@@ -1,0 +1,21 @@
+# timers.forge - several tasks running at the same time.
+
+function countdown(label, seconds)
+	for remaining from seconds to 1 do
+		say "{label}: {remaining}"
+		wait 1 second
+	end
+	say "{label}: done!"
+end
+
+start countdown("Bomb", 3)
+start countdown("Shield", 2)
+
+set door_open to false
+start (function()
+	wait until door_open
+	say "Someone opened the door at {round(time(), 1)} seconds."
+end)()
+
+wait 1.5 seconds
+set door_open to true

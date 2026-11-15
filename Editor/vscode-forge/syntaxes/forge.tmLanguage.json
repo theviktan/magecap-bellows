@@ -1,0 +1,103 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Forge",
+	"scopeName": "source.forge",
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#strings" },
+		{ "include": "#numbers" },
+		{ "include": "#definitions" },
+		{ "include": "#keywords" },
+		{ "include": "#constants" },
+		{ "include": "#calls" },
+		{ "include": "#operators" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{ "name": "comment.block.forge", "begin": "#\\[", "end": "\\]#" },
+				{ "name": "comment.line.number-sign.forge", "match": "#.*$" }
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.forge",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{ "name": "constant.character.escape.forge", "match": "\\\\[ntr0\"\\\\{}]" },
+				{
+					"name": "meta.interpolation.forge",
+					"begin": "\\{",
+					"end": "\\}",
+					"beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.forge" } },
+					"endCaptures": { "0": { "name": "punctuation.section.interpolation.end.forge" } },
+					"patterns": [{ "include": "$self" }]
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{ "name": "constant.numeric.hex.forge", "match": "\\b0[xX][0-9a-fA-F_]+\\b" },
+				{ "name": "constant.numeric.forge", "match": "\\b[0-9][0-9_]*(\\.[0-9]+)?([eE][+-]?[0-9]+)?\\b" }
+			]
+		},
+		"definitions": {
+			"patterns": [
+				{
+					"match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+					"captures": { "1": { "name": "storage.type.function.forge" }, "2": { "name": "entity.name.function.forge" } }
+				},
+				{
+					"match": "\\b(kind)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(extends)\\s+([A-Za-z_][A-Za-z0-9_]*))?",
+					"captures": {
+						"1": { "name": "storage.type.class.forge" },
+						"2": { "name": "entity.name.type.class.forge" },
+						"3": { "name": "storage.modifier.extends.forge" },
+						"4": { "name": "entity.other.inherited-class.forge" }
+					}
+				},
+				{
+					"match": "^\\s*(phrase)\\s+(.*)$",
+					"captures": { "1": { "name": "storage.type.function.forge" }, "2": { "name": "entity.name.function.forge" } }
+				},
+				{
+					"match": "^\\s*(when)\\s+([A-Za-z_ ]+?)(?=\\s+(with|by)\\b|\\s*$)",
+					"captures": { "1": { "name": "keyword.control.event.forge" }, "2": { "name": "entity.name.function.event.forge" } }
+				}
+			]
+		},
+		"keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.forge",
+					"match": "\\b(if|then|else|otherwise|end|while|until|do|repeat|times|forever|for|each|in|from|to|by|stop|skip|return|try|catch|fail|when|trigger|wait|start|use|as|with)\\b"
+				},
+				{
+					"name": "keyword.other.statement.forge",
+					"match": "\\b(set|constant|add|take|multiply|divide|new|function|phrase|kind|extends|say)\\b"
+				},
+				{
+					"name": "keyword.operator.word.forge",
+					"match": "\\b(and|or|not|is|contains|of|above|below|at least|at most|greater than|less than|equal to|empty)\\b"
+				},
+				{ "name": "variable.language.self.forge", "match": "\\b(self|my|parent)\\b" },
+				{ "name": "keyword.other.unit.forge", "match": "\\b(seconds?|frames?|ms|milliseconds?|minutes?)\\b" }
+			]
+		},
+		"constants": {
+			"name": "constant.language.forge",
+			"match": "\\b(true|false|yes|no|nothing|pi|infinity)\\b"
+		},
+		"calls": {
+			"match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+			"captures": { "1": { "name": "entity.name.function.call.forge" } }
+		},
+		"operators": {
+			"patterns": [
+				{ "name": "keyword.operator.comparison.forge", "match": "==|!=|<=|>=|<|>" },
+				{ "name": "keyword.operator.arithmetic.forge", "match": "\\+|-|\\*|/|%|\\^" },
+				{ "name": "keyword.operator.possessive.forge", "match": "'s\\b" }
+			]
+		}
+	}
+}

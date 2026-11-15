@@ -1,0 +1,44 @@
+set level to 1
+function show_level()
+	return level
+end
+set level to 2
+say show_level()                       # expect: 2
+
+function shadow()
+	set level to 99
+	return level
+end
+say shadow()                           # expect: 99
+say level                              # expect: 99
+
+function make_adders()
+	set adders to []
+	for each n in [1, 2] do
+		add function(x) return x + n end to adders
+	end
+	return adders
+end
+set adders to make_adders()
+say adders[1](10)                      # expect: 11
+say adders[2](10)                      # expect: 12
+
+function outer_counter()
+	set total to 0
+	function bump()
+		add 5 to total
+	end
+	bump()
+	bump()
+	return total
+end
+say outer_counter()                    # expect: 10
+
+for each item in ["loop var"] do
+	set seen to item
+end
+say seen                               # expect: loop var
+say defined_later()                    # expect: hoisted
+function defined_later()
+	return "hoisted"
+end
