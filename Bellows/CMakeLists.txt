@@ -25,6 +25,7 @@ target_link_libraries(Bellows
 		spdlog::spdlog
 		Jolt
 		pybind11::embed
+		ForgeScript
 		Threads::Threads
 		${CMAKE_DL_LIBS})
 

@@ -206,7 +206,7 @@ namespace Bellows {
 				py::object module = LoadScriptModule(component.ScriptPath);
 				py::object cls = FindScriptClass(module, component.ClassName);
 				py::object object = cls();
-				object.attr("entity") = Scripting::PyEntity(entity);
+				object.attr("entity") = Scripting::ScriptEntity(entity);
 
 				for (const auto& [name, value] : component.Fields)
 				{
@@ -611,7 +611,7 @@ sys.stderr = _BellowsLogWriter(2)
 				return;
 
 			ScriptInstance instance = it->second;
-			Invoke(self, instance, method, Scripting::PyEntity(otherEntity));
+			Invoke(self, instance, method, Scripting::ScriptEntity(otherEntity));
 			if (auto again = s_Data->Instances.find(self); again != s_Data->Instances.end())
 				again->second.ErrorCount = instance.ErrorCount;
 		};

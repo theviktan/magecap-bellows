@@ -17,7 +17,7 @@ namespace Bellows {
 
 	namespace {
 
-		using Scripting::PyEntity;
+		using Scripting::ScriptEntity;
 
 		EditorLayer& Editor()
 		{
@@ -47,7 +47,7 @@ namespace Bellows {
 			return { sequence[0], sequence[1], sequence[2] };
 		}
 
-		Entity ResolveInActiveScene(const PyEntity& handle)
+		Entity ResolveInActiveScene(const ScriptEntity& handle)
 		{
 			Entity entity = handle.Resolve();
 			if (entity.GetScene() != Editor().GetActiveScene().get())
@@ -101,7 +101,7 @@ namespace Bellows {
 				"Runs the editor for whole frames (rendering, play-mode updates, UI). Use it to let time pass in automation.");
 
 			// Selection -------------------------------------------------------------------------
-			m.def("select", [](const std::optional<PyEntity>& entity, bool additive)
+			m.def("select", [](const std::optional<ScriptEntity>& entity, bool additive)
 			{
 				if (!entity)
 					Editor().ClearSelection();
@@ -110,7 +110,7 @@ namespace Bellows {
 			}, py::arg("entity"), py::arg("additive") = false, "Selects an entity (None clears the selection)");
 			m.def("selection", []
 			{
-				std::vector<PyEntity> result;
+				std::vector<ScriptEntity> result;
 				for (UUID uuid : Editor().GetSelection())
 				{
 					if (Entity entity = Editor().GetActiveScene()->TryGetEntityByUUID(uuid))
@@ -119,7 +119,7 @@ namespace Bellows {
 				return result;
 			}, "Selected entities, most recently selected last");
 			m.def("clear_selection", [] { Editor().ClearSelection(); });
-			m.def("focus", [](const std::optional<PyEntity>& entity)
+			m.def("focus", [](const std::optional<ScriptEntity>& entity)
 			{
 				if (entity)
 					Editor().Select(ResolveInActiveScene(*entity));
@@ -135,7 +135,7 @@ namespace Bellows {
 			m.def("can_redo", [] { return Editor().GetUndoHistory().CanRedo(); });
 
 			// Prefabs and assets ----------------------------------------------------------------
-			m.def("save_prefab", [](const PyEntity& entity, const std::string& path) { return Editor().SavePrefab(entity.Resolve(), path); },
+			m.def("save_prefab", [](const ScriptEntity& entity, const std::string& path) { return Editor().SavePrefab(entity.Resolve(), path); },
 				py::arg("entity"), py::arg("path"), "Saves an entity and its children as a .bprefab asset");
 			m.def("import_asset", [](const std::string& source, const std::string& folder)
 			{
