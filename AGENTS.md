@@ -126,9 +126,14 @@ namespace Bellows {
 * Editor automation runs at a *frame boundary* (`EditorLayer::RunAtFrameBoundary`), which is the
   only place `RunFrames` may be called.
 * Adding a component touches: `Scene/Components.h` (+ `AllComponents`), `SceneSerializer`,
-  `Scene::Copy` (via `AllComponents`), the inspector, the hierarchy icon, the Python binding
-  (`ScriptBindings.cpp` component table), `docs/ScriptingAPI.md`, `FeatureTest.py` and tests. See
-  `.claude/skills/bellows-add-component`.
+  `Scene::Copy` (via `AllComponents`), the inspector, the hierarchy icon, the script API
+  (`Scripting/ScriptApi.h`/`.cpp` component table and `ScriptApiDefinition.h`), `docs/ScriptingAPI.md`,
+  `FeatureTest.py` and tests. See `.claude/skills/bellows-add-component`.
+* The script API is described **once**, in `Scripting/ScriptApiDefinition.h`, using the neutral
+  types of `Scripting/ScriptApi.h`. Two binders turn it into a language: `ScriptBindings.cpp`
+  (Python module `_bellows`) and `ForgeScriptBindings.cpp` (ForgeScript). Never add an engine
+  function to only one binder; only language-specific extras (Python operators, `__repr__`, script
+  objects) belong in a binder.
 
 ## Building games as an agent
 

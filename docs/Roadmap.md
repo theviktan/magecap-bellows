@@ -121,9 +121,9 @@ end
    not to Python. That is what makes `wait`, tasks, events and plain-English runtime errors work
    naturally, and lets games that use only ForgeScript ship without a Python runtime later.
 2. **One description of the engine API, two languages.** Today the API is written once, by hand,
-   for pybind11 (`Scripting/ScriptBindings.cpp`). It becomes a shared **script API registry**:
-   every type, property, method and function is registered once with typed C++ lambdas, and two
-   backends turn the registry into the Python module and the ForgeScript bindings. Names are the
+   for pybind11. It is now a shared **script API description** (`Scripting/ScriptApiDefinition.h`):
+   every type, property, method and function is described once with typed C++ lambdas, and two
+   binders turn it into the Python module and the ForgeScript bindings. Names are the
    same in both languages (`entity.transform.position`, `rigid_body.add_force(...)`), so docs,
    examples and `FeatureTest` coverage carry over, and a new engine feature appears in both
    languages from one change.
@@ -141,10 +141,11 @@ end
 
 ### Next steps
 
-1. Script API registry with the Python backend, replacing `ScriptBindings.cpp` without changing
-   the Python API (`FeatureTest.py` must pass unchanged).
-2. ForgeScript backend for the registry, plus `.forge` support in `ScriptEngine` and the
-   Script component, lifecycle events and Inspector fields.
+1. Done: the script API is described once (`Scripting/ScriptApiDefinition.h`); the Python module
+   is built from it without any change to the Python API, and the ForgeScript binder
+   (`Scripting/ForgeScriptBindings.cpp`) exposes the same API to ForgeScript.
+2. `.forge` support in `ScriptEngine` and the Script component, lifecycle events and Inspector
+   fields.
 3. `FeatureTest.forge`, `docs/ScriptingAPI.md` examples in both languages, editor support
    (create ForgeScript script, highlighting in the content browser).
 4. Language additions that make game code easier: "did you mean ...?" suggestions for misspelled
