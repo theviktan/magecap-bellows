@@ -278,8 +278,8 @@ namespace Bellows {
 	{
 		RigidBodyComponent& rigidBody = entity.GetComponent<RigidBodyComponent>();
 
-		glm::vec3 translation, scale;
-		glm::quat rotation;
+		glm::vec3 translation(0.0f), scale(1.0f);
+		glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 		if (!Math::DecomposeTransform(m_Scene.GetWorldTransform(entity), translation, rotation, scale))
 		{
 			BW_CORE_ERROR("Physics: entity '{}' has a degenerate transform; no body created", entity.GetName());
@@ -461,8 +461,8 @@ namespace Bellows {
 				continue;
 
 			const glm::mat4 worldTransform = m_Scene.GetWorldTransform(entity);
-			glm::vec3 translation, scale;
-			glm::quat rotation;
+			glm::vec3 translation(0.0f), scale(1.0f);
+			glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 			if (!Math::DecomposeTransform(worldTransform, translation, rotation, scale))
 				continue;
 
@@ -498,8 +498,8 @@ namespace Bellows {
 			JPH::Quat rotation;
 			bodies.GetPositionAndRotation(bodyID, position, rotation);
 
-			glm::vec3 currentTranslation, scale;
-			glm::quat currentRotation;
+			glm::vec3 currentTranslation(0.0f), scale(1.0f);
+			glm::quat currentRotation(1.0f, 0.0f, 0.0f, 0.0f);
 			Math::DecomposeTransform(m_Scene.GetWorldTransform(entity), currentTranslation, currentRotation, scale);
 			const glm::mat4 world = Math::ComposeTransform(glm::vec3(position.GetX(), position.GetY(), position.GetZ()), FromJolt(rotation), scale);
 			m_Scene.SetWorldTransform(entity, world);
@@ -641,8 +641,8 @@ namespace Bellows {
 		if (it == m_Jolt->Bodies.end())
 			return;
 
-		glm::vec3 translation, scale;
-		glm::quat rotation;
+		glm::vec3 translation(0.0f), scale(1.0f);
+		glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 		if (!Math::DecomposeTransform(m_Scene.GetWorldTransform(entity), translation, rotation, scale))
 			return;
 		m_Jolt->System.GetBodyInterface().SetPositionAndRotation(it->second, JPH::RVec3(translation.x, translation.y, translation.z),

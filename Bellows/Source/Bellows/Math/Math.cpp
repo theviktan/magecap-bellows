@@ -8,8 +8,8 @@ namespace Bellows::Math {
 
 	bool DecomposeTransform(const glm::mat4& transform, glm::vec3& translation, glm::quat& rotation, glm::vec3& scale)
 	{
-		glm::vec3 skew;
-		glm::vec4 perspective;
+		glm::vec3 skew(0.0f);
+		glm::vec4 perspective(0.0f);
 		if (!glm::decompose(transform, scale, rotation, translation, skew, perspective))
 			return false;
 		rotation = glm::normalize(rotation);

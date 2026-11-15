@@ -29,7 +29,7 @@ namespace Bellows {
 
 	void TransformComponent::SetTransform(const glm::mat4& transform)
 	{
-		glm::quat rotation;
+		glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 		if (Math::DecomposeTransform(transform, Translation, rotation, Scale))
 			SetRotation(rotation);
 	}

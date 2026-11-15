@@ -10,11 +10,11 @@ jobs:
     name: Linux (GCC, all tests on lavapipe)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -39,11 +39,11 @@ jobs:
     name: Windows (MSVC, build and unit tests)
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -58,8 +58,16 @@ jobs:
       - name: Configure
         run: cmake --preset windows -DPython_ROOT_DIR="$env:pythonLocation"
 
+      # Compiler errors and warnings are also reported as annotations on the workflow run.
       - name: Build
-        run: cmake --build build/windows --config Release
+        run: |
+          cmake --build build/windows --config Release 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path build.log -Pattern ': (fatal )?error |: warning C' |
+              Select-Object -ExpandProperty Line -Unique | Select-Object -First 40 |
+              ForEach-Object { Write-Output "::error::$_" }
+            exit 1
+          }
 
       # Hosted Windows runners have no Vulkan driver, so only the GPU-free suites run here.
       - name: Test

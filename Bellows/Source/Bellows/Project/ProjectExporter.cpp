@@ -208,10 +208,10 @@ namespace Bellows {
 		// Open-source license notices travel with every build of the game.
 		if (const std::filesystem::path notices = engineDirectory / "ThirdPartyNotices.md"; FileSystem::Exists(notices))
 		{
-			std::error_code error;
-			std::filesystem::copy_file(notices, output / "ThirdPartyNotices.md", std::filesystem::copy_options::overwrite_existing, error);
-			if (error)
-				note("Warning: could not copy ThirdPartyNotices.md (" + error.message() + ")");
+			std::error_code copyError;
+			std::filesystem::copy_file(notices, output / "ThirdPartyNotices.md", std::filesystem::copy_options::overwrite_existing, copyError);
+			if (copyError)
+				note("Warning: could not copy ThirdPartyNotices.md (" + copyError.message() + ")");
 		}
 
 		auto assetExclusions = [](const std::filesystem::path& relative)
