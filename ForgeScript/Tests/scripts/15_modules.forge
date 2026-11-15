@@ -1,0 +1,7 @@
+use "helpers"
+say double(21)                         # expect: 42
+say HELPER_NAME                        # expect: helpers v1
+announce "modules work"                # expect: ** modules work **
+use "helpers" as h
+say h.double(5)                        # expect: 10
+say h.HELPER_NAME                      # expect: helpers v1

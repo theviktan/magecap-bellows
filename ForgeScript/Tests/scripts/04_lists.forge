@@ -1,0 +1,49 @@
+set items to ["sword", "shield"]
+add "potion" to items
+say items                        # expect: ["sword", "shield", "potion"]
+say items[1]                     # expect: sword
+say items[-1]                    # expect: potion
+say items.length                 # expect: 3
+say length of items              # expect: 3
+say items.first                  # expect: sword
+say items.last                   # expect: potion
+say items contains "shield"      # expect: true
+say "bow" is in items            # expect: false
+say "bow" is not in items        # expect: true
+take "shield" from items
+say items                        # expect: ["sword", "potion"]
+items.insert(1, "map")
+say items                        # expect: ["map", "sword", "potion"]
+say items.remove_at(2)           # expect: sword
+say items.index_of("potion")     # expect: 2
+say items.pop()                  # expect: potion
+say items                        # expect: ["map"]
+set numbers to [5, 3, 9, 1]
+numbers.sort()
+say numbers                      # expect: [1, 3, 5, 9]
+numbers.reverse()
+say numbers                      # expect: [9, 5, 3, 1]
+say numbers.sum()                # expect: 18
+say numbers.join(" - ")          # expect: 9 - 5 - 3 - 1
+say numbers.slice(2, 3)          # expect: [5, 3]
+say numbers.map(function(n) return n * 10 end)          # expect: [90, 50, 30, 10]
+say numbers.filter(function(n) return n > 4 end)        # expect: [9, 5]
+say numbers.find(function(n) return n < 5 end)          # expect: 3
+set words to ["ccc", "a", "bb"]
+words.sort_by(function(w) return w.length end)
+say words                        # expect: ["a", "bb", "ccc"]
+say [1, 2] + [3]                 # expect: [1, 2, 3]
+say [] is empty                  # expect: true
+say min(numbers)                 # expect: 1
+say max(4, 8, 2)                 # expect: 8
+set copied to copy(numbers)
+add 100 to copied
+say numbers.length               # expect: 4
+say copied.length                # expect: 5
+set nested to [
+	"multi",
+	"line",
+]
+say nested                       # expect: ["multi", "line"]
+numbers.clear()
+say numbers                      # expect: []

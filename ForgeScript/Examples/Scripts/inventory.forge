@@ -1,0 +1,36 @@
+# inventory.forge - lists, maps and phrases working together.
+
+set inventory to []
+constant MAX_ITEMS is 5
+
+phrase give (item) to the player
+	if inventory.length is at least MAX_ITEMS then
+		say "Your bag is full, so you leave the {item} behind."
+		return
+	end
+	add item to inventory
+	say "You picked up: {item}."
+end
+
+phrase drop (item)
+	if item is not in inventory then
+		say "You do not have a {item}."
+		return
+	end
+	take item from inventory
+	say "You dropped the {item}."
+end
+
+give "sword" to the player
+give "torch" to the player
+give "apple" to the player
+drop "torch"
+drop "shield"
+
+set prices to { sword: 120, apple: 2, torch: 5 }
+set total to 0
+for each item in inventory do
+	add prices.get(item, 0) to total
+end
+say "Your items: {inventory.join(", ")}"
+say "They are worth {total} gold."

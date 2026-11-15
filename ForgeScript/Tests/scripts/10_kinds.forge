@@ -1,0 +1,103 @@
+kind Creature
+	set name to "creature"
+	set health to 10
+	set tags to []
+
+	function setup(name)
+		set my name to name
+	end
+
+	function hurt(amount)
+		take amount from my health
+		if my health is at most 0 then
+			set my health to 0
+			return "{my name} fell"
+		end
+		return "{my name} has {my health}"
+	end
+
+	function describe()
+		return "a creature called {my name}"
+	end
+end
+
+kind Dragon extends Creature
+	set health to 100
+	set fire to 50
+
+	function setup(name, fire)
+		parent.setup(name)
+		set my fire to fire
+	end
+
+	function hurt(amount)
+		return parent.hurt(amount / 2)
+	end
+
+	function describe()
+		return "a dragon! " + parent.describe()
+	end
+end
+
+set rat to new Creature("Rat")
+say rat.hurt(4)                         # expect: Rat has 6
+say rat.hurt(100)                       # expect: Rat fell
+set smaug to new Dragon("Smaug", 80)
+say smaug.hurt(40)                      # expect: Smaug has 80
+say smaug.fire                          # expect: 80
+say smaug.describe()                    # expect: a dragon! a creature called Smaug
+say smaug's name                        # expect: Smaug
+say smaug is a Dragon                   # expect: true
+say smaug is a Creature                 # expect: true
+say rat is a Dragon                     # expect: false
+say type(smaug)                         # expect: Dragon
+say rat                                 # expect: Creature {name: "Rat", health: 0, tags: []}
+
+# Each object gets its own copy of field values.
+add "small" to rat.tags
+set mouse to new Creature("Mouse")
+say mouse.tags                          # expect: []
+
+# A method can be stored and called later.
+set action to smaug.describe
+say action()                            # expect: a dragon! a creature called Smaug
+
+kind Point
+	set x to 0
+	set y to 0
+	function to_text()
+		return "<{my x}, {my y}>"
+	end
+end
+set p to new Point
+set p.x to 3
+say p                                   # expect: <3, 0>
+say "Point is {p}"                      # expect: Point is <3, 0>
+
+kind Counter
+	set value to 0
+	function increase()
+		add 1 to my value
+		return self
+	end
+end
+set c to new Counter()
+c.increase().increase().increase()
+say c.value                             # expect: 3
+
+kind Tool
+	function use_twice()
+		set results to []
+		set run to function()
+			add self.name() to results
+		end
+		run()
+		run()
+		return results
+	end
+	function name()
+		return "hammer"
+	end
+end
+say new Tool().use_twice()              # expect: ["hammer", "hammer"]
+say Dragon.name                         # expect: Dragon

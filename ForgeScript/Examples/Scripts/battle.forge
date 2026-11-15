@@ -1,0 +1,64 @@
+# battle.forge - kinds, inheritance, events and waiting.
+# Run it with:  forgescript --realtime battle.forge  to watch it play out in real time.
+
+kind Fighter
+	set name to "fighter"
+	set health to 30
+	set attack to 5
+
+	function setup(name, health, attack)
+		set my name to name
+		set my health to health
+		set my attack to attack
+	end
+
+	function is_alive()
+		return my health is above 0
+	end
+
+	function hit(target)
+		set damage to my attack + random(0, 3)
+		take damage from target.health
+		say "{my name} hits {target.name} for {damage}. {target.name} has {max(0, target.health)} left."
+	end
+end
+
+kind Healer extends Fighter
+	set potions to 2
+
+	function hit(target)
+		if my health is below 15 and my potions is above 0 then
+			add 12 to my health
+			take 1 from my potions
+			say "{my name} drinks a potion and now has {my health} health."
+			return
+		end
+		parent.hit(target)
+	end
+end
+
+set hero to new Healer("Aria", 35, 6)
+set orc to new Fighter("Orc", 40, 7)
+
+when battle over with winner
+	say "{winner.name} wins the battle!"
+end
+
+function fight(a, b)
+	set round to 1
+	while a.is_alive() and b.is_alive() do
+		say "-- Round {round} --"
+		a.hit(b)
+		if b.is_alive() then b.hit(a) end
+		add 1 to round
+		wait 1 second
+	end
+	if a.is_alive() then
+		trigger battle over with a
+	else
+		trigger battle over with b
+	end
+end
+
+start fight(hero, orc)
+say "The battle has started!"

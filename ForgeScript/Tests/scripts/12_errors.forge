@@ -1,0 +1,133 @@
+try
+	fail "Something broke"
+catch problem
+	say "caught: {problem}"                 # expect: caught: Something broke
+end
+
+try
+	set x to 1 / 0
+catch problem
+	say problem                             # expect: Cannot divide by zero.
+end
+
+try
+	set list to [1, 2]
+	say list[5]
+catch problem
+	say problem                             # expect: Position 5 is outside the list, which has 2 items.
+end
+
+try
+	say list[0]
+catch problem
+	say problem                             # expect: Positions start at 1 in ForgeScript (use 1 for the first item, -1 for the last).
+end
+
+try
+	say undefined_thing
+catch problem
+	say problem                             # expect: 'undefined_thing' has not been given a value yet. Use: set undefined_thing to ...
+end
+
+function risky(n)
+	if n is above 2 then fail { code: n } end
+	return n
+end
+try
+	risky(1)
+	risky(5)
+	say "not reached"
+catch problem
+	say problem.code                        # expect: 5
+end
+
+# Errors pass through function calls and loops until caught.
+function deep(n)
+	if n is 0 then fail "bottom" end
+	return deep(n - 1)
+end
+for each i in [1] do
+	try
+		deep(10)
+	catch problem
+		say "{problem} from deep"           # expect: bottom from deep
+	end
+end
+
+# try without catch just ignores the error.
+try
+	fail "quiet"
+end
+say "still running"                         # expect: still running
+
+try
+	try
+		fail "inner"
+	catch problem
+		fail "outer from " + problem
+	end
+catch problem
+	say problem                             # expect: outer from inner
+end
+
+try
+	say "a" - 1
+catch problem
+	say problem                             # expect: Cannot subtract text and number.
+end
+
+try
+	greet_missing()
+catch problem
+	say problem                             # expect: 'greet_missing' has not been given a value yet. Use: set greet_missing to ...
+end
+
+function two(a, b)
+	return a + b
+end
+try
+	two(1)
+catch problem
+	say problem                             # expect: 'two' needs 2 values, but was given 1 value.
+end
+
+try
+	set n to nothing
+	say n.health
+catch problem
+	say problem                             # expect: Cannot read 'health' because the value is nothing (it has not been set yet).
+end
+
+constant SPEED is 5
+try
+	set SPEED to 6
+catch problem
+	say problem                             # expect: 'SPEED' is a constant and cannot be changed.
+end
+
+function loop_break()
+	for each i in [1, 2, 3] do
+		try
+			if i is 2 then stop end
+		catch problem
+		end
+	end
+	return "loop stopped cleanly"
+end
+say loop_break()                            # expect: loop stopped cleanly
+try
+	fail "after loop"
+catch problem
+	say problem                             # expect: after loop
+end
+assert(1 is 1, "fine")
+try
+	assert(1 is 2, "one is not two")
+catch problem
+	say problem                             # expect: one is not two
+end
+
+# An error nobody catches stops this script and is reported.
+say "before"                                # expect: before
+fail "Uncaught problem"                     # expect error: Uncaught problem
+say "never printed"

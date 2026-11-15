@@ -1,0 +1,25 @@
+set hero to { name: "Aria", hp: 30, "class": "mage" }
+say hero.name                    # expect: Aria
+say hero["class"]                # expect: mage
+set hero.hp to 25
+set hero["level"] to 2
+say hero                         # expect: {"name": "Aria", "hp": 25, "class": "mage", "level": 2}
+say hero.missing                 # expect: nothing
+say hero.keys()                  # expect: ["name", "hp", "class", "level"]
+say hero.has("hp")               # expect: true
+say hero contains "mana"         # expect: false
+say hero.get("mana", 0)          # expect: 0
+hero.remove("class")
+say hero.length                  # expect: 3
+set scores to {}
+set scores[1] to "first"
+set scores[true] to "yes"
+say scores[1]                    # expect: first
+say scores[true]                 # expect: yes
+for each key, value in { a: 1, b: 2 } do
+	say "{key}={value}"
+end
+# expect: a=1
+# expect: b=2
+set actions to { greet: function(who) return "hi " + who end }
+say actions.greet("bob")         # expect: hi bob
