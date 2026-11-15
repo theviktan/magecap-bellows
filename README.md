@@ -20,6 +20,11 @@ can drive end to end.
 * **Scripting** in Python 3: behavior scripts with lifecycle callbacks, Inspector-editable fields,
   entity creation/destruction, prefabs, input, physics and audio APIs.
   See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
+* **ForgeScript** (in progress): Bellows' own natural-language scripting language, set to become
+  its flagship way to write game logic, with Python kept alongside. The language, its
+  `forgescript` tool and its tests are in `ForgeScript/` (guide:
+  [docs/ForgeScript/LanguageGuide.md](docs/ForgeScript/LanguageGuide.md)); running `.forge`
+  scripts on entities is the next milestone (see [docs/Roadmap.md](docs/Roadmap.md)).
 * **Editor**: hierarchy, inspector, content browser with drag and drop, console with a Python
   prompt, transform gizmos, picking, undo/redo, play/pause/step, prefabs, render settings, project
   hub, and **Export Game** (a standalone build with its own Python runtime).
@@ -106,10 +111,11 @@ tested version.
 | `BellowsEditor/` | Editor |
 | `BellowsRuntime/` | Game runtime (exported games use it) |
 | `BellowsTests/` | Unit, GPU and automation tests |
+| `ForgeScript/` | The ForgeScript language: compiler, virtual machine, `forgescript` tool, tests |
 | `Python/bellows/` | The `bellows` Python package |
 | `Projects/FeatureTest/` | Sample project that uses every feature and tests the scripting API |
 | `Tools/` | Agent CLI and build tools |
-| `docs/` | Scripting and automation reference |
+| `docs/` | Scripting, ForgeScript and automation reference |
 
 Contributors (human or AI) should read [AGENTS.md](AGENTS.md) first. Plans for 2D, ForgeScript and
 MageCap Forge integration are in [docs/Roadmap.md](docs/Roadmap.md).

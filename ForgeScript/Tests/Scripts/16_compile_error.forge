@@ -1,0 +1,4 @@
+say "this never runs because the script has a mistake"
+if 1 is 1 then
+	say "missing end"
+# expect error: This 'if' is missing its 'end'.

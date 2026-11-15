@@ -1,0 +1,10 @@
+# A helper script used by 15_modules.forge.
+constant HELPER_NAME is "helpers v1"
+
+function double(n)
+	return n * 2
+end
+
+phrase announce (message)
+	say "** {message} **"
+end

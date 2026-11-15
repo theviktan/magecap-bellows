@@ -7,8 +7,9 @@ Guidelines for AI agents (and humans) changing this repository. Read this first;
 
 MageCap Bellows is a small, production-quality 3D game engine for Windows and Linux:
 C++20, CMake, GLFW, NVRHI (Vulkan 1.3), EnTT, Jolt Physics, miniaudio, embedded CPython 3.13
-(pybind11), Dear ImGui. Games are scripted in Python; the editor is fully scriptable so agents can
-build games through it.
+(pybind11), Dear ImGui. Games are scripted in Python, and ForgeScript (`ForgeScript/`, Bellows' own
+natural-language language) is becoming the flagship alternative; the editor is fully scriptable so
+agents can build games through it.
 
 | Folder | Contents |
 |--------|----------|
@@ -16,11 +17,12 @@ build games through it.
 | `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport), `Panels/`, `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
 | `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
+| `ForgeScript/` | The ForgeScript language (compiler, VM, standard library, `forgescript` tool, tests). Engine-independent, `namespace ForgeScript`; read `ForgeScript/AGENTS.md` before changing it. |
 | `Python/bellows/` | The Python package games import (`__init__.py`, `editor.py`). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons. |
 | `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`. |
-| `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, images. |
+| `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
 ## Build and test
@@ -40,6 +42,8 @@ The tests:
 
 | ctest name | What it covers |
 |------------|----------------|
+| `ForgeScriptTests` | The ForgeScript language: lexer, compiler errors, embedding API, and every `ForgeScript/Tests/Scripts/*.forge` script (also under GC stress). |
+| `ForgeScriptEngineExample` | The small stand-alone host in `ForgeScript/Examples/EngineIntegration`. |
 | `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |

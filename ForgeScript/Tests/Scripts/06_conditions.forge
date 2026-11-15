@@ -1,0 +1,31 @@
+set hp to 40
+if hp is 40 then say "exact" end                     # expect: exact
+if hp is above 50 then
+	say "healthy"
+else if hp is above 20 then
+	say "hurt"                                       # expect: hurt
+otherwise
+	say "critical"
+end
+if hp is below 10 then
+	say "low"
+otherwise if hp is at least 40 then
+	say "at least 40"                                # expect: at least 40
+end
+if hp is at most 40 and hp is greater than 39 then say "range" end    # expect: range
+if hp is less than 0 or hp is equal to 40 then say "or works" end     # expect: or works
+if hp is not 41 then say "not 41" end                                 # expect: not 41
+if hp == 40 and hp != 41 and hp >= 40 and hp <= 40 and hp > 1 and hp < 99 then say "symbols" end   # expect: symbols
+if not (hp is 1) then say "parens" end               # expect: parens
+say hp is a number                                   # expect: true
+say "x" is a text                                    # expect: true
+say [1] is a list                                    # expect: true
+say {} is a map                                      # expect: true
+say print is a function                              # expect: true
+say vector(1, 2) is a vector                         # expect: true
+say 5 is not a text                                  # expect: true
+set a to 3
+say a is a number and a is 3                         # expect: true
+say nothing or "fallback"                            # expect: fallback
+say 0 and "zero is true"                             # expect: zero is true
+say false and missing_function()                     # expect: false
