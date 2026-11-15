@@ -61,6 +61,6 @@ jobs:
       - name: Build
         run: cmake --build build/windows --config Release
 
-      # Hosted Windows runners have no Vulkan driver, so only the GPU-free suite runs here.
+      # Hosted Windows runners have no Vulkan driver, so only the GPU-free suites run here.
       - name: Test
-        run: ctest --test-dir build/windows -C Release -R BellowsUnitTests --output-on-failure
+        run: ctest --test-dir build/windows -C Release -R "BellowsUnitTests|ForgeScript" --output-on-failure

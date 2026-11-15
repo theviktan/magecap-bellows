@@ -20,14 +20,14 @@ namespace {
 
 }
 
-FORGESCRIPT_TEST(LexerKeywordsAndNames)
+TEST_CASE("LexerKeywordsAndNames")
 {
 	std::vector<TokenType> types = Types("set health to 10");
 	std::vector<TokenType> expected = { TokenType::Set, TokenType::Identifier, TokenType::To, TokenType::Number, TokenType::Newline, TokenType::Eof };
 	CHECK(types == expected);
 }
 
-FORGESCRIPT_TEST(LexerNumbers)
+TEST_CASE("LexerNumbers")
 {
 	Lexer lexer("12 3.5 1_000 0xff 2e3");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -38,7 +38,7 @@ FORGESCRIPT_TEST(LexerNumbers)
 	CHECK_EQ(tokens[4].Number, 2000.0);
 }
 
-FORGESCRIPT_TEST(LexerTextAndInterpolation)
+TEST_CASE("LexerTextAndInterpolation")
 {
 	Lexer lexer("\"Hi {name}!\"");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -49,7 +49,7 @@ FORGESCRIPT_TEST(LexerTextAndInterpolation)
 	CHECK_EQ(tokens[2].Text, std::string("!"));
 }
 
-FORGESCRIPT_TEST(LexerPossessive)
+TEST_CASE("LexerPossessive")
 {
 	std::vector<TokenType> types = Types("player's health");
 	CHECK(types[0] == TokenType::Identifier);
@@ -57,21 +57,21 @@ FORGESCRIPT_TEST(LexerPossessive)
 	CHECK(types[2] == TokenType::Identifier);
 }
 
-FORGESCRIPT_TEST(LexerNewlinesInsideBracketsAreIgnored)
+TEST_CASE("LexerNewlinesInsideBracketsAreIgnored")
 {
 	std::vector<TokenType> types = Types("[1,\n2,\n3]");
 	CHECK_EQ(std::count(types.begin(), types.end(), TokenType::Newline), 1);
 	CHECK(types[types.size() - 2] == TokenType::Newline);
 }
 
-FORGESCRIPT_TEST(LexerNewlinesInsideFunctionsInsideBrackets)
+TEST_CASE("LexerNewlinesInsideFunctionsInsideBrackets")
 {
 	// list.map(function(x) <newline> return x <newline> end)
 	std::vector<TokenType> types = Types("f(function(x)\nsay x\nreturn {a:\n1}\nend)");
 	CHECK_EQ(std::count(types.begin(), types.end(), TokenType::Newline), 4);
 }
 
-FORGESCRIPT_TEST(LexerCommentsAndErrors)
+TEST_CASE("LexerCommentsAndErrors")
 {
 	std::vector<TokenType> types = Types("# a comment\n#[ block\ncomment ]# say 1");
 	CHECK(types[0] == TokenType::Identifier);
@@ -85,7 +85,7 @@ FORGESCRIPT_TEST(LexerCommentsAndErrors)
 	CHECK(unterminated.Tokenize()[0].Type == TokenType::Error);
 }
 
-FORGESCRIPT_TEST(LexerLineNumbers)
+TEST_CASE("LexerLineNumbers")
 {
 	Lexer lexer("a\n\nb");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -93,7 +93,7 @@ FORGESCRIPT_TEST(LexerLineNumbers)
 	CHECK_EQ(tokens[2].Line, 3);
 }
 
-FORGESCRIPT_TEST(PhrasePatterns)
+TEST_CASE("PhrasePatterns")
 {
 	PhrasePattern pattern;
 	std::string error;
