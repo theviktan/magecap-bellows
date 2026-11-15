@@ -1,6 +1,6 @@
 #include "TestFramework.h"
 
-using namespace Forge;
+using namespace ForgeScript;
 
 // Compile errors: every mistake should point at the right line with a helpful message.
 
@@ -26,46 +26,46 @@ namespace {
 
 }
 
-FORGE_TEST(CompileErrorMissingEnd)
+FORGESCRIPT_TEST(CompileErrorMissingEnd)
 {
 	CompileError error = CompileFails("say 1\nwhile true do\n\tsay 2\n");
 	CHECK_CONTAINS(error.Message, "missing its 'end'");
 	CHECK_EQ(error.Line, 2);
 }
 
-FORGE_TEST(CompileErrorEqualsSign)
+FORGESCRIPT_TEST(CompileErrorEqualsSign)
 {
 	CHECK_CONTAINS(CompileFails("set x = 5").Message, "Use 'to' instead of '='");
 	CHECK_CONTAINS(CompileFails("if x = 5 then end").Message, "Use 'is' to compare");
 }
 
-FORGE_TEST(CompileErrorExtraEnd)
+FORGESCRIPT_TEST(CompileErrorExtraEnd)
 {
 	CompileError error = CompileFails("say 1\nend");
 	CHECK_CONTAINS(error.Message, "does not close anything");
 	CHECK_EQ(error.Line, 2);
 }
 
-FORGE_TEST(CompileErrorKeywordAsName)
+FORGESCRIPT_TEST(CompileErrorKeywordAsName)
 {
 	CHECK_CONTAINS(CompileFails("set end to 1").Message, "keyword");
 	CHECK_CONTAINS(CompileFails("function if()\nend").Message, "keyword");
 }
 
-FORGE_TEST(CompileErrorLoopControlOutsideLoop)
+FORGESCRIPT_TEST(CompileErrorLoopControlOutsideLoop)
 {
 	CHECK_CONTAINS(CompileFails("stop").Message, "only be used inside a loop");
 	CHECK_CONTAINS(CompileFails("skip").Message, "only be used inside a loop");
 }
 
-FORGE_TEST(CompileErrorIncompletePhrase)
+FORGESCRIPT_TEST(CompileErrorIncompletePhrase)
 {
 	CompileError error = CompileFails("random number from 1");
 	CHECK_CONTAINS(error.Message, "not complete");
 	CHECK_CONTAINS(error.Message, "random number from (low) to (high)");
 }
 
-FORGE_TEST(CompileErrorBadPlacement)
+FORGESCRIPT_TEST(CompileErrorBadPlacement)
 {
 	CHECK_CONTAINS(CompileFails("function f()\n\tconstant X is 1\nend").Message, "top level");
 	CHECK_CONTAINS(CompileFails("function f()\n\tphrase hi\n\tend\nend").Message, "top level");
@@ -75,7 +75,7 @@ FORGE_TEST(CompileErrorBadPlacement)
 	CHECK_CONTAINS(CompileFails("else").Message, "needs an 'if'");
 }
 
-FORGE_TEST(CompileErrorUnfinishedExpression)
+FORGESCRIPT_TEST(CompileErrorUnfinishedExpression)
 {
 	CHECK_CONTAINS(CompileFails("set x to").Message, "Expected a value");
 	CHECK_CONTAINS(CompileFails("say (1 + 2").Message, "Expected ')'");
@@ -83,7 +83,7 @@ FORGE_TEST(CompileErrorUnfinishedExpression)
 	CHECK_CONTAINS(CompileFails("repeat 3\nend").Message, "times");
 }
 
-FORGE_TEST(CompilesSingleLineBlocks)
+FORGESCRIPT_TEST(CompilesSingleLineBlocks)
 {
 	CompilesFine("if true then say 1 else say 2 end");
 	CompilesFine("for each x in [1] do say x end");
@@ -91,12 +91,12 @@ FORGE_TEST(CompilesSingleLineBlocks)
 	CompilesFine("while false do end");
 }
 
-FORGE_TEST(CompilesKeywordsAsPropertyNames)
+FORGESCRIPT_TEST(CompilesKeywordsAsPropertyNames)
 {
 	CompilesFine("set m to {}\nset m.end to 1\nsay m.end\nsay {if: 1}.if");
 }
 
-FORGE_TEST(RuntimeErrorReportsLineAndTrace)
+FORGESCRIPT_TEST(RuntimeErrorReportsLineAndTrace)
 {
 	ForgeTest::ScriptRun run = ForgeTest::RunScript("function inner()\n\treturn 1 / 0\nend\nfunction outer()\n\treturn inner()\nend\nouter()\n");
 	CHECK(!run.Success);
@@ -110,7 +110,7 @@ FORGE_TEST(RuntimeErrorReportsLineAndTrace)
 	}
 }
 
-FORGE_TEST(InstructionLimitStopsEndlessLoops)
+FORGESCRIPT_TEST(InstructionLimitStopsEndlessLoops)
 {
 	VMConfig config;
 	config.InstructionLimit = 100000;
@@ -122,7 +122,7 @@ FORGE_TEST(InstructionLimitStopsEndlessLoops)
 	CHECK_CONTAINS(error, "ran too long without waiting");
 }
 
-FORGE_TEST(ReplShowsExpressionValues)
+FORGESCRIPT_TEST(ReplShowsExpressionValues)
 {
 	VM vm;
 	std::string output;

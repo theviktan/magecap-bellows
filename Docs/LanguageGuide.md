@@ -1,13 +1,13 @@
-# Forge Language Guide
+# ForgeScript Language Guide
 
-Forge is a scripting language for games. It reads like plain English, it is short to type, and it was built to drive a game engine: moving entities, reacting to events, waiting for time to pass, and organizing game objects.
+ForgeScript is a scripting language for games. It reads like plain English, it is short to type, and it was built to drive a game engine: moving entities, reacting to events, waiting for time to pass, and organizing game objects.
 
-This guide teaches the whole language step by step. Every example is real Forge code you can run.
+This guide teaches the whole language step by step. Every example is real ForgeScript code you can run.
 
-**How to try the examples:** open a terminal in the folder that holds `forge.exe` (Windows) or `forge` (Linux) and either:
+**How to try the examples:** open a terminal in the folder that holds `forgescript.exe` (Windows) or `forgescript` (Linux) and either:
 
-- type `forge` and press Enter to open the interactive prompt, then type code line by line, or
-- save code in a file such as `test.forge`, then run `forge test.forge`.
+- type `forgescript` and press Enter to open the interactive prompt, then type code line by line, or
+- save code in a file such as `test.forge`, then run `forgescript test.forge`.
 
 ---
 
@@ -44,7 +44,7 @@ Create a file named `hello.forge` with this line:
 say "Hello, world!"
 ```
 
-Run it with `forge hello.forge`. It prints:
+Run it with `forgescript hello.forge`. It prints:
 
 ```
 Hello, world!
@@ -52,7 +52,7 @@ Hello, world!
 
 `say` shows a value. Text goes inside double quotes `" "`.
 
-**Comments** are notes for people. Forge ignores them:
+**Comments** are notes for people. ForgeScript ignores them:
 
 ```forge
 # This is a comment. It runs to the end of the line.
@@ -77,7 +77,7 @@ Inside `( )`, `[ ]` and `{ }` you can spread values over as many lines as you li
 
 ## 2. Values
 
-Forge has a small set of value types:
+ForgeScript has a small set of value types:
 
 | Type | Examples | Notes |
 |---|---|---|
@@ -115,7 +115,7 @@ set player_name to "Ron"
 set is_alive to yes
 ```
 
-Forge has English commands for changing numbers:
+ForgeScript has English commands for changing numbers:
 
 ```forge
 set gold to 50
@@ -140,7 +140,7 @@ constant MAX_HEALTH is 100
 
 Trying to `set MAX_HEALTH to 5` later is an error.
 
-**Names** may use letters, digits and `_`, and must start with a letter or `_`. Words that Forge uses itself (like `if`, `end`, `set`, `to`, `from`, `by`, `with`) cannot be variable names. See the full list in [Reference.md](Reference.md#reserved-words).
+**Names** may use letters, digits and `_`, and must start with a letter or `_`. Words that ForgeScript uses itself (like `if`, `end`, `set`, `to`, `from`, `by`, `with`) cannot be variable names. See the full list in [Reference.md](Reference.md#reserved-words).
 
 ---
 
@@ -169,16 +169,16 @@ To write a real `{` or `}` in text, put a backslash before it: `"\{"`.
 **Useful text tools:**
 
 ```forge
-set title to "Forge Language"
-say title.length              # 14
-say title.upper()             # FORGE LANGUAGE
-say title.lower()             # forge language
-say title[1]                  # F   (positions start at 1)
-say title[-1]                 # e   (negative positions count from the end)
-say title.slice(1, 5)         # Forge
-say title.contains("Lang")    # true
-say title contains "Lang"     # true (the same thing, in English)
-say title.replace("Forge", "My")      # My Language
+set title to "Dragon Quest"
+say title.length              # 12
+say title.upper()             # DRAGON QUEST
+say title.lower()             # dragon quest
+say title[1]                  # D   (positions start at 1)
+say title[-1]                 # t   (negative positions count from the end)
+say title.slice(1, 6)         # Dragon
+say title.contains("Quest")   # true
+say title contains "Quest"    # true (the same thing, in English)
+say title.replace("Dragon", "Side")     # Side Quest
 say "a,b,c".split(",")        # ["a", "b", "c"]
 say "  padded  ".trim()       # padded
 say "42".is_number()          # true
@@ -216,7 +216,7 @@ if health is 0 then say "Game over" end
 
 ### Comparing values
 
-| Forge | Meaning |
+| ForgeScript | Meaning |
 |---|---|
 | `a is b` | equal |
 | `a is not b` | not equal |
@@ -230,7 +230,7 @@ if health is 0 then say "Game over" end
 | `a is a number` | type check (`number`, `text`, `boolean`, `list`, `map`, `function`, `vector`, `object`, `kind`) |
 | `a is a Enemy` | is this object made from the kind `Enemy` (or a kind that extends it)? |
 
-If you prefer symbols, `==`, `!=`, `<`, `<=`, `>`, `>=` also work. A single `=` is **not** used in Forge; the compiler will tell you to use `is` or `to` instead.
+If you prefer symbols, `==`, `!=`, `<`, `<=`, `>`, `>=` also work. A single `=` is **not** used in ForgeScript; the compiler will tell you to use `is` or `to` instead.
 
 ### Combining conditions
 
@@ -268,7 +268,7 @@ for i from 10 to 0 by -2 do
 end
 ```
 
-The end number is included. If the start is bigger than the end, Forge counts down automatically.
+The end number is included. If the start is bigger than the end, ForgeScript counts down automatically.
 
 ### Go through every item with `for each`
 
@@ -499,7 +499,7 @@ say next_id()    # 2
 
 ## 10. Phrases: your own English commands
 
-A **phrase** is a function you call with words instead of brackets. This is what lets Forge scripts read like instructions.
+A **phrase** is a function you call with words instead of brackets. This is what lets ForgeScript scripts read like instructions.
 
 ```forge
 phrase heal (target) by (amount)
@@ -537,7 +537,7 @@ say random item from ["red", "blue"]        # random pick
 say distance from vector(0, 0, 0) to vector(3, 4, 0)    # 5
 ```
 
-If you start a phrase but do not finish it, Forge shows every way the phrase can be written.
+If you start a phrase but do not finish it, ForgeScript shows every way the phrase can be written.
 
 ---
 
@@ -691,13 +691,13 @@ Every `when` block also runs as its own task, which is why handlers can `wait`.
 
 **Important:** a loop that never waits freezes the game, because nothing else gets a turn. Always put a `wait` inside `repeat forever` and other long-running loops. The engine can stop runaway scripts with an error.
 
-Code the engine calls directly and needs an answer from right away (for example, a sorting function you pass to `sort_by`) cannot `wait`. Forge tells you clearly if this happens; use `start` for code that needs to wait.
+Code the engine calls directly and needs an answer from right away (for example, a sorting function you pass to `sort_by`) cannot `wait`. ForgeScript tells you clearly if this happens; use `start` for code that needs to wait.
 
 ---
 
 ## 14. Handling errors
 
-When something goes wrong (dividing by zero, reading outside a list, calling something that does not exist), Forge stops that task and reports a clear error with the file and line number:
+When something goes wrong (dividing by zero, reading outside a list, calling something that does not exist), ForgeScript stops that task and reports a clear error with the file and line number:
 
 ```
 Error: Position 5 is outside the list, which has 2 items.
@@ -763,7 +763,7 @@ say position.length             # how far from (0, 0, 0)
 | `a.lerp(b, t)`, `lerp(a, b, t)` | blend from a to b (t from 0 to 1) |
 | `v.copy()` / `copy(v)` | a separate copy |
 
-**Engine positions:** `set my position.x to 5` works on engine objects too. Forge reads the position, changes `x`, and gives the new position back to the engine automatically.
+**Engine positions:** `set my position.x to 5` works on engine objects too. ForgeScript reads the position, changes `x`, and gives the new position back to the engine automatically.
 
 ---
 

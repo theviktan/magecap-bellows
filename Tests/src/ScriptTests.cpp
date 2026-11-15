@@ -82,7 +82,7 @@ namespace {
 		ForgeTest::RunOptions options;
 		options.StressGC = stressGC;
 		std::filesystem::path folder = path.parent_path() / "modules";
-		options.Setup = [folder](Forge::VM& vm)
+		options.Setup = [folder](ForgeScript::VM& vm)
 		{
 			vm.SetRandomSeed(42);
 			vm.SetModuleLoader([folder](const std::string& name, std::string& outName, std::string& outSource)
@@ -128,7 +128,7 @@ namespace {
 	std::vector<std::filesystem::path> ScriptFiles()
 	{
 		std::vector<std::filesystem::path> files;
-		for (const auto& entry : std::filesystem::directory_iterator(FORGE_TEST_SCRIPTS_DIR))
+		for (const auto& entry : std::filesystem::directory_iterator(FORGESCRIPT_TEST_SCRIPTS_DIR))
 		{
 			if (entry.is_regular_file() && entry.path().extension() == ".forge")
 				files.push_back(entry.path());
@@ -139,7 +139,7 @@ namespace {
 
 }
 
-FORGE_TEST(ScriptExpectations)
+FORGESCRIPT_TEST(ScriptExpectations)
 {
 	std::vector<std::filesystem::path> files = ScriptFiles();
 	CHECK(!files.empty());
@@ -150,7 +150,7 @@ FORGE_TEST(ScriptExpectations)
 	}
 }
 
-FORGE_TEST(ScriptExpectationsUnderGCStress)
+FORGESCRIPT_TEST(ScriptExpectationsUnderGCStress)
 {
 	for (const std::filesystem::path& file : ScriptFiles())
 		CheckScript(file, true);

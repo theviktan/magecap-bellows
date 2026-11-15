@@ -1,4 +1,4 @@
-# Forge Quick Reference
+# ForgeScript Quick Reference
 
 Everything in the language on one page. For explanations and examples, see the [Language Guide](LanguageGuide.md).
 

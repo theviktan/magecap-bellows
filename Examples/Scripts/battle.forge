@@ -1,5 +1,5 @@
 # battle.forge - kinds, inheritance, events and waiting.
-# Run it with:  forge --realtime battle.forge  to watch it play out in real time.
+# Run it with:  forgescript --realtime battle.forge  to watch it play out in real time.
 
 kind Fighter
 	set name to "fighter"

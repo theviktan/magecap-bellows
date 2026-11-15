@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Forge/Forge.h"
+#include "ForgeScript/ForgeScript.h"
 
 #include <functional>
 #include <sstream>
 #include <string>
 #include <vector>
 
-// A deliberately small test framework: register with FORGE_TEST, check with CHECK / CHECK_EQ.
+// A deliberately small test framework: register with FORGESCRIPT_TEST, check with CHECK / CHECK_EQ.
 
 namespace ForgeTest {
 
@@ -56,14 +56,14 @@ namespace ForgeTest {
 	{
 		double SimulateSeconds = 30.0;   // How long to keep calling Update after loading.
 		bool StressGC = false;           // Collect garbage on every instruction.
-		std::function<void(Forge::VM&)> Setup;
+		std::function<void(ForgeScript::VM&)> Setup;
 	};
 
 	ScriptRun RunScript(const std::string& source, const RunOptions& options = RunOptions());
 
 }
 
-#define FORGE_TEST(name)                                                         \
+#define FORGESCRIPT_TEST(name)                                                         \
 	static void name();                                                          \
 	static ForgeTest::Registrar name##Registrar(#name, name);                    \
 	static void name()

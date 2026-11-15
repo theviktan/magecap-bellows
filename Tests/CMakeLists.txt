@@ -1,4 +1,4 @@
-add_executable(ForgeTests
+add_executable(ForgeScriptTests
 	src/TestFramework.h
 	src/TestMain.cpp
 	src/LexerTests.cpp
@@ -6,8 +6,8 @@ add_executable(ForgeTests
 	src/EmbeddingTests.cpp
 	src/ScriptTests.cpp
 )
-target_link_libraries(ForgeTests PRIVATE Forge)
-target_compile_definitions(ForgeTests PRIVATE FORGE_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts")
-forge_set_warnings(ForgeTests)
+target_link_libraries(ForgeScriptTests PRIVATE ForgeScript)
+target_compile_definitions(ForgeScriptTests PRIVATE FORGESCRIPT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+forge_set_warnings(ForgeScriptTests)
 
-add_test(NAME ForgeTests COMMAND ForgeTests)
+add_test(NAME ForgeScriptTests COMMAND ForgeScriptTests)

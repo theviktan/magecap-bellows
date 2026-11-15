@@ -1,6 +1,6 @@
-# Forge Language
+# ForgeScript
 
-**Forge** is a scripting language for games by MageCap Games. It reads like plain English, is quick to learn, and is built to drive a game engine: entities, events, timers and game objects are part of the language itself.
+**ForgeScript** is a scripting language for games by MageCap Games. It reads like plain English, is quick to learn, and is built to drive a game engine: entities, events, timers and game objects are part of the language itself.
 
 ```forge
 set health to 100
@@ -29,10 +29,10 @@ end
 
 | | |
 |---|---|
-| [Language Guide](Docs/LanguageGuide.md) | Learn Forge step by step, from your first script to kinds, events and tasks. |
+| [Language Guide](Docs/LanguageGuide.md) | Learn ForgeScript step by step, from your first script to kinds, events and tasks. |
 | [Quick Reference](Docs/Reference.md) | Every statement, operator, function and method on one page. |
-| [Embedding Guide](Docs/Embedding.md) | Add Forge to a C++/CMake engine, expose entities, send events. |
-| [AGENTS.md](AGENTS.md) | How to work on Forge itself: layout, code style, testing rules. |
+| [Embedding Guide](Docs/Embedding.md) | Add ForgeScript to a C++/CMake engine, expose entities, send events. |
+| [AGENTS.md](AGENTS.md) | How to work on ForgeScript itself: layout, code style, testing rules. |
 
 ## Building
 
@@ -42,11 +42,11 @@ You need CMake 3.20 or newer and a C++17 compiler.
 
 1. Install **Visual Studio 2022** with the **Desktop development with C++** workload (it includes CMake).
 2. Open **x64 Native Tools Command Prompt for VS 2022** from the Start menu.
-3. Go to this folder, for example: `cd C:\Dev\ForgeLanguage`
+3. Go to this folder, for example: `cd C:\Dev\ForgeScript`
 4. Configure: `cmake -S . -B build`
 5. Build: `cmake --build build --config Release`
 6. Run the tests: `ctest --test-dir build -C Release --output-on-failure`
-7. The tool is at `build\ForgeCLI\Release\forge.exe`.
+7. The tool is at `build\ForgeScriptCLI\Release\forgescript.exe`.
 
 You can also open the folder directly in Visual Studio (**File > Open > Folder...**) and it will configure CMake for you.
 
@@ -56,44 +56,44 @@ You can also open the folder directly in Visual Studio (**File > Open > Folder..
 2. Configure: `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`
 3. Build: `cmake --build build`
 4. Run the tests: `ctest --test-dir build --output-on-failure`
-5. The tool is at `build/ForgeCLI/forge`.
+5. The tool is at `build/ForgeScriptCLI/forgescript`.
 
 ### Build options
 
 | Option | Default | |
 |---|---|---|
-| `FORGE_BUILD_CLI` | ON | The `forge` command line tool. |
-| `FORGE_BUILD_TESTS` | ON | The test suite. |
-| `FORGE_BUILD_EXAMPLES` | ON | The engine integration example. |
-| `FORGE_WARNINGS_AS_ERRORS` | OFF | Fail the build on any compiler warning. |
+| `FORGESCRIPT_BUILD_CLI` | ON | The `forgescript` command line tool. |
+| `FORGESCRIPT_BUILD_TESTS` | ON | The test suite. |
+| `FORGESCRIPT_BUILD_EXAMPLES` | ON | The engine integration example. |
+| `FORGESCRIPT_WARNINGS_AS_ERRORS` | OFF | Fail the build on any compiler warning. |
 
-## Using the `forge` tool
+## Using the `forgescript` tool
 
 ```
-forge                          start the interactive prompt
-forge game.forge               run a script
-forge --check game.forge       check a script for mistakes without running it
-forge --realtime game.forge    run with real time, so "wait 2 seconds" really waits
-forge --version                show the version
+forgescript                          start the interactive prompt
+forgescript game.forge               run a script
+forgescript --check game.forge       check a script for mistakes without running it
+forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
+forgescript --version                show the version
 ```
 
-Try the scripts in [`Examples/Scripts`](Examples/Scripts): `forge Examples/Scripts/battle.forge`.
+Try the scripts in [`Examples/Scripts`](Examples/Scripts): `forgescript Examples/Scripts/battle.forge`.
 
 ## Editor support
 
-[`Editor/vscode-forge`](Editor/vscode-forge) adds syntax highlighting and auto-indent for `.forge` files to Visual Studio Code. Its README has the install steps.
+[`Editor/vscode-forgescript`](Editor/vscode-forgescript) adds syntax highlighting and auto-indent for `.forge` files to Visual Studio Code. Its README has the install steps.
 
 ## Project layout
 
 ```
-Forge/            the language library (link this into the engine)
-  src/Forge/
-    Forge.h       the one header to include
+ForgeScript/            the language library (link this into the engine)
+  src/ForgeScript/
+    ForgeScript.h       the one header to include
     API/          types for native (C++) functions and objects
     Compiler/     lexer, phrases and the compiler
     Core/         values, objects, bytecode, UTF-8 helpers
     VM/           virtual machine, tasks, garbage collector, standard library
-ForgeCLI/         the forge command line tool and interactive prompt
+ForgeScriptCLI/         the forgescript command line tool and interactive prompt
 Tests/            C++ unit tests and Tests/scripts/*.forge expectation tests
 Examples/         example scripts and a mini engine showing integration
 Docs/             language guide, reference and embedding guide
