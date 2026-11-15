@@ -2,9 +2,9 @@
 
 #include <cmath>
 
-using namespace Forge;
+using namespace ForgeScript;
 
-// These tests use Forge the way a game engine does: C++ objects exposed to scripts,
+// These tests use ForgeScript the way a game engine does: C++ objects exposed to scripts,
 // one module per entity, events sent from the game loop, and time moving forward.
 
 namespace {
@@ -78,7 +78,7 @@ namespace {
 
 }
 
-FORGE_TEST(NativeFunctionsAreCallable)
+FORGESCRIPT_TEST(NativeFunctionsAreCallable)
 {
 	Harness h;
 	h.Machine.RegisterFunction("double_it", 1, [](CallContext& c) { return Value::FromNumber(c.Number(0) * 2); });
@@ -94,7 +94,7 @@ FORGE_TEST(NativeFunctionsAreCallable)
 	CHECK(h.Errors.empty());
 }
 
-FORGE_TEST(NativeErrorsAreCatchable)
+FORGESCRIPT_TEST(NativeErrorsAreCatchable)
 {
 	Harness h;
 	h.Machine.RegisterFunction("needs_number", 1, [](CallContext& c) { return Value::FromNumber(c.Number(0)); });
@@ -102,7 +102,7 @@ FORGE_TEST(NativeErrorsAreCatchable)
 	CHECK_EQ(h.Output, std::string("needs_number needs a number for value 1, but got text.\n"));
 }
 
-FORGE_TEST(NativePhrases)
+FORGESCRIPT_TEST(NativePhrases)
 {
 	NativeType entityType = MakeEntityType();
 	FakeEntity hero{ "Hero" };
@@ -133,7 +133,7 @@ FORGE_TEST(NativePhrases)
 	CHECK_CONTAINS(error, "'if'");
 }
 
-FORGE_TEST(NativeTypesExposeProperties)
+FORGESCRIPT_TEST(NativeTypesExposeProperties)
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -163,7 +163,7 @@ FORGE_TEST(NativeTypesExposeProperties)
 	CHECK_EQ(player.Z, 4.0);
 }
 
-FORGE_TEST(NativeTypeErrors)
+FORGESCRIPT_TEST(NativeTypeErrors)
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -184,7 +184,7 @@ FORGE_TEST(NativeTypeErrors)
 	CHECK(!enemy.Alive);
 }
 
-FORGE_TEST(OneModulePerEntityWithEvents)
+FORGESCRIPT_TEST(OneModulePerEntityWithEvents)
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -225,7 +225,7 @@ FORGE_TEST(OneModulePerEntityWithEvents)
 	CHECK(h.Errors.empty());
 }
 
-FORGE_TEST(WaitUsesGameTime)
+FORGESCRIPT_TEST(WaitUsesGameTime)
 {
 	Harness h;
 	h.Machine.Load(
@@ -256,7 +256,7 @@ FORGE_TEST(WaitUsesGameTime)
 	CHECK_EQ(h.Machine.GetTaskCount(), static_cast<size_t>(0));
 }
 
-FORGE_TEST(UnloadCancelsWaitingTasks)
+FORGESCRIPT_TEST(UnloadCancelsWaitingTasks)
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("start (function()\n\twait 1 second\n\tsay \"should not print\"\nend)()\n", "t.forge");
@@ -269,7 +269,7 @@ FORGE_TEST(UnloadCancelsWaitingTasks)
 	CHECK(h.Output.empty());
 }
 
-FORGE_TEST(HostCallsScriptFunctions)
+FORGESCRIPT_TEST(HostCallsScriptFunctions)
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("function score(a, b)\n\treturn a * 10 + b\nend\nfunction slow()\n\twait 1 second\nend\n", "t.forge");
@@ -290,7 +290,7 @@ FORGE_TEST(HostCallsScriptFunctions)
 	}
 }
 
-FORGE_TEST(ScriptsShareGlobalsSetByTheHost)
+FORGESCRIPT_TEST(ScriptsShareGlobalsSetByTheHost)
 {
 	Harness h;
 	h.Machine.SetSharedGlobal("gravity", Value::FromNumber(9.8));
@@ -300,7 +300,7 @@ FORGE_TEST(ScriptsShareGlobalsSetByTheHost)
 	CHECK_EQ(h.Output, std::string("9.8\n1\n9.8\n"));
 }
 
-FORGE_TEST(TriggerHandlerRoutesEvents)
+FORGESCRIPT_TEST(TriggerHandlerRoutesEvents)
 {
 	Harness h;
 	h.Machine.SetTriggerHandler([&h](Module*, const std::string& event, const std::vector<Value>& values)
@@ -313,7 +313,7 @@ FORGE_TEST(TriggerHandlerRoutesEvents)
 	CHECK_EQ(h.Output, std::string("listener A heard Ron\nlistener B heard Ron\n"));
 }
 
-FORGE_TEST(HandlesKeepValuesAlive)
+FORGESCRIPT_TEST(HandlesKeepValuesAlive)
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("set data to [\"keep me\", { nested: [1, 2, 3] }]\n", "t.forge");
@@ -330,7 +330,7 @@ FORGE_TEST(HandlesKeepValuesAlive)
 	CHECK_EQ(h.Machine.ToText(copy.Get()), std::string("[\"keep me\", {\"nested\": [1, 2, 3]}]"));
 }
 
-FORGE_TEST(GarbageIsCollected)
+FORGESCRIPT_TEST(GarbageIsCollected)
 {
 	Harness h;
 	h.Machine.CollectGarbage();
@@ -354,7 +354,7 @@ FORGE_TEST(GarbageIsCollected)
 	CHECK(h.Machine.GetObjectCount() <= after);
 }
 
-FORGE_TEST(CallbacksSurviveGCStress)
+FORGESCRIPT_TEST(CallbacksSurviveGCStress)
 {
 	VMConfig config;
 	config.InitialGCThreshold = 1;
@@ -370,7 +370,7 @@ FORGE_TEST(CallbacksSurviveGCStress)
 	CHECK(h.Errors.empty());
 }
 
-FORGE_TEST(ModuleLoaderAndCaching)
+FORGESCRIPT_TEST(ModuleLoaderAndCaching)
 {
 	Harness h;
 	int loads = 0;
@@ -393,7 +393,7 @@ FORGE_TEST(ModuleLoaderAndCaching)
 		CHECK_CONTAINS(h.Errors[0], "Could not find the script \"missing\"");
 }
 
-FORGE_TEST(CompileErrorsAreReportedToTheHost)
+FORGESCRIPT_TEST(CompileErrorsAreReportedToTheHost)
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("say 1\nset x to\n", "broken.forge");
@@ -403,7 +403,7 @@ FORGE_TEST(CompileErrorsAreReportedToTheHost)
 	CHECK(h.Output.empty());
 }
 
-FORGE_TEST(RandomSeedIsRepeatable)
+FORGESCRIPT_TEST(RandomSeedIsRepeatable)
 {
 	Harness a;
 	Harness b;

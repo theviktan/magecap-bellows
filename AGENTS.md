@@ -1,17 +1,17 @@
-# AGENTS.md — Working on Forge Language
+# AGENTS.md — Working on ForgeScript
 
 Guidelines for anyone (human or AI agent) changing this repository. Read this before making changes.
 
 ## What this is
 
-Forge is a natural-language-style scripting language for the MageCap game engine: a C++17 static library (`Forge/`), a command line tool (`ForgeCLI/`), tests (`Tests/`), examples and docs. It is production software: stable, tested and friendly to beginners.
+ForgeScript is a natural-language-style scripting language for the MageCap game engine: a C++17 static library (`ForgeScript/`), a command line tool (`ForgeScriptCLI/`), tests (`Tests/`), examples and docs. It is production software: stable, tested and friendly to beginners.
 
 ## Build and test
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFORGE_WARNINGS_AS_ERRORS=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFORGESCRIPT_WARNINGS_AS_ERRORS=ON
 cmake --build build
-ctest --test-dir build --output-on-failure        # or: ./build/Tests/ForgeTests [name filter]
+ctest --test-dir build --output-on-failure        # or: ./build/Tests/ForgeScriptTests [name filter]
 ```
 
 Before every commit, also run the sanitizer build:
@@ -19,7 +19,7 @@ Before every commit, also run the sanitizer build:
 ```bash
 cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
 	-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined"
-cmake --build build-asan && ./build-asan/Tests/ForgeTests
+cmake --build build-asan && ./build-asan/Tests/ForgeScriptTests
 ```
 
 A change is done only when: it builds with warnings as errors, every test passes (normal, GC stress and sanitizers), and docs match the behavior.
@@ -37,12 +37,12 @@ A change is done only when: it builds with warnings as errors, every test passes
 - Tabs for indentation, braces on their own line (Allman style), `#pragma once` in headers.
 - `PascalCase` for types, functions and methods; `camelCase` for locals and parameters.
 - Members: `m_Name`; statics: `s_Name`; plain data structs use public `PascalCase` fields (like Hazel components).
-- Everything lives in `namespace Forge`. Include paths are rooted at `Forge/src` (`#include "Forge/VM/VM.h"`).
-- Include order: the file's own header first, then other Forge headers, then standard headers, each group sorted.
+- Everything lives in `namespace ForgeScript`. Include paths are rooted at `ForgeScript/src` (`#include "ForgeScript/VM/VM.h"`).
+- Include order: the file's own header first, then other ForgeScript headers, then standard headers, each group sorted.
 - Comment the *why*, in plain English a beginner can follow. Messages and comments use American English.
 - No raw `new`/`delete` outside the VM allocator and the GC sweep. No global mutable state.
 
-## Rules that keep Forge safe
+## Rules that keep ForgeScript safe
 
 **Garbage collection.** The collector runs only between instructions (`Execute` checks at the top of the loop) and never while compiling (`GCPause`). So:
 - Native code may allocate several objects in a row safely.
@@ -50,9 +50,9 @@ A change is done only when: it builds with warnings as errors, every test passes
 - Every new object field that points at another object must be marked in `VM::BlackenObject`.
 - New root containers in the VM must be marked in `VM::MarkRoots`.
 
-**Stacks.** Task stacks are `std::vector` and can reallocate. Never keep a pointer or reference into `Task::Stack` across a push or a call; use indices. Re-fetch `frame` after anything that can push or pop frames (`FORGE_REFRESH`).
+**Stacks.** Task stacks are `std::vector` and can reallocate. Never keep a pointer or reference into `Task::Stack` across a push or a call; use indices. Re-fetch `frame` after anything that can push or pop frames (`FORGESCRIPT_REFRESH`).
 
-**Errors.** Native code reports script errors by throwing `Forge::RuntimeError`. Nothing else may escape into the VM. Every error message must say what went wrong in plain words and, where possible, what to write instead.
+**Errors.** Native code reports script errors by throwing `ForgeScript::RuntimeError`. Nothing else may escape into the VM. Every error message must say what went wrong in plain words and, where possible, what to write instead.
 
 **Names.** A new reserved word breaks existing scripts that use it as a name. Prefer contextual words (checked with `CheckWord`/`MatchWord`) over new keywords.
 
@@ -67,13 +67,13 @@ A change is done only when: it builds with warnings as errors, every test passes
 2. Compiler: a `...Statement()` function; if it opens a block, update `IsBlockOpener` in the compiler **and** `IsBlockOpenerWord` in the lexer.
 3. Opcode (if needed): add it to `OpCode` with its operand comment, then handle it in `VM::Execute`.
 4. Tests: an expectation script, plus compile-error tests in `Tests/src/LanguageTests.cpp` for its mistakes.
-5. Docs: guide, reference, and the VS Code grammar in `Editor/vscode-forge`.
+5. Docs: guide, reference, and the VS Code grammar in `Editor/vscode-forgescript`.
 
 ## Tests
 
 - `Tests/scripts/*.forge` run automatically. Write `# expect: <line>` for each line a script must print, in order, and `# expect error: <part of message>` for each error the host must receive. Each script runs twice: normally and with the garbage collector running on every instruction.
 - Scripts used with `use` live in `Tests/scripts/modules/`.
-- C++ tests use `FORGE_TEST`, `CHECK`, `CHECK_EQ` and `CHECK_CONTAINS` (`Tests/src/TestFramework.h`).
+- C++ tests use `FORGESCRIPT_TEST`, `CHECK`, `CHECK_EQ` and `CHECK_CONTAINS` (`Tests/src/TestFramework.h`).
 - `Examples/EngineIntegration` runs as a test too; keep it working, since it is the reference for engine integration.
 
 ## Commits

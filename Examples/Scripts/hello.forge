@@ -1,7 +1,7 @@
 # hello.forge - the smallest Forge program.
-# Run it with:  forge hello.forge
+# Run it with:  forgescript hello.forge
 
-say "Hello from Forge!"
+say "Hello from ForgeScript!"
 
 set name to "adventurer"
 say "Welcome, {name}. Your quest begins now."

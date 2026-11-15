@@ -1,4 +1,4 @@
-// A tiny stand-in for a game engine, showing every step of embedding Forge:
+// A tiny stand-in for a game engine, showing every step of embedding ForgeScript:
 //   1. one VM for the whole game
 //   2. an "Entity" type that scripts can read, change and call
 //   3. engine phrases such as  move (thing) toward (target) by (amount)
@@ -6,9 +6,9 @@
 //   5. events sent from the game loop, and time moving forward with Update
 //   6. destroying entities safely
 //
-// Build target: ForgeEngineExample. Run it from the build folder.
+// Build target: ForgeScriptEngineExample. Run it from the build folder.
 
-#include "Forge/Forge.h"
+#include "ForgeScript/ForgeScript.h"
 
 #include <cmath>
 #include <iostream>
@@ -27,7 +27,7 @@ namespace Example {
 		double X = 0, Y = 0, Z = 0;
 		double Health = 100;
 		bool Alive = true;
-		Forge::Module* Script = nullptr;
+		ForgeScript::Module* Script = nullptr;
 	};
 
 	// Scripts hold a small reference object instead of a raw Entity pointer, so a script
@@ -77,7 +77,7 @@ namespace Example {
 			: m_Scene(scene), m_VM(MakeConfig())
 		{
 			m_VM.SetPrintHandler([](const std::string& text) { std::cout << "[script] " << text << std::endl; });
-			m_VM.SetErrorHandler([](const Forge::ScriptError& error) { std::cerr << "[script error] " << error.ToString() << std::endl; });
+			m_VM.SetErrorHandler([](const ForgeScript::ScriptError& error) { std::cerr << "[script error] " << error.ToString() << std::endl; });
 			RegisterEntityType();
 			RegisterPhrases();
 		}
@@ -96,18 +96,18 @@ namespace Example {
 			for (auto& entity : m_Scene.All())
 			{
 				if (entity->Alive && entity->Script)
-					m_VM.Emit(entity->Script, "update", { Forge::Value::FromNumber(deltaSeconds) });
+					m_VM.Emit(entity->Script, "update", { ForgeScript::Value::FromNumber(deltaSeconds) });
 			}
 			m_VM.Update(deltaSeconds);
 		}
 
-		void SendEvent(Entity* entity, const std::string& event, const std::vector<Forge::Value>& values)
+		void SendEvent(Entity* entity, const std::string& event, const std::vector<ForgeScript::Value>& values)
 		{
 			if (entity->Alive && entity->Script)
 				m_VM.Emit(entity->Script, event, values);
 		}
 
-		Forge::Value Wrap(Entity* entity)
+		ForgeScript::Value Wrap(Entity* entity)
 		{
 			return m_VM.MakeNative(m_EntityType, new EntityRef{ &m_Scene, entity->ID });
 		}
@@ -123,12 +123,12 @@ namespace Example {
 			}
 		}
 
-		Forge::VM& GetVM() { return m_VM; }
+		ForgeScript::VM& GetVM() { return m_VM; }
 
 	private:
-		static Forge::VMConfig MakeConfig()
+		static ForgeScript::VMConfig MakeConfig()
 		{
-			Forge::VMConfig config;
+			ForgeScript::VMConfig config;
 			config.InstructionLimit = 10'000'000; // A script that never waits cannot freeze the game.
 			return config;
 		}
@@ -139,7 +139,7 @@ namespace Example {
 			return ref->Owner->Find(ref->ID);
 		}
 
-		// Step 2: describe Entity to Forge.
+		// Step 2: describe Entity to ForgeScript.
 		void RegisterEntityType()
 		{
 			m_EntityType.Name = "Entity";
@@ -151,44 +151,44 @@ namespace Example {
 				return entity ? "Entity(" + entity->Name + ")" : std::string("Entity(destroyed)");
 			};
 
-			m_EntityType.Getters["name"] = [](Forge::VM& vm, void* data) { return vm.MakeText(Resolve(data)->Name); };
-			m_EntityType.Getters["health"] = [](Forge::VM&, void* data) { return Forge::Value::FromNumber(Resolve(data)->Health); };
-			m_EntityType.Getters["position"] = [](Forge::VM& vm, void* data)
+			m_EntityType.Getters["name"] = [](ForgeScript::VM& vm, void* data) { return vm.MakeText(Resolve(data)->Name); };
+			m_EntityType.Getters["health"] = [](ForgeScript::VM&, void* data) { return ForgeScript::Value::FromNumber(Resolve(data)->Health); };
+			m_EntityType.Getters["position"] = [](ForgeScript::VM& vm, void* data)
 			{
 				Entity* e = Resolve(data);
 				return vm.MakeVector(e->X, e->Y, e->Z);
 			};
 
-			m_EntityType.Setters["health"] = [](Forge::VM&, void* data, const Forge::Value& value)
+			m_EntityType.Setters["health"] = [](ForgeScript::VM&, void* data, const ForgeScript::Value& value)
 			{
 				if (!value.IsNumber())
-					throw Forge::RuntimeError("health must be a number");
+					throw ForgeScript::RuntimeError("health must be a number");
 				Resolve(data)->Health = value.AsNumber();
 			};
-			m_EntityType.Setters["position"] = [](Forge::VM&, void* data, const Forge::Value& value)
+			m_EntityType.Setters["position"] = [](ForgeScript::VM&, void* data, const ForgeScript::Value& value)
 			{
-				if (!Forge::IsObjectType(value, Forge::ObjectType::Vector))
-					throw Forge::RuntimeError("position must be a vector");
-				Forge::Vector* v = Forge::As<Forge::Vector>(value);
+				if (!ForgeScript::IsObjectType(value, ForgeScript::ObjectType::Vector))
+					throw ForgeScript::RuntimeError("position must be a vector");
+				ForgeScript::Vector* v = ForgeScript::As<ForgeScript::Vector>(value);
 				Entity* e = Resolve(data);
 				e->X = v->X;
 				e->Y = v->Y;
 				e->Z = v->Z;
 			};
 
-			m_EntityType.Methods["destroy"] = { 0, [this](Forge::CallContext& context)
+			m_EntityType.Methods["destroy"] = { 0, [this](ForgeScript::CallContext& context)
 			{
 				// SelfAs reports a clear script error if the entity was already destroyed.
 				EntityRef* ref = context.SelfAs<EntityRef>(m_EntityType);
 				Destroy(Resolve(ref));
-				return Forge::Value();
+				return ForgeScript::Value();
 			} };
 		}
 
 		// Step 3: engine commands written as phrases.
 		void RegisterPhrases()
 		{
-			m_VM.RegisterPhrase("move (thing) toward (target) by (amount)", [this](Forge::CallContext& context)
+			m_VM.RegisterPhrase("move (thing) toward (target) by (amount)", [this](ForgeScript::CallContext& context)
 			{
 				Entity* thing = Resolve(context.NativeArg<EntityRef>(0, m_EntityType));
 				Entity* target = Resolve(context.NativeArg<EntityRef>(1, m_EntityType));
@@ -204,10 +204,10 @@ namespace Example {
 					thing->Y += dy * step;
 					thing->Z += dz * step;
 				}
-				return Forge::Value();
+				return ForgeScript::Value();
 			});
 
-			m_VM.RegisterPhrase("find entity named (name)", [this](Forge::CallContext& context)
+			m_VM.RegisterPhrase("find entity named (name)", [this](ForgeScript::CallContext& context)
 			{
 				const std::string& name = context.Text(0);
 				for (auto& entity : m_Scene.All())
@@ -215,14 +215,14 @@ namespace Example {
 					if (entity->Alive && entity->Name == name)
 						return Wrap(entity.get());
 				}
-				return Forge::Value();
+				return ForgeScript::Value();
 			});
 		}
 
 	private:
 		Scene& m_Scene;
-		Forge::VM m_VM;
-		Forge::NativeType m_EntityType;
+		ForgeScript::VM m_VM;
+		ForgeScript::NativeType m_EntityType;
 	};
 
 }

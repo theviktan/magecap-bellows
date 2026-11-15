@@ -1,0 +1,26 @@
+{
+	"name": "forgescript",
+	"displayName": "ForgeScript",
+	"description": "Syntax highlighting for the ForgeScript scripting language (.forge files).",
+	"version": "1.0.0",
+	"publisher": "magecap-games",
+	"engines": { "vscode": "^1.80.0" },
+	"categories": ["Programming Languages"],
+	"contributes": {
+		"languages": [
+			{
+				"id": "forgescript",
+				"aliases": ["ForgeScript", "forgescript"],
+				"extensions": [".forge"],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "forgescript",
+				"scopeName": "source.forge",
+				"path": "./syntaxes/forgescript.tmLanguage.json"
+			}
+		]
+	}
+}

@@ -1,11 +1,11 @@
 #include "TestFramework.h"
 
-#include "Forge/Compiler/Lexer.h"
-#include "Forge/Compiler/Phrase.h"
+#include "ForgeScript/Compiler/Lexer.h"
+#include "ForgeScript/Compiler/Phrase.h"
 
 #include <algorithm>
 
-using namespace Forge;
+using namespace ForgeScript;
 
 namespace {
 
@@ -20,14 +20,14 @@ namespace {
 
 }
 
-FORGE_TEST(LexerKeywordsAndNames)
+FORGESCRIPT_TEST(LexerKeywordsAndNames)
 {
 	std::vector<TokenType> types = Types("set health to 10");
 	std::vector<TokenType> expected = { TokenType::Set, TokenType::Identifier, TokenType::To, TokenType::Number, TokenType::Newline, TokenType::Eof };
 	CHECK(types == expected);
 }
 
-FORGE_TEST(LexerNumbers)
+FORGESCRIPT_TEST(LexerNumbers)
 {
 	Lexer lexer("12 3.5 1_000 0xff 2e3");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -38,7 +38,7 @@ FORGE_TEST(LexerNumbers)
 	CHECK_EQ(tokens[4].Number, 2000.0);
 }
 
-FORGE_TEST(LexerTextAndInterpolation)
+FORGESCRIPT_TEST(LexerTextAndInterpolation)
 {
 	Lexer lexer("\"Hi {name}!\"");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -49,7 +49,7 @@ FORGE_TEST(LexerTextAndInterpolation)
 	CHECK_EQ(tokens[2].Text, std::string("!"));
 }
 
-FORGE_TEST(LexerPossessive)
+FORGESCRIPT_TEST(LexerPossessive)
 {
 	std::vector<TokenType> types = Types("player's health");
 	CHECK(types[0] == TokenType::Identifier);
@@ -57,21 +57,21 @@ FORGE_TEST(LexerPossessive)
 	CHECK(types[2] == TokenType::Identifier);
 }
 
-FORGE_TEST(LexerNewlinesInsideBracketsAreIgnored)
+FORGESCRIPT_TEST(LexerNewlinesInsideBracketsAreIgnored)
 {
 	std::vector<TokenType> types = Types("[1,\n2,\n3]");
 	CHECK_EQ(std::count(types.begin(), types.end(), TokenType::Newline), 1);
 	CHECK(types[types.size() - 2] == TokenType::Newline);
 }
 
-FORGE_TEST(LexerNewlinesInsideFunctionsInsideBrackets)
+FORGESCRIPT_TEST(LexerNewlinesInsideFunctionsInsideBrackets)
 {
 	// list.map(function(x) <newline> return x <newline> end)
 	std::vector<TokenType> types = Types("f(function(x)\nsay x\nreturn {a:\n1}\nend)");
 	CHECK_EQ(std::count(types.begin(), types.end(), TokenType::Newline), 4);
 }
 
-FORGE_TEST(LexerCommentsAndErrors)
+FORGESCRIPT_TEST(LexerCommentsAndErrors)
 {
 	std::vector<TokenType> types = Types("# a comment\n#[ block\ncomment ]# say 1");
 	CHECK(types[0] == TokenType::Identifier);
@@ -85,7 +85,7 @@ FORGE_TEST(LexerCommentsAndErrors)
 	CHECK(unterminated.Tokenize()[0].Type == TokenType::Error);
 }
 
-FORGE_TEST(LexerLineNumbers)
+FORGESCRIPT_TEST(LexerLineNumbers)
 {
 	Lexer lexer("a\n\nb");
 	std::vector<Token> tokens = lexer.Tokenize();
@@ -93,7 +93,7 @@ FORGE_TEST(LexerLineNumbers)
 	CHECK_EQ(tokens[2].Line, 3);
 }
 
-FORGE_TEST(PhrasePatterns)
+FORGESCRIPT_TEST(PhrasePatterns)
 {
 	PhrasePattern pattern;
 	std::string error;
