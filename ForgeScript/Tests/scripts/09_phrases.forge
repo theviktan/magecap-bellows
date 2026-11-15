@@ -1,0 +1,49 @@
+# Phrases can be used before the line that defines them.
+set early to { hp: 0 }
+heal early by 1
+say early.hp                                 # expect: 1
+
+phrase heal (target) by (amount)
+	add amount to target.hp
+end
+
+set hero to { hp: 50 }
+heal hero by 15
+say hero.hp                                  # expect: 65
+
+phrase deal (amount) damage to (target)
+	take amount from target.hp
+end
+deal 10 damage to hero
+say hero.hp                                  # expect: 55
+
+phrase average of (a) and (b)
+	return (a + b) / 2
+end
+say average of 4 and 8                       # expect: 6
+set mean to average of 1 + 1 and 4
+say mean                                     # expect: 3
+
+phrase move (thing) by (x) and (y)
+	add x to thing.x
+	add y to thing.y
+end
+set box to { x: 0, y: 0 }
+move box by 3 and 4
+say "{box.x},{box.y}"                        # expect: 3,4
+
+phrase greet everyone
+	say "Hello, everyone!"
+end
+greet everyone                               # expect: Hello, everyone!
+
+say random number from 5 to 5                # expect: 5
+say random item from ["only"]                # expect: only
+say distance from vector(0, 0, 0) to vector(3, 4, 0)    # expect: 5
+say random(1, 1)                             # expect: 1
+# Inside a bigger expression, a phrase's result is what gets compared.
+set a to vector(0, 0, 0)
+set b to vector(1, 0, 0)
+if distance from a to b is below 2 then say "close" end      # expect: close
+say (distance from a to b) + 1                               # expect: 2
+say distance from a to b + vector(1, 0, 0)                   # expect: 2

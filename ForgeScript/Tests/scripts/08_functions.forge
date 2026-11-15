@@ -1,0 +1,83 @@
+function add_up(a, b)
+	return a + b
+end
+say add_up(2, 3)                  # expect: 5
+
+function factorial(n)
+	if n is at most 1 then return 1 end
+	return n * factorial(n - 1)
+end
+say factorial(10)                 # expect: 3628800
+
+function nothing_back()
+	set temp to 5
+end
+say nothing_back()                # expect: nothing
+
+# Variables set inside a function belong to that function.
+set shared to "outer"
+function local_test()
+	set inner to "inner value"
+	if true then
+		set result to "set in a block"
+	end
+	return result
+end
+say local_test()                  # expect: set in a block
+
+# Script variables can be changed from inside functions.
+set score to 0
+function score_point()
+	add 1 to score
+	set score to score + 1
+end
+score_point()
+say score                         # expect: 2
+
+function make_counter()
+	set count to 0
+	return function()
+		add 1 to count
+		return count
+	end
+end
+set counter to make_counter()
+counter()
+counter()
+say counter()                     # expect: 3
+set other to make_counter()
+say other()                       # expect: 1
+
+set double to function(x) return x * 2 end
+say double(21)                    # expect: 42
+say sqrt of 81                    # expect: 9
+say length of [1, 2, 3] + 1       # expect: 4
+say abs of -5                     # expect: 5
+
+function apply(f, value)
+	return f(value)
+end
+say apply(double, 4)              # expect: 8
+
+function fib(n)
+	if n is below 2 then return n end
+	return fib(n - 1) + fib(n - 2)
+end
+say fib(20)                       # expect: 6765
+
+function outer()
+	function helper(x)
+		return x + 1
+	end
+	return helper(1)
+end
+say outer()                       # expect: 2
+
+function early(n)
+	for each i in [1, 2, 3] do
+		if i is n then return "found {i}" end
+	end
+	return "none"
+end
+say early(2)                      # expect: found 2
+say early(9)                      # expect: none
