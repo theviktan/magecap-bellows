@@ -111,7 +111,8 @@ tested version.
 | `Tools/` | Agent CLI and build tools |
 | `docs/` | Scripting and automation reference |
 
-Contributors (human or AI) should read [AGENTS.md](AGENTS.md) first.
+Contributors (human or AI) should read [AGENTS.md](AGENTS.md) first. Plans for 2D, ForgeScript and
+MageCap Forge integration are in [docs/Roadmap.md](docs/Roadmap.md).
 
 ## License notices
 
