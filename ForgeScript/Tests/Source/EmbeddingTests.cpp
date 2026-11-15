@@ -415,3 +415,58 @@ TEST_CASE("RandomSeedIsRepeatable")
 	b.Machine.Load(script, "t.forge");
 	CHECK_EQ(a.Output, b.Output);
 }
+
+TEST_CASE("NativeObjectsCanCompareEqual")
+{
+	// Two separate wrappers of one C++ object: equal (and usable as one map key) only with Equals/Hash.
+	NativeType idType;
+	idType.Name = "Id";
+	idType.Equals = [](void* a, void* b) { return *static_cast<int*>(a) == *static_cast<int*>(b); };
+	idType.Hash = [](void* data) { return std::hash<int>()(*static_cast<int*>(data)); };
+	NativeType plainType;
+	plainType.Name = "Plain";
+
+	int first = 7;
+	int same = 7;
+	int other = 8;
+	Harness h;
+	h.Machine.SetSharedGlobal("a", h.Machine.MakeNative(idType, &first));
+	h.Machine.SetSharedGlobal("b", h.Machine.MakeNative(idType, &same));
+	h.Machine.SetSharedGlobal("c", h.Machine.MakeNative(idType, &other));
+	h.Machine.SetSharedGlobal("p", h.Machine.MakeNative(plainType, &first));
+	h.Machine.SetSharedGlobal("q", h.Machine.MakeNative(plainType, &first));
+	h.Machine.Load(
+		"say a is b\n"
+		"say a is c\n"
+		"say p is q\n"
+		"set seen to {}\n"
+		"set seen[a] to \"first\"\n"
+		"say seen[b]\n"
+		"say [a] contains b\n",
+		"t.forge");
+	CHECK_EQ(h.Output, std::string("true\nfalse\nfalse\nfirst\ntrue\n"));
+	CHECK(h.Errors.empty());
+}
+
+TEST_CASE("NativeFunctionsCanHaveMembers")
+{
+	VMConfig config;
+	config.InitialGCThreshold = 1;
+	Harness h(config);
+	Value make = h.Machine.MakeFunction("Point", 1, [](CallContext& c) { return Value::FromNumber(c.Number(0) * 10); });
+	CHECK(h.Machine.SetFunctionMember(make, "origin", h.Machine.MakeFunction("origin", 0, [](CallContext&) { return Value::FromNumber(0); })));
+	CHECK(h.Machine.SetFunctionMember(make, "unit", Value::FromNumber(1)));
+	CHECK(!h.Machine.SetFunctionMember(Value::FromNumber(3), "x", Value()));
+	h.Machine.SetSharedGlobal("Point", make);
+	h.Machine.CollectGarbage();
+	h.Machine.Load(
+		"say Point(2)\n"
+		"say Point.origin()\n"
+		"say Point.unit\n"
+		"set f to Point.origin\n"
+		"say f()\n"
+		"try\n\tsay Point.missing\ncatch p\n\tsay p\nend\n",
+		"t.forge");
+	CHECK_EQ(h.Output, std::string("20\n0\n1\n0\n'Point' has nothing called 'missing'.\n"));
+	CHECK(h.Errors.empty());
+}
