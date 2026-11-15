@@ -362,8 +362,8 @@ namespace Bellows::Scripting {
 			Entity entity = handle.Resolve();
 			Scene* scene = entity.GetScene();
 			const glm::mat4 world = scene->GetWorldTransform(entity);
-			glm::vec3 position, scale;
-			glm::quat rotation;
+			glm::vec3 position(0.0f), scale(1.0f);
+			glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 			Math::DecomposeTransform(world, position, rotation, scale);
 			glm::vec3 direction = target - position;
 			if (glm::length(direction) < 1e-6f)
@@ -614,52 +614,52 @@ namespace Bellows::Scripting {
 					throw py::value_error("Material '" + path + "' could not be loaded");
 				return PyMaterial { material, path };
 			}, py::arg("path"))
-			.def_property_readonly("path", [](const PyMaterial& m) { return m.Path; })
-			.def_property("name", [](const PyMaterial& m) { return m.Instance->GetName(); }, [](PyMaterial& m, const std::string& v) { m.Instance->SetName(v); })
-			.def_property("color", [](const PyMaterial& m) { return m.Instance->GetProperties().AlbedoColor; },
-				[](PyMaterial& m, const py::object& v) { m.Instance->EditProperties().AlbedoColor = ToColor(v); })
-			.def_property("metallic", [](const PyMaterial& m) { return m.Instance->GetProperties().Metallic; },
-				[](PyMaterial& m, float v) { m.Instance->EditProperties().Metallic = std::clamp(v, 0.0f, 1.0f); })
-			.def_property("roughness", [](const PyMaterial& m) { return m.Instance->GetProperties().Roughness; },
-				[](PyMaterial& m, float v) { m.Instance->EditProperties().Roughness = std::clamp(v, 0.0f, 1.0f); })
-			.def_property("emissive", [](const PyMaterial& m) { return m.Instance->GetProperties().EmissiveColor; },
-				[](PyMaterial& m, const glm::vec3& v) { m.Instance->EditProperties().EmissiveColor = v; })
-			.def_property("emissive_intensity", [](const PyMaterial& m) { return m.Instance->GetProperties().EmissiveIntensity; },
-				[](PyMaterial& m, float v) { m.Instance->EditProperties().EmissiveIntensity = std::max(v, 0.0f); })
-			.def_property("alpha_mode", [](const PyMaterial& m) { return std::string(AlphaModeToString(m.Instance->GetProperties().Mode)); },
-				[](PyMaterial& m, const std::string& v) { m.Instance->EditProperties().Mode = AlphaModeFromString(v); })
-			.def_property("double_sided", [](const PyMaterial& m) { return m.Instance->GetProperties().DoubleSided; },
-				[](PyMaterial& m, bool v) { m.Instance->EditProperties().DoubleSided = v; })
-			.def_property("normal_strength", [](const PyMaterial& m) { return m.Instance->GetProperties().NormalStrength; },
-				[](PyMaterial& m, float v) { m.Instance->EditProperties().NormalStrength = std::max(v, 0.0f); })
-			.def_property("alpha_cutoff", [](const PyMaterial& m) { return m.Instance->GetProperties().AlphaCutoff; },
-				[](PyMaterial& m, float v) { m.Instance->EditProperties().AlphaCutoff = std::clamp(v, 0.0f, 1.0f); })
-			.def_property("uv_tiling", [](const PyMaterial& m) { return m.Instance->GetProperties().UVTiling; },
-				[](PyMaterial& m, const glm::vec2& v) { m.Instance->EditProperties().UVTiling = v; })
-			.def_property("uv_offset", [](const PyMaterial& m) { return m.Instance->GetProperties().UVOffset; },
-				[](PyMaterial& m, const glm::vec2& v) { m.Instance->EditProperties().UVOffset = v; })
-			.def_property("albedo_map", [](const PyMaterial& m) { return m.Instance->AlbedoMapPath; },
-				[](PyMaterial& m, const py::object& v) { SetMaterialTexture(*m.Instance, v, m.Instance->AlbedoMapPath, TextureColorSpace::SRGB, &Material::SetAlbedoMap); },
+			.def_property_readonly("path", [](const PyMaterial& material) { return material.Path; })
+			.def_property("name", [](const PyMaterial& material) { return material.Instance->GetName(); }, [](PyMaterial& material, const std::string& v) { material.Instance->SetName(v); })
+			.def_property("color", [](const PyMaterial& material) { return material.Instance->GetProperties().AlbedoColor; },
+				[](PyMaterial& material, const py::object& v) { material.Instance->EditProperties().AlbedoColor = ToColor(v); })
+			.def_property("metallic", [](const PyMaterial& material) { return material.Instance->GetProperties().Metallic; },
+				[](PyMaterial& material, float v) { material.Instance->EditProperties().Metallic = std::clamp(v, 0.0f, 1.0f); })
+			.def_property("roughness", [](const PyMaterial& material) { return material.Instance->GetProperties().Roughness; },
+				[](PyMaterial& material, float v) { material.Instance->EditProperties().Roughness = std::clamp(v, 0.0f, 1.0f); })
+			.def_property("emissive", [](const PyMaterial& material) { return material.Instance->GetProperties().EmissiveColor; },
+				[](PyMaterial& material, const glm::vec3& v) { material.Instance->EditProperties().EmissiveColor = v; })
+			.def_property("emissive_intensity", [](const PyMaterial& material) { return material.Instance->GetProperties().EmissiveIntensity; },
+				[](PyMaterial& material, float v) { material.Instance->EditProperties().EmissiveIntensity = std::max(v, 0.0f); })
+			.def_property("alpha_mode", [](const PyMaterial& material) { return std::string(AlphaModeToString(material.Instance->GetProperties().Mode)); },
+				[](PyMaterial& material, const std::string& v) { material.Instance->EditProperties().Mode = AlphaModeFromString(v); })
+			.def_property("double_sided", [](const PyMaterial& material) { return material.Instance->GetProperties().DoubleSided; },
+				[](PyMaterial& material, bool v) { material.Instance->EditProperties().DoubleSided = v; })
+			.def_property("normal_strength", [](const PyMaterial& material) { return material.Instance->GetProperties().NormalStrength; },
+				[](PyMaterial& material, float v) { material.Instance->EditProperties().NormalStrength = std::max(v, 0.0f); })
+			.def_property("alpha_cutoff", [](const PyMaterial& material) { return material.Instance->GetProperties().AlphaCutoff; },
+				[](PyMaterial& material, float v) { material.Instance->EditProperties().AlphaCutoff = std::clamp(v, 0.0f, 1.0f); })
+			.def_property("uv_tiling", [](const PyMaterial& material) { return material.Instance->GetProperties().UVTiling; },
+				[](PyMaterial& material, const glm::vec2& v) { material.Instance->EditProperties().UVTiling = v; })
+			.def_property("uv_offset", [](const PyMaterial& material) { return material.Instance->GetProperties().UVOffset; },
+				[](PyMaterial& material, const glm::vec2& v) { material.Instance->EditProperties().UVOffset = v; })
+			.def_property("albedo_map", [](const PyMaterial& material) { return material.Instance->AlbedoMapPath; },
+				[](PyMaterial& material, const py::object& v) { SetMaterialTexture(*material.Instance, v, material.Instance->AlbedoMapPath, TextureColorSpace::SRGB, &Material::SetAlbedoMap); },
 				"Albedo (base color) texture path, or None")
-			.def_property("normal_map", [](const PyMaterial& m) { return m.Instance->NormalMapPath; },
-				[](PyMaterial& m, const py::object& v) { SetMaterialTexture(*m.Instance, v, m.Instance->NormalMapPath, TextureColorSpace::Linear, &Material::SetNormalMap); },
+			.def_property("normal_map", [](const PyMaterial& material) { return material.Instance->NormalMapPath; },
+				[](PyMaterial& material, const py::object& v) { SetMaterialTexture(*material.Instance, v, material.Instance->NormalMapPath, TextureColorSpace::Linear, &Material::SetNormalMap); },
 				"Tangent-space normal map path, or None")
-			.def_property("metallic_roughness_map", [](const PyMaterial& m) { return m.Instance->MetallicRoughnessMapPath; },
-				[](PyMaterial& m, const py::object& v) { SetMaterialTexture(*m.Instance, v, m.Instance->MetallicRoughnessMapPath, TextureColorSpace::Linear, &Material::SetMetallicRoughnessMap); },
+			.def_property("metallic_roughness_map", [](const PyMaterial& material) { return material.Instance->MetallicRoughnessMapPath; },
+				[](PyMaterial& material, const py::object& v) { SetMaterialTexture(*material.Instance, v, material.Instance->MetallicRoughnessMapPath, TextureColorSpace::Linear, &Material::SetMetallicRoughnessMap); },
 				"glTF metallic (B) / roughness (G) texture path, or None")
-			.def_property("occlusion_map", [](const PyMaterial& m) { return m.Instance->OcclusionMapPath; },
-				[](PyMaterial& m, const py::object& v) { SetMaterialTexture(*m.Instance, v, m.Instance->OcclusionMapPath, TextureColorSpace::Linear, &Material::SetOcclusionMap); },
+			.def_property("occlusion_map", [](const PyMaterial& material) { return material.Instance->OcclusionMapPath; },
+				[](PyMaterial& material, const py::object& v) { SetMaterialTexture(*material.Instance, v, material.Instance->OcclusionMapPath, TextureColorSpace::Linear, &Material::SetOcclusionMap); },
 				"Ambient occlusion (R) texture path, or None")
-			.def_property("emissive_map", [](const PyMaterial& m) { return m.Instance->EmissiveMapPath; },
-				[](PyMaterial& m, const py::object& v) { SetMaterialTexture(*m.Instance, v, m.Instance->EmissiveMapPath, TextureColorSpace::SRGB, &Material::SetEmissiveMap); },
+			.def_property("emissive_map", [](const PyMaterial& material) { return material.Instance->EmissiveMapPath; },
+				[](PyMaterial& material, const py::object& v) { SetMaterialTexture(*material.Instance, v, material.Instance->EmissiveMapPath, TextureColorSpace::SRGB, &Material::SetEmissiveMap); },
 				"Emissive texture path, or None")
-			.def("save", [](PyMaterial& m, const std::string& path)
+			.def("save", [](PyMaterial& material, const std::string& path)
 			{
-				if (!AssetManager::SaveMaterial(m.Instance, path))
+				if (!AssetManager::SaveMaterial(material.Instance, path))
 					throw std::runtime_error("Could not save material to '" + path + "'");
-				m.Path = path;
+				material.Path = path;
 			}, py::arg("path"), "Writes the material to a .bmat file in the project")
-			.def("__repr__", [](const PyMaterial& m) { return "Material('" + m.Instance->GetName() + "')"; });
+			.def("__repr__", [](const PyMaterial& material) { return "Material('" + material.Instance->GetName() + "')"; });
 
 		// --- Components -------------------------------------------------------
 		py::class_<TransformRef>(m, "Transform", "Position, rotation and scale relative to the parent")
@@ -1028,7 +1028,7 @@ namespace Bellows::Scripting {
 			RenderCamera camera;
 			if (!scene.GetPrimaryCamera(viewport.x / std::max(viewport.y, 1.0f), camera))
 				return py::none();
-			glm::vec3 origin, direction;
+			glm::vec3 origin(0.0f), direction(0.0f);
 			Math::ScreenPointToRay(screenPosition, viewport, glm::inverse(camera.Projection * camera.View), origin, direction);
 			return py::make_tuple(origin, direction);
 		}, py::arg("screen_position"), "Returns (origin, direction) of a ray through a viewport pixel, or None without a camera");
@@ -1039,7 +1039,7 @@ namespace Bellows::Scripting {
 			const glm::vec2 viewport = Input::GetViewportSize().x > 0 ? Input::GetViewportSize()
 				: glm::vec2(static_cast<float>(scene.GetViewportWidth()), static_cast<float>(scene.GetViewportHeight()));
 			RenderCamera camera;
-			glm::vec2 result;
+			glm::vec2 result(0.0f);
 			if (!scene.GetPrimaryCamera(viewport.x / std::max(viewport.y, 1.0f), camera)
 				|| !Math::WorldToScreenPoint(worldPosition, camera.Projection * camera.View, viewport, result))
 				return py::none();

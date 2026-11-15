@@ -20,7 +20,7 @@ namespace {
 		const uint32_t sampleCount = static_cast<uint32_t>(seconds * sampleRate);
 		std::vector<int16_t> samples(sampleCount);
 		for (uint32_t i = 0; i < sampleCount; i++)
-			samples[i] = static_cast<int16_t>(std::sin(glm::two_pi<float>() * frequency * i / sampleRate) * 12000.0f);
+			samples[i] = static_cast<int16_t>(std::sin(glm::two_pi<float>() * frequency * static_cast<float>(i) / sampleRate) * 12000.0f);
 
 		std::vector<uint8_t> file;
 		auto write32 = [&](uint32_t v) { for (int b = 0; b < 4; b++) file.push_back(static_cast<uint8_t>(v >> (8 * b))); };

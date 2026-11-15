@@ -574,8 +574,8 @@ namespace Bellows {
 
 		const CameraComponent& camera = cameraEntity.GetComponent<CameraComponent>();
 		const glm::mat4 world = GetWorldTransform(cameraEntity);
-		glm::vec3 translation, scale;
-		glm::quat rotation;
+		glm::vec3 translation(0.0f), scale(1.0f);
+		glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 		Math::DecomposeTransform(world, translation, rotation, scale);
 
 		// The view ignores scale so scaled camera parents do not distort the image.

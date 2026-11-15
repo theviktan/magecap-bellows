@@ -23,8 +23,8 @@ TEST_CASE("Transforms compose and decompose losslessly")
 	const glm::vec3 scale(2.0f, 0.5f, 1.25f);
 
 	const glm::mat4 transform = Math::ComposeTransform(translation, rotation, scale);
-	glm::vec3 outTranslation, outScale;
-	glm::quat outRotation;
+	glm::vec3 outTranslation(0.0f), outScale(1.0f);
+	glm::quat outRotation(1.0f, 0.0f, 0.0f, 0.0f);
 	REQUIRE(Math::DecomposeTransform(transform, outTranslation, outRotation, outScale));
 	CHECK(Near(outTranslation, translation));
 	CHECK(Near(outScale, scale));
@@ -50,7 +50,7 @@ TEST_CASE("Screen rays and world-to-screen are inverse operations")
 	const glm::mat4 viewProjection = projection * view;
 	const glm::vec2 viewport(800.0f, 800.0f);
 
-	glm::vec2 screen;
+	glm::vec2 screen(0.0f);
 	REQUIRE(Math::WorldToScreenPoint(glm::vec3(0.0f), viewProjection, viewport, screen));
 	CHECK(screen.x == doctest::Approx(400.0f));
 	CHECK(screen.y == doctest::Approx(400.0f));
@@ -59,7 +59,7 @@ TEST_CASE("Screen rays and world-to-screen are inverse operations")
 	REQUIRE(Math::WorldToScreenPoint(glm::vec3(0.0f, 1.0f, 0.0f), viewProjection, viewport, screen));
 	CHECK(screen.y < 400.0f);
 
-	glm::vec3 origin, direction;
+	glm::vec3 origin(0.0f), direction(0.0f);
 	Math::ScreenPointToRay(glm::vec2(400.0f, 400.0f), viewport, glm::inverse(viewProjection), origin, direction);
 	const glm::vec3 expected = glm::normalize(glm::vec3(0.0f) - glm::vec3(0.0f, 2.0f, 5.0f));
 	CHECK(Near(direction, expected, 1e-3f));
