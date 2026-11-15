@@ -33,6 +33,23 @@ can drive end to end.
   game and it can create, play-test, screenshot and export it.
   See [docs/EditorAutomation.md](docs/EditorAutomation.md).
 
+## Download (Windows)
+
+You don't need to build the engine to use it. Every change to `main` is built on GitHub into a
+ready-to-run package with Python and everything else included:
+
+1. Sign in to GitHub and open https://github.com/theviktan/magecap-bellows/actions/workflows/ci.yml.
+2. Click the newest run with a green check mark.
+3. Scroll to **Artifacts** at the bottom and click **MageCap-Bellows-<version>-Windows** to download it.
+4. Right-click the downloaded zip, choose **Extract All...**, and extract it anywhere (for example
+   `C:\MageCapBellows`).
+5. Open the extracted folder and double-click **BellowsEditor.exe**. If Windows SmartScreen says
+   "Windows protected your PC", click **More info** and then **Run anyway** (the editor is not
+   code-signed yet).
+
+Version tags (`v0.1.0`, ...) also publish the same zip on the repository's **Releases** page.
+The only requirement is a graphics driver with Vulkan 1.3 (any recent Intel, AMD or NVIDIA driver).
+
 ## Building on Windows 11 (step by step)
 
 You need about 6 GB of free disk space. Install these once:
