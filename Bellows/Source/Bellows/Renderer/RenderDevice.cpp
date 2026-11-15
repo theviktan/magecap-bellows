@@ -7,18 +7,27 @@
 #include <nvrhi/validation.h>
 #include <nvrhi/vulkan.h>
 
-#include <vulkan/vulkan.h>
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
 
 #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 // Defined in vendor/NvrhiVulkanDispatch.cpp (compiled into nvrhi_vk).
-void BellowsInitializeVulkanDispatcher(VkInstance instance, PFN_vkGetInstanceProcAddr getInstanceProcAddr, VkDevice device);
+bool BellowsLoadVulkanLibrary();
+void BellowsLoadVulkanInstanceFunctions(VkInstance instance);
+void BellowsLoadVulkanDeviceFunctions(VkDevice device);
 
 namespace Bellows {
 
 	namespace {
+
+		// Every Vulkan call goes through the dynamically loaded dispatch table.
+		vk::detail::DispatchLoaderDynamic& Vk()
+		{
+			return VULKAN_HPP_DEFAULT_DISPATCHER;
+		}
 
 		std::atomic<uint32_t> s_ValidationErrorCount = 0;
 
@@ -172,8 +181,6 @@ namespace Bellows {
 		if (!PickPhysicalDevice() || !CreateLogicalDevice())
 			return false;
 
-		BellowsInitializeVulkanDispatcher(m_Vulkan->Instance, vkGetInstanceProcAddr, m_Vulkan->Device);
-
 		nvrhi::vulkan::DeviceDesc deviceDesc;
 		deviceDesc.errorCB = &s_MessageCallback;
 		deviceDesc.instance = m_Vulkan->Instance;
@@ -219,10 +226,16 @@ namespace Bellows {
 
 	bool RenderDevice::CreateInstance()
 	{
+		if (!BellowsLoadVulkanLibrary())
+		{
+			BW_CORE_CRITICAL("Vulkan is not available on this computer. Install or update the graphics driver (Vulkan 1.3 is required).");
+			return false;
+		}
+
 		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+		Vk().vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+		Vk().vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
 
 		auto hasExtension = [&availableExtensions](const char* name)
 		{
@@ -246,9 +259,9 @@ namespace Bellows {
 		if (m_Specification.EnableValidation)
 		{
 			uint32_t layerCount = 0;
-			vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+			Vk().vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 			std::vector<VkLayerProperties> layers(layerCount);
-			vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+			Vk().vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
 			const bool hasValidationLayer = std::any_of(layers.begin(), layers.end(),
 				[](const VkLayerProperties& p) { return std::strcmp(p.layerName, "VK_LAYER_KHRONOS_validation") == 0; });
@@ -295,17 +308,18 @@ namespace Bellows {
 		if (m_Vulkan->ValidationEnabled)
 			instanceInfo.pNext = &messengerInfo;
 
-		const VkResult result = vkCreateInstance(&instanceInfo, nullptr, &m_Vulkan->Instance);
+		const VkResult result = Vk().vkCreateInstance(&instanceInfo, nullptr, &m_Vulkan->Instance);
 		if (result != VK_SUCCESS)
 		{
 			BW_CORE_CRITICAL("Failed to create the Vulkan instance ({}). Is a Vulkan 1.3 driver installed?", static_cast<int>(result));
 			return false;
 		}
+		BellowsLoadVulkanInstanceFunctions(m_Vulkan->Instance);
 
 		if (m_Vulkan->ValidationEnabled)
 		{
 			auto createMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-				vkGetInstanceProcAddr(m_Vulkan->Instance, "vkCreateDebugUtilsMessengerEXT"));
+				Vk().vkGetInstanceProcAddr(m_Vulkan->Instance, "vkCreateDebugUtilsMessengerEXT"));
 			if (createMessenger)
 				createMessenger(m_Vulkan->Instance, &messengerInfo, nullptr, &m_Vulkan->DebugMessenger);
 		}
@@ -315,9 +329,9 @@ namespace Bellows {
 	bool RenderDevice::PickPhysicalDevice()
 	{
 		uint32_t deviceCount = 0;
-		vkEnumeratePhysicalDevices(m_Vulkan->Instance, &deviceCount, nullptr);
+		Vk().vkEnumeratePhysicalDevices(m_Vulkan->Instance, &deviceCount, nullptr);
 		std::vector<VkPhysicalDevice> devices(deviceCount);
-		vkEnumeratePhysicalDevices(m_Vulkan->Instance, &deviceCount, devices.data());
+		Vk().vkEnumeratePhysicalDevices(m_Vulkan->Instance, &deviceCount, devices.data());
 
 		const std::string preferred = ToLower(m_Specification.PreferredAdapter);
 
@@ -325,7 +339,7 @@ namespace Bellows {
 		for (VkPhysicalDevice device : devices)
 		{
 			VkPhysicalDeviceProperties properties;
-			vkGetPhysicalDeviceProperties(device, &properties);
+			Vk().vkGetPhysicalDeviceProperties(device, &properties);
 
 			std::string rejectReason;
 			if (properties.apiVersion < VK_API_VERSION_1_3)
@@ -338,15 +352,15 @@ namespace Bellows {
 			features2.pNext = &features12;
 			if (rejectReason.empty())
 			{
-				vkGetPhysicalDeviceFeatures2(device, &features2);
+				Vk().vkGetPhysicalDeviceFeatures2(device, &features2);
 				if (!features13.dynamicRendering || !features13.synchronization2 || !features12.timelineSemaphore)
 					rejectReason = "required Vulkan 1.3 features are missing";
 			}
 
 			uint32_t queueFamilyCount = 0;
-			vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+			Vk().vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 			std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-			vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+			Vk().vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 			uint32_t graphicsFamily = UINT32_MAX;
 			for (uint32_t i = 0; i < queueFamilyCount; i++)
@@ -357,7 +371,7 @@ namespace Bellows {
 				if (m_Vulkan->Surface)
 				{
 					VkBool32 presentSupported = VK_FALSE;
-					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Vulkan->Surface, &presentSupported);
+					Vk().vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Vulkan->Surface, &presentSupported);
 					if (!presentSupported)
 						continue;
 				}
@@ -370,9 +384,9 @@ namespace Bellows {
 			if (rejectReason.empty() && m_Vulkan->Surface)
 			{
 				uint32_t extensionCount = 0;
-				vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+				Vk().vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 				std::vector<VkExtensionProperties> extensions(extensionCount);
-				vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
+				Vk().vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
 				const bool hasSwapchain = std::any_of(extensions.begin(), extensions.end(),
 					[](const VkExtensionProperties& p) { return std::strcmp(p.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0; });
 				if (!hasSwapchain)
@@ -425,7 +439,7 @@ namespace Bellows {
 		supported12.pNext = &supported13;
 		VkPhysicalDeviceFeatures2 supported { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 		supported.pNext = &supported11;
-		vkGetPhysicalDeviceFeatures2(m_Vulkan->PhysicalDevice, &supported);
+		Vk().vkGetPhysicalDeviceFeatures2(m_Vulkan->PhysicalDevice, &supported);
 
 		VkPhysicalDeviceVulkan11Features enabled11 { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 		VkPhysicalDeviceVulkan12Features enabled12 { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -469,21 +483,22 @@ namespace Bellows {
 		deviceInfo.enabledExtensionCount = static_cast<uint32_t>(m_Vulkan->DeviceExtensions.size());
 		deviceInfo.ppEnabledExtensionNames = m_Vulkan->DeviceExtensions.data();
 
-		const VkResult result = vkCreateDevice(m_Vulkan->PhysicalDevice, &deviceInfo, nullptr, &m_Vulkan->Device);
+		const VkResult result = Vk().vkCreateDevice(m_Vulkan->PhysicalDevice, &deviceInfo, nullptr, &m_Vulkan->Device);
 		if (result != VK_SUCCESS)
 		{
 			BW_CORE_CRITICAL("Failed to create the Vulkan device ({})", static_cast<int>(result));
 			return false;
 		}
+		BellowsLoadVulkanDeviceFunctions(m_Vulkan->Device);
 
-		vkGetDeviceQueue(m_Vulkan->Device, m_Vulkan->GraphicsQueueFamily, 0, &m_Vulkan->GraphicsQueue);
+		Vk().vkGetDeviceQueue(m_Vulkan->Device, m_Vulkan->GraphicsQueueFamily, 0, &m_Vulkan->GraphicsQueue);
 		return true;
 	}
 
 	bool RenderDevice::CreateSwapchain()
 	{
 		VkSurfaceCapabilitiesKHR capabilities;
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &capabilities);
+		Vk().vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &capabilities);
 
 		uint32_t width = m_Specification.TargetWindow->GetFramebufferWidth();
 		uint32_t height = m_Specification.TargetWindow->GetFramebufferHeight();
@@ -498,9 +513,9 @@ namespace Bellows {
 			return false;
 
 		uint32_t formatCount = 0;
-		vkGetPhysicalDeviceSurfaceFormatsKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &formatCount, nullptr);
+		Vk().vkGetPhysicalDeviceSurfaceFormatsKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &formatCount, nullptr);
 		std::vector<VkSurfaceFormatKHR> formats(formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &formatCount, formats.data());
+		Vk().vkGetPhysicalDeviceSurfaceFormatsKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &formatCount, formats.data());
 
 		// The tonemap pass writes display-encoded (sRGB) values, so a UNORM swapchain is used.
 		VkSurfaceFormatKHR surfaceFormat = formats.empty() ? VkSurfaceFormatKHR { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR } : formats[0];
@@ -515,9 +530,9 @@ namespace Bellows {
 		}
 
 		uint32_t presentModeCount = 0;
-		vkGetPhysicalDeviceSurfacePresentModesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &presentModeCount, nullptr);
+		Vk().vkGetPhysicalDeviceSurfacePresentModesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &presentModeCount, nullptr);
 		std::vector<VkPresentModeKHR> presentModes(presentModeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &presentModeCount, presentModes.data());
+		Vk().vkGetPhysicalDeviceSurfacePresentModesKHR(m_Vulkan->PhysicalDevice, m_Vulkan->Surface, &presentModeCount, presentModes.data());
 
 		VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;	// Always available
 		if (!m_Specification.VSync)
@@ -553,7 +568,7 @@ namespace Bellows {
 		swapchainInfo.clipped = VK_TRUE;
 		swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
 
-		VkResult result = vkCreateSwapchainKHR(m_Vulkan->Device, &swapchainInfo, nullptr, &m_Vulkan->Swapchain);
+		VkResult result = Vk().vkCreateSwapchainKHR(m_Vulkan->Device, &swapchainInfo, nullptr, &m_Vulkan->Swapchain);
 		if (result != VK_SUCCESS)
 		{
 			BW_CORE_ERROR("Failed to create the swapchain ({})", static_cast<int>(result));
@@ -566,9 +581,9 @@ namespace Bellows {
 		m_BackBufferHeight = height;
 
 		uint32_t swapchainImageCount = 0;
-		vkGetSwapchainImagesKHR(m_Vulkan->Device, m_Vulkan->Swapchain, &swapchainImageCount, nullptr);
+		Vk().vkGetSwapchainImagesKHR(m_Vulkan->Device, m_Vulkan->Swapchain, &swapchainImageCount, nullptr);
 		m_Vulkan->SwapchainImages.resize(swapchainImageCount);
-		vkGetSwapchainImagesKHR(m_Vulkan->Device, m_Vulkan->Swapchain, &swapchainImageCount, m_Vulkan->SwapchainImages.data());
+		Vk().vkGetSwapchainImagesKHR(m_Vulkan->Device, m_Vulkan->Swapchain, &swapchainImageCount, m_Vulkan->SwapchainImages.data());
 
 		for (uint32_t i = 0; i < swapchainImageCount; i++)
 		{
@@ -591,10 +606,10 @@ namespace Bellows {
 		VkSemaphoreCreateInfo semaphoreInfo { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		m_Vulkan->AcquireSemaphores.resize(m_Specification.MaxFramesInFlight + 1);
 		for (VkSemaphore& semaphore : m_Vulkan->AcquireSemaphores)
-			vkCreateSemaphore(m_Vulkan->Device, &semaphoreInfo, nullptr, &semaphore);
+			Vk().vkCreateSemaphore(m_Vulkan->Device, &semaphoreInfo, nullptr, &semaphore);
 		m_Vulkan->PresentSemaphores.resize(swapchainImageCount);
 		for (VkSemaphore& semaphore : m_Vulkan->PresentSemaphores)
-			vkCreateSemaphore(m_Vulkan->Device, &semaphoreInfo, nullptr, &semaphore);
+			Vk().vkCreateSemaphore(m_Vulkan->Device, &semaphoreInfo, nullptr, &semaphore);
 
 		m_SwapchainDirty = false;
 		return true;
@@ -611,11 +626,11 @@ namespace Bellows {
 		if (m_Vulkan->Device)
 		{
 			for (VkSemaphore semaphore : m_Vulkan->AcquireSemaphores)
-				vkDestroySemaphore(m_Vulkan->Device, semaphore, nullptr);
+				Vk().vkDestroySemaphore(m_Vulkan->Device, semaphore, nullptr);
 			for (VkSemaphore semaphore : m_Vulkan->PresentSemaphores)
-				vkDestroySemaphore(m_Vulkan->Device, semaphore, nullptr);
+				Vk().vkDestroySemaphore(m_Vulkan->Device, semaphore, nullptr);
 			if (m_Vulkan->Swapchain)
-				vkDestroySwapchainKHR(m_Vulkan->Device, m_Vulkan->Swapchain, nullptr);
+				Vk().vkDestroySwapchainKHR(m_Vulkan->Device, m_Vulkan->Swapchain, nullptr);
 		}
 		m_Vulkan->AcquireSemaphores.clear();
 		m_Vulkan->PresentSemaphores.clear();
@@ -693,7 +708,7 @@ namespace Bellows {
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
 			VkSemaphore acquireSemaphore = m_Vulkan->AcquireSemaphores[m_Vulkan->AcquireSemaphoreIndex];
-			const VkResult result = vkAcquireNextImageKHR(m_Vulkan->Device, m_Vulkan->Swapchain, UINT64_MAX,
+			const VkResult result = Vk().vkAcquireNextImageKHR(m_Vulkan->Device, m_Vulkan->Swapchain, UINT64_MAX,
 				acquireSemaphore, VK_NULL_HANDLE, &m_CurrentBackBuffer);
 
 			if (result == VK_ERROR_OUT_OF_DATE_KHR)
@@ -740,7 +755,7 @@ namespace Bellows {
 			presentInfo.pSwapchains = &m_Vulkan->Swapchain;
 			presentInfo.pImageIndices = &m_CurrentBackBuffer;
 
-			const VkResult result = vkQueuePresentKHR(m_Vulkan->GraphicsQueue, &presentInfo);
+			const VkResult result = Vk().vkQueuePresentKHR(m_Vulkan->GraphicsQueue, &presentInfo);
 			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
 				m_SwapchainDirty = true;
 			else if (result != VK_SUCCESS)
@@ -803,18 +818,18 @@ namespace Bellows {
 		m_NativeDevice = nullptr;
 
 		if (m_Vulkan->Device)
-			vkDestroyDevice(m_Vulkan->Device, nullptr);
+			Vk().vkDestroyDevice(m_Vulkan->Device, nullptr);
 		if (m_Vulkan->Surface)
-			vkDestroySurfaceKHR(m_Vulkan->Instance, m_Vulkan->Surface, nullptr);
+			Vk().vkDestroySurfaceKHR(m_Vulkan->Instance, m_Vulkan->Surface, nullptr);
 		if (m_Vulkan->DebugMessenger)
 		{
 			auto destroyMessenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-				vkGetInstanceProcAddr(m_Vulkan->Instance, "vkDestroyDebugUtilsMessengerEXT"));
+				Vk().vkGetInstanceProcAddr(m_Vulkan->Instance, "vkDestroyDebugUtilsMessengerEXT"));
 			if (destroyMessenger)
 				destroyMessenger(m_Vulkan->Instance, m_Vulkan->DebugMessenger, nullptr);
 		}
 		if (m_Vulkan->Instance)
-			vkDestroyInstance(m_Vulkan->Instance, nullptr);
+			Vk().vkDestroyInstance(m_Vulkan->Instance, nullptr);
 
 		m_Vulkan.reset();
 	}

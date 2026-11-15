@@ -69,6 +69,9 @@ jobs:
             exit 1
           }
 
+      - name: List runtime files
+        run: Get-ChildItem build/windows/bin -Filter *.dll | Select-Object Name, Length
+
       # Hosted Windows runners have no Vulkan driver, so only the GPU-free suite runs here.
       - name: Test
         run: ctest --test-dir build/windows -C Release -R BellowsUnitTests --output-on-failure
