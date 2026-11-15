@@ -78,61 +78,82 @@ A business decision belongs here too: an open-source license (Godot is MIT) attr
 and trust; a commercial license with source access funds development. Decide before inviting
 outside contributors.
 
-## 4. ForgeScript (Forge)
+## 4. ForgeScript
 
-Goal: ForgeScript is to Bellows what GDScript is to Godot - the first-class, easiest way to write
-game logic, with an English-like style:
+Goal: ForgeScript is to Bellows what GDScript is to Godot - the flagship, easiest way to write game
+logic, with an English-like style. Python stays fully supported alongside it, the way Godot offers
+both GDScript and C#: each script file is either `.forge` or `.py`, and a game can mix them.
+
+### Where it stands
+
+The language itself is done and lives in `ForgeScript/` (guide: `docs/ForgeScript/LanguageGuide.md`):
+variables and constants, text with `{interpolation}`, lists, maps, vectors, functions and closures,
+**phrases** (`phrase heal (target) by (amount)`), **kinds** (classes) with inheritance, events
+(`when hit by damage`, `trigger`), tasks (`wait 2 seconds`, `wait until ready`, `start patrol()`),
+`try`/`catch`/`fail`, `use` for modules, a garbage collector, friendly compile and runtime errors,
+the `forgescript` command line tool (runner, checker, interactive prompt) and a VS Code grammar.
+It is covered by `ForgeScriptTests` (every test script also runs with the garbage collector on every
+instruction) and is clean under AddressSanitizer and UndefinedBehaviorSanitizer.
+
+What is missing is the engine side: `.forge` files cannot yet be attached to entities.
 
 ```forge
-script Player
-    property speed is 5
-    property health is 100
+# The target: an entity script written in ForgeScript.
+set speed to 5
 
-    when the game starts
-        set health to 100
-    end
+when update with delta
+	if key "W" is down then
+		move self forward by speed * delta
+	end
+end
 
-    every frame
-        if key W is down then
-            move forward by speed * delta
-        end
-    end
-
-    when hit by damage
-        reduce health by damage
-        if health is below 1 then
-            play sound "Audio/Death.wav"
-            destroy me
-        end
-    end
+when collided with other
+	if other's name is "Spikes" then
+		play sound "Audio/Hurt.wav"
+		self.destroy()
+	end
 end
 ```
 
-### Architecture (recommended)
+### Architecture (decided November 2026)
 
-1. **Language specification first** - grammar (EBNF), keywords, types (number, text, yes/no,
-   vector, color, entity, list, map), scoping, events, error messages. Written as
-   `docs/ForgeScript.md` with a test file per rule. Natural-language languages live or die on
-   unambiguous grammar: every sentence form must map to exactly one meaning.
-2. **Compiler front end in C++** - lexer (indentation- and keyword-aware), parser to an AST,
-   semantic analysis (names, types, unknown properties), helpful errors with line/column and
-   "did you mean" suggestions.
-3. **Back end: compile to Python** - the AST is lowered to Python code that uses the existing
-   `bellows` API, with a source map so every error and stack trace points at the `.forge` line.
-   This reuses the whole tested API, the exporter (games already bundle Python) and the
-   FeatureTest coverage on day one. A dedicated bytecode VM (like GDScript's) can replace this
-   back end later without changing the language, if profiling shows it is needed.
-4. **Engine integration** - `.forge` becomes an asset type; the Script component accepts `.forge`
-   or `.py`; scripts compile on load, cache by file hash, and recompile when edited. ForgeScript and
-   Python scripts can call each other. `properties` become Inspector fields like Python annotations.
-5. **Tooling** - a ForgeScript Language Server (LSP) for completion, hover docs, go-to-definition,
-   diagnostics and rename; a TextMate grammar for syntax highlighting (VS Code, Monaco, and the
-   Bellows script editor); a formatter; later a debugger via the Debug Adapter Protocol.
-6. **Tests** - parser and compiler unit tests, plus a `FeatureTest.forge` that mirrors
-   `FeatureTest.py` so the whole API is proven from ForgeScript too.
+1. **Own virtual machine.** ForgeScript compiles to bytecode for its own VM (`ForgeScript/Source`),
+   not to Python. That is what makes `wait`, tasks, events and plain-English runtime errors work
+   naturally, and lets games that use only ForgeScript ship without a Python runtime later.
+2. **One description of the engine API, two languages.** Today the API is written once, by hand,
+   for pybind11 (`Scripting/ScriptBindings.cpp`). It becomes a shared **script API registry**:
+   every type, property, method and function is registered once with typed C++ lambdas, and two
+   backends turn the registry into the Python module and the ForgeScript bindings. Names are the
+   same in both languages (`entity.transform.position`, `rigid_body.add_force(...)`), so docs,
+   examples and `FeatureTest` coverage carry over, and a new engine feature appears in both
+   languages from one change.
+3. **ForgeScript extras on top.** Engine phrases (`move (thing) toward (target) by (amount)`,
+   `play sound (path)`, `key (name) is down`) are thin wrappers registered for ForgeScript only.
+4. **Engine integration.** `ScriptComponent` accepts `.forge` or `.py`; one ForgeScript module per
+   scripted entity with `self` bound to the entity; lifecycle callbacks map to events
+   (`on_create` -> `when created`, `on_update(dt)` -> `when update with delta`,
+   `on_fixed_update(dt)` -> `when physics update with delta`, `on_destroy` -> `when destroyed`,
+   collisions and triggers -> `when collided with other` / `when collision ends with other` /
+   `when entered by other` / `when exited by other`); script variables become Inspector fields;
+   errors go to the Console with file and line; scripts recompile when edited.
+5. **Tests.** Registry unit tests, ForgeScript binding tests, and a `FeatureTest.forge` that mirrors
+   `FeatureTest.py`, so the whole API is proven from both languages.
 
-Naming note: "MageCap Forge" (the app) and "Forge" (the language) will be confused. Use
-**ForgeScript** in all public material and `.forge` as the file extension.
+### Next steps
+
+1. Script API registry with the Python backend, replacing `ScriptBindings.cpp` without changing
+   the Python API (`FeatureTest.py` must pass unchanged).
+2. ForgeScript backend for the registry, plus `.forge` support in `ScriptEngine` and the
+   Script component, lifecycle events and Inspector fields.
+3. `FeatureTest.forge`, `docs/ScriptingAPI.md` examples in both languages, editor support
+   (create ForgeScript script, highlighting in the content browser).
+4. Language additions that make game code easier: "did you mean ...?" suggestions for misspelled
+   names, warnings for variables set but never used, default parameter values, a `match`
+   statement, task handles (`set t to start patrol()`, `stop t`), whole numbers and bit flags,
+   JSON, `finally`, enums.
+5. Tooling: a ForgeScript Language Server (completion, hover docs, go-to-definition, diagnostics,
+   rename), the TextMate grammar in the Bellows script editor, a formatter, and a debugger through
+   the Debug Adapter Protocol.
 
 ## 5. MageCap Forge integration
 
@@ -161,11 +182,11 @@ read logs and take screenshots (`docs/EditorAutomation.md`). Forge integration b
 
 | Milestone | Contents |
 |-----------|----------|
-| 0.2 Foundation | Windows build verified in CI, script debugger basics, hot reload, signals/events, input actions, audio buses |
-| 0.3 Game UI and text | MSDF text, UI components (buttons, labels, panels, layout containers), themes |
-| 0.4 2D | Sprites, Camera2D, Box2D, tilemaps, sprite animation, 2D editor mode, 2D templates |
-| 0.5 ForgeScript 1.0 | Specification, compiler to Python, Inspector fields, LSP, FeatureTest.forge |
-| 0.6 MageCap Forge | Forge Link for Bellows, Assay bug reports, Chisel/Whetstone ForgeScript support |
+| 0.2 ForgeScript in the engine | Script API registry (Python and ForgeScript backends), `.forge` scripts on entities, lifecycle events, Inspector fields, FeatureTest.forge |
+| 0.3 Foundation | Windows build verified in CI, script debugger basics, hot reload, signals/events, input actions, audio buses |
+| 0.4 Game UI and text | MSDF text, UI components (buttons, labels, panels, layout containers), themes |
+| 0.5 2D | Sprites, Camera2D, Box2D, tilemaps, sprite animation, 2D editor mode, 2D templates |
+| 0.6 ForgeScript tooling and MageCap Forge | ForgeScript language additions, LSP, debugger; Forge Link for Bellows, Assay bug reports, Chisel/Whetstone ForgeScript support |
 | 0.7 Animation and VFX | Skeletal animation, animation timeline, particles, decals |
 | 0.8 Scale | Job system, asset import pipeline, streaming, profiler, D3D12 backend |
 | 0.9 Platforms | macOS, Android, Web |

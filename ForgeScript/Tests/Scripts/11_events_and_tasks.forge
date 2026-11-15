@@ -1,0 +1,64 @@
+when game starts
+	say "started"
+end
+
+when hit with damage and source
+	say "hit for {damage} by {source}"
+end
+
+when hit with damage
+	say "second handler {damage}"
+end
+
+when level up
+	say "level up"
+end
+
+trigger game starts                      # expect: started
+trigger hit with 5, "trap"
+# expect: hit for 5 by trap
+# expect: second handler 5
+trigger hit
+# expect: hit for nothing by nothing
+# expect: second handler nothing
+trigger "nobody listens"
+
+function countdown(name, start_at)
+	for i from start_at to 1 do
+		say "{name} {i}"
+		wait 1 second
+	end
+	say "{name} done"
+end
+
+start countdown("A", 2)
+# expect: A 2
+start countdown("B", 1)
+# expect: B 1
+say "both started"                        # expect: both started
+# expect: A 1
+# expect: B done
+# expect: A done
+
+when tick
+	wait 3 frames
+	say "three frames later"
+end
+start (function()
+	wait 5 seconds
+	trigger tick
+	wait until flag is true
+	say "flag seen"
+	wait 500 ms
+	say "half second"
+	trigger level up
+end)()
+# expect: three frames later
+set flag to false
+start (function()
+	wait 6 seconds
+	set flag to true
+end)()
+# expect: flag seen
+# expect: half second
+# expect: level up

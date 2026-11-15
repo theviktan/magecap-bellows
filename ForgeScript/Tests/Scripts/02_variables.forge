@@ -1,0 +1,28 @@
+# set / add / take / multiply / divide and constants.
+set health to 100
+say health                      # expect: 100
+add 25 to health
+say health                      # expect: 125
+take 50 from health
+say health                      # expect: 75
+multiply health by 2
+say health                      # expect: 150
+divide health by 3
+say health                      # expect: 50
+set name to "Ron"
+add " the Brave" to name
+say name                        # expect: Ron the Brave
+constant MAX_LEVEL is 99
+say MAX_LEVEL                   # expect: 99
+set a to 1
+set b to a
+set a to 2
+say b                           # expect: 1
+set player to { score: 0 }
+add 10 to player's score
+add 5 to player.score
+say player.score                # expect: 15
+set grid to [[1, 2], [3, 4]]
+set grid[2][1] to 30
+add 1 to grid[1][2]
+say grid                        # expect: [[1, 3], [30, 4]]

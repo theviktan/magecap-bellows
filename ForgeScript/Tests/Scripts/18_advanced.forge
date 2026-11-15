@@ -1,0 +1,80 @@
+# Multi-line functions inside brackets.
+set doubled to [1, 2, 3].map(function(n)
+	set result to n * 2
+	return result
+end)
+say doubled                                  # expect: [2, 4, 6]
+
+set config to {
+	name: "settings",
+	on_load: function()
+		return "loaded"
+	end,
+	volume: 0.5,
+}
+say config.on_load()                         # expect: loaded
+say config.volume                            # expect: 0.5
+
+# Fields can use earlier fields.
+kind Bar
+	set max to 10
+	set value to my max / 2
+	function fill()
+		set my value to my max
+	end
+end
+set bar to new Bar
+say bar.value                                # expect: 5
+bar.fill()
+say bar's value                              # expect: 10
+
+# Methods can run as their own task.
+kind Guard
+	set name to "guard"
+	function patrol(steps)
+		for i from 1 to steps do
+			say "{my name} step {i}"
+			wait 1 second
+		end
+	end
+end
+set g to new Guard
+start g.patrol(2)                            # expect: guard step 1
+say "patrol started"                         # expect: patrol started
+
+# Closures inside closures.
+function make()
+	set a to 1
+	return function()
+		set b to 10
+		return function()
+			add 1 to a
+			return a + b
+		end
+	end
+end
+set inner to make()()
+inner()
+say inner()                                  # expect: 13
+
+say Bar is a kind                            # expect: true
+say bar is an object                         # expect: true
+say bar is a Bar                             # expect: true
+for each key in { x: 1, y: 2 } do say key end
+# expect: x
+# expect: y
+for each letter, position in "ab" do say "{position}{letter}" end
+# expect: 1a
+# expect: 2b
+set results to []
+for i from 1 to 3 do
+	add function() return i end to results
+end
+say results.map(function(f) return f() end)  # expect: [1, 2, 3]
+say [3, 1, 2].sort().reverse()               # expect: [3, 2, 1]
+say "Level " + 3 + "!"                       # expect: Level 3!
+say type(nothing)                            # expect: nothing
+say type([])                                 # expect: list
+say type(print)                              # expect: function
+# The patrol task wakes up one second later.
+# expect: guard step 2
