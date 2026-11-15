@@ -1,0 +1,34 @@
+{
+	"Name": "RedPlastic",
+	"AlbedoColor": [
+		0.75,
+		0.05999999865889549,
+		0.03999999910593033,
+		1.0
+	],
+	"Metallic": 0.0,
+	"Roughness": 0.30000001192092896,
+	"EmissiveColor": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"EmissiveIntensity": 1.0,
+	"NormalStrength": 1.0,
+	"AlphaMode": "Opaque",
+	"AlphaCutoff": 0.5,
+	"DoubleSided": false,
+	"UVTiling": [
+		1.0,
+		1.0
+	],
+	"UVOffset": [
+		0.0,
+		0.0
+	],
+	"AlbedoMap": "",
+	"NormalMap": "",
+	"MetallicRoughnessMap": "",
+	"OcclusionMap": "",
+	"EmissiveMap": ""
+}

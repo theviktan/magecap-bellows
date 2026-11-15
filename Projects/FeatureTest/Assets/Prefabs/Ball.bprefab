@@ -1,0 +1,71 @@
+{
+	"Prefab": "Ball",
+	"Version": 1,
+	"Entities": [
+		{
+			"ID": 3547285222822083202,
+			"Name": "Ball",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.6000000238418579,
+					0.6000000238418579,
+					0.6000000238418579
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/RedPlastic.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.3499999940395355,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": true
+			},
+			"SphereCollider": {
+				"Radius": 0.5,
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			},
+			"Script": {
+				"Script": "Scripts/BounceSound.py",
+				"Class": "",
+				"Fields": {}
+			},
+			"AudioSource": {
+				"Clip": "Audio/Chime.wav",
+				"Volume": 0.3499999940395355,
+				"Pitch": 1.0,
+				"Loop": false,
+				"PlayOnStart": false,
+				"Spatial": true,
+				"MinDistance": 1.0,
+				"MaxDistance": 50.0
+			}
+		}
+	]
+}

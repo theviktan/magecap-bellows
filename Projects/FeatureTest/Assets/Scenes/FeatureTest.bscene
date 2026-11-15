@@ -1,0 +1,1561 @@
+{
+	"Scene": "FeatureTest",
+	"Version": 1,
+	"Settings": {
+		"Gravity": [
+			0.0,
+			-9.8100004196167,
+			0.0
+		],
+		"FixedTimestep": 0.01666666753590107,
+		"AmbientColor": [
+			0.029999999329447746,
+			0.03500000014901161,
+			0.03999999910593033
+		],
+		"Rendering": {
+			"ShadowsEnabled": true,
+			"ShadowMapSize": 2048,
+			"CascadeCount": 4,
+			"ShadowDistance": 80.0,
+			"ShadowSoftness": 0.029999999329447746,
+			"SSAOEnabled": true,
+			"SSAORadius": 0.6000000238418579,
+			"SSAOStrength": 1.0,
+			"BloomEnabled": true,
+			"BloomIntensity": 0.05000000074505806,
+			"BloomThreshold": 1.0,
+			"Exposure": 1.0,
+			"Tonemapper": "ACES",
+			"Vignette": 0.20000000298023224,
+			"FXAAEnabled": true
+		}
+	},
+	"Entities": [
+		{
+			"ID": 13387218449248732003,
+			"Name": "Main Camera",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					4.5,
+					13.0
+				],
+				"RotationEuler": [
+					-0.2485952377319336,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"Camera": {
+				"Projection": "Perspective",
+				"FieldOfView": 55.0,
+				"OrthographicSize": 10.0,
+				"NearClip": 0.10000000149011612,
+				"FarClip": 1000.0,
+				"Primary": true
+			},
+			"Script": {
+				"Script": "Scripts/FlyCamera.py",
+				"Class": "",
+				"Fields": {}
+			},
+			"AudioListener": {
+				"Active": true
+			}
+		},
+		{
+			"ID": 1851716514961633984,
+			"Name": "Sun",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					10.0,
+					0.0
+				],
+				"RotationEuler": [
+					-0.6632251143455505,
+					0.9599310755729675,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"DirectionalLight": {
+				"Color": [
+					1.0,
+					0.9300000071525574,
+					0.8399999737739563
+				],
+				"Intensity": 3.200000047683716,
+				"CastShadows": true
+			}
+		},
+		{
+			"ID": 6432698477166705173,
+			"Name": "Sky",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"SkyLight": {
+				"Environment": "Environments/quarry_01_1k.hdr",
+				"Intensity": 1.0,
+				"Rotation": 0.0,
+				"SkyboxBlur": 0.0,
+				"ProceduralSky": {
+					"ZenithColor": [
+						0.1599999964237213,
+						0.3199999928474426,
+						0.6200000047683716
+					],
+					"HorizonColor": [
+						0.6200000047683716,
+						0.699999988079071,
+						0.7799999713897705
+					],
+					"GroundColor": [
+						0.12999999523162842,
+						0.11999999731779099,
+						0.10999999940395355
+					],
+					"SunIntensity": 40.0,
+					"SunAngularRadius": 0.019999999552965164
+				}
+			}
+		},
+		{
+			"ID": 12584637012785912435,
+			"Name": "Ground",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					40.0,
+					1.0,
+					40.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Plane",
+				"Material": "Materials/Ground.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.800000011920929,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.05000000074505806,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					-0.05000000074505806,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 12242190670998256094,
+			"Name": "Pedestal 1",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-5.0,
+					0.30000001192092896,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.6000000238418579,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 8088936565183748390,
+			"Name": "Sphere 1",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-5.0,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					1.2000000476837158,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/Gold.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 3959613849957656963,
+			"Name": "Pedestal 2",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-2.5,
+					0.30000001192092896,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.6000000238418579,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 9096859642700298947,
+			"Name": "Sphere 2",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-2.5,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					1.2000000476837158,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/Copper.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 17426579185111642064,
+			"Name": "Pedestal 3",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.30000001192092896,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.6000000238418579,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 3234616186036463522,
+			"Name": "Sphere 3",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					1.2000000476837158,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/Chrome.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 12295986766595059475,
+			"Name": "Pedestal 4",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					2.5,
+					0.30000001192092896,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.6000000238418579,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 7221428616302094070,
+			"Name": "Sphere 4",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					2.5,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					1.2000000476837158,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/Ceramic.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 1416938837396153893,
+			"Name": "Pedestal 5",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					5.0,
+					0.30000001192092896,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.6000000238418579,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 5993667999557607721,
+			"Name": "Sphere 5",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					5.0,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					1.2000000476837158,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/Rubber.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 11876622819535218360,
+			"Name": "Bottle Plinth",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-3.5,
+					0.4000000059604645,
+					2.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.2000000476837158,
+					0.800000011920929,
+					1.2000000476837158
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 11577342883573438507,
+			"Name": "Water Bottle",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-3.5,
+					1.899999976158142,
+					2.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					8.0,
+					8.0,
+					8.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Models/WaterBottle.glb",
+				"Material": "",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"Script": {
+				"Script": "Scripts/Spinner.py",
+				"Class": "",
+				"Fields": {
+					"speed": {
+						"Type": "float",
+						"Value": 60.0
+					}
+				}
+			}
+		},
+		{
+			"ID": 6235233114222466703,
+			"Name": "Lantern",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					3.0,
+					0.0,
+					1.0
+				],
+				"RotationEuler": [
+					0.0,
+					-0.5235987901687622,
+					0.0
+				],
+				"Scale": [
+					0.15000000596046448,
+					0.15000000596046448,
+					0.15000000596046448
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Models/Lantern.glb",
+				"Material": "",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 14097678472699632336,
+			"Name": "Spot Light",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					3.0,
+					6.0,
+					4.0
+				],
+				"RotationEuler": [
+					-1.0471975803375244,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"SpotLight": {
+				"Color": [
+					1.0,
+					0.8500000238418579,
+					0.6000000238418579
+				],
+				"Intensity": 60.0,
+				"Range": 14.0,
+				"InnerAngle": 18.0,
+				"OuterAngle": 30.000001907348633
+			}
+		},
+		{
+			"ID": 18055552109353223944,
+			"Name": "Orbiting Light 1",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.18000000715255737,
+					0.18000000715255737,
+					0.18000000715255737
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/GlowOrange.bmat",
+				"CastShadows": false,
+				"Visible": true
+			},
+			"PointLight": {
+				"Color": [
+					0.949999988079071,
+					0.44999998807907104,
+					0.10000000149011612
+				],
+				"Intensity": 12.0,
+				"Range": 6.0
+			},
+			"Script": {
+				"Script": "Scripts/Orbit.py",
+				"Class": "",
+				"Fields": {
+					"center": {
+						"Type": "Vec3",
+						"Value": [
+							0.0,
+							0.0,
+							0.5
+						]
+					},
+					"height": {
+						"Type": "float",
+						"Value": 1.4
+					},
+					"phase": {
+						"Type": "float",
+						"Value": 0.0
+					},
+					"radius": {
+						"Type": "float",
+						"Value": 4.0
+					},
+					"speed": {
+						"Type": "float",
+						"Value": 0.5
+					}
+				}
+			}
+		},
+		{
+			"ID": 3307876887805816356,
+			"Name": "Orbiting Light 2",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.18000000715255737,
+					0.18000000715255737,
+					0.18000000715255737
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/GlowCyan.bmat",
+				"CastShadows": false,
+				"Visible": true
+			},
+			"PointLight": {
+				"Color": [
+					0.10000000149011612,
+					0.699999988079071,
+					1.0
+				],
+				"Intensity": 12.0,
+				"Range": 6.0
+			},
+			"Script": {
+				"Script": "Scripts/Orbit.py",
+				"Class": "",
+				"Fields": {
+					"center": {
+						"Type": "Vec3",
+						"Value": [
+							0.0,
+							0.0,
+							0.5
+						]
+					},
+					"height": {
+						"Type": "float",
+						"Value": 1.4
+					},
+					"phase": {
+						"Type": "float",
+						"Value": 2.0944
+					},
+					"radius": {
+						"Type": "float",
+						"Value": 4.0
+					},
+					"speed": {
+						"Type": "float",
+						"Value": 0.5
+					}
+				}
+			}
+		},
+		{
+			"ID": 5511814249880390779,
+			"Name": "Orbiting Light 3",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.18000000715255737,
+					0.18000000715255737,
+					0.18000000715255737
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Sphere",
+				"Material": "Materials/GlowMagenta.bmat",
+				"CastShadows": false,
+				"Visible": true
+			},
+			"PointLight": {
+				"Color": [
+					1.0,
+					0.15000000596046448,
+					0.699999988079071
+				],
+				"Intensity": 12.0,
+				"Range": 6.0
+			},
+			"Script": {
+				"Script": "Scripts/Orbit.py",
+				"Class": "",
+				"Fields": {
+					"center": {
+						"Type": "Vec3",
+						"Value": [
+							0.0,
+							0.0,
+							0.5
+						]
+					},
+					"height": {
+						"Type": "float",
+						"Value": 1.4
+					},
+					"phase": {
+						"Type": "float",
+						"Value": 4.1888
+					},
+					"radius": {
+						"Type": "float",
+						"Value": 4.0
+					},
+					"speed": {
+						"Type": "float",
+						"Value": 0.5
+					}
+				}
+			}
+		},
+		{
+			"ID": 6869372182044019107,
+			"Name": "Crate 0-0",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					6.179999828338623,
+					0.4000000059604645,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 1850285205487862389,
+			"Name": "Crate 0-1",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					7.0,
+					0.4000000059604645,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 8920623029167313427,
+			"Name": "Crate 0-2",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					7.820000171661377,
+					0.4000000059604645,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 12825563687339368732,
+			"Name": "Crate 1-0",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					6.590000152587891,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 13744362156458175952,
+			"Name": "Crate 1-1",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					7.409999847412109,
+					1.2000000476837158,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 13742931453586113445,
+			"Name": "Crate 2-0",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					7.0,
+					2.0,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.800000011920929,
+					0.800000011920929,
+					0.800000011920929
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Crate.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 2.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.699999988079071,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 5311817594860843780,
+			"Name": "Cannon",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-1.0,
+					1.0,
+					-7.5
+				],
+				"RotationEuler": [
+					0.13962633907794952,
+					-0.6632251143455505,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"Script": {
+				"Script": "Scripts/Cannon.py",
+				"Class": "",
+				"Fields": {
+					"interval": {
+						"Type": "float",
+						"Value": 1.6
+					},
+					"launch_speed": {
+						"Type": "float",
+						"Value": 13.0
+					}
+				}
+			}
+		},
+		{
+			"ID": 6464982856837608402,
+			"Name": "Barrel",
+			"Parent": 5311817594860843780,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					1.5707963705062866,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.5,
+					1.600000023841858,
+					0.5
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cylinder",
+				"Material": "Materials/Iron.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 3412422807116614499,
+			"Name": "Cannon Base",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-1.0,
+					0.3499999940395355,
+					-7.5
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					0.699999988079071,
+					1.399999976158142
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Iron.bmat",
+				"CastShadows": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 17811072957025670241,
+			"Name": "Ramp",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-7.5,
+					0.5,
+					-1.5
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					-0.3141592741012573
+				],
+				"Scale": [
+					4.0,
+					0.30000001192092896,
+					2.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/Stone.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"MeshCollider": {
+				"UseMeshRenderer": true
+			}
+		},
+		{
+			"ID": 15190319706520818094,
+			"Name": "Capsule Buddy",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-4.0,
+					1.0,
+					-0.5
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Capsule",
+				"Material": "Materials/RedPlastic.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Dynamic",
+				"Mass": 5.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": false,
+				"LockRotationX": true,
+				"LockRotationY": false,
+				"LockRotationZ": true,
+				"ContinuousCollision": false
+			},
+			"CapsuleCollider": {
+				"Radius": 0.5,
+				"HalfHeight": 0.5,
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			}
+		},
+		{
+			"ID": 12459172364629138344,
+			"Name": "Trigger Zone",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					6.0,
+					1.0,
+					4.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					3.0,
+					2.0,
+					3.0
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cube",
+				"Material": "Materials/TriggerVolume.bmat",
+				"CastShadows": false,
+				"Visible": true
+			},
+			"RigidBody": {
+				"Type": "Static",
+				"Mass": 1.0,
+				"LinearDamping": 0.05000000074505806,
+				"AngularDamping": 0.05000000074505806,
+				"GravityScale": 1.0,
+				"Friction": 0.5,
+				"Restitution": 0.0,
+				"IsTrigger": true,
+				"LockRotationX": false,
+				"LockRotationY": false,
+				"LockRotationZ": false,
+				"ContinuousCollision": false
+			},
+			"BoxCollider": {
+				"HalfExtents": [
+					0.5,
+					0.5,
+					0.5
+				],
+				"Offset": [
+					0.0,
+					0.0,
+					0.0
+				]
+			},
+			"Script": {
+				"Script": "Scripts/TriggerZone.py",
+				"Class": "",
+				"Fields": {}
+			}
+		},
+		{
+			"ID": 6323196047337407033,
+			"Name": "Speaker",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.3499999940395355,
+					4.5
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					0.5,
+					0.699999988079071,
+					0.5
+				]
+			},
+			"MeshRenderer": {
+				"Mesh": "Builtin/Cone",
+				"Material": "Materials/Iron.bmat",
+				"CastShadows": true,
+				"Visible": true
+			},
+			"AudioSource": {
+				"Clip": "Audio/Chime.wav",
+				"Volume": 0.800000011920929,
+				"Pitch": 1.0,
+				"Loop": false,
+				"PlayOnStart": false,
+				"Spatial": true,
+				"MinDistance": 1.0,
+				"MaxDistance": 50.0
+			}
+		},
+		{
+			"ID": 8920251353246097368,
+			"Name": "Test Runner",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"Script": {
+				"Script": "Scripts/FeatureTest.py",
+				"Class": "",
+				"Fields": {}
+			}
+		}
+	]
+}

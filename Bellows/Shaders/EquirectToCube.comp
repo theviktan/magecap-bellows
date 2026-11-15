@@ -1,0 +1,30 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// Converts an equirectangular HDR image (e.g. a Poly Haven HDRI) into a cube map.
+
+#include "CubeMap.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std140) uniform Constants
+{
+	vec4 Params;	// x = face size, y = clamp (max radiance)
+} u_Constants;
+
+layout(set = 0, binding = 1) uniform texture2D u_Equirect;
+layout(set = 0, binding = 2) uniform sampler s_Linear;
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2DArray o_Cube;
+
+void main()
+{
+	uvec3 id = gl_GlobalInvocationID;
+	float size = u_Constants.Params.x;
+	if (float(id.x) >= size || float(id.y) >= size)
+		return;
+
+	vec3 direction = CubeDirection(id, size);
+	vec3 color = textureLod(sampler2D(u_Equirect, s_Linear), DirectionToEquirect(direction), 0.0).rgb;
+	// Clamp extreme values (the sun disc) so prefiltering stays noise-free.
+	color = min(color, vec3(u_Constants.Params.y));
+	imageStore(o_Cube, ivec3(id), vec4(color, 1.0));
+}

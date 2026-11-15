@@ -1,0 +1,174 @@
+#include "bwpch.h"
+#include "Bellows/Project/Project.h"
+
+#include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Serialization/JsonUtils.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+
+namespace Bellows {
+
+	Ref<Project> Project::s_ActiveProject;
+
+	namespace {
+
+		// A new project starts with a lit, framed scene so the first thing users see looks right.
+		void WriteDefaultScene(const std::filesystem::path& path)
+		{
+			Scene scene("Main");
+
+			Entity camera = scene.CreateEntity("Main Camera");
+			camera.AddComponent<CameraComponent>();
+			camera.GetTransform().Translation = { 0.0f, 2.5f, 7.0f };
+			camera.GetTransform().SetRotationEuler(glm::radians(glm::vec3(-15.0f, 0.0f, 0.0f)));
+
+			Entity sun = scene.CreateEntity("Sun");
+			sun.AddComponent<DirectionalLightComponent>();
+			sun.GetTransform().SetRotationEuler(glm::radians(glm::vec3(-50.0f, 70.0f, 0.0f)));
+
+			Entity sky = scene.CreateEntity("Sky");
+			sky.AddComponent<SkyLightComponent>();
+
+			Entity ground = scene.CreateEntity("Ground");
+			ground.AddComponent<MeshRendererComponent>().MeshPath = "Builtin/Plane";
+			ground.GetTransform().Scale = { 20.0f, 1.0f, 20.0f };
+			ground.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+			ground.AddComponent<BoxColliderComponent>().HalfExtents = { 0.5f, 0.01f, 0.5f };
+
+			Entity cube = scene.CreateEntity("Cube");
+			cube.AddComponent<MeshRendererComponent>().MeshPath = "Builtin/Cube";
+			cube.GetTransform().Translation = { 0.0f, 0.5f, 0.0f };
+
+			SceneSerializer::Serialize(scene, path);
+		}
+
+	}
+
+	void Project::SetActive(const Ref<Project>& project)
+	{
+		s_ActiveProject = project;
+		AssetManager::SetAssetDirectory(project ? project->GetAssetDirectory() : std::filesystem::path());
+	}
+
+	std::filesystem::path Project::GetProjectFilePath() const
+	{
+		return m_ProjectDirectory / (m_Config.Name + FileExtension);
+	}
+
+	std::filesystem::path Project::GetAssetDirectory() const
+	{
+		return m_ProjectDirectory / m_Config.AssetDirectory;
+	}
+
+	Ref<Project> Project::Create(const std::filesystem::path& directory, const std::string& name)
+	{
+		if (name.empty())
+		{
+			BW_CORE_ERROR("A project needs a name");
+			return nullptr;
+		}
+
+		Ref<Project> project = CreateRef<Project>();
+		project->m_ProjectDirectory = std::filesystem::absolute(directory);
+		project->m_Config.Name = name;
+
+		const std::filesystem::path assets = project->GetAssetDirectory();
+		for (const char* folder : { "Scenes", "Scripts", "Models", "Materials", "Textures", "Environments", "Audio", "Prefabs" })
+		{
+			if (!FileSystem::CreateDirectories(assets / folder))
+			{
+				BW_CORE_ERROR("Could not create project folder '{}'", (assets / folder).string());
+				return nullptr;
+			}
+		}
+
+		const std::filesystem::path startScene = assets / project->m_Config.StartScene;
+		if (!FileSystem::Exists(startScene))
+			WriteDefaultScene(startScene);
+
+		if (!project->Save())
+			return nullptr;
+		SetActive(project);
+		return project;
+	}
+
+	Ref<Project> Project::Load(const std::filesystem::path& path)
+	{
+		std::filesystem::path projectFile = path;
+		std::error_code error;
+		if (std::filesystem::is_directory(path, error))
+		{
+			projectFile.clear();
+			for (const auto& entry : std::filesystem::directory_iterator(path, error))
+			{
+				if (entry.path().extension() == FileExtension)
+				{
+					projectFile = entry.path();
+					break;
+				}
+			}
+			if (projectFile.empty())
+			{
+				BW_CORE_ERROR("No {} file in '{}'", FileExtension, path.string());
+				return nullptr;
+			}
+		}
+
+		const std::optional<std::string> text = FileSystem::ReadTextFile(projectFile);
+		if (!text)
+		{
+			BW_CORE_ERROR("Project file '{}' could not be read", projectFile.string());
+			return nullptr;
+		}
+		const Json json = Json::parse(*text, nullptr, false);
+		if (json.is_discarded() || !json.is_object())
+		{
+			BW_CORE_ERROR("Project file '{}' is not valid JSON", projectFile.string());
+			return nullptr;
+		}
+
+		Ref<Project> project = CreateRef<Project>();
+		project->m_ProjectDirectory = std::filesystem::absolute(projectFile).parent_path();
+		ProjectConfig& config = project->m_Config;
+		config.Name = projectFile.stem().string();
+		JsonRead(json, "Name", config.Name);
+		JsonRead(json, "StartScene", config.StartScene);
+		JsonRead(json, "AssetDirectory", config.AssetDirectory);
+		if (auto it = json.find("Runtime"); it != json.end())
+		{
+			JsonRead(*it, "WindowWidth", config.WindowWidth);
+			JsonRead(*it, "WindowHeight", config.WindowHeight);
+			JsonRead(*it, "Fullscreen", config.Fullscreen);
+			JsonRead(*it, "VSync", config.VSync);
+		}
+
+		SetActive(project);
+		BW_CORE_INFO("Opened project '{}' ({})", config.Name, project->m_ProjectDirectory.string());
+		return project;
+	}
+
+	bool Project::Save()
+	{
+		Json json;
+		json["Name"] = m_Config.Name;
+		json["Engine"] = "MageCap Bellows " BW_VERSION;
+		json["StartScene"] = m_Config.StartScene;
+		json["AssetDirectory"] = m_Config.AssetDirectory;
+		Json& runtime = json["Runtime"];
+		runtime["WindowWidth"] = m_Config.WindowWidth;
+		runtime["WindowHeight"] = m_Config.WindowHeight;
+		runtime["Fullscreen"] = m_Config.Fullscreen;
+		runtime["VSync"] = m_Config.VSync;
+
+		if (!FileSystem::WriteTextFile(GetProjectFilePath(), json.dump(1, '\t')))
+		{
+			BW_CORE_ERROR("Failed to save project '{}'", GetProjectFilePath().string());
+			return false;
+		}
+		return true;
+	}
+
+}

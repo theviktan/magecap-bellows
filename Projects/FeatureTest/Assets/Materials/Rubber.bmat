@@ -1,0 +1,34 @@
+{
+	"Name": "Rubber",
+	"AlbedoColor": [
+		0.05000000074505806,
+		0.05000000074505806,
+		0.05999999865889549,
+		1.0
+	],
+	"Metallic": 0.0,
+	"Roughness": 0.949999988079071,
+	"EmissiveColor": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"EmissiveIntensity": 1.0,
+	"NormalStrength": 1.0,
+	"AlphaMode": "Opaque",
+	"AlphaCutoff": 0.5,
+	"DoubleSided": false,
+	"UVTiling": [
+		1.0,
+		1.0
+	],
+	"UVOffset": [
+		0.0,
+		0.0
+	],
+	"AlbedoMap": "",
+	"NormalMap": "",
+	"MetallicRoughnessMap": "",
+	"OcclusionMap": "",
+	"EmissiveMap": ""
+}

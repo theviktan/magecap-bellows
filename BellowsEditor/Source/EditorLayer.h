@@ -1,0 +1,242 @@
+#pragma once
+
+#include "AgentServer.h"
+#include "EditorCamera.h"
+#include "EditorSettings.h"
+#include "UndoHistory.h"
+
+#include "Bellows/Core/Layer.h"
+#include "Bellows/Project/Project.h"
+#include "Bellows/Project/ProjectExporter.h"
+#include "Bellows/Renderer/Image.h"
+#include "Bellows/Renderer/SceneRenderer.h"
+#include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/Scene.h"
+
+#include <filesystem>
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace Bellows {
+
+	class SceneHierarchyPanel;
+	class InspectorPanel;
+	class ContentBrowserPanel;
+	class ConsolePanel;
+	class SettingsPanel;
+	class StatisticsPanel;
+
+	enum class SceneState : uint8_t
+	{
+		Edit = 0,
+		Play,
+		Pause,
+	};
+
+	enum class GizmoMode : uint8_t
+	{
+		None = 0,
+		Translate,
+		Rotate,
+		Scale,
+	};
+
+	struct EditorOptions
+	{
+		std::filesystem::path ProjectPath;		// Open this project at startup
+		std::filesystem::path StartupScript;	// Python automation script to run once the editor is ready
+		bool ExitAfterScript = false;
+		bool Headless = false;
+		bool DisableAgentServer = false;
+		uint16_t AgentServerPort = 0;			// 0 = use the saved preference
+	};
+
+	// The editor: project and scene management, play mode, selection, undo, the viewport,
+	// all panels and the automation surface used by AI agents.
+	class EditorLayer : public Layer
+	{
+	public:
+		explicit EditorLayer(EditorOptions options);
+		~EditorLayer() override;
+
+		void OnAttach() override;
+		void OnDetach() override;
+		void OnUpdate(Timestep timestep) override;
+		void OnImGuiRender() override;
+		void OnEvent(Event& event) override;
+
+		static EditorLayer& Get() { return *s_Instance; }
+		static bool HasInstance() { return s_Instance != nullptr; }
+
+		// Project ------------------------------------------------------------
+		bool NewProject(const std::filesystem::path& directory, const std::string& name);
+		bool OpenProject(const std::filesystem::path& path);
+		Ref<Project> GetProject() const { return m_Project; }
+
+		// Scenes (paths are asset paths or absolute paths) -------------------
+		void NewScene(const std::string& name = "Untitled");
+		bool OpenScene(const std::string& path);
+		bool SaveScene();
+		bool SaveSceneAs(const std::string& assetPath);
+		const std::string& GetScenePath() const { return m_ScenePath; }
+		bool IsSceneDirty() const;
+		const Ref<Scene>& GetEditorScene() const { return m_EditorScene; }
+		// The scene being shown: the play-mode copy while playing, otherwise the edited scene.
+		const Ref<Scene>& GetActiveScene() const { return m_RuntimeScene ? m_RuntimeScene : m_EditorScene; }
+
+		// Play mode ----------------------------------------------------------
+		void Play();
+		void Stop();
+		void SetPaused(bool paused);
+		void Step(uint32_t frames = 1);
+		SceneState GetSceneState() const { return m_SceneState; }
+
+		// Selection ----------------------------------------------------------
+		void Select(Entity entity, bool additive = false);
+		void SetSelection(const std::vector<UUID>& selection);
+		void ClearSelection();
+		Entity GetPrimarySelection() const;
+		const std::vector<UUID>& GetSelection() const { return m_Selection; }
+		bool IsSelected(Entity entity) const;
+
+		// Commands (undoable) -------------------------------------------------
+		Entity CreateEntity(const std::string& name, Entity parent = {});
+		Entity CreatePrimitive(const std::string& meshPath, const std::string& name);
+		Entity CreateMeshEntity(const std::string& meshPath, const glm::vec3& position);
+		Entity InstantiatePrefab(const std::string& prefabPath, const glm::vec3& position);
+		void DeleteSelection();
+		void DuplicateSelection();
+		void FocusSelection();
+		bool SavePrefab(Entity entity, const std::string& assetPath);
+
+		// Undo: call CommitChange after any change to the edited scene.
+		void CommitChange(const std::string& description);
+		void Undo();
+		void Redo();
+		const UndoHistory& GetUndoHistory() const { return m_UndoHistory; }
+
+		// Viewport -----------------------------------------------------------
+		EditorCamera& GetCamera() { return m_Camera; }
+		SceneRenderer& GetViewportRenderer() { return *m_ViewportRenderer; }
+		// Renders the active scene now and returns the image (used by screenshots and agents).
+		Image CaptureViewport();
+		void SetViewportSizeOverride(uint32_t width, uint32_t height);
+		GizmoMode GetGizmoMode() const { return m_GizmoMode; }
+		bool IsUsingGameCamera() const;
+
+		// Build and settings -------------------------------------------------
+		ExportResult ExportGame(const std::filesystem::path& outputDirectory);
+		EditorSettings& GetSettings() { return m_Settings; }
+		AgentServer& GetAgentServer() { return m_AgentServer; }
+
+		// Advances the editor by whole frames (automation scripts use this to let time pass).
+		// Only valid inside RunAtFrameBoundary, where no frame is in progress.
+		void RunFrames(uint32_t frames);
+		bool CanRunFrames() const { return m_AtFrameBoundary && !m_RunningFrames; }
+		// Runs 'function' at the start of the next frame, before any frame work begins. Automation
+		// (agent requests, the console prompt, startup scripts) runs there so it may call RunFrames.
+		void RunAtFrameBoundary(std::function<void()> function);
+		void RequestExit(int exitCode = 0);
+
+		// Executes Python in the editor context and records one undo step if the scene changed.
+		bool ExecutePython(const std::string& source, std::string& outOutput);
+	private:
+		void DrawProjectHub();
+		void DrawMenuBar();
+		void DrawToolbar();
+		void DrawStatusBar();
+		void DrawViewport();
+		void DrawViewportToolbar();
+		void DrawGizmo();
+		void DrawDialogs();
+		void BuildDefaultLayout(unsigned int dockspaceID);
+
+		void RenderViewport();
+		void SubmitEditorOverlays(SceneRenderer& renderer);
+		void HandleShortcuts();
+		void HandleViewportDrop(const std::string& assetPath);
+		void PickEntity(const glm::vec2& viewportPosition);
+		void ResetEditorStateForScene();
+		std::string SerializeEditorScene() const;
+		void LoadSnapshot(const UndoHistory::Snapshot& snapshot);
+		void UpdateWindowTitle();
+		void StartAgentServer();
+		Json HandleAgentRequest(const std::string& method, const Json& params);
+		void RunStartupScript();
+		void SaveLayout();
+		bool IsViewportInputActive() const;
+	private:
+		static EditorLayer* s_Instance;
+
+		EditorOptions m_Options;
+		EditorSettings m_Settings;
+		Ref<Project> m_Project;
+
+		Ref<Scene> m_EditorScene;
+		Ref<Scene> m_RuntimeScene;
+		std::string m_ScenePath;			// Asset path of the open scene; empty for unsaved scenes
+		SceneState m_SceneState = SceneState::Edit;
+		std::optional<std::string> m_PendingSceneLoad;
+
+		std::vector<UUID> m_Selection;
+		UndoHistory m_UndoHistory;
+		std::string m_CurrentSnapshot;		// Serialized edited scene as of the last commit
+		std::string m_SavedSnapshot;		// Serialized edited scene as of the last save
+		bool m_WasEditingWidget = false;
+
+		EditorCamera m_Camera;
+		Scope<SceneRenderer> m_ViewportRenderer;
+		glm::vec2 m_ViewportSize { 1280.0f, 720.0f };
+		glm::vec2 m_ViewportPosition { 0.0f };
+		glm::uvec2 m_ViewportSizeOverride { 0, 0 };
+		bool m_ViewportHovered = false;
+		bool m_ViewportFocused = false;
+		float m_ViewportMouseWheel = 0.0f;		// Collected during the UI frame for the next camera update
+		bool m_CameraControlActive = false;
+		bool m_FreeCameraInPlay = false;
+		bool m_ShowColliders = true;
+		GizmoMode m_GizmoMode = GizmoMode::Translate;
+		bool m_GizmoLocal = false;
+		bool m_GizmoWasUsing = false;
+		float m_TranslateSnap = 0.5f;
+		float m_RotateSnap = 15.0f;
+		float m_ScaleSnap = 0.1f;
+
+		Scope<SceneHierarchyPanel> m_HierarchyPanel;
+		Scope<InspectorPanel> m_InspectorPanel;
+		Scope<ContentBrowserPanel> m_ContentBrowserPanel;
+		Scope<ConsolePanel> m_ConsolePanel;
+		Scope<SettingsPanel> m_SettingsPanel;
+		Scope<StatisticsPanel> m_StatisticsPanel;
+
+		// Dialog state
+		bool m_ShowNewProjectDialog = false;
+		bool m_ShowOpenProjectDialog = false;
+		bool m_ShowExportDialog = false;
+		bool m_ShowAboutDialog = false;
+		bool m_ShowSaveSceneAsDialog = false;
+		bool m_ShowStatistics = false;
+		bool m_ShowDemoWindow = false;
+		std::string m_DialogName;
+		std::string m_DialogPath;
+		std::string m_DialogMessage;
+		ExportResult m_LastExport;
+
+		AgentServer m_AgentServer;
+		bool m_StartupScriptPending = false;
+		bool m_LayoutInitialized = false;
+		bool m_RunningFrames = false;
+		bool m_AtFrameBoundary = false;
+		bool m_AgentRequestsQueued = false;
+		bool m_ProcessingAgentRequests = false;
+		float m_LastFrameTime = 0.0f;
+		std::filesystem::path m_LayoutPath;
+
+		friend class SceneHierarchyPanel;
+		friend class InspectorPanel;
+		friend class ContentBrowserPanel;
+	};
+
+}

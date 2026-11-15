@@ -1,0 +1,270 @@
+#include <doctest/doctest.h>
+
+#include "TestUtilities.h"
+
+#include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/SceneSerializer.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+
+using namespace Bellows;
+
+namespace {
+
+	bool Near(const glm::vec3& a, const glm::vec3& b, float epsilon = 1e-4f)
+	{
+		return glm::all(glm::lessThan(glm::abs(a - b), glm::vec3(epsilon)));
+	}
+
+	// Gives an entity every component with non-default values.
+	void AddEveryComponent(Entity entity)
+	{
+		TransformComponent& transform = entity.GetComponent<TransformComponent>();
+		transform.Translation = { 1.0f, 2.0f, 3.0f };
+		transform.SetRotationEuler(glm::radians(glm::vec3(10.0f, 20.0f, 30.0f)));
+		transform.Scale = { 2.0f, 2.0f, 2.0f };
+
+		auto& meshRenderer = entity.AddComponent<MeshRendererComponent>();
+		meshRenderer.MeshPath = "Builtin/Sphere";
+		meshRenderer.MaterialPath = "Materials/Gold.bmat";
+		meshRenderer.CastShadows = false;
+
+		auto& camera = entity.AddComponent<CameraComponent>();
+		camera.Projection = ProjectionType::Orthographic;
+		camera.OrthographicSize = 12.0f;
+		camera.Primary = false;
+
+		entity.AddComponent<DirectionalLightComponent>().Intensity = 5.0f;
+		entity.AddComponent<PointLightComponent>().Range = 7.0f;
+		entity.AddComponent<SpotLightComponent>().OuterAngle = glm::radians(40.0f);
+		auto& sky = entity.AddComponent<SkyLightComponent>();
+		sky.EnvironmentPath = "Environments/Studio.hdr";
+		sky.Rotation = glm::radians(90.0f);
+
+		auto& rigidBody = entity.AddComponent<RigidBodyComponent>();
+		rigidBody.Type = RigidBodyType::Kinematic;
+		rigidBody.Mass = 3.0f;
+		rigidBody.LockRotationY = true;
+		entity.AddComponent<BoxColliderComponent>().HalfExtents = { 1.0f, 2.0f, 3.0f };
+		entity.AddComponent<SphereColliderComponent>().Radius = 0.75f;
+		entity.AddComponent<CapsuleColliderComponent>().HalfHeight = 1.25f;
+		entity.AddComponent<MeshColliderComponent>();
+
+		auto& script = entity.AddComponent<ScriptComponent>();
+		script.ScriptPath = "Scripts/Player.py";
+		script.ClassName = "Player";
+		script.Fields["speed"] = 4.5;
+		script.Fields["lives"] = int64_t(3);
+		script.Fields["god_mode"] = true;
+		script.Fields["title"] = std::string("Hero");
+		script.Fields["spawn"] = glm::vec3(1.0f, 2.0f, 3.0f);
+
+		auto& audio = entity.AddComponent<AudioSourceComponent>();
+		audio.ClipPath = "Audio/Theme.ogg";
+		audio.Loop = true;
+		entity.AddComponent<AudioListenerComponent>();
+		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
+	}
+
+}
+
+TEST_CASE("Entities are created, found and destroyed")
+{
+	Ref<Scene> scene = CreateRef<Scene>("Test");
+	Entity a = scene->CreateEntity("A");
+	Entity b = scene->CreateEntity("B");
+	CHECK(scene->GetEntityCount() == 2);
+	CHECK(scene->FindEntityByName("B") == b);
+	CHECK(scene->TryGetEntityByUUID(a.GetUUID()) == a);
+	CHECK(scene->GetEntityByRenderID(a.GetRenderID()) == a);
+	CHECK(a.HasComponent<TransformComponent>());
+	CHECK(a.HasComponent<RelationshipComponent>());
+
+	const UUID uuid = a.GetUUID();
+	scene->DestroyEntity(a);
+	CHECK_FALSE(a.IsValid());
+	CHECK_FALSE(scene->TryGetEntityByUUID(uuid));
+	CHECK(scene->GetEntityCount() == 1);
+	CHECK_FALSE(scene->FindEntityByName("A"));
+}
+
+TEST_CASE("Hierarchy keeps world transforms, order and prevents cycles")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity parent = scene->CreateEntity("Parent");
+	Entity child = scene->CreateEntity("Child");
+	parent.GetTransform().Translation = { 10.0f, 0.0f, 0.0f };
+	parent.GetTransform().Scale = { 2.0f, 2.0f, 2.0f };
+	child.GetTransform().Translation = { 1.0f, 1.0f, 1.0f };
+
+	REQUIRE(scene->SetParent(child, parent, true));
+	CHECK(child.GetParent() == parent);
+	CHECK(Near(scene->GetWorldPosition(child), { 1.0f, 1.0f, 1.0f }));
+	CHECK(Near(child.GetTransform().Translation, { -4.5f, 0.5f, 0.5f }));
+	CHECK(scene->GetRootEntities().size() == 1);
+
+	CHECK_FALSE(scene->SetParent(parent, child, true));
+	CHECK(parent.GetParent() == Entity());
+
+	Entity second = scene->CreateChildEntity(parent, "Second");
+	CHECK(parent.GetChildren().size() == 2);
+	scene->SetSiblingIndex(second, 0);
+	CHECK(parent.GetChildren()[0] == second);
+	CHECK(second.IsDescendantOf(parent));
+
+	scene->Unparent(child, true);
+	CHECK(Near(scene->GetWorldPosition(child), { 1.0f, 1.0f, 1.0f }));
+	CHECK(scene->GetRootEntities().size() == 2);
+
+	// Destroying a parent destroys its children.
+	scene->DestroyEntity(parent);
+	CHECK_FALSE(second.IsValid());
+	CHECK(scene->GetEntityCount() == 1);
+}
+
+TEST_CASE("DuplicateEntity deep-copies with new IDs next to the original")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity first = scene->CreateEntity("First");
+	Entity root = scene->CreateEntity("Root");
+	Entity last = scene->CreateEntity("Last");
+	Entity child = scene->CreateChildEntity(root, "Child");
+	child.AddComponent<PointLightComponent>().Intensity = 42.0f;
+
+	Entity copy = scene->DuplicateEntity(root);
+	REQUIRE(copy);
+	CHECK(copy.GetUUID() != root.GetUUID());
+	CHECK(copy.GetName() == "Root");
+	REQUIRE(copy.GetChildren().size() == 1);
+	Entity childCopy = copy.GetChildren()[0];
+	CHECK(childCopy.GetUUID() != child.GetUUID());
+	CHECK(childCopy.GetComponent<PointLightComponent>().Intensity == 42.0f);
+
+	const std::vector<Entity> roots = scene->GetRootEntities();
+	REQUIRE(roots.size() == 4);
+	CHECK(roots[0] == first);
+	CHECK(roots[1] == root);
+	CHECK(roots[2] == copy);
+	CHECK(roots[3] == last);
+}
+
+TEST_CASE("Scene::Copy keeps IDs, components and hierarchy")
+{
+	Ref<Scene> source = CreateRef<Scene>("Source");
+	Entity parent = source->CreateEntity("Parent");
+	Entity child = source->CreateChildEntity(parent, "Child");
+	AddEveryComponent(child);
+	source->GetSettings().Gravity = { 0.0f, -3.0f, 0.0f };
+
+	Ref<Scene> copy = Scene::Copy(source);
+	CHECK(copy->GetEntityCount() == 2);
+	Entity copiedChild = copy->TryGetEntityByUUID(child.GetUUID());
+	REQUIRE(copiedChild);
+	CHECK(copiedChild.GetParent().GetUUID() == parent.GetUUID());
+	CHECK(copiedChild.GetComponent<RigidBodyComponent>().Mass == 3.0f);
+	CHECK(copy->GetSettings().Gravity.y == -3.0f);
+
+	// The copy is independent.
+	copiedChild.GetComponent<RigidBodyComponent>().Mass = 9.0f;
+	CHECK(child.GetComponent<RigidBodyComponent>().Mass == 3.0f);
+}
+
+TEST_CASE("Scene serialization round-trips every component")
+{
+	Ref<Scene> scene = CreateRef<Scene>("RoundTrip");
+	scene->GetSettings().Gravity = { 0.0f, -20.0f, 0.0f };
+	scene->GetSettings().Rendering.Exposure = 1.7f;
+	scene->GetSettings().Rendering.ToneMapper = Tonemapper::AgX;
+	Entity root = scene->CreateEntity("Root");
+	Entity child = scene->CreateChildEntity(root, "Child");
+	scene->CreateChildEntity(root, "Second Child");
+	scene->CreateEntity("Other Root");
+	AddEveryComponent(child);
+
+	const std::filesystem::path path = BellowsTests::GetTestOutputDirectory() / "RoundTrip.bscene";
+	REQUIRE(SceneSerializer::Serialize(*scene, path));
+
+	Ref<Scene> loaded = CreateRef<Scene>();
+	REQUIRE(SceneSerializer::Deserialize(*loaded, path));
+
+	CHECK(loaded->GetName() == "RoundTrip");
+	CHECK(loaded->GetEntityCount() == 4);
+	CHECK(loaded->GetSettings().Gravity.y == -20.0f);
+	CHECK(loaded->GetSettings().Rendering.ToneMapper == Tonemapper::AgX);
+	CHECK(loaded->GetSettings().Rendering.Exposure == doctest::Approx(1.7f));
+
+	// Serializing the loaded scene reproduces the original document exactly.
+	CHECK(SceneSerializer::SerializeToJson(*loaded).dump() == SceneSerializer::SerializeToJson(*scene).dump());
+
+	Entity loadedChild = loaded->TryGetEntityByUUID(child.GetUUID());
+	REQUIRE(loadedChild);
+	CHECK(loadedChild.GetParent().GetName() == "Root");
+	CHECK(loadedChild.GetParent().GetChildren()[0] == loadedChild);
+	const ScriptComponent& script = loadedChild.GetComponent<ScriptComponent>();
+	CHECK(std::get<double>(script.Fields.at("speed")) == doctest::Approx(4.5));
+	CHECK(std::get<int64_t>(script.Fields.at("lives")) == 3);
+	CHECK(std::get<bool>(script.Fields.at("god_mode")));
+	CHECK(std::get<std::string>(script.Fields.at("title")) == "Hero");
+	CHECK(std::get<glm::vec3>(script.Fields.at("spawn")) == glm::vec3(1.0f, 2.0f, 3.0f));
+	CHECK(Near(glm::degrees(loadedChild.GetTransform().GetRotationEuler()), { 10.0f, 20.0f, 30.0f }, 1e-3f));
+}
+
+TEST_CASE("Deserializing rejects malformed scene files")
+{
+	const std::filesystem::path path = BellowsTests::GetTestOutputDirectory() / "Broken.bscene";
+	FileSystem::WriteTextFile(path, "{ this is not json");
+	Ref<Scene> scene = CreateRef<Scene>();
+	CHECK_FALSE(SceneSerializer::Deserialize(*scene, path));
+	CHECK_FALSE(SceneSerializer::Deserialize(*scene, BellowsTests::GetTestOutputDirectory() / "Missing.bscene"));
+	CHECK(scene->GetEntityCount() == 0);
+}
+
+TEST_CASE("Prefabs instantiate with fresh IDs and keep their hierarchy")
+{
+	const std::filesystem::path projectAssets = BellowsTests::GetTestOutputDirectory() / "PrefabProject";
+	AssetManager::SetAssetDirectory(projectAssets);
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity tower = scene->CreateEntity("Tower");
+	Entity top = scene->CreateChildEntity(tower, "Top");
+	top.GetTransform().Translation = { 0.0f, 5.0f, 0.0f };
+	top.AddComponent<PointLightComponent>();
+	REQUIRE(SceneSerializer::SavePrefab(tower, projectAssets / "Prefabs" / "Tower.bprefab"));
+
+	Entity first = SceneSerializer::InstantiatePrefab(*scene, "Prefabs/Tower.bprefab");
+	Entity second = SceneSerializer::InstantiatePrefab(*scene, "Prefabs/Tower.bprefab", tower);
+	REQUIRE(first);
+	REQUIRE(second);
+	CHECK(first.GetUUID() != tower.GetUUID());
+	CHECK(first.GetUUID() != second.GetUUID());
+	CHECK(first.GetComponent<PrefabComponent>().PrefabPath == "Prefabs/Tower.bprefab");
+	REQUIRE(first.GetChildren().size() == 1);
+	CHECK(first.GetChildren()[0].GetTransform().Translation.y == 5.0f);
+	CHECK(first.GetChildren()[0].HasComponent<PointLightComponent>());
+	CHECK(second.GetParent() == tower);
+	CHECK(scene->GetEntityCount() == 6);
+
+	CHECK_FALSE(SceneSerializer::InstantiatePrefab(*scene, "Prefabs/Missing.bprefab"));
+	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("Destruction during play is deferred to the end of the frame")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity entity = scene->CreateEntity("Doomed");
+	Entity child = scene->CreateChildEntity(entity, "Child");
+	scene->OnRuntimeStart();
+
+	scene->DestroyEntity(entity);
+	CHECK(entity.IsValid());
+	CHECK(scene->IsPendingDestroy(entity));
+	CHECK(scene->IsPendingDestroy(child));
+	CHECK_FALSE(scene->FindEntityByName("Doomed"));
+
+	scene->OnUpdateRuntime(1.0f / 60.0f);
+	CHECK_FALSE(entity.IsValid());
+	CHECK_FALSE(child.IsValid());
+	scene->OnRuntimeStop();
+}
