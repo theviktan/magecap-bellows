@@ -14,7 +14,10 @@ namespace Bellows::Scripting {
 
 	namespace {
 
+		// The pointer is only used after the ID confirms the scene still exists, because the scene may
+		// have been deleted while it was still the context (reading a deleted scene is undefined).
 		Scene* s_ContextScene = nullptr;
+		uint64_t s_ContextSceneID = 0;
 		std::function<void(int)> s_QuitHandler;
 		std::function<bool(const std::string&)> s_LoadSceneHandler;
 		float s_DeltaTime = 0.0f;
@@ -76,13 +79,18 @@ namespace Bellows::Scripting {
 		return entity;
 	}
 
-	void SetContextScene(Scene* scene) { s_ContextScene = scene; }
+	void SetContextScene(Scene* scene)
+	{
+		s_ContextScene = scene;
+		s_ContextSceneID = scene ? scene->GetID() : 0;
+	}
 
 	Scene* GetContextScene()
 	{
-		if (s_ContextScene && Scene::GetSceneByID(s_ContextScene->GetID()) == s_ContextScene)
-			return s_ContextScene;
-		return nullptr;
+		if (!s_ContextScene)
+			return nullptr;
+		Scene* live = Scene::GetSceneByID(s_ContextSceneID);
+		return live == s_ContextScene ? live : nullptr;
 	}
 
 	Scene& RequireContextScene()
