@@ -1,0 +1,35 @@
+when explode
+	fail "boom in handler"
+end
+trigger explode                              # expect error: boom in handler
+say "the script continues after a handler fails"     # expect: the script continues after a handler fails
+function recurse_forever(n)
+	return recurse_forever(n + 1)
+end
+start recurse_forever(1)                     # expect error: Too many functions calling each other
+say "done"                                   # expect: done
+kind Loop
+	function to_text()
+		return "loop {self}"
+	end
+end
+try
+	say new Loop
+catch problem
+	say "nested calls stopped"                # expect: nested calls stopped
+end
+kind Broken
+	function to_text()
+		fail "broken to_text"
+	end
+end
+try
+	say "value: {new Broken}"
+catch problem
+	say problem                               # expect: broken to_text (test.forge line 23)
+end
+try
+	say "joined " + new Broken
+catch problem
+	say "caught joined"                       # expect: caught joined
+end

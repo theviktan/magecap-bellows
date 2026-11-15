@@ -1,0 +1,33 @@
+set a to vector(1, 2, 3)
+set b to vector(4, 5, 6)
+say a + b                                # expect: (5, 7, 9)
+say b - a                                # expect: (3, 3, 3)
+say a * 2                                # expect: (2, 4, 6)
+say 2 * a                                # expect: (2, 4, 6)
+say b / 2                                # expect: (2, 2.5, 3)
+say -a                                   # expect: (-1, -2, -3)
+say a.x + a.y + a.z                      # expect: 6
+say vector(3, 4).length                  # expect: 5
+say vector(0, 0, 9).normalized()         # expect: (0, 0, 1)
+say a.dot(b)                             # expect: 32
+say vector(1, 0, 0).cross(vector(0, 1, 0))   # expect: (0, 0, 1)
+say a.distance_to(a)                     # expect: 0
+say lerp(vector(0, 0, 0), vector(10, 10, 10), 0.5)   # expect: (5, 5, 5)
+say a is vector(1, 2, 3)                 # expect: true
+set a.x to 10
+add 5 to a.y
+say a                                    # expect: (10, 7, 3)
+set holder to { position: vector(0, 0, 0) }
+set holder.position.x to 4
+add 1 to holder.position.y
+say holder.position                      # expect: (4, 1, 0)
+set path to [vector(1, 1, 1)]
+set path[1].z to 9
+say path                                 # expect: [(1, 1, 9)]
+say clamp(15, 0, 10)                     # expect: 10
+say round(3.14159, 2)                    # expect: 3.14
+say floor(2.7)                           # expect: 2
+say ceil(2.1)                            # expect: 3
+say round(2.5)                           # expect: 3
+say sign(-4)                             # expect: -1
+say degrees(pi)                          # expect: 180

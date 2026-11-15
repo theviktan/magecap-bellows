@@ -1,0 +1,43 @@
+set name to "Ron"
+set level to 7
+say "Hi {name}, you are level {level}."   # expect: Hi Ron, you are level 7.
+say "Next: {level + 1}"                   # expect: Next: 8
+say "{name}{name}"                        # expect: RonRon
+say "Nested {"inner {level}"} done"       # expect: Nested inner 7 done
+say "List: {[1, "two"]}"                  # expect: List: [1, "two"]
+say "{ {a: 1}.a }"                        # expect: 1
+say "Forge".length                        # expect: 5
+say length of "café"                      # expect: 4
+say "café"[4]                             # expect: é
+say "Hello"[1]                            # expect: H
+say "Hello"[-1]                           # expect: o
+say "Hello World".upper()                 # expect: HELLO WORLD
+say "Hello World".lower()                 # expect: hello world
+say "  trim me  ".trim()                  # expect: trim me
+say "a,b,c".split(",")                    # expect: ["a", "b", "c"]
+say "one two  three".split()              # expect: ["one", "two", "three"]
+say "abc".split("")                       # expect: ["a", "b", "c"]
+say "hello".replace("l", "L")             # expect: heLLo
+say "hello".contains("ell")               # expect: true
+say "hello" contains "xyz"                # expect: false
+say "hello".starts_with("he")             # expect: true
+say "hello".ends_with("lo")               # expect: true
+say "hello".find("l")                     # expect: 3
+say "hello".find("z")                     # expect: nothing
+say "Forge Language".slice(1, 5)          # expect: Forge
+say "Forge Language".slice(-8)            # expect: Language
+say "ab".repeat(3)                        # expect: ababab
+say "42".is_number()                      # expect: true
+say "4x2".is_number()                     # expect: false
+say number("3.25") + 1                    # expect: 4.25
+say number("nope")                        # expect: nothing
+say text(12) + "3"                        # expect: 123
+say "apple" is below "banana"             # expect: true
+say "" is empty                           # expect: true
+say "x" is not empty                      # expect: true
+for each letter in "héy" do
+	say letter
+end
+# expect: h
+# expect: é
+# expect: y
