@@ -362,8 +362,8 @@ namespace Bellows::Scripting {
 			Entity entity = handle.Resolve();
 			Scene* scene = entity.GetScene();
 			const glm::mat4 world = scene->GetWorldTransform(entity);
-			glm::vec3 position, scale;
-			glm::quat rotation;
+			glm::vec3 position(0.0f), scale(1.0f);
+			glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 			Math::DecomposeTransform(world, position, rotation, scale);
 			glm::vec3 direction = target - position;
 			if (glm::length(direction) < 1e-6f)
@@ -1028,7 +1028,7 @@ namespace Bellows::Scripting {
 			RenderCamera camera;
 			if (!scene.GetPrimaryCamera(viewport.x / std::max(viewport.y, 1.0f), camera))
 				return py::none();
-			glm::vec3 origin, direction;
+			glm::vec3 origin(0.0f), direction(0.0f);
 			Math::ScreenPointToRay(screenPosition, viewport, glm::inverse(camera.Projection * camera.View), origin, direction);
 			return py::make_tuple(origin, direction);
 		}, py::arg("screen_position"), "Returns (origin, direction) of a ray through a viewport pixel, or None without a camera");
@@ -1039,7 +1039,7 @@ namespace Bellows::Scripting {
 			const glm::vec2 viewport = Input::GetViewportSize().x > 0 ? Input::GetViewportSize()
 				: glm::vec2(static_cast<float>(scene.GetViewportWidth()), static_cast<float>(scene.GetViewportHeight()));
 			RenderCamera camera;
-			glm::vec2 result;
+			glm::vec2 result(0.0f);
 			if (!scene.GetPrimaryCamera(viewport.x / std::max(viewport.y, 1.0f), camera)
 				|| !Math::WorldToScreenPoint(worldPosition, camera.Projection * camera.View, viewport, result))
 				return py::none();

@@ -733,8 +733,8 @@ namespace Bellows {
 
 		auto drawColliders = [&](Entity entity)
 		{
-			glm::vec3 translation, scale;
-			glm::quat rotation;
+			glm::vec3 translation(0.0f), scale(1.0f);
+			glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 			Math::DecomposeTransform(scene->GetWorldTransform(entity), translation, rotation, scale);
 			const glm::mat4 rigid = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation);
 
@@ -810,8 +810,8 @@ namespace Bellows {
 			{
 				const float aspect = m_ViewportSize.x / std::max(m_ViewportSize.y, 1.0f);
 				const glm::mat4 projection = camera->GetProjection(aspect);
-				glm::vec3 translation, scale;
-				glm::quat rotation;
+				glm::vec3 translation(0.0f), scale(1.0f);
+				glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
 				Math::DecomposeTransform(world, translation, rotation, scale);
 				const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation));
 				// Draw the frustum out to a short preview distance.
@@ -1567,7 +1567,7 @@ namespace Bellows {
 
 		// Drop point: where the mouse ray hits the ground plane (or in front of the camera).
 		const ImVec2 mouse = ImGui::GetMousePos();
-		glm::vec3 origin, direction;
+		glm::vec3 origin(0.0f), direction(0.0f);
 		const RenderCamera camera = m_Camera.GetRenderCamera();
 		Math::ScreenPointToRay(glm::vec2(mouse.x, mouse.y) - m_ViewportPosition, m_ViewportSize,
 			glm::inverse(camera.Projection * camera.View), origin, direction);
