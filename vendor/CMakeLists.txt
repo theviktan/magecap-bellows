@@ -8,13 +8,13 @@
 set(CMAKE_FOLDER "Vendor")
 
 # --- Vulkan -------------------------------------------------------------------
-# Headers come from the pinned submodule; the loader library comes from the
-# system (Vulkan SDK on Windows, libvulkan-dev on Ubuntu).
+# Headers come from the pinned submodule; the loader library (vulkan-1.dll, libvulkan.so.1)
+# comes with the graphics driver and is opened at run time.
 add_subdirectory(Vulkan-Headers EXCLUDE_FROM_ALL)
-find_package(Vulkan REQUIRED COMPONENTS)
-
+# Nothing links against the loader: see NvrhiVulkanDispatch.cpp.
 add_library(BellowsVulkan INTERFACE)
-target_link_libraries(BellowsVulkan INTERFACE Vulkan::Headers ${Vulkan_LIBRARIES})
+target_link_libraries(BellowsVulkan INTERFACE Vulkan::Headers)
+target_compile_definitions(BellowsVulkan INTERFACE VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 if(WIN32)
 	target_compile_definitions(BellowsVulkan INTERFACE VK_USE_PLATFORM_WIN32_KHR)
 endif()
