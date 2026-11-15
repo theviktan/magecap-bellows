@@ -27,7 +27,7 @@ namespace Bellows {
 	//   <Output>/<Game>.bproject   project settings
 	//   <Output>/Assets/           project assets
 	//   <Output>/Shaders/, Python/ engine data
-	//   <Output>/python/           bundled Python runtime
+	//   <Output>/PythonRuntime/    bundled Python runtime
 	class ProjectExporter
 	{
 	public:

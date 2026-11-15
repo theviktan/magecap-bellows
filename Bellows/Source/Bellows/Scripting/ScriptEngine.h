@@ -46,6 +46,11 @@ namespace Bellows {
 		// Folder that holds the 'bellows' Python package (engine Resources/Python).
 		static void SetEngineModuleDirectory(const std::filesystem::path& directory);
 
+		// Folder next to the executable that holds a bundled Python runtime (exported games).
+		// Distinct from the "Python" folder of the bellows package, which Windows would treat as
+		// the same folder if only the letter case differed.
+		static constexpr const char* BundledRuntimeFolder = "PythonRuntime";
+
 		// Play mode lifecycle
 		static void OnRuntimeStart(Scene& scene);
 		static void OnRuntimeStop(Scene& scene);

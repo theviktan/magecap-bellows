@@ -302,7 +302,7 @@ sys.stderr = _BellowsLogWriter(2)
 		std::filesystem::path home = pythonHome;
 		if (home.empty())
 		{
-			const std::filesystem::path bundled = Platform::GetExecutableDirectory() / "python";
+			const std::filesystem::path bundled = Platform::GetExecutableDirectory() / BundledRuntimeFolder;
 			if (std::filesystem::exists(bundled))
 				home = bundled;
 		}
