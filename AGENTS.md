@@ -21,7 +21,7 @@ agents can build games through it.
 | `Python/bellows/` | The Python package games import (`__init__.py`, `editor.py`). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons. |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`. |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 

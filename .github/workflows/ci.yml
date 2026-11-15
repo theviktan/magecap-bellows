@@ -3,7 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write    # Publishing a GitHub Release when a version tag is pushed
 
 jobs:
   linux:
@@ -75,3 +80,46 @@ jobs:
       # Hosted Windows runners have no Vulkan driver, so only the GPU-free suites run here.
       - name: Test
         run: ctest --test-dir build/windows -C Release -R "BellowsUnitTests|ForgeScript" --output-on-failure
+
+      # A ready-to-run editor: engine, sample project, bundled Python and the C++ runtime DLLs.
+      - name: Package
+        run: |
+          $redist = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory |
+            Sort-Object FullName | Select-Object -Last 1
+          if (-not $redist) { Write-Output "::error::Visual C++ runtime DLLs not found"; exit 1 }
+          python Tools/PackageRelease.py --build-dir build/windows --output dist --msvc-redist $redist.FullName --no-zip
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # The unit tests run from inside the package, so its bundled Python is the one in use.
+      - name: Test the package
+        run: |
+          $package = Get-ChildItem dist -Directory | Select-Object -First 1
+          Copy-Item build/windows/bin/BellowsTests.exe $package.FullName
+          Push-Location $package.FullName
+          .\BellowsTests.exe "--test-case-exclude=*[gpu]*"
+          $code = $LASTEXITCODE
+          Pop-Location
+          Remove-Item (Join-Path $package.FullName "BellowsTests.exe"), (Join-Path $package.FullName "*.log") -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $package.FullName "TestOutput") -Recurse -ErrorAction SilentlyContinue
+          exit $code
+
+      - name: Zip the package
+        run: |
+          $package = Get-ChildItem dist -Directory | Select-Object -First 1
+          7z a -tzip "dist/$($package.Name).zip" "./dist/$($package.Name)" -mx=7 | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          "PACKAGE_NAME=$($package.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload the editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: dist/${{ env.PACKAGE_NAME }}
+          retention-days: 30
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.PACKAGE_NAME }}.zip
+          generate_release_notes: true
