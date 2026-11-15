@@ -1,33 +1,22 @@
-# Embedding ForgeScript in Your Engine (C++)
+# The ForgeScript C++ API
 
-This guide walks through adding ForgeScript to a C++/CMake game engine, step by step. The finished result is the same as [`Examples/EngineIntegration/Main.cpp`](../Examples/EngineIntegration/Main.cpp), which builds and runs as part of the test suite, so you can always check that file for working code.
+This guide explains, step by step, how C++ code hosts ForgeScript: creating the virtual machine, exposing types, functions and phrases, running scripts and sending events. Bellows' own scripting layer is built on exactly this API. A small working host lives in [`ForgeScript/Examples/EngineIntegration/Main.cpp`](../../ForgeScript/Examples/EngineIntegration/Main.cpp); it builds and runs as the `ForgeScriptEngineExample` test, so it always matches the code.
 
 **Requirements:** a C++17 compiler (Visual Studio 2022 on Windows, GCC 11+ or Clang 14+ on Linux) and CMake 3.20+. ForgeScript has no other dependencies.
 
 ---
 
-## Step 1: Add ForgeScript to your repository
+## Step 1: Link the library
 
-1. Copy the whole `ForgeScript` folder into your engine repository, for example as `ThirdParty/ForgeScript`.
-   (Or add it as a git submodule: `git submodule add <url> ThirdParty/ForgeScript`.)
-2. Open your engine's top-level `CMakeLists.txt`.
-3. Add these lines **before** your engine target is defined:
+ForgeScript is built as part of MageCap Bellows from the `ForgeScript/` folder. Any target that hosts scripts links the `ForgeScript` CMake target:
 
 ```cmake
-# ForgeScript scripting language. Turn off its tests, tool and example inside the engine build.
-set(FORGESCRIPT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(FORGESCRIPT_BUILD_CLI OFF CACHE BOOL "" FORCE)
-set(FORGESCRIPT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(ThirdParty/ForgeScript)
+target_link_libraries(MyTarget PRIVATE ForgeScript)
 ```
 
-4. Link ForgeScript into your engine's static library:
+Then include the one public header: `#include "ForgeScript/ForgeScript.h"`.
 
-```cmake
-target_link_libraries(Engine PUBLIC ForgeScript)
-```
-
-5. Re-run CMake. In any engine source file you can now write `#include "ForgeScript/ForgeScript.h"`.
+The library only uses the C++ standard library, so it can also be copied into another C++20 project on its own.
 
 ---
 

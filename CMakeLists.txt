@@ -51,6 +51,12 @@ add_subdirectory(vendor)
 # -----------------------------------------------------------------------------
 # Engine, tools and tests
 # -----------------------------------------------------------------------------
+# Testing is switched on before any folder adds tests (ForgeScript adds its own).
+if(BELLOWS_BUILD_TESTS)
+	enable_testing()
+endif()
+
+add_subdirectory(ForgeScript)
 add_subdirectory(Bellows)
 add_subdirectory(BellowsRuntime)
 
@@ -59,6 +65,5 @@ if(BELLOWS_BUILD_EDITOR)
 endif()
 
 if(BELLOWS_BUILD_TESTS)
-	enable_testing()
 	add_subdirectory(BellowsTests)
 endif()

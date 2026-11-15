@@ -1,42 +1,38 @@
-cmake_minimum_required(VERSION 3.20)
+# ForgeScript - the natural-language scripting language of MageCap Bellows.
+#
+# The language core (compiler, virtual machine, standard library) has no engine dependencies:
+# it only uses the C++ standard library. The engine binds to it from Bellows/Source/Bellows/Scripting.
 
-project(ForgeScript VERSION 1.0.0 LANGUAGES CXX)
+file(GLOB_RECURSE FORGESCRIPT_SOURCES CONFIGURE_DEPENDS
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/ForgeScript/*.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/ForgeScript/*.h")
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+add_library(ForgeScript STATIC ${FORGESCRIPT_SOURCES})
+target_include_directories(ForgeScript PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Source")
+target_compile_definitions(ForgeScript PUBLIC FORGESCRIPT_VERSION="1.0.0")
+bellows_set_compile_options(ForgeScript)
+set_target_properties(ForgeScript PROPERTIES FOLDER "ForgeScript")
 
-option(FORGESCRIPT_BUILD_CLI "Build the forgescript command line tool" ON)
-option(FORGESCRIPT_BUILD_TESTS "Build the ForgeScript test suite" ON)
-option(FORGESCRIPT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+# forgescript: run scripts, check them for mistakes, or try code in the interactive prompt.
+add_executable(ForgeScriptCLI CLI/Source/Main.cpp)
+set_target_properties(ForgeScriptCLI PROPERTIES OUTPUT_NAME forgescript FOLDER "ForgeScript")
+target_link_libraries(ForgeScriptCLI PRIVATE ForgeScript)
+bellows_set_compile_options(ForgeScriptCLI)
 
-# Shared compiler warnings for every ForgeScript target.
-function(forge_set_warnings target)
-	if(MSVC)
-		target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
-		if(FORGESCRIPT_WARNINGS_AS_ERRORS)
-			target_compile_options(${target} PRIVATE /WX)
-		endif()
-	else()
-		target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter)
-		if(FORGESCRIPT_WARNINGS_AS_ERRORS)
-			target_compile_options(${target} PRIVATE -Werror)
-		endif()
-	endif()
-endfunction()
+# A small stand-in engine that shows embedding without the rest of Bellows.
+add_executable(ForgeScriptEngineExample Examples/EngineIntegration/Main.cpp)
+set_target_properties(ForgeScriptEngineExample PROPERTIES FOLDER "ForgeScript")
+target_link_libraries(ForgeScriptEngineExample PRIVATE ForgeScript)
+bellows_set_compile_options(ForgeScriptEngineExample)
 
-add_subdirectory(ForgeScript)
+if(BELLOWS_BUILD_TESTS)
+	file(GLOB FORGESCRIPT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Source/*.h")
+	add_executable(ForgeScriptTests ${FORGESCRIPT_TEST_SOURCES})
+	set_target_properties(ForgeScriptTests PROPERTIES FOLDER "ForgeScript")
+	target_link_libraries(ForgeScriptTests PRIVATE ForgeScript BellowsDoctest)
+	target_compile_definitions(ForgeScriptTests PRIVATE FORGESCRIPT_TEST_SCRIPTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests/Scripts")
+	bellows_set_compile_options(ForgeScriptTests)
 
-if(FORGESCRIPT_BUILD_CLI)
-	add_subdirectory(ForgeScriptCLI)
-endif()
-
-if(FORGESCRIPT_BUILD_TESTS)
-	enable_testing()
-	add_subdirectory(Tests)
-endif()
-
-option(FORGESCRIPT_BUILD_EXAMPLES "Build the engine integration example" ON)
-if(FORGESCRIPT_BUILD_EXAMPLES)
-	add_subdirectory(Examples)
+	add_test(NAME ForgeScriptTests COMMAND ForgeScriptTests)
+	add_test(NAME ForgeScriptEngineExample COMMAND ForgeScriptEngineExample)
 endif()

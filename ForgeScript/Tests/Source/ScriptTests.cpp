@@ -139,18 +139,17 @@ namespace {
 
 }
 
-FORGESCRIPT_TEST(ScriptExpectations)
+TEST_CASE("ScriptExpectations")
 {
 	std::vector<std::filesystem::path> files = ScriptFiles();
 	CHECK(!files.empty());
 	for (const std::filesystem::path& file : files)
 	{
-		std::cout << "    script " << file.filename().string() << std::endl;
 		CheckScript(file, false);
 	}
 }
 
-FORGESCRIPT_TEST(ScriptExpectationsUnderGCStress)
+TEST_CASE("ScriptExpectationsUnderGCStress")
 {
 	for (const std::filesystem::path& file : ScriptFiles())
 		CheckScript(file, true);

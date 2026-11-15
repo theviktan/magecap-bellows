@@ -78,7 +78,7 @@ namespace {
 
 }
 
-FORGESCRIPT_TEST(NativeFunctionsAreCallable)
+TEST_CASE("NativeFunctionsAreCallable")
 {
 	Harness h;
 	h.Machine.RegisterFunction("double_it", 1, [](CallContext& c) { return Value::FromNumber(c.Number(0) * 2); });
@@ -94,7 +94,7 @@ FORGESCRIPT_TEST(NativeFunctionsAreCallable)
 	CHECK(h.Errors.empty());
 }
 
-FORGESCRIPT_TEST(NativeErrorsAreCatchable)
+TEST_CASE("NativeErrorsAreCatchable")
 {
 	Harness h;
 	h.Machine.RegisterFunction("needs_number", 1, [](CallContext& c) { return Value::FromNumber(c.Number(0)); });
@@ -102,7 +102,7 @@ FORGESCRIPT_TEST(NativeErrorsAreCatchable)
 	CHECK_EQ(h.Output, std::string("needs_number needs a number for value 1, but got text.\n"));
 }
 
-FORGESCRIPT_TEST(NativePhrases)
+TEST_CASE("NativePhrases")
 {
 	NativeType entityType = MakeEntityType();
 	FakeEntity hero{ "Hero" };
@@ -133,7 +133,7 @@ FORGESCRIPT_TEST(NativePhrases)
 	CHECK_CONTAINS(error, "'if'");
 }
 
-FORGESCRIPT_TEST(NativeTypesExposeProperties)
+TEST_CASE("NativeTypesExposeProperties")
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -163,7 +163,7 @@ FORGESCRIPT_TEST(NativeTypesExposeProperties)
 	CHECK_EQ(player.Z, 4.0);
 }
 
-FORGESCRIPT_TEST(NativeTypeErrors)
+TEST_CASE("NativeTypeErrors")
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -184,7 +184,7 @@ FORGESCRIPT_TEST(NativeTypeErrors)
 	CHECK(!enemy.Alive);
 }
 
-FORGESCRIPT_TEST(OneModulePerEntityWithEvents)
+TEST_CASE("OneModulePerEntityWithEvents")
 {
 	Harness h;
 	NativeType entityType = MakeEntityType();
@@ -225,7 +225,7 @@ FORGESCRIPT_TEST(OneModulePerEntityWithEvents)
 	CHECK(h.Errors.empty());
 }
 
-FORGESCRIPT_TEST(WaitUsesGameTime)
+TEST_CASE("WaitUsesGameTime")
 {
 	Harness h;
 	h.Machine.Load(
@@ -256,7 +256,7 @@ FORGESCRIPT_TEST(WaitUsesGameTime)
 	CHECK_EQ(h.Machine.GetTaskCount(), static_cast<size_t>(0));
 }
 
-FORGESCRIPT_TEST(UnloadCancelsWaitingTasks)
+TEST_CASE("UnloadCancelsWaitingTasks")
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("start (function()\n\twait 1 second\n\tsay \"should not print\"\nend)()\n", "t.forge");
@@ -269,7 +269,7 @@ FORGESCRIPT_TEST(UnloadCancelsWaitingTasks)
 	CHECK(h.Output.empty());
 }
 
-FORGESCRIPT_TEST(HostCallsScriptFunctions)
+TEST_CASE("HostCallsScriptFunctions")
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("function score(a, b)\n\treturn a * 10 + b\nend\nfunction slow()\n\twait 1 second\nend\n", "t.forge");
@@ -278,7 +278,8 @@ FORGESCRIPT_TEST(HostCallsScriptFunctions)
 	Value fn = h.Machine.GetGlobal(result.LoadedModule, "score");
 	Value out;
 	CHECK(h.Machine.Call(fn, { Value::FromNumber(4), Value::FromNumber(2) }, &out));
-	CHECK(out.IsNumber() && out.AsNumber() == 42.0);
+	REQUIRE(out.IsNumber());
+	CHECK_EQ(out.AsNumber(), 42.0);
 
 	CHECK(!h.Machine.Call(fn, { Value::FromNumber(1) }, &out));
 	CHECK(!h.Machine.Call(h.Machine.GetGlobal(result.LoadedModule, "slow"), {}, &out));
@@ -290,7 +291,7 @@ FORGESCRIPT_TEST(HostCallsScriptFunctions)
 	}
 }
 
-FORGESCRIPT_TEST(ScriptsShareGlobalsSetByTheHost)
+TEST_CASE("ScriptsShareGlobalsSetByTheHost")
 {
 	Harness h;
 	h.Machine.SetSharedGlobal("gravity", Value::FromNumber(9.8));
@@ -300,7 +301,7 @@ FORGESCRIPT_TEST(ScriptsShareGlobalsSetByTheHost)
 	CHECK_EQ(h.Output, std::string("9.8\n1\n9.8\n"));
 }
 
-FORGESCRIPT_TEST(TriggerHandlerRoutesEvents)
+TEST_CASE("TriggerHandlerRoutesEvents")
 {
 	Harness h;
 	h.Machine.SetTriggerHandler([&h](Module*, const std::string& event, const std::vector<Value>& values)
@@ -313,7 +314,7 @@ FORGESCRIPT_TEST(TriggerHandlerRoutesEvents)
 	CHECK_EQ(h.Output, std::string("listener A heard Ron\nlistener B heard Ron\n"));
 }
 
-FORGESCRIPT_TEST(HandlesKeepValuesAlive)
+TEST_CASE("HandlesKeepValuesAlive")
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("set data to [\"keep me\", { nested: [1, 2, 3] }]\n", "t.forge");
@@ -330,7 +331,7 @@ FORGESCRIPT_TEST(HandlesKeepValuesAlive)
 	CHECK_EQ(h.Machine.ToText(copy.Get()), std::string("[\"keep me\", {\"nested\": [1, 2, 3]}]"));
 }
 
-FORGESCRIPT_TEST(GarbageIsCollected)
+TEST_CASE("GarbageIsCollected")
 {
 	Harness h;
 	h.Machine.CollectGarbage();
@@ -354,7 +355,7 @@ FORGESCRIPT_TEST(GarbageIsCollected)
 	CHECK(h.Machine.GetObjectCount() <= after);
 }
 
-FORGESCRIPT_TEST(CallbacksSurviveGCStress)
+TEST_CASE("CallbacksSurviveGCStress")
 {
 	VMConfig config;
 	config.InitialGCThreshold = 1;
@@ -370,7 +371,7 @@ FORGESCRIPT_TEST(CallbacksSurviveGCStress)
 	CHECK(h.Errors.empty());
 }
 
-FORGESCRIPT_TEST(ModuleLoaderAndCaching)
+TEST_CASE("ModuleLoaderAndCaching")
 {
 	Harness h;
 	int loads = 0;
@@ -393,7 +394,7 @@ FORGESCRIPT_TEST(ModuleLoaderAndCaching)
 		CHECK_CONTAINS(h.Errors[0], "Could not find the script \"missing\"");
 }
 
-FORGESCRIPT_TEST(CompileErrorsAreReportedToTheHost)
+TEST_CASE("CompileErrorsAreReportedToTheHost")
 {
 	Harness h;
 	LoadResult result = h.Machine.Load("say 1\nset x to\n", "broken.forge");
@@ -403,7 +404,7 @@ FORGESCRIPT_TEST(CompileErrorsAreReportedToTheHost)
 	CHECK(h.Output.empty());
 }
 
-FORGESCRIPT_TEST(RandomSeedIsRepeatable)
+TEST_CASE("RandomSeedIsRepeatable")
 {
 	Harness a;
 	Harness b;
