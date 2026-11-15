@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    name: Linux (GCC, all tests on lavapipe)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build glslang-tools libvulkan-dev mesa-vulkan-drivers \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libwayland-dev libxkbcommon-dev
+
+      - name: Configure
+        run: cmake --preset linux-debug -DPython_ROOT_DIR="$pythonLocation"
+
+      - name: Build
+        run: cmake --build build/linux-debug
+
+      - name: Test
+        env:
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+        run: ctest --test-dir build/linux-debug --output-on-failure
+
+  windows:
+    name: Windows (MSVC, build and unit tests)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: latest
+          install_runtime: true
+          cache: true
+          stripdown: true
+
+      - name: Configure
+        run: cmake --preset windows -DPython_ROOT_DIR="$env:pythonLocation"
+
+      - name: Build
+        run: cmake --build build/windows --config Release
+
+      # Hosted Windows runners have no Vulkan driver, so only the GPU-free suite runs here.
+      - name: Test
+        run: ctest --test-dir build/windows -C Release -R BellowsUnitTests --output-on-failure

@@ -1,0 +1,594 @@
+#include "InspectorPanel.h"
+
+#include "EditorLayer.h"
+#include "EditorTheme.h"
+#include "EditorUI.h"
+#include "IconsLucide.h"
+#include "Panels/ContentBrowserPanel.h"
+
+#include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Core/FileSystem.h"
+#include "Bellows/Core/Platform.h"
+
+#include <imgui.h>
+#include <imgui_stdlib.h>
+
+namespace Bellows {
+
+	namespace {
+
+		// Draws one component section when the entity has it. 'draw' receives the component.
+		template<typename T, typename DrawFunction>
+		void DrawComponent(EditorLayer& editor, Entity entity, const char* icon, const char* name, DrawFunction draw, bool canRemove = true)
+		{
+			if (!entity.HasComponent<T>())
+				return;
+
+			bool remove = false;
+			bool reset = false;
+			const bool open = UI::ComponentHeader(icon, name, canRemove, remove, reset);
+			if (open)
+			{
+				ImGui::PushID(name);
+				ImGui::Indent(4.0f * Theme::GetScale());
+				draw(entity.GetComponent<T>());
+				ImGui::Unindent(4.0f * Theme::GetScale());
+				ImGui::PopID();
+				ImGui::Spacing();
+			}
+
+			if (reset)
+			{
+				if constexpr (std::is_same_v<T, TransformComponent>)
+					entity.GetComponent<T>() = TransformComponent();
+				else
+					entity.GetComponent<T>() = T();
+				editor.CommitChange(std::string("Reset ") + name);
+			}
+			if (remove)
+			{
+				entity.RemoveComponent<T>();
+				editor.CommitChange(std::string("Remove ") + name);
+			}
+		}
+
+		bool DrawFieldValue(const char* name, ScriptFieldValue& value)
+		{
+			return std::visit([name](auto& v) -> bool
+			{
+				using V = std::decay_t<decltype(v)>;
+				if constexpr (std::is_same_v<V, bool>)
+					return UI::Property(name, v);
+				else if constexpr (std::is_same_v<V, int64_t>)
+				{
+					int intValue = static_cast<int>(v);
+					const bool changed = UI::Property(name, intValue);
+					v = intValue;
+					return changed;
+				}
+				else if constexpr (std::is_same_v<V, double>)
+				{
+					float floatValue = static_cast<float>(v);
+					const bool changed = UI::Property(name, floatValue, 0.05f, 0.0f, 0.0f, "%.3f");
+					v = floatValue;
+					return changed;
+				}
+				else if constexpr (std::is_same_v<V, std::string>)
+					return UI::Property(name, v);
+				else if constexpr (std::is_same_v<V, glm::vec2>)
+					return UI::PropertyVec2(name, v);
+				else if constexpr (std::is_same_v<V, glm::vec3>)
+					return UI::PropertyVec3(name, v);
+				else
+					return UI::PropertyColor(name, v);
+			}, value);
+		}
+
+	}
+
+	const ScriptClassInfo* InspectorPanel::GetScriptInfo(const std::string& scriptPath, const std::string& className)
+	{
+		const std::string key = scriptPath + "|" + className;
+		std::error_code error;
+		const auto writeTime = std::filesystem::last_write_time(AssetManager::GetAbsolutePath(scriptPath), error);
+		if (error)
+			return nullptr;
+
+		CachedScriptInfo& cached = m_ScriptInfoCache[key];
+		if (cached.WriteTime != writeTime || (!cached.Valid && cached.Error.empty()))
+		{
+			cached.WriteTime = writeTime;
+			cached.Valid = ScriptEngine::GetClassInfo(scriptPath, className, cached.Info);
+			cached.Error = cached.Valid ? std::string() : ScriptEngine::GetLastError();
+		}
+		return cached.Valid ? &cached.Info : nullptr;
+	}
+
+	void InspectorPanel::FlushMaterialSave()
+	{
+		if (m_PendingMaterialSave && !AssetManager::SaveMaterial(m_PendingMaterialSave, m_PendingMaterialPath))
+			BW_ERROR("Could not save the material '{}'", m_PendingMaterialPath);
+		m_PendingMaterialSave.reset();
+		m_PendingMaterialPath.clear();
+	}
+
+	void InspectorPanel::OnImGuiRender()
+	{
+		// Material files are saved as soon as the user lets go of the widget, like other asset changes.
+		if (m_PendingMaterialSave && !ImGui::IsAnyItemActive())
+			FlushMaterialSave();
+
+		if (!ImGui::Begin("Inspector"))
+		{
+			ImGui::End();
+			return;
+		}
+
+		Entity entity = m_Editor.GetPrimarySelection();
+		if (entity)
+		{
+			DrawEntity(entity);
+		}
+		else if (const std::string asset = m_Editor.m_ContentBrowserPanel->GetSelectedAsset();
+			!asset.empty() && AssetManager::GetAssetType(asset) == AssetType::Material)
+		{
+			ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+			ImGui::Text(ICON_PALETTE "  %s", asset.c_str());
+			ImGui::PopFont();
+			ImGui::Separator();
+			if (Ref<Material> material = AssetManager::GetMaterial(asset))
+				DrawMaterialEditor(material, asset);
+		}
+		else
+		{
+			UI::CenteredText("Select an entity to see its components.");
+		}
+
+		ImGui::End();
+	}
+
+	void InspectorPanel::DrawEntity(Entity entity)
+	{
+		const float scale = Theme::GetScale();
+
+		// Header: name, ID and Add Component
+		std::string name = entity.GetName();
+		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 140.0f * scale);
+		if (ImGui::InputText("##Name", &name) && !name.empty())
+			entity.SetName(name);
+		ImGui::PopFont();
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::AccentMuted));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(IM_COL32(242, 112, 26, 90)));
+		if (ImGui::Button(ICON_PLUS "  Add Component", ImVec2(-FLT_MIN, 0.0f)))
+		{
+			m_ComponentFilter.clear();
+			ImGui::OpenPopup("##AddComponent");
+		}
+		ImGui::PopStyleColor(2);
+		if (ImGui::BeginPopup("##AddComponent"))
+		{
+			DrawAddComponentMenu(entity);
+			ImGui::EndPopup();
+		}
+		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
+		ImGui::TextDisabled("ID %llu", static_cast<unsigned long long>(static_cast<uint64_t>(entity.GetUUID())));
+		if (const auto* prefab = entity.TryGetComponent<PrefabComponent>())
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled(ICON_PACKAGE " %s", prefab->PrefabPath.c_str());
+		}
+		ImGui::PopFont();
+		ImGui::Spacing();
+
+		ImGui::BeginChild("##Components");
+
+		DrawComponent<TransformComponent>(m_Editor, entity, ICON_MOVE, "Transform", [](TransformComponent& c)
+		{
+			if (UI::BeginPropertyGrid("Transform"))
+			{
+				UI::PropertyVec3("Position", c.Translation);
+				glm::vec3 rotation = glm::degrees(c.GetRotationEuler());
+				if (UI::PropertyVec3("Rotation", rotation, 0.0f, 0.25f))
+					c.SetRotationEuler(glm::radians(rotation));
+				UI::PropertyVec3("Scale", c.Scale, 1.0f);
+				UI::EndPropertyGrid();
+			}
+		}, false);
+
+		DrawComponent<MeshRendererComponent>(m_Editor, entity, ICON_BOX, "Mesh Renderer", [&](MeshRendererComponent& c) { DrawMeshRenderer(entity, c); });
+
+		DrawComponent<CameraComponent>(m_Editor, entity, ICON_CAMERA, "Camera", [](CameraComponent& c)
+		{
+			if (UI::BeginPropertyGrid("Camera"))
+			{
+				const char* projections[] = { "Perspective", "Orthographic" };
+				int projection = static_cast<int>(c.Projection);
+				if (UI::PropertyCombo("Projection", projection, projections, 2))
+					c.Projection = static_cast<ProjectionType>(projection);
+				if (c.Projection == ProjectionType::Perspective)
+					UI::PropertyAngle("Field of View", c.FieldOfView, 1.0f, 179.0f, "Vertical field of view");
+				else
+					UI::Property("Size", c.OrthographicSize, 0.1f, 0.01f, 10000.0f, "%.2f", "Visible height in world units");
+				UI::Property("Near Clip", c.NearClip, 0.01f, 0.001f, 100.0f);
+				UI::Property("Far Clip", c.FarClip, 1.0f, 1.0f, 100000.0f, "%.1f");
+				UI::Property("Primary", c.Primary, "The primary camera renders the game");
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<DirectionalLightComponent>(m_Editor, entity, ICON_SUN, "Directional Light", [](DirectionalLightComponent& c)
+		{
+			if (UI::BeginPropertyGrid("DirectionalLight"))
+			{
+				UI::PropertyColor("Color", c.Color);
+				UI::Property("Intensity", c.Intensity, 0.02f, 0.0f, 100.0f, "%.2f");
+				UI::Property("Cast Shadows", c.CastShadows);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<PointLightComponent>(m_Editor, entity, ICON_LIGHTBULB, "Point Light", [](PointLightComponent& c)
+		{
+			if (UI::BeginPropertyGrid("PointLight"))
+			{
+				UI::PropertyColor("Color", c.Color);
+				UI::Property("Intensity", c.Intensity, 0.1f, 0.0f, 10000.0f, "%.1f");
+				UI::Property("Range", c.Range, 0.05f, 0.01f, 1000.0f, "%.2f");
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<SpotLightComponent>(m_Editor, entity, ICON_FLASHLIGHT, "Spot Light", [](SpotLightComponent& c)
+		{
+			if (UI::BeginPropertyGrid("SpotLight"))
+			{
+				UI::PropertyColor("Color", c.Color);
+				UI::Property("Intensity", c.Intensity, 0.1f, 0.0f, 10000.0f, "%.1f");
+				UI::Property("Range", c.Range, 0.05f, 0.01f, 1000.0f, "%.2f");
+				UI::PropertyAngle("Inner Angle", c.InnerAngle, 0.0f, 89.0f);
+				UI::PropertyAngle("Outer Angle", c.OuterAngle, 0.1f, 89.0f);
+				c.InnerAngle = std::min(c.InnerAngle, c.OuterAngle);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<SkyLightComponent>(m_Editor, entity, ICON_CLOUD, "Sky Light", [](SkyLightComponent& c)
+		{
+			if (UI::BeginPropertyGrid("SkyLight"))
+			{
+				UI::PropertyAsset("Environment", c.EnvironmentPath, AssetType::Environment,
+					"An equirectangular .hdr image (e.g. from polyhaven.com). Empty uses the procedural sky.");
+				UI::Property("Intensity", c.Intensity, 0.01f, 0.0f, 20.0f, "%.2f");
+				UI::PropertyAngle("Rotation", c.Rotation, -180.0f, 180.0f);
+				UI::PropertySlider("Background Blur", c.SkyboxBlur, 0.0f, 6.0f, "%.1f");
+				if (c.EnvironmentPath.empty())
+				{
+					UI::PropertyColor("Zenith", c.Sky.ZenithColor);
+					UI::PropertyColor("Horizon", c.Sky.HorizonColor);
+					UI::PropertyColor("Ground", c.Sky.GroundColor);
+					UI::Property("Sun Glow", c.Sky.SunIntensity, 0.5f, 0.0f, 500.0f, "%.0f");
+				}
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<RigidBodyComponent>(m_Editor, entity, ICON_ATOM, "Rigid Body", [](RigidBodyComponent& c)
+		{
+			if (UI::BeginPropertyGrid("RigidBody"))
+			{
+				const char* types[] = { "Static", "Dynamic", "Kinematic" };
+				int type = static_cast<int>(c.Type);
+				if (UI::PropertyCombo("Type", type, types, 3, "Static never moves, Dynamic is simulated, Kinematic is moved by scripts"))
+					c.Type = static_cast<RigidBodyType>(type);
+				if (c.Type == RigidBodyType::Dynamic)
+				{
+					UI::Property("Mass", c.Mass, 0.05f, 0.001f, 100000.0f, "%.2f kg");
+					UI::Property("Gravity Scale", c.GravityScale, 0.01f, -10.0f, 10.0f, "%.2f");
+					UI::Property("Linear Damping", c.LinearDamping, 0.01f, 0.0f, 10.0f, "%.2f");
+					UI::Property("Angular Damping", c.AngularDamping, 0.01f, 0.0f, 10.0f, "%.2f");
+				}
+				UI::PropertySlider("Friction", c.Friction, 0.0f, 2.0f);
+				UI::PropertySlider("Bounciness", c.Restitution, 0.0f, 1.0f);
+				UI::Property("Is Trigger", c.IsTrigger, "Reports overlaps (on_trigger_enter) without colliding");
+				if (c.Type == RigidBodyType::Dynamic)
+				{
+					UI::Property("Lock Rotation X", c.LockRotationX);
+					UI::Property("Lock Rotation Y", c.LockRotationY);
+					UI::Property("Lock Rotation Z", c.LockRotationZ);
+					UI::Property("Continuous", c.ContinuousCollision, "Prevents fast objects from tunneling through thin colliders");
+				}
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<BoxColliderComponent>(m_Editor, entity, ICON_BOX, "Box Collider", [](BoxColliderComponent& c)
+		{
+			if (UI::BeginPropertyGrid("BoxCollider"))
+			{
+				UI::PropertyVec3("Half Extents", c.HalfExtents, 0.5f);
+				UI::PropertyVec3("Offset", c.Offset);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<SphereColliderComponent>(m_Editor, entity, ICON_CIRCLE, "Sphere Collider", [](SphereColliderComponent& c)
+		{
+			if (UI::BeginPropertyGrid("SphereCollider"))
+			{
+				UI::Property("Radius", c.Radius, 0.01f, 0.001f, 10000.0f);
+				UI::PropertyVec3("Offset", c.Offset);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<CapsuleColliderComponent>(m_Editor, entity, ICON_CIRCLE, "Capsule Collider", [](CapsuleColliderComponent& c)
+		{
+			if (UI::BeginPropertyGrid("CapsuleCollider"))
+			{
+				UI::Property("Radius", c.Radius, 0.01f, 0.001f, 10000.0f);
+				UI::Property("Half Height", c.HalfHeight, 0.01f, 0.001f, 10000.0f, "%.3f", "Half the length of the cylinder part");
+				UI::PropertyVec3("Offset", c.Offset);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<MeshColliderComponent>(m_Editor, entity, ICON_SHAPES, "Mesh Collider", [](MeshColliderComponent&)
+		{
+			UI::TextMuted("Uses the Mesh Renderer's triangles. Static bodies only.");
+		});
+
+		DrawComponent<ScriptComponent>(m_Editor, entity, ICON_FILE_CODE, "Script", [&](ScriptComponent& c) { DrawScriptComponent(entity, c); });
+
+		DrawComponent<AudioSourceComponent>(m_Editor, entity, ICON_VOLUME_2, "Audio Source", [&](AudioSourceComponent& c)
+		{
+			if (UI::BeginPropertyGrid("AudioSource"))
+			{
+				UI::PropertyAsset("Clip", c.ClipPath, AssetType::Audio);
+				UI::PropertySlider("Volume", c.Volume, 0.0f, 2.0f);
+				UI::PropertySlider("Pitch", c.Pitch, 0.1f, 3.0f);
+				UI::Property("Loop", c.Loop);
+				UI::Property("Play On Start", c.PlayOnStart);
+				UI::Property("3D Sound", c.Spatial, "Volume and panning follow the listener");
+				if (c.Spatial)
+				{
+					UI::Property("Min Distance", c.MinDistance, 0.05f, 0.01f, 1000.0f, "%.2f");
+					UI::Property("Max Distance", c.MaxDistance, 0.1f, 0.01f, 10000.0f, "%.1f");
+				}
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<AudioListenerComponent>(m_Editor, entity, ICON_MUSIC, "Audio Listener", [](AudioListenerComponent& c)
+		{
+			if (UI::BeginPropertyGrid("AudioListener"))
+			{
+				UI::Property("Active", c.Active, "Without an active listener, the primary camera hears the scene");
+				UI::EndPropertyGrid();
+			}
+		});
+
+		ImGui::Spacing();
+		ImGui::EndChild();
+	}
+
+	void InspectorPanel::DrawMeshRenderer(Entity entity, MeshRendererComponent& c)
+	{
+		if (UI::BeginPropertyGrid("MeshRenderer"))
+		{
+			UI::PropertyAsset("Mesh", c.MeshPath, AssetType::Mesh, "A glTF model or a built-in shape", true);
+			UI::PropertyAsset("Material", c.MaterialPath, AssetType::Material, "Overrides every submesh's material");
+			UI::Property("Cast Shadows", c.CastShadows);
+			UI::Property("Visible", c.Visible);
+			UI::EndPropertyGrid();
+		}
+
+		if (!c.MaterialPath.empty() && AssetManager::GetAssetType(c.MaterialPath) == AssetType::Material)
+		{
+			if (ImGui::TreeNodeEx("Material Properties", ImGuiTreeNodeFlags_SpanAvailWidth))
+			{
+				if (Ref<Material> material = AssetManager::GetMaterial(c.MaterialPath))
+					DrawMaterialEditor(material, c.MaterialPath);
+				ImGui::TreePop();
+			}
+		}
+		else if (c.RuntimeMesh)
+		{
+			const auto& materials = c.RuntimeMesh->GetMaterials();
+			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
+			ImGui::TextDisabled("%zu submesh(es), %zu material(s) from the mesh", c.RuntimeMesh->GetSubmeshes().size(), materials.size());
+			ImGui::PopFont();
+			if (ImGui::Button(ICON_PALETTE "  Create Material Override", ImVec2(-FLT_MIN, 0.0f)))
+			{
+				Ref<Material> material = materials.empty() ? CreateRef<Material>("Material") : materials.front()->Clone();
+				material->SetName(entity.GetName());
+				std::string path = "Materials/" + entity.GetName() + ".bmat";
+				for (int suffix = 1; AssetManager::Exists(path); suffix++)
+					path = "Materials/" + entity.GetName() + "_" + std::to_string(suffix) + ".bmat";
+				if (AssetManager::SaveMaterial(material, path))
+				{
+					c.MaterialPath = path;
+					m_Editor.CommitChange("Create material");
+				}
+			}
+		}
+	}
+
+	bool InspectorPanel::DrawMaterialEditor(const Ref<Material>& material, const std::string& assetPath)
+	{
+		bool changed = false;
+		MaterialProperties properties = material->GetProperties();
+		if (UI::BeginPropertyGrid("Material"))
+		{
+			changed |= UI::PropertyColor("Albedo", properties.AlbedoColor);
+			changed |= UI::PropertySlider("Metallic", properties.Metallic, 0.0f, 1.0f);
+			changed |= UI::PropertySlider("Roughness", properties.Roughness, 0.0f, 1.0f);
+			changed |= UI::PropertyColor("Emissive", properties.EmissiveColor);
+			changed |= UI::Property("Emissive Intensity", properties.EmissiveIntensity, 0.05f, 0.0f, 1000.0f, "%.2f");
+			changed |= UI::PropertySlider("Normal Strength", properties.NormalStrength, 0.0f, 2.0f);
+			const char* modes[] = { "Opaque", "Mask", "Blend" };
+			int mode = static_cast<int>(properties.Mode);
+			if (UI::PropertyCombo("Alpha Mode", mode, modes, 3))
+			{
+				properties.Mode = static_cast<AlphaMode>(mode);
+				changed = true;
+			}
+			if (properties.Mode == AlphaMode::Mask)
+				changed |= UI::PropertySlider("Alpha Cutoff", properties.AlphaCutoff, 0.0f, 1.0f);
+			changed |= UI::Property("Double Sided", properties.DoubleSided);
+			changed |= UI::PropertyVec2("UV Tiling", properties.UVTiling);
+			changed |= UI::PropertyVec2("UV Offset", properties.UVOffset);
+
+			auto textureField = [&](const char* label, std::string& path, TextureColorSpace colorSpace, void (Material::*setter)(Ref<Texture2D>))
+			{
+				if (UI::PropertyAsset(label, path, AssetType::Texture))
+				{
+					(material.get()->*setter)(AssetManager::GetTexture(path, colorSpace));
+					changed = true;
+				}
+			};
+			textureField("Albedo Map", material->AlbedoMapPath, TextureColorSpace::SRGB, &Material::SetAlbedoMap);
+			textureField("Normal Map", material->NormalMapPath, TextureColorSpace::Linear, &Material::SetNormalMap);
+			textureField("Metal/Rough Map", material->MetallicRoughnessMapPath, TextureColorSpace::Linear, &Material::SetMetallicRoughnessMap);
+			textureField("Occlusion Map", material->OcclusionMapPath, TextureColorSpace::Linear, &Material::SetOcclusionMap);
+			textureField("Emissive Map", material->EmissiveMapPath, TextureColorSpace::SRGB, &Material::SetEmissiveMap);
+			UI::EndPropertyGrid();
+		}
+
+		if (changed)
+		{
+			material->SetProperties(properties);
+			if (m_PendingMaterialSave && m_PendingMaterialSave != material)
+				FlushMaterialSave();
+			m_PendingMaterialSave = material;
+			m_PendingMaterialPath = assetPath;
+		}
+		return changed;
+	}
+
+	void InspectorPanel::DrawScriptComponent(Entity entity, ScriptComponent& c)
+	{
+		if (UI::BeginPropertyGrid("Script"))
+		{
+			UI::PropertyAsset("Script", c.ScriptPath, AssetType::Script);
+			UI::Property("Class", c.ClassName, "Leave empty to use the first bellows.Script class in the file");
+			UI::EndPropertyGrid();
+		}
+
+		if (c.ScriptPath.empty())
+		{
+			UI::TextMuted("Choose a Python script (drag one from the Content panel).");
+			return;
+		}
+
+		const ScriptClassInfo* info = GetScriptInfo(c.ScriptPath, c.ClassName);
+		if (!info)
+		{
+			const auto& cached = m_ScriptInfoCache[c.ScriptPath + "|" + c.ClassName];
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+			ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", cached.Error.empty() ? "The script could not be loaded." : cached.Error.c_str());
+			ImGui::PopStyleColor();
+			return;
+		}
+
+		if (info->Fields.empty())
+		{
+			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
+			ImGui::TextDisabled("%s has no exposed fields", info->ClassName.c_str());
+			ImGui::PopFont();
+			return;
+		}
+
+		UI::SectionHeader(info->ClassName.c_str());
+		if (UI::BeginPropertyGrid("ScriptFields"))
+		{
+			for (const ScriptFieldInfo& field : info->Fields)
+			{
+				auto it = c.Fields.find(field.Name);
+				const bool overridden = it != c.Fields.end() && it->second.index() == field.DefaultValue.index();
+				ScriptFieldValue value = overridden ? it->second : field.DefaultValue;
+				if (DrawFieldValue(field.Name.c_str(), value))
+					c.Fields[field.Name] = value;
+				if (overridden && ImGui::BeginPopupContextItem(field.Name.c_str()))
+				{
+					if (ImGui::MenuItem(ICON_REFRESH_CW "  Reset to default"))
+					{
+						c.Fields.erase(field.Name);
+						m_Editor.CommitChange("Reset field");
+					}
+					ImGui::EndPopup();
+				}
+			}
+			UI::EndPropertyGrid();
+		}
+
+		// Drop overrides for fields the script no longer declares.
+		std::erase_if(c.Fields, [info](const auto& entry)
+		{
+			return std::none_of(info->Fields.begin(), info->Fields.end(), [&](const ScriptFieldInfo& field) { return field.Name == entry.first; });
+		});
+
+		if (ImGui::Button(ICON_EXTERNAL_LINK "  Open Script", ImVec2(-FLT_MIN, 0.0f)))
+			Platform::OpenWithDefaultApplication(AssetManager::GetAbsolutePath(c.ScriptPath));
+	}
+
+	void InspectorPanel::DrawAddComponentMenu(Entity entity)
+	{
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::SetNextItemWidth(220.0f * Theme::GetScale());
+		ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Search", &m_ComponentFilter);
+
+		auto entry = [&]<typename T>(const char* icon, const char* name, const char* category)
+		{
+			if (entity.HasComponent<T>())
+				return;
+			std::string lowerName = name, lowerFilter = m_ComponentFilter;
+			std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+			std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
+			if (!lowerFilter.empty() && lowerName.find(lowerFilter) == std::string::npos)
+				return;
+			const std::string label = std::string(icon) + "  " + name;
+			if (ImGui::Selectable(label.c_str()))
+			{
+				T& component = entity.AddComponent<T>();
+				if constexpr (std::is_same_v<T, BoxColliderComponent>)
+				{
+					// Fit the collider to the mesh when there is one.
+					if (auto* meshRenderer = entity.TryGetComponent<MeshRendererComponent>(); meshRenderer && meshRenderer->RuntimeMesh)
+					{
+						const AABB& bounds = meshRenderer->RuntimeMesh->GetBoundingBox();
+						component.HalfExtents = glm::max(bounds.GetExtents(), glm::vec3(0.01f));
+						component.Offset = bounds.GetCenter();
+					}
+				}
+				m_Editor.CommitChange(std::string("Add ") + name);
+				ImGui::CloseCurrentPopup();
+			}
+			(void)category;
+		};
+
+		if (m_ComponentFilter.empty())
+			UI::SectionHeader("Rendering");
+		entry.operator()<MeshRendererComponent>(ICON_BOX, "Mesh Renderer", "Rendering");
+		entry.operator()<CameraComponent>(ICON_CAMERA, "Camera", "Rendering");
+		entry.operator()<DirectionalLightComponent>(ICON_SUN, "Directional Light", "Rendering");
+		entry.operator()<PointLightComponent>(ICON_LIGHTBULB, "Point Light", "Rendering");
+		entry.operator()<SpotLightComponent>(ICON_FLASHLIGHT, "Spot Light", "Rendering");
+		entry.operator()<SkyLightComponent>(ICON_CLOUD, "Sky Light", "Rendering");
+		if (m_ComponentFilter.empty())
+			UI::SectionHeader("Physics");
+		entry.operator()<RigidBodyComponent>(ICON_ATOM, "Rigid Body", "Physics");
+		entry.operator()<BoxColliderComponent>(ICON_BOX, "Box Collider", "Physics");
+		entry.operator()<SphereColliderComponent>(ICON_CIRCLE, "Sphere Collider", "Physics");
+		entry.operator()<CapsuleColliderComponent>(ICON_CIRCLE, "Capsule Collider", "Physics");
+		entry.operator()<MeshColliderComponent>(ICON_SHAPES, "Mesh Collider", "Physics");
+		if (m_ComponentFilter.empty())
+			UI::SectionHeader("Behavior");
+		entry.operator()<ScriptComponent>(ICON_FILE_CODE, "Script", "Behavior");
+		entry.operator()<AudioSourceComponent>(ICON_VOLUME_2, "Audio Source", "Audio");
+		entry.operator()<AudioListenerComponent>(ICON_MUSIC, "Audio Listener", "Audio");
+	}
+
+}

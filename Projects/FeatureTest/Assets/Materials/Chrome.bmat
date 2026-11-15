@@ -1,0 +1,34 @@
+{
+	"Name": "Chrome",
+	"AlbedoColor": [
+		0.550000011920929,
+		0.5600000023841858,
+		0.5600000023841858,
+		1.0
+	],
+	"Metallic": 1.0,
+	"Roughness": 0.05000000074505806,
+	"EmissiveColor": [
+		0.0,
+		0.0,
+		0.0
+	],
+	"EmissiveIntensity": 1.0,
+	"NormalStrength": 1.0,
+	"AlphaMode": "Opaque",
+	"AlphaCutoff": 0.5,
+	"DoubleSided": false,
+	"UVTiling": [
+		1.0,
+		1.0
+	],
+	"UVOffset": [
+		0.0,
+		0.0
+	],
+	"AlbedoMap": "",
+	"NormalMap": "",
+	"MetallicRoughnessMap": "",
+	"OcclusionMap": "",
+	"EmissiveMap": ""
+}

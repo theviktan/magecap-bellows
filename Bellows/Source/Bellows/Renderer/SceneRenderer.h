@@ -1,0 +1,308 @@
+#pragma once
+
+#include "Bellows/Core/Base.h"
+#include "Bellows/Math/AABB.h"
+#include "Bellows/Renderer/Environment.h"
+#include "Bellows/Renderer/Material.h"
+#include "Bellows/Renderer/Mesh.h"
+#include "Bellows/Renderer/ShaderInterop.h"
+
+#include <glm/glm.hpp>
+#include <nvrhi/nvrhi.h>
+
+#include <vector>
+
+namespace Bellows {
+
+	enum class Tonemapper : uint8_t
+	{
+		ACES = 0,
+		AgX,
+		Reinhard,
+		None,
+	};
+
+	const char* TonemapperToString(Tonemapper tonemapper);
+	Tonemapper TonemapperFromString(std::string_view text);
+
+	struct SceneRendererSettings
+	{
+		// Shadows (directional light, cascaded)
+		bool ShadowsEnabled = true;
+		uint32_t ShadowMapSize = 2048;
+		uint32_t CascadeCount = 4;
+		float ShadowDistance = 80.0f;
+		float CascadeSplitLambda = 0.85f;
+		float ShadowSoftness = 0.03f;		// Light angular size; larger = softer penumbrae
+		float ShadowBias = 0.0003f;
+		float ShadowNormalBias = 1.5f;		// In shadow-map texels
+		uint32_t ShadowPCFSamples = 16;
+
+		// Ambient occlusion
+		bool SSAOEnabled = true;
+		bool SSAOHalfResolution = true;
+		float SSAORadius = 0.6f;
+		float SSAOBias = 0.025f;
+		float SSAOPower = 1.6f;
+		float SSAOStrength = 1.0f;
+		uint32_t SSAOSamples = 16;
+
+		// Bloom
+		bool BloomEnabled = true;
+		float BloomIntensity = 0.05f;
+		float BloomThreshold = 1.0f;
+		float BloomKnee = 0.5f;
+		float BloomRadius = 1.0f;
+
+		// Tonemapping and post
+		float Exposure = 1.0f;
+		Tonemapper ToneMapper = Tonemapper::ACES;
+		float Vignette = 0.2f;
+		bool FXAAEnabled = true;
+
+		// Editor overlays
+		bool ShowGrid = false;
+		float GridCellSize = 1.0f;
+		bool ShowSelectionOutline = true;
+		glm::vec4 OutlineColor { 1.0f, 0.52f, 0.12f, 1.0f };
+	};
+
+	struct RenderCamera
+	{
+		glm::mat4 View { 1.0f };
+		glm::mat4 Projection { 1.0f };	// Depth 0..1, Y-up clip space (see Math::PerspectiveProjection)
+		glm::vec3 Position { 0.0f };
+		float NearClip = 0.1f;
+		float FarClip = 1000.0f;
+	};
+
+	struct DirectionalLightData
+	{
+		glm::vec3 Direction { 0.0f, -1.0f, 0.0f };	// Direction the light travels
+		glm::vec3 Color { 1.0f };
+		float Intensity = 3.0f;
+		bool CastShadows = true;
+	};
+
+	struct PointLightData
+	{
+		glm::vec3 Position { 0.0f };
+		glm::vec3 Color { 1.0f };
+		float Intensity = 10.0f;
+		float Range = 10.0f;
+	};
+
+	struct SpotLightData
+	{
+		glm::vec3 Position { 0.0f };
+		glm::vec3 Direction { 0.0f, -1.0f, 0.0f };
+		glm::vec3 Color { 1.0f };
+		float Intensity = 10.0f;
+		float Range = 10.0f;
+		float InnerAngle = glm::radians(20.0f);
+		float OuterAngle = glm::radians(30.0f);
+	};
+
+	struct EnvironmentSettings
+	{
+		Ref<Environment> EnvironmentMap;	// Null = flat ambient color + gradient background
+		float Intensity = 1.0f;
+		float Rotation = 0.0f;			// Radians around +Y
+		float SkyboxBlur = 0.0f;		// Mip level of the radiance map shown as background
+		glm::vec3 AmbientColor { 0.03f, 0.035f, 0.04f };
+	};
+
+	struct SceneRendererStatistics
+	{
+		uint32_t DrawCalls = 0;
+		uint32_t ShadowDrawCalls = 0;
+		uint64_t Triangles = 0;
+		uint32_t Meshes = 0;
+		uint32_t PointLights = 0;
+		uint32_t SpotLights = 0;
+	};
+
+	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.
+	//
+	// Usage per frame:
+	//   BeginScene(camera); Submit...(); EndScene();
+	class SceneRenderer
+	{
+	public:
+		SceneRenderer();
+		~SceneRenderer();
+
+		SceneRenderer(const SceneRenderer&) = delete;
+		SceneRenderer& operator=(const SceneRenderer&) = delete;
+
+		void SetViewportSize(uint32_t width, uint32_t height);
+		uint32_t GetViewportWidth() const { return m_ViewportWidth; }
+		uint32_t GetViewportHeight() const { return m_ViewportHeight; }
+
+		SceneRendererSettings& GetSettings() { return m_Settings; }
+		const SceneRendererSettings& GetSettings() const { return m_Settings; }
+
+		void BeginScene(const RenderCamera& camera);
+		void SetEnvironment(const EnvironmentSettings& environment);
+		void SubmitDirectionalLight(const DirectionalLightData& light);
+		void SubmitPointLight(const PointLightData& light);
+		void SubmitSpotLight(const SpotLightData& light);
+
+		// Submits every submesh of 'mesh'. 'materialOverride' replaces all of the mesh's own materials.
+		void SubmitMesh(const Ref<Mesh>& mesh, const glm::mat4& transform, uint32_t entityID = 0,
+			const Ref<Material>& materialOverride = nullptr, bool castShadows = true);
+
+		// Overlay lines (drawn after tonemapping, depth-tested against the scene).
+		void SubmitLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
+		void SubmitWireBox(const glm::mat4& transform, const glm::vec3& halfExtents, const glm::vec4& color);
+		void SubmitWireSphere(const glm::vec3& center, float radius, const glm::vec4& color);
+		void SubmitWireCapsule(const glm::mat4& transform, float radius, float halfHeight, const glm::vec4& color);
+
+		void SetSelectedEntities(const std::vector<uint32_t>& entityIDs);
+
+		// Records and submits all passes.
+		void EndScene();
+
+		nvrhi::ITexture* GetFinalImage() const;
+		nvrhi::ITexture* GetEntityIDImage() const;
+		nvrhi::ITexture* GetHDRImage() const;
+
+		// Entity ID (as submitted, 0 = none) at a viewport pixel. Blocks until the GPU has finished.
+		uint32_t ReadEntityID(uint32_t x, uint32_t y) const;
+
+		const SceneRendererStatistics& GetStatistics() const { return m_Statistics; }
+	private:
+		struct DrawCommand
+		{
+			const Mesh* MeshPtr = nullptr;
+			uint32_t SubmeshIndex = 0;
+			Material* MaterialPtr = nullptr;
+			glm::mat4 Transform { 1.0f };
+			uint32_t EntityID = 0;
+			bool CastShadows = true;
+			float SortKey = 0.0f;
+		};
+
+		struct LineVertex
+		{
+			glm::vec3 Position;
+			glm::vec4 Color;
+		};
+
+		void CreatePipelines();
+		void CreateRenderTargets();
+		void CreateShadowMap();
+		void CreateBindingSets();
+
+		void UpdateFrameConstants(nvrhi::ICommandList* commandList);
+		void ComputeCascades(ShaderInterop::FrameData& frame);
+
+		void RenderShadows(nvrhi::ICommandList* commandList, const std::vector<DrawCommand>& casters);
+		void RenderPrepass(nvrhi::ICommandList* commandList);
+		void RenderSSAO(nvrhi::ICommandList* commandList);
+		void RenderOpaque(nvrhi::ICommandList* commandList);
+		void RenderSkybox(nvrhi::ICommandList* commandList);
+		void RenderTransparent(nvrhi::ICommandList* commandList);
+		void RenderBloom(nvrhi::ICommandList* commandList);
+		void RenderTonemap(nvrhi::ICommandList* commandList);
+		void RenderOverlays(nvrhi::ICommandList* commandList);
+
+		void DrawFullscreen(nvrhi::ICommandList* commandList, nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* framebuffer,
+			nvrhi::IBindingSet* bindingSet, uint32_t width, uint32_t height);
+		void DrawMeshes(nvrhi::ICommandList* commandList, const std::vector<DrawCommand>& draws, nvrhi::IFramebuffer* framebuffer,
+			nvrhi::IGraphicsPipeline* singleSided, nvrhi::IGraphicsPipeline* doubleSided);
+
+		nvrhi::BindingSetHandle CreatePostProcessSet(nvrhi::IBuffer* constants, std::initializer_list<nvrhi::ITexture*> textures,
+			nvrhi::TextureDimension firstDimension = nvrhi::TextureDimension::Texture2D);
+		nvrhi::BufferHandle CreateVolatileConstantBuffer(size_t size, const char* name);
+		nvrhi::GraphicsPipelineHandle CreateFullscreenPipeline(const char* fragmentShader, const nvrhi::FramebufferInfo& framebufferInfo,
+			const nvrhi::BlendState::RenderTarget& blend = nvrhi::BlendState::RenderTarget());
+	private:
+		SceneRendererSettings m_Settings;
+		SceneRendererSettings m_AppliedSettings;
+		uint32_t m_ViewportWidth = 1280;
+		uint32_t m_ViewportHeight = 720;
+		bool m_TargetsDirty = true;
+
+		// Per-frame scene data
+		RenderCamera m_Camera;
+		EnvironmentSettings m_Environment;
+		Ref<Environment> m_BoundEnvironment;
+		DirectionalLightData m_DirectionalLight;
+		bool m_HasDirectionalLight = false;
+		std::vector<PointLightData> m_PointLights;
+		std::vector<SpotLightData> m_SpotLights;
+		std::vector<DrawCommand> m_OpaqueDraws;
+		std::vector<DrawCommand> m_TransparentDraws;
+		std::vector<LineVertex> m_LineVertices;
+		std::vector<uint32_t> m_SelectedEntities;
+		std::vector<Ref<Mesh>> m_FrameMeshes;			// Keeps submitted meshes alive until the frame is recorded
+		std::vector<Ref<Material>> m_FrameMaterials;
+		AABB m_SceneBounds;
+		bool m_InScene = false;
+
+		SceneRendererStatistics m_Statistics;
+		ShaderInterop::FrameData m_FrameData {};
+
+		nvrhi::CommandListHandle m_CommandList;
+		nvrhi::InputLayoutHandle m_MeshInputLayout;
+		nvrhi::InputLayoutHandle m_LineInputLayout;
+
+		// Render targets
+		nvrhi::TextureHandle m_DepthTexture;
+		nvrhi::TextureHandle m_NormalTexture;
+		nvrhi::TextureHandle m_EntityIDTexture;
+		nvrhi::TextureHandle m_HDRTexture;
+		nvrhi::TextureHandle m_SSAOTexture;
+		nvrhi::TextureHandle m_SSAOBlurTexture;
+		nvrhi::TextureHandle m_LDRTexture;
+		nvrhi::TextureHandle m_FinalTexture;
+		std::vector<nvrhi::TextureHandle> m_BloomMips;
+		nvrhi::TextureHandle m_ShadowMap;
+		uint32_t m_SSAOWidth = 0, m_SSAOHeight = 0;
+
+		nvrhi::FramebufferHandle m_PrepassFramebuffer;
+		nvrhi::FramebufferHandle m_HDRDepthFramebuffer;		// HDR color + read-only depth
+		nvrhi::FramebufferHandle m_HDRFramebuffer;
+		nvrhi::FramebufferHandle m_SSAOFramebuffer;
+		nvrhi::FramebufferHandle m_SSAOBlurFramebuffer;
+		nvrhi::FramebufferHandle m_LDRFramebuffer;
+		nvrhi::FramebufferHandle m_FinalFramebuffer;
+		nvrhi::FramebufferHandle m_FinalDepthFramebuffer;
+		std::vector<nvrhi::FramebufferHandle> m_BloomFramebuffers;
+		std::vector<nvrhi::FramebufferHandle> m_ShadowFramebuffers;
+
+		// Pipelines
+		nvrhi::GraphicsPipelineHandle m_ShadowPipeline;
+		nvrhi::GraphicsPipelineHandle m_PrepassPipeline, m_PrepassPipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_OpaquePipeline, m_OpaquePipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_TransparentPipeline, m_TransparentPipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_SkyboxPipeline;
+		nvrhi::GraphicsPipelineHandle m_SSAOPipeline, m_SSAOBlurPipeline;
+		nvrhi::GraphicsPipelineHandle m_BloomDownsamplePipeline, m_BloomUpsamplePipeline;
+		nvrhi::GraphicsPipelineHandle m_TonemapPipeline, m_FXAAPipeline;
+		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
+
+		// Constant buffers
+		nvrhi::BufferHandle m_FrameBuffer;
+		nvrhi::BufferHandle m_LightBuffer;
+		nvrhi::BufferHandle m_SSAOConstants, m_SSAOBlurConstantsH, m_SSAOBlurConstantsV;
+		nvrhi::BufferHandle m_SkyConstants;
+		std::vector<nvrhi::BufferHandle> m_BloomConstants;
+		nvrhi::BufferHandle m_TonemapConstants, m_FXAAConstants;
+		nvrhi::BufferHandle m_GridConstants, m_OutlineConstants;
+		nvrhi::BufferHandle m_LineVertexBuffer;
+		size_t m_LineVertexCapacity = 0;
+
+		// Binding sets
+		nvrhi::BindingSetHandle m_SceneSet;
+		nvrhi::BindingSetHandle m_ShadowSet;
+		nvrhi::BindingSetHandle m_LineSet;
+		nvrhi::BindingSetHandle m_SSAOSet, m_SSAOBlurSetH, m_SSAOBlurSetV;
+		nvrhi::BindingSetHandle m_SkySet;
+		std::vector<nvrhi::BindingSetHandle> m_BloomDownsampleSets, m_BloomUpsampleSets;
+		nvrhi::BindingSetHandle m_TonemapSet, m_FXAASet;
+		nvrhi::BindingSetHandle m_GridSet, m_OutlineSet;
+	};
+
+}

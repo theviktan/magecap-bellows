@@ -1,0 +1,133 @@
+# AGENTS.md - working on MageCap Bellows
+
+Guidelines for AI agents (and humans) changing this repository. Read this first; the skills in
+`.claude/skills/` hold step-by-step procedures for common jobs.
+
+## What this is
+
+MageCap Bellows is a small, production-quality 3D game engine for Windows and Linux:
+C++20, CMake, GLFW, NVRHI (Vulkan 1.3), EnTT, Jolt Physics, miniaudio, embedded CPython 3.13
+(pybind11), Dear ImGui. Games are scripted in Python; the editor is fully scriptable so agents can
+build games through it.
+
+| Folder | Contents |
+|--------|----------|
+| `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
+| `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport), `Panels/`, `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
+| `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
+| `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
+| `Python/bellows/` | The Python package games import (`__init__.py`, `editor.py`). |
+| `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API. Rebuilt by `Tools/BuildFeatureTest.py`. |
+| `Resources/` | Editor fonts and icons. |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`. |
+| `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, images. |
+| `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
+
+## Build and test
+
+```bash
+git submodule update --init --recursive
+cmake --preset linux-debug            # Windows: cmake --preset windows
+cmake --build build/linux-debug       # Windows: cmake --build build/windows --config Debug
+ctest --test-dir build/linux-debug    # Windows: ctest --test-dir build/windows -C Debug
+```
+
+Executables land in `build/<preset>/bin/`. Requirements: CMake ≥ 3.24, a C++20 compiler
+(GCC 13 / Clang 17 / MSVC 2022), Python 3.13 with development files, `glslangValidator`
+(Vulkan SDK on Windows, `glslang-tools` on Linux), a Vulkan 1.3 driver.
+
+The tests:
+
+| ctest name | What it covers |
+|------------|----------------|
+| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export (no GPU). |
+| `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
+| `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
+| `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.py` checks the entire Python API. |
+| `BellowsEditorFeatureTest` | The same, in editor play mode. |
+
+Without a GPU, run on the Mesa software rasterizer:
+`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json ctest --test-dir build/linux-debug`.
+Run a single doctest case with `build/linux-debug/bin/BellowsTests -tc="*name*"`.
+GPU tests run with Vulkan validation enabled and fail on any validation message.
+
+## Rules
+
+1. **Stay inside this repository.** Do not read, copy from or reference other code on the
+   machine. Third-party code comes in only as a submodule in `vendor/` with a compatible license,
+   recorded in `ThirdPartyNotices.md`.
+2. **Everything is tested.** New engine behavior gets a doctest case; new Python API gets a check
+   in `FeatureTest.py` (and a line in `docs/ScriptingAPI.md`); new editor automation gets a check
+   in `EditorAutomationTest.py` (and `docs/EditorAutomation.md`). Bug fixes get a regression test.
+   All ctest suites must pass before committing.
+3. **Warnings are errors** (`BELLOWS_WARNINGS_AS_ERRORS`, on by default). Fix the cause; do not
+   silence warnings in first-party code.
+4. **Review before committing.** Run the review checklist (`.claude/skills/bellows-code-review`)
+   over the full diff. Commit messages: imperative summary line, then what and why.
+5. **Keep docs true.** README, AGENTS.md, docs/ and skills describe the code as it is.
+6. **No placeholders.** No TODO stubs, dead code, commented-out code or "hack" fixes in
+   committed code. If something is out of scope, leave it out completely.
+
+## Code style (Hazel-style C++)
+
+```cpp
+namespace Bellows {
+
+	// Comments explain *why*, in full sentences.
+	class SceneRenderer
+	{
+	public:
+		void SubmitMesh(const Ref<Mesh>& mesh, const glm::mat4& transform);
+		uint32_t GetDrawCount() const { return m_DrawCount; }
+	private:
+		void FlushDrawList();
+	private:
+		uint32_t m_DrawCount = 0;
+		static SceneRenderer* s_Instance;
+	};
+
+}
+```
+
+* Types, functions, methods, enum values, public struct fields: `PascalCase`.
+  Locals and parameters: `camelCase`. Members `m_`, statics `s_`, constants `c_` (file scope).
+* Tabs for indentation, Allman braces, `#pragma once`, namespace `Bellows` (nested:
+  `Bellows::UI`, `Bellows::Scripting`). Namespace bodies are indented.
+* Includes: own header first, then project headers (`"Bellows/..."`), then third-party, then
+  standard library, each group sorted. Engine `.cpp` files rely on `bwpch.h`; headers include what
+  they use and must compile on their own.
+* `Ref<T>`/`Scope<T>` (`CreateRef`, `CreateScope`) for ownership; raw pointers/references are
+  non-owning. Prefer `std::filesystem::path` for paths; asset paths are `std::string` with `/`.
+* Errors: `BW_CORE_ERROR`/`BW_ERROR` (engine/game) with a useful message; `BW_CORE_ASSERT` /
+  `BW_CORE_VERIFY` only for programmer errors. User mistakes (bad files, bad script calls) must
+  never crash: log, raise a Python exception, or return false.
+* Python: PEP 8, 4 spaces, type annotations on script fields, docstrings on public classes.
+* GLSL: `#version 460`, `PascalCase` functions, `u_`/`v_`/`o_` prefixes for uniforms/varyings/outputs,
+  shared code in `Bellows/Shaders/Include/`. C++ mirrors of uniform blocks live in
+  `Renderer/ShaderInterop.h` with `static_assert`ed layouts.
+
+## Engine conventions worth knowing
+
+* World space is right-handed, Y up, forward is -Z. Clip space is Y-up with depth 0..1: NVRHI's
+  Vulkan backend flips the viewport, so projections are **not** Y-flipped and front faces are
+  counter-clockwise. Fullscreen-pass UV (0,0) is the top-left (`UVToNDC`/`NDCToUV` in `Common.glsl`).
+* Descriptor set *n* = NVRHI `registerSpace` *n* (`setRegisterSpaceAndDescriptorSet`). Set 0 is
+  per-frame scene data, set 1 is per-material. Push constants are per-draw.
+* Entities are identified by `UUID` (persistent) and drawn with render ID = `entt` handle + 1
+  (0 = nothing, used by picking). Python holds `(sceneID, UUID)` handles, never pointers.
+* During play, `DestroyEntity` is deferred to the end of the frame; Python scripts may create and
+  destroy entities freely.
+* The editor serializes the edited scene for undo (one snapshot per committed change) and plays a
+  copy (`Scene::Copy`), so play never modifies the edited scene.
+* Editor automation runs at a *frame boundary* (`EditorLayer::RunAtFrameBoundary`), which is the
+  only place `RunFrames` may be called.
+* Adding a component touches: `Scene/Components.h` (+ `AllComponents`), `SceneSerializer`,
+  `Scene::Copy` (via `AllComponents`), the inspector, the hierarchy icon, the Python binding
+  (`ScriptBindings.cpp` component table), `docs/ScriptingAPI.md`, `FeatureTest.py` and tests. See
+  `.claude/skills/bellows-add-component`.
+
+## Building games as an agent
+
+Use the running editor through `Tools/bellows_cli.py` (or `BellowsEditor --run-script`). The
+procedure is in `.claude/skills/bellows-make-game`; the API is in `docs/EditorAutomation.md` and
+`docs/ScriptingAPI.md`. Always verify with screenshots and a play-test before reporting success.

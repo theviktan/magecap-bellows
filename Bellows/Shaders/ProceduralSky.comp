@@ -1,0 +1,42 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// Analytic sky used when a scene has no HDRI: gradient sky, sun disc and a ground plane.
+
+#include "CubeMap.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std140) uniform Constants
+{
+	vec4 Params;		// x = face size, y = sun angular radius (radians), z = sun intensity
+	vec4 SunDirection;	// xyz = direction towards the sun
+	vec4 ZenithColor;
+	vec4 HorizonColor;
+	vec4 GroundColor;
+} u_Sky;
+
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2DArray o_Cube;
+
+void main()
+{
+	uvec3 id = gl_GlobalInvocationID;
+	float size = u_Sky.Params.x;
+	if (float(id.x) >= size || float(id.y) >= size)
+		return;
+
+	vec3 direction = CubeDirection(id, size);
+	float elevation = direction.y;
+
+	vec3 sky = mix(u_Sky.HorizonColor.rgb, u_Sky.ZenithColor.rgb, pow(clamp(elevation, 0.0, 1.0), 0.45));
+	vec3 ground = mix(u_Sky.HorizonColor.rgb * 0.6, u_Sky.GroundColor.rgb, pow(clamp(-elevation, 0.0, 1.0), 0.35));
+	vec3 color = elevation >= 0.0 ? sky : ground;
+
+	vec3 sunDirection = normalize(u_Sky.SunDirection.xyz);
+	float sunCos = dot(direction, sunDirection);
+	float sunRadius = u_Sky.Params.y;
+	float disc = smoothstep(cos(sunRadius * 1.15), cos(sunRadius), sunCos);
+	float glow = pow(max(sunCos, 0.0), 64.0) * 0.6 + pow(max(sunCos, 0.0), 8.0) * 0.08;
+	color += vec3(1.0, 0.93, 0.82) * (disc * u_Sky.Params.z + glow * u_Sky.Params.z * 0.02) * step(0.0, elevation + 0.02);
+
+	imageStore(o_Cube, ivec3(id), vec4(color, 1.0));
+}

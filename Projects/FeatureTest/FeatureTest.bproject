@@ -1,0 +1,12 @@
+{
+	"Name": "Feature Test",
+	"Engine": "MageCap Bellows 0.1.0",
+	"StartScene": "Scenes/FeatureTest.bscene",
+	"AssetDirectory": "Assets",
+	"Runtime": {
+		"WindowWidth": 1600,
+		"WindowHeight": 900,
+		"Fullscreen": false,
+		"VSync": true
+	}
+}

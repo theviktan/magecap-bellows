@@ -1,0 +1,64 @@
+[submodule "vendor/glfw"]
+	path = vendor/glfw
+	url = https://github.com/glfw/glfw
+	shallow = true
+[submodule "vendor/glm"]
+	path = vendor/glm
+	url = https://github.com/g-truc/glm
+	shallow = true
+[submodule "vendor/miniaudio"]
+	path = vendor/miniaudio
+	url = https://github.com/mackron/miniaudio
+	shallow = true
+[submodule "vendor/entt"]
+	path = vendor/entt
+	url = https://github.com/skypjack/entt
+	shallow = true
+[submodule "vendor/JoltPhysics"]
+	path = vendor/JoltPhysics
+	url = https://github.com/jrouwe/JoltPhysics
+	shallow = true
+[submodule "vendor/imgui"]
+	path = vendor/imgui
+	url = https://github.com/ocornut/imgui
+	shallow = true
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog
+	shallow = true
+[submodule "vendor/cgltf"]
+	path = vendor/cgltf
+	url = https://github.com/jkuhlmann/cgltf
+	shallow = true
+[submodule "vendor/doctest"]
+	path = vendor/doctest
+	url = https://github.com/doctest/doctest
+	shallow = true
+[submodule "vendor/json"]
+	path = vendor/json
+	url = https://github.com/nlohmann/json
+	shallow = true
+[submodule "vendor/ImGuizmo"]
+	path = vendor/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo
+	shallow = true
+[submodule "vendor/stb"]
+	path = vendor/stb
+	url = https://github.com/nothings/stb
+	shallow = true
+[submodule "vendor/nvrhi"]
+	path = vendor/nvrhi
+	url = https://github.com/NVIDIA-RTX/NVRHI
+	shallow = true
+[submodule "vendor/pybind11"]
+	path = vendor/pybind11
+	url = https://github.com/pybind/pybind11
+	shallow = true
+[submodule "vendor/Vulkan-Headers"]
+	path = vendor/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers
+	shallow = true
+[submodule "vendor/portable-file-dialogs"]
+	path = vendor/portable-file-dialogs
+	url = https://github.com/samhocevar/portable-file-dialogs
+	shallow = true

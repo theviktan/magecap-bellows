@@ -1,0 +1,34 @@
+{
+	"Name": "GlowMagenta",
+	"AlbedoColor": [
+		1.0,
+		0.15000000596046448,
+		0.699999988079071,
+		1.0
+	],
+	"Metallic": 0.0,
+	"Roughness": 0.5,
+	"EmissiveColor": [
+		1.0,
+		0.15000000596046448,
+		0.699999988079071
+	],
+	"EmissiveIntensity": 8.0,
+	"NormalStrength": 1.0,
+	"AlphaMode": "Opaque",
+	"AlphaCutoff": 0.5,
+	"DoubleSided": false,
+	"UVTiling": [
+		1.0,
+		1.0
+	],
+	"UVOffset": [
+		0.0,
+		0.0
+	],
+	"AlbedoMap": "",
+	"NormalMap": "",
+	"MetallicRoughnessMap": "",
+	"OcclusionMap": "",
+	"EmissiveMap": ""
+}

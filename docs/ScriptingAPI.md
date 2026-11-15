@@ -1,0 +1,211 @@
+# Scripting API reference
+
+Game logic in MageCap Bellows is written in **Python 3** (CPython 3.13 embedded in the engine).
+Everything lives in the `bellows` package; exported games bundle their own Python runtime, so
+players do not need Python installed.
+
+```python
+import bellows
+from bellows import Vec3, Key
+
+
+class Player(bellows.Script):
+    speed: float = 5.0                       # Shown and editable in the Inspector
+
+    def on_update(self, dt):
+        direction = Vec3(0.0)
+        if bellows.is_key_down(Key.W): direction += self.entity.forward
+        if bellows.is_key_down(Key.S): direction -= self.entity.forward
+        self.entity.translate(direction * (self.speed * dt))
+```
+
+Attach a script to an entity with a **Script** component (Inspector → Add Component → Script, or
+drag a `.py` file onto the component's Script field). The project's `Assets` folder is on
+`sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Edited
+scripts are reloaded the next time play starts.
+
+The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`; when in
+doubt, that file shows working usage of every function below.
+
+## Conventions
+
+| Topic | Convention |
+|-------|------------|
+| Units | Meters, seconds, kilograms. |
+| Axes | Right-handed, **Y up**. An entity's *forward* is **-Z**. |
+| Angles | `Entity.rotation`, `Transform.rotation_degrees`, light angles, camera FOV and `SkyLight.rotation` are **degrees**. `Transform.rotation` and `Quat.from_euler` use **radians**. |
+| Colors | Linear RGB(A) floats, usually 0-1 (values above 1 are allowed for HDR emission). |
+| Vectors | Anywhere a `Vec2/Vec3/Vec4` is expected you may pass a tuple or list, e.g. `entity.position = (0, 1, 0)`. |
+| Asset paths | Relative to the project's `Assets` folder with forward slashes, e.g. `"Models/Ship.glb"`. Built-in meshes: `Builtin/Cube`, `Builtin/Sphere`, `Builtin/Plane`, `Builtin/Capsule`, `Builtin/Cylinder`, `Builtin/Cone`, `Builtin/Quad`. |
+| Errors | Invalid arguments raise `ValueError`/`TypeError`; using a destroyed entity raises `RuntimeError`. A script that raises 10 times is disabled; errors are shown in the Console. |
+
+## Script lifecycle
+
+Derive from `bellows.Script`. The engine sets `self.entity` before any callback runs.
+
+| Callback | When |
+|----------|------|
+| `on_create(self)` | Once, after every script in the scene has been created (safe to look up other entities' scripts). |
+| `on_update(self, dt)` | Every frame. `dt` is in seconds. |
+| `on_fixed_update(self, dt)` | Every physics step (fixed timestep, default 60 Hz). Use it for forces. |
+| `on_destroy(self)` | When the entity is destroyed or play stops. |
+| `on_collision_enter(self, other)` / `on_collision_exit(self, other)` | Started/stopped touching `other` (an `Entity`). Both bodies need colliders; at least one must be dynamic. |
+| `on_trigger_enter(self, other)` / `on_trigger_exit(self, other)` | `other` entered/left this trigger, or this entity entered/left a trigger. |
+
+**Exposed fields.** Class attributes with a type annotation of `bool`, `int`, `float`, `str`,
+`Vec2`, `Vec3` or `Vec4` appear in the Inspector. Values edited there are saved with the scene and
+assigned to the instance before `on_create`.
+
+`Script` also offers the shortcuts `self.transform` and `self.get_component(component)`.
+
+## Math
+
+### `Vec2`, `Vec3`, `Vec4`
+Constructors: `Vec3()`, `Vec3(scalar)`, `Vec3(x, y, z)`, `Vec3((x, y, z))`.
+
+| Member | Vec2 | Vec3 | Vec4 |
+|--------|:----:|:----:|:----:|
+| `x y` / `z` / `w` (read/write) | ✓ | ✓ | ✓ |
+| `r g b a` (read/write) | | | ✓ |
+| `+ - * /` (vector or scalar), unary `-` | ✓ | ✓ | ✓ (no unary `-`) |
+| `+= -= *=` | | ✓ | |
+| `length()`, `normalized()`, `dot(other)` | ✓ | ✓ | |
+| `length_squared()`, `cross(other)`, `distance(other)`, `lerp(other, t)` | | ✓ | |
+| `copy()`, indexing, `len()`, iteration, `==` | ✓ | ✓ | ✓ |
+
+### `Quat`
+`Quat()` (identity), `Quat(w, x, y, z)`, `Quat.from_euler(radians: Vec3)`,
+`Quat.from_euler_degrees(degrees: Vec3)`, `Quat.from_axis_angle(axis: Vec3, radians)`.
+Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
+`to_euler_degrees()`, `normalized()`, `inverse()`, `slerp(other, t)`.
+
+### Functions
+`lerp(a, b, t)`, `clamp(value, low, high)`. `bellows.VERSION` is the engine version string.
+
+## Time, input and logging
+
+| Function | Description |
+|----------|-------------|
+| `delta_time()` | Seconds since the previous frame. |
+| `time()` | Seconds since play started. |
+| `frame()` | Frames since play started. |
+| `is_key_down(key)` / `is_key_pressed(key)` / `is_key_released(key)` | Held / went down this frame / went up this frame. `key` is a `Key` value (`Key.W`, `Key.Space`, `Key.LeftShift`, `Key.F1`, `Key.D0`…`Key.D9`, `Key.Up`, …) or its name as a string (`"W"`). |
+| `is_mouse_down(button=MouseButton.Left)` / `is_mouse_pressed(...)` / `is_mouse_released(...)` | Mouse buttons: `MouseButton.Left`, `Right`, `Middle`, `Button3`, `Button4`. |
+| `mouse_position()` | `Vec2` in viewport pixels, top-left origin. |
+| `mouse_delta()` / `scroll_delta()` | Movement this frame (`Vec2`). |
+| `viewport_size()` | Size of the game view in pixels (`Vec2`). |
+| `log(*values)` / `log_warning(*values)` / `log_error(*values)` | Write to the Console (values are joined with spaces). `print()` also goes to the Console. |
+
+In the editor, game input is only delivered while the Viewport has focus during play.
+
+## Scene and entities
+
+| Function | Description |
+|----------|-------------|
+| `create_entity(name="Entity", parent=None)` | Creates an entity (with a Transform) and returns it. |
+| `destroy(entity)` / `entity.destroy()` | Destroys the entity and its children (at the end of the frame during play). |
+| `find_entity(name)` | First entity with that name, or `None`. |
+| `get_entity(id)` | Entity by its persistent ID (`entity.id`), or `None`. |
+| `get_entities(component=None)` | All entities, optionally only those with a component (`get_entities(bellows.RigidBody)` or `get_entities("RigidBody")`). |
+| `instantiate(prefab, position=None, parent=None)` | Spawns a `.bprefab` and returns its root entity. |
+| `primary_camera()` | The entity whose Camera is primary, or `None`. |
+| `screen_to_world_ray(screen_position)` | `(origin, direction)` through a viewport pixel, or `None` without a camera. |
+| `world_to_screen(world_position)` | `Vec2` pixel position, or `None` if behind the camera. |
+| `scene_name()`, `is_playing()` | Current scene name; whether the game is running. |
+| `load_scene(path)` | Switches to another scene at the end of the frame. Returns `False` if it does not exist. |
+| `quit(exit_code=0)` | Quits the game (in the editor: stops play mode). |
+| `get_gravity()` / `set_gravity(Vec3)` | Scene gravity (default `(0, -9.81, 0)`). |
+| `raycast(origin, direction, max_distance=1000)` | First physics collider hit, as a `RaycastHit` (`entity`, `point`, `normal`, `distance`) or `None`. Play mode only. |
+
+### `Entity`
+
+| Member | Description |
+|--------|-------------|
+| `id` | Persistent 64-bit ID (stable across saves). |
+| `valid` / `bool(entity)` | `False` once destroyed. |
+| `name` | Read/write. |
+| `position` | **World** position (read/write). |
+| `local_position` | Position relative to the parent. |
+| `rotation` | Local rotation as Euler angles in **degrees**. |
+| `scale` | Local scale. |
+| `forward`, `right`, `up` | World-space unit axes (forward is -Z). |
+| `parent` | Read/write (`None` = root). Setting keeps the world transform; cycles raise `ValueError`. |
+| `children`, `find_child(name)` | Direct children; recursive search by name. |
+| `translate(delta)`, `rotate(degrees)`, `look_at(target, up=Vec3(0,1,0))` | Movement helpers (`rotate` is in local space). |
+| `transform` | The `Transform` component. |
+| `add_component(c)`, `get_component(c)`, `has_component(c)`, `remove_component(c)`, `components` | `c` is a component class (`bellows.RigidBody`) or name (`"RigidBody"`). `add_component` returns the component (existing or new); `get_component` returns `None` when missing. |
+| `script` | The running script instance (play mode), or `None`. |
+
+## Components
+
+Component objects are lightweight views: keep the entity and call `get_component` again rather
+than storing components for a long time.
+
+### `Transform`
+`position` / `translation` (local, `Vec3`), `rotation` (local Euler, **radians**),
+`rotation_degrees`, `quaternion` (`Quat`), `scale`, read-only `world_position`, `forward`, `right`, `up`.
+
+### `MeshRenderer`
+`mesh` (asset path: `.gltf`/`.glb` or `Builtin/...`), `material` (asset path, `Material` object or
+`None` for the mesh's own materials), `color` (`Vec4`; setting it gives the entity its own material
+instance), `cast_shadows`, `visible`.
+
+### `Camera`
+`projection` (`"Perspective"`/`"Orthographic"`), `fov` (vertical, degrees), `orthographic_size`
+(visible height in meters), `near_clip`, `far_clip`, `primary`.
+
+### Lights
+* `DirectionalLight`: `color`, `intensity`, `cast_shadows` — shines along the entity's forward (-Z).
+* `PointLight`: `color`, `intensity`, `range`.
+* `SpotLight`: `color`, `intensity`, `range`, `inner_angle`, `outer_angle` (degrees) — forward (-Z).
+* `SkyLight`: `environment` (`.hdr` equirectangular image; empty = procedural sky), `intensity`,
+  `rotation` (degrees), `skybox_blur` (0 = sharp background).
+
+### Physics
+* `RigidBody`: `type` (`"Static"`, `"Dynamic"`, `"Kinematic"`), `mass`, `friction`, `restitution`,
+  `linear_damping`, `angular_damping`, `gravity_scale`, `is_trigger`, `lock_rotation_x/y/z`,
+  `continuous`; during play: `velocity`, `angular_velocity`, `add_force(Vec3)`,
+  `add_impulse(Vec3)`, `add_torque(Vec3)`, `teleport(Vec3)`.
+  Type, mass, locks and colliders apply when the body is created (start of play or when the entity
+  is created); friction, restitution, damping and gravity scale apply immediately.
+* `BoxCollider`: `half_extents`, `offset`. `SphereCollider`: `radius`, `offset`.
+  `CapsuleCollider`: `radius`, `half_height` (cylinder part), `offset` (Y-up capsule).
+  `MeshCollider`: `use_mesh_renderer` (triangle mesh from the MeshRenderer; static bodies only).
+  Collider sizes are multiplied by the entity's scale. Several colliders on one entity form a
+  compound shape.
+
+### `ScriptComponent`
+`path`, `class_name` (empty = first `bellows.Script` subclass in the file), `fields` (dict of
+overridden values), `set_field(name, value)`, `instance` (the running object or `None`).
+(The Python class is named `ScriptComponent` because `bellows.Script` is the script base class;
+`"Script"` also works as a component name.)
+
+### Audio
+* `AudioSource`: `clip` (`.wav`, `.mp3`, `.flac`, `.ogg`), `volume`, `pitch`, `loop`,
+  `play_on_start`, `spatial` (3D), `min_distance`, `max_distance`, `play()`, `stop()`, `pause()`,
+  `is_playing`.
+* `AudioListener`: `active`. Without an active listener the primary camera hears the scene.
+* `play_sound(path, volume=1.0)` plays a one-shot 2D sound; `set_master_volume(v)`,
+  `get_master_volume()`.
+
+## Materials
+
+```python
+gold = bellows.Material("Gold", color=(1.0, 0.77, 0.34, 1.0), metallic=1.0, roughness=0.2)
+entity.get_component(bellows.MeshRenderer).material = gold
+gold.save("Materials/Gold.bmat")          # Optional: write it into the project
+```
+
+`Material(name="Material", color=None, metallic=0.0, roughness=0.5)` creates a runtime material;
+`Material.load(path)` opens a `.bmat`. Properties: `name`, `path`, `color`, `metallic`,
+`roughness`, `emissive` (`Vec3`), `emissive_intensity`, `alpha_mode` (`"Opaque"`, `"Mask"`,
+`"Blend"`), `alpha_cutoff`, `double_sided`, `normal_strength`, `uv_tiling`, `uv_offset`, and the
+texture slots `albedo_map`, `normal_map`, `metallic_roughness_map` (glTF layout: roughness in G,
+metallic in B), `occlusion_map`, `emissive_map` (asset paths; `None` clears). `save(path)` writes
+a `.bmat`.
+
+## Editor automation (`bellows.editor`)
+
+Inside the editor (Console, `--run-script` automation and the agent server) the additional module
+`bellows.editor` controls the editor itself: projects, scenes, play mode, undo, selection,
+screenshots and exporting. See [EditorAutomation.md](EditorAutomation.md).
