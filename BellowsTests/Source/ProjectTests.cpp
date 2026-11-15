@@ -9,6 +9,7 @@
 #include "Bellows/Project/ProjectExporter.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptEngine.h"
 
 #include <stb_image.h>
 
@@ -111,7 +112,7 @@ class Checker(bellows.Script):
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Shaders" / "PBR.frag.spv"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "ThirdPartyNotices.md"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Python" / "bellows" / "__init__.py"));
-	CHECK(FileSystem::Exists(options.OutputDirectory / "python"));
+	CHECK(FileSystem::Exists(options.OutputDirectory / ScriptEngine::BundledRuntimeFolder));
 	Project::SetActive(nullptr);
 
 	// Run the exported game in its own process, without access to the build's Python.

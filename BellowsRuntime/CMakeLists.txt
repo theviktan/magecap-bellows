@@ -12,5 +12,5 @@ if(WIN32)
 	target_link_options(BellowsRuntime PRIVATE $<$<CONFIG:Dist>:/ENTRY:mainCRTStartup>)
 else()
 	# Exported games ship their Python runtime next to the executable.
-	set_target_properties(BellowsRuntime PROPERTIES BUILD_RPATH "\$ORIGIN;\$ORIGIN/python/lib" INSTALL_RPATH "\$ORIGIN;\$ORIGIN/python/lib")
+	set_target_properties(BellowsRuntime PROPERTIES BUILD_RPATH "\$ORIGIN;\$ORIGIN/PythonRuntime/lib" INSTALL_RPATH "\$ORIGIN;\$ORIGIN/PythonRuntime/lib")
 endif()

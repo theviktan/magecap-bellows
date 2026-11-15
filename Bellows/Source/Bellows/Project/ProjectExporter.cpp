@@ -180,7 +180,7 @@ namespace Bellows {
 			return fail("The runtime executable was not found next to the editor (" + runtime.string() + ")");
 
 		// Start from a clean folder so no stale files ship.
-		for (const char* folder : { "Assets", "Shaders", "Python", "python" })
+		for (const char* folder : { "Assets", "Shaders", "Python", ScriptEngine::BundledRuntimeFolder })
 			std::filesystem::remove_all(output / folder, error);
 		if (!FileSystem::CreateDirectories(output))
 			return fail("Could not create '" + output.string() + "'");
@@ -243,7 +243,7 @@ namespace Bellows {
 				return fail("The Python runtime could not be located");
 
 #if defined(BW_PLATFORM_WINDOWS)
-			const std::filesystem::path pythonHome = output / "python";
+			const std::filesystem::path pythonHome = output / ScriptEngine::BundledRuntimeFolder;
 			if (!CopyFiltered(python.StandardLibrary, pythonHome / "Lib", IsExcluded, result.TotalBytes))
 				return fail("Could not copy the Python standard library");
 			if (FileSystem::Exists(python.PlatformLibrary)
@@ -255,7 +255,7 @@ namespace Bellows {
 					return fail("Could not copy " + library.filename().string());
 			}
 #else
-			const std::filesystem::path pythonHome = output / "python";
+			const std::filesystem::path pythonHome = output / ScriptEngine::BundledRuntimeFolder;
 			if (!CopyFiltered(python.StandardLibrary, pythonHome / "lib" / ("python" + python.Version), IsExcluded, result.TotalBytes))
 				return fail("Could not copy the Python standard library");
 			for (const std::filesystem::path& library : python.SharedLibraries)
