@@ -6,6 +6,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 using namespace Bellows;
@@ -243,4 +244,16 @@ TEST_CASE("Stale entity handles fail safely")
 	scene.reset();
 	CHECK_FALSE(ScriptEngine::ExecuteSource("bellows.create_entity('X')", output));
 	CHECK(output.find("No scene is active") != std::string::npos);
+}
+
+TEST_CASE("The script context forgets a scene that was deleted while active")
+{
+	// Regression: checking whether the context scene still existed used to read the deleted scene.
+	Ref<Scene> scene = CreateRef<Scene>();
+	ScriptEngine::SetContextScene(scene.get());
+	CHECK_EQ(Scripting::GetContextScene(), scene.get());
+	scene.reset();
+	CHECK_EQ(Scripting::GetContextScene(), static_cast<Scene*>(nullptr));
+	CHECK_THROWS_AS(Scripting::RequireContextScene(), std::runtime_error);
+	ScriptEngine::SetContextScene(nullptr);
 }
