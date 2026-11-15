@@ -129,7 +129,7 @@ TEST_CASE("[gpu] Directional light casts shadows onto the ground")
 	const RenderCamera camera = MakeCamera(glm::vec3(0.0f, 12.0f, 0.01f), glm::vec3(0.0f), 1.0f);
 	auto groundBrightness = [&camera](const Image& image, float worldX)
 	{
-		glm::vec2 screen;
+		glm::vec2 screen(0.0f);
 		REQUIRE(Math::WorldToScreenPoint(glm::vec3(worldX, 0.0f, 0.0f), camera.Projection * camera.View, glm::vec2(256.0f), screen));
 		return image.GetAverageColor(static_cast<uint32_t>(screen.x) - 4, static_cast<uint32_t>(screen.y) - 4, 8, 8).g;
 	};
