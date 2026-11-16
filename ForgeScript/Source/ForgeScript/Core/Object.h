@@ -140,6 +140,8 @@ namespace ForgeScript {
 		std::string Name;
 		int Arity = 0;
 		NativeFn Fn;
+		// Values reachable as function.name, for example Material.load next to Material(...).
+		std::unordered_map<std::string, Value> Members;
 
 		NativeFunction(std::string name, int arity, NativeFn fn) : Object(ObjectType::NativeFunction), Name(std::move(name)), Arity(arity), Fn(std::move(fn)) {}
 	};

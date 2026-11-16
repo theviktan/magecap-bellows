@@ -124,6 +124,13 @@ ForgeScript::Value ScriptEngine::Wrap(Entity entity)
 
 **Errors from C++.** Throw `ForgeScript::RuntimeError("message")` from any getter, setter, method or function. Scripts can catch it with `try ... catch`, and if they do not, it is reported with the script's file and line.
 
+**Identity.** Each `MakeNative` call makes a new wrapper, so by default two wrappers of the same C++ object are not equal. Set `Equals` (and `Hash`, to use them as map keys) so `if other is player` works:
+
+```cpp
+m_EntityType.Equals = [](void* a, void* b) { return static_cast<EntityRef*>(a)->ID == static_cast<EntityRef*>(b)->ID; };
+m_EntityType.Hash = [](void* data) { return std::hash<uint64_t>()(static_cast<EntityRef*>(data)->ID); };
+```
+
 The `NativeType` must stay alive as long as the VM, so store it as a member next to the VM.
 
 ---
@@ -155,6 +162,14 @@ m_VM.RegisterPhrase("move (thing) toward (target) by (amount)", [this](ForgeScri
 	return ForgeScript::Value();
 });
 // Script:  move self toward player by speed * delta
+```
+
+**Functions with members.** A native function can carry values that scripts reach with a dot, which is how a type offers both a constructor and helpers: `Material("Gold")` and `Material.load("Materials/Gold.bmat")`.
+
+```cpp
+ForgeScript::Value material = m_VM.MakeFunction("Material", ForgeScript::AnyArity, makeMaterial);
+m_VM.SetFunctionMember(material, "load", m_VM.MakeFunction("Material.load", 1, loadMaterial));
+m_VM.SetSharedGlobal("Material", material);
 ```
 
 Use `AnyArity` as the arity for functions that accept any number of values, and `context.Count()` to see how many were given. Values the host wants every script to see go in shared globals: `m_VM.SetSharedGlobal("gravity", ForgeScript::Value::FromNumber(9.81));`.

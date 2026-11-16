@@ -388,6 +388,14 @@ namespace ForgeScript {
 		return Value::FromObject(Allocate<NativeFunction>(name.size(), name, arity, std::move(fn)));
 	}
 
+	bool VM::SetFunctionMember(const Value& function, const std::string& name, Value member)
+	{
+		if (!IsObjectType(function, ObjectType::NativeFunction))
+			return false;
+		As<NativeFunction>(function)->Members[name] = member;
+		return true;
+	}
+
 	std::string VM::TypeOf(const Value& value) const
 	{
 		if (IsObjectType(value, ObjectType::Instance))
@@ -878,6 +886,15 @@ namespace ForgeScript {
 				task->Stack[receiverSlot] = global->second;
 				return CallValue(task, global->second, argCount);
 			}
+			case ObjectType::NativeFunction:
+			{
+				NativeFunction* function = As<NativeFunction>(receiver);
+				auto member = function->Members.find(name->Text);
+				if (member == function->Members.end())
+					return Fail("'" + function->Name + "' has nothing called '" + name->Text + "'.");
+				task->Stack[receiverSlot] = member->second;
+				return CallValue(task, member->second, argCount);
+			}
 			default:
 				break;
 		}
@@ -1092,6 +1109,15 @@ namespace ForgeScript {
 				if (global == module->Globals.end())
 					return Fail("The script '" + module->Name + "' has nothing called '" + key + "'.");
 				outValue = global->second;
+				return true;
+			}
+			case ObjectType::NativeFunction:
+			{
+				NativeFunction* function = As<NativeFunction>(object);
+				auto member = function->Members.find(key);
+				if (member == function->Members.end())
+					return Fail("'" + function->Name + "' has nothing called '" + key + "'.");
+				outValue = member->second;
 				return true;
 			}
 			case ObjectType::Kind:
@@ -2376,9 +2402,12 @@ namespace ForgeScript {
 		switch (object->GetType())
 		{
 			case ObjectType::String:
-			case ObjectType::NativeFunction:
 			case ObjectType::Vector:
 			case ObjectType::NativeObject:
+				break;
+			case ObjectType::NativeFunction:
+				for (const auto& [name, member] : static_cast<NativeFunction*>(object)->Members)
+					MarkValue(member);
 				break;
 			case ObjectType::List:
 				for (const Value& item : static_cast<List*>(object)->Items)

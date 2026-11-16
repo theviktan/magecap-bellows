@@ -22,11 +22,17 @@ editor, or unreachable from Python).
    section using `UI::Property*` helpers (tooltips for anything non-obvious) and an entry in
    `DrawAddComponentMenu`. Optionally an icon in `SceneHierarchyPanel.cpp` and gizmo lines in
    `EditorLayer::SubmitEditorOverlays`. Icons come from `Tools/GenerateIconHeader.py`.
-5. **Python** - `Bellows/Source/Bellows/Scripting/ScriptBindings.cpp`: a `py::class_<FooRef>`
-   with snake_case properties (validate/clamp input; raise `ValueError` for bad values) and a
-   `MakeComponentInfo<FooComponent>("Foo")` entry in `GetComponentInfos()` plus
-   `ComponentDisplayName`. Changes that must reach a live system (physics, audio) call into it
-   from the setter.
+5. **Script API (Python and ForgeScript)** - the API is described once for both languages:
+   * `Bellows/Source/Bellows/Scripting/ScriptApi.h`: a `using FooRef = ComponentRef<FooComponent>;`
+     and add `FooRef` to the `ComponentHandle` variant.
+   * `Scripting/ScriptApi.cpp`: a `MakeComponentInfo<FooComponent>("Foo")` entry in
+     `GetComponentInfos()` and a line in `ComponentDisplayName`.
+   * `Scripting/ScriptApiDefinition.h`: `api.template Class<FooRef>("Foo", "doc")` with snake_case
+     `Property`/`ReadOnly`/`Method` entries. Use only the neutral types from `ScriptApi.h`
+     (no `py::` types); validate/clamp input and throw `ScriptValueError` for bad values (Python sees
+     `ValueError`). Changes that must reach a live system (physics, audio) call into it from the setter.
+   Both `ScriptBindings.cpp` (Python) and `ForgeScriptBindings.cpp` (ForgeScript) pick it up
+   automatically; add Python-only extras (`__repr__`, operators) in `ScriptBindings.cpp` only.
 6. **Tests** - doctest coverage for the system behavior; add the component to
    `Projects/FeatureTest/Assets/Scripts/FeatureTest.py` (`test_components` checks every property)
    and, if it is visible, to `Tools/BuildFeatureTest.py` so the sample scene uses it; rebuild the
