@@ -26,7 +26,7 @@ namespace pybind11::detail {
 	template<>
 	struct type_caster<Bellows::Scripting::ColorValue>
 	{
-		PYBIND11_TYPE_CASTER(Bellows::Scripting::ColorValue, const_name("Vec4"));
+		PYBIND11_TYPE_CASTER(Bellows::Scripting::ColorValue, const_name("Vec4 | typing.Sequence[float]"));
 
 		bool load(handle source, bool)
 		{
@@ -65,7 +65,7 @@ namespace pybind11::detail {
 	template<>
 	struct type_caster<Bellows::Scripting::KeyArg>
 	{
-		PYBIND11_TYPE_CASTER(Bellows::Scripting::KeyArg, const_name("Key"));
+		PYBIND11_TYPE_CASTER(Bellows::Scripting::KeyArg, const_name("Key | str"));
 
 		bool load(handle source, bool)
 		{
@@ -91,7 +91,7 @@ namespace pybind11::detail {
 	template<>
 	struct type_caster<Bellows::Scripting::MouseButtonArg>
 	{
-		PYBIND11_TYPE_CASTER(Bellows::Scripting::MouseButtonArg, const_name("MouseButton"));
+		PYBIND11_TYPE_CASTER(Bellows::Scripting::MouseButtonArg, const_name("MouseButton | str"));
 
 		bool load(handle source, bool)
 		{
@@ -117,7 +117,7 @@ namespace pybind11::detail {
 	template<>
 	struct type_caster<Bellows::Scripting::ComponentName>
 	{
-		PYBIND11_TYPE_CASTER(Bellows::Scripting::ComponentName, const_name("str"));
+		PYBIND11_TYPE_CASTER(Bellows::Scripting::ComponentName, const_name("str | type"));
 
 		bool load(handle source, bool)
 		{
