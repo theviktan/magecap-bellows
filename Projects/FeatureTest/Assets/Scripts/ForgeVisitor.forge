@@ -1,0 +1,13 @@
+# Added to a falling ball by FeatureTest.forge; reports the ball's contact events back to it.
+
+when entered by other
+	trigger visitor reports with "entered {other.name}"
+end
+
+when collided with other
+	trigger visitor reports with "collided"
+end
+
+when destroyed
+	trigger visitor reports with "visitor destroyed"
+end

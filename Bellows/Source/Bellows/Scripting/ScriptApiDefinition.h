@@ -82,7 +82,8 @@ namespace Bellows::Scripting {
 		// --- Time -------------------------------------------------------------
 		api.Function("delta_time", []() { return GetDeltaTime(); }, "Seconds since the previous frame");
 		api.Function("time", []() { return GetTime(); }, "Seconds since play started");
-		api.Function("frame", []() { return GetFrame(); }, "Frames since play started");
+		// A signed count, so ForgeScript sees a number (its unsigned 64-bit values are IDs, shown as text).
+		api.Function("frame", []() { return static_cast<int64_t>(GetFrame()); }, "Frames since play started");
 
 		// --- Materials --------------------------------------------------------
 		auto material = api.template Class<ScriptMaterial>("Material", "PBR material that can be assigned to a MeshRenderer");

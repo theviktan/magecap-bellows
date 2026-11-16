@@ -1,8 +1,11 @@
 # Scripting API reference
 
-Game logic in MageCap Bellows is written in **Python 3** (CPython 3.13 embedded in the engine).
-Everything lives in the `bellows` package; exported games bundle their own Python runtime, so
-players do not need Python installed.
+Game logic in MageCap Bellows is written in **ForgeScript** (Bellows' own English-like language,
+`.forge` files) or **Python 3** (CPython 3.13 embedded in the engine, `.py` files). Both use the
+same engine API with the same names, and a game can mix them freely. This page describes the API
+in Python terms; [Using the API from ForgeScript](#using-the-api-from-forgescript) shows how the
+same calls look in ForgeScript. In Python everything lives in the `bellows` package; exported
+games bundle their own Python runtime, so players do not need Python installed.
 
 ```python
 import bellows
@@ -20,15 +23,16 @@ class Player(bellows.Script):
 ```
 
 Attach a script to an entity with a **Script** component (Inspector → Add Component → Script, or
-drag a `.py` file onto the component's Script field). The project's `Assets` folder is on
+drag a `.py` or `.forge` file onto the component's Script field). The project's `Assets` folder is on
 `sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Edited
 scripts are reloaded the next time play starts.
 
-The API is described once (`Bellows/Source/Bellows/Scripting/ScriptApiDefinition.h`) and is also
-available to ForgeScript with the same names; see [Using the API from ForgeScript](#using-the-api-from-forgescript).
+The API is described once (`Bellows/Source/Bellows/Scripting/ScriptApiDefinition.h`), so both
+languages always offer the same functions.
 
-The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`; when in
-doubt, that file shows working usage of every function below.
+The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`, and from
+ForgeScript by `FeatureTest.forge` next to it; when in doubt, those files show working usage of
+every function below.
 
 ## Conventions
 
@@ -218,9 +222,53 @@ screenshots and exporting. See [EditorAutomation.md](EditorAutomation.md).
 Every function, class and property on this page that is not marked Python-only is also available
 to [ForgeScript](ForgeScript/LanguageGuide.md), with the same names:
 `find_entity("Player").position`, `self.add_component("RigidBody")`, `body.add_force(vector(0, 5, 0))`,
-`Material("Gold", [1, 0.8, 0])`, `Material.load("Materials/Gold.bmat")`. Attaching `.forge` scripts
-to entities is the next step of the ForgeScript milestone (see `docs/Roadmap.md`); today the API is
-used through `Bellows::Scripting::RegisterForgeScriptApi` (`Scripting/ForgeScriptBindings.h`).
+`Material("Gold", [1, 0.8, 0])`, `Material.load("Materials/Gold.bmat")`.
+
+The Python example at the top of this page, written in ForgeScript (`Scripts/Player.forge`):
+
+```forge
+set speed to 5.0                             # Shown and editable in the Inspector
+
+when update with delta
+	set direction to vector()
+	if is_key_down("W") then set direction to direction + my forward end
+	if is_key_down("S") then set direction to direction - my forward end
+	self.translate(direction * speed * delta)
+end
+```
+
+### ForgeScript entity scripts
+
+A `.forge` file attached with a Script component is one script for that entity (there is no class
+to choose). Each entity gets its own copy of the script, with `self` set to the entity; `my name`
+is short for `self.name`. The script's top level runs when the entity's script starts, then the
+engine sends these events, which the script handles with `when`:
+
+| Python callback | ForgeScript event | When |
+|-----------------|-------------------|------|
+| `on_create(self)` | `when created` | Once, after every script in the scene has started. |
+| `on_update(self, dt)` | `when update with delta` | Every frame; `delta` is in seconds. |
+| `on_fixed_update(self, dt)` | `when physics update with delta` | Every physics step. |
+| `on_destroy(self)` | `when destroyed` | When the entity is destroyed or play stops. |
+| `on_collision_enter(self, other)` / `on_collision_exit` | `when collided with other` / `when collision ends with other` | Started/stopped touching `other`. |
+| `on_trigger_enter(self, other)` / `on_trigger_exit` | `when entered by other` / `when exited by other` | `other` entered/left this trigger, or this entity entered/left a trigger. |
+
+- **Inspector fields.** Top-level lines that set a name to a plain value appear in the Inspector:
+  numbers, text, `true`/`false`/`yes`/`no`, `vector(x, y)`, `vector(x, y, z)` and colors
+  (`[r, g, b]` or `[r, g, b, a]`). Names starting with `_` stay hidden. Values edited in the
+  Inspector replace the script's own values after the top level has run and before `when created`.
+- **Decimal or whole number?** How you write the starting value decides the Inspector field:
+  `set speed to 4.0` makes a decimal field (you can type 4.5), while `set lives to 4` makes a
+  whole-number field (4, 5, 6...). Write `.0` when a setting should take decimals.
+- **Waiting.** `wait` and `start` work in every handler (`wait 2 seconds`, `wait until ready`);
+  waiting tasks continue each frame.
+- **Talking to other scripts.** `trigger door opened with self` reaches the matching `when` handlers
+  of every running script, including the sender's.
+- **Other files.** `use "Scripts/Helpers"` loads `Assets/Scripts/Helpers.forge`.
+- **Errors** appear in the Console as `Scripts/Player.forge line 12: <message>`; a script with a
+  mistake is not started, and one that fails 10 times is switched off, as in Python. A frame that
+  runs a loop without any `wait` for too long is stopped with an error instead of freezing the game.
+- **Reloading.** Scripts are read again every time play starts, so edits apply on the next Play.
 
 How values look in ForgeScript:
 

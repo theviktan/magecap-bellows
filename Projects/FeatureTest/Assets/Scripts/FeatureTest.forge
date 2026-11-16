@@ -1,0 +1,254 @@
+# Exercises the MageCap Bellows engine API from ForgeScript inside the FeatureTest scene.
+#
+# Attached to the "ForgeScript Test Runner" entity. It runs first, while the Python test
+# (FeatureTest.py) waits; when it is done it renames its entity to
+#     ForgeScript Test Passed (N checks)    or    ForgeScript Test Failed (N of M checks)
+# and FeatureTest.py includes that result in the final "FEATURE TEST PASSED" line.
+
+set label to "default"          # FeatureTest sets this to "authored" in the scene
+
+set checks to 0
+set failures to []
+set events to []
+
+# -- Helpers -----------------------------------------------------------------------------
+
+function check(condition, description)
+	add 1 to checks
+	if not condition then
+		add description to failures
+		say "FeatureTest.forge: FAILED - {description}"
+	end
+end
+
+# True when two numbers, vectors or lists of numbers (colors) are equal within a tolerance.
+function near(a, b, tolerance)
+	if a is a number then return abs(a - b) is at most tolerance end
+	if a is a vector then return distance(a, b) is at most tolerance end
+	if length(a) is not length(b) then return false end
+	for i from 1 to length(a)
+		if abs(a[i] - b[i]) is above tolerance then return false end
+	end
+	return true
+end
+
+function close(a, b)
+	return near(a, b, 0.0001)
+end
+
+# True when calling 'action' fails with an error.
+function fails(action)
+	try
+		action()
+	catch
+		return true
+	end
+	return false
+end
+
+# Waits until 'condition' is true, or until 'seconds' have passed.
+function wait_for(condition, seconds)
+	set deadline to time() + seconds
+	until condition() or time() is above deadline
+		wait
+	end
+end
+
+# -- Events from the engine --------------------------------------------------------------
+
+when update with delta
+	if delta is a number and not events.contains("update") then add "update" to events end
+end
+
+when physics update with delta
+	if delta is above 0 and not events.contains("physics") then add "physics" to events end
+end
+
+# -- The test sequence -------------------------------------------------------------------
+
+function test_basics()
+	check(label is "authored", "Inspector fields from the scene replace the script's value ({label})")
+	check(self is find_entity("ForgeScript Test Runner"), "self is the entity the script is attached to")
+	check(my has_component("Script") and my get_component("Script").path is "Scripts/FeatureTest.forge", "the script component")
+	check(is_playing() and scene_name() is "FeatureTest", "is_playing and scene_name")
+	check(delta_time() is at least 0 and time() is at least 0 and frame() is at least 0, "time functions")
+	check(not is_key_down("Space") and not is_key_pressed("W") and not is_mouse_down("Right"), "input queries by name")
+	check(fails(function() is_key_down("NotAKey") end), "unknown key names are rejected")
+	check(viewport_size().x is above 0 and mouse_position() is a vector, "viewport and mouse queries")
+	check(near(get_gravity(), vector(0, -9.81, 0), 0.001), "default gravity ({get_gravity()})")
+end
+
+function test_scene_queries()
+	for each name in ["Main Camera", "Sun", "Sky", "Ground", "Water Bottle", "Cannon", "Trigger Zone"]
+		check(find_entity(name) is not nothing, "authored entity '{name}' exists")
+	end
+	check(find_entity("Does Not Exist") is nothing, "find_entity gives nothing for missing names")
+	set cameras to get_entities("Camera")
+	check(length(cameras) is 1 and primary_camera() is cameras[1], "get_entities and primary_camera")
+	check(get_entity(cameras[1].id) is cameras[1], "get_entity by id")
+	check(length(get_entities()) is above length(get_entities("PointLight")), "get_entities without a filter")
+end
+
+function test_entities()
+	set holder to create_entity("Forge Parent")
+	set child to create_entity("Forge Child", holder)
+	check(child.parent is holder and holder.children[1] is child, "parenting")
+	check(holder.find_child("Forge Child") is child and holder.valid, "find_child and valid")
+	check(fails(function() set holder.parent to child end), "hierarchy cycles are rejected")
+	set holder.name to "Forge Renamed"
+	check(holder.name is "Forge Renamed" and text(holder) contains "Forge Renamed", "renaming")
+
+	set holder.position to vector(1, 2, 3)
+	set child.local_position to vector(0, 1, 0)
+	check(close(child.position, vector(1, 3, 3)), "child world position follows the parent")
+	set holder.position.x to 4
+	add 1 to holder.position.y
+	check(close(holder.position, vector(4, 3, 3)), "changing one part of a position")
+	set holder.rotation to vector(0, 90, 0)
+	check(close(holder.forward, vector(-1, 0, 0)), "rotation in degrees and forward")
+	set holder.rotation to vector()
+	holder.rotate(vector(0, 0, 90))
+	check(near(holder.rotation, vector(0, 0, 90), 0.001), "rotate")
+	holder.translate(vector(1, 0, 0))
+	check(close(holder.position, vector(5, 3, 3)), "translate")
+	holder.look_at(vector(5, 3, -10))
+	check(close(holder.forward, vector(0, 0, -1)), "look_at")
+	set holder.transform.scale to vector(1, 2, 1)
+	check(close(holder.scale, vector(1, 2, 1)), "Transform component")
+
+	set child.parent to nothing
+	check(child.parent is nothing and holder.children.is_empty(), "unparenting")
+	child.destroy()
+	destroy(holder)
+end
+
+function test_components()
+	set thing to create_entity("Forge Components")
+	check(thing.components.join(", ") is "Transform", "new entities only have a Transform")
+	check(fails(function() thing.add_component("NotAComponent") end), "unknown components are rejected")
+
+	set renderer to thing.add_component("MeshRenderer")
+	set renderer.mesh to "Builtin/Sphere"
+	set renderer.cast_shadows to false
+	check(renderer.mesh is "Builtin/Sphere" and not renderer.cast_shadows, "MeshRenderer properties")
+	set renderer.color to [0, 1, 0, 1]
+	check(close(renderer.color, [0, 1, 0, 1]), "MeshRenderer color")
+
+	set light to thing.add_component("PointLight")
+	set light.color to vector(0, 1, 0)
+	set light.range to 4
+	check(close(light.color, vector(0, 1, 0)) and light.range is 4, "PointLight properties")
+
+	set body to thing.add_component("RigidBody")
+	set body.type to "Kinematic"
+	set body.mass to 3
+	check(body.type is "Kinematic" and body.mass is 3, "RigidBody properties")
+	set sphere to thing.add_component("SphereCollider")
+	set sphere.radius to 0.75
+	check(sphere.radius is 0.75, "SphereCollider properties")
+	set source to thing.add_component("AudioSource")
+	set source.clip to "Audio/Chime.wav"
+	check(source.clip is "Audio/Chime.wav", "AudioSource properties")
+
+	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource", "components list ({thing.components})")
+	thing.remove_component("PointLight")
+	check(not thing.has_component("PointLight") and thing.get_component("PointLight") is nothing, "remove_component")
+	thing.destroy()
+end
+
+function test_materials()
+	set gold to Material("Forge Gold", [1, 0.8, 0.3, 1], 1, 0.25)
+	check(gold.name is "Forge Gold" and gold.path.starts_with("Runtime/"), "runtime materials")
+	set gold.metallic to 2
+	set gold.emissive to vector(1, 0.2, 0)
+	check(gold.metallic is 1 and close(gold.emissive, vector(1, 0.2, 0)), "material properties (metallic is clamped)")
+	set loaded to Material.load("Materials/Gold.bmat")
+	check(loaded.path is "Materials/Gold.bmat" and loaded.metallic is above 0.9, "Material.load")
+	check(fails(function() Material.load("Materials/Missing.bmat") end), "loading a missing material fails")
+	check(play_sound("Audio/Chime.wav", 0.1) and not play_sound("Audio/Missing.wav"), "play_sound")
+end
+
+function test_destruction()
+	set temporary to create_entity("Forge Temporary")
+	destroy(temporary)
+	check(temporary.valid, "destroy is deferred to the end of the frame")
+	wait 1 frame
+	check(not temporary.valid, "destroyed entities become invalid")
+	check(fails(function() say temporary.name end), "using a destroyed entity fails")
+end
+
+function test_physics()
+	set ball to instantiate("Prefabs/Ball.bprefab", vector(-6, 4, -6))
+	set ball.name to "Forge Drop Ball"
+	set body to ball.get_component("RigidBody")
+	set landed to function() return ball.position.y is below 0.5 end
+	wait_for(landed, 4)
+	check(landed(), "a dropped prefab falls onto the ground ({ball.position})")
+	set body.velocity to vector(0, 5, 0)
+	check(near(body.velocity, vector(0, 5, 0), 0.001), "RigidBody velocity")
+	wait 2 frames
+	check(ball.position.y is above 0.4, "velocity moves the body")
+
+	set hit to raycast(vector(-3, 10, 6), vector(0, -1, 0), 100)
+	check(hit is not nothing and hit.entity.name is "Ground", "raycast hits the ground")
+	check(near(hit.distance, 10, 0.01) and near(hit.normal, vector(0, 1, 0), 0.001), "raycast distance and normal")
+	check(raycast(vector(0, 50, 0), vector(0, 1, 0), 10) is nothing, "raycast misses give nothing")
+	ball.destroy()
+end
+
+function test_events()
+	check(events.contains("update"), "when update runs every frame")
+	check(events.contains("physics"), "when physics update runs")
+
+	# Contacts arrive through the trigger zone's events; the visitor's script reports back.
+	set zone to find_entity("Trigger Zone")
+	set visitor to create_entity("Forge Visitor")
+	set visitor.position to zone.position + vector(0, 6, 0)
+	visitor.add_component("RigidBody")
+	visitor.add_component("SphereCollider")
+	set script to visitor.add_component("Script")
+	set script.path to "Scripts/ForgeVisitor.forge"
+	wait_for(function() return events.contains("entered Trigger Zone") and events.contains("collided") end, 6)
+	check(events.contains("entered Trigger Zone"), "scripts added during play start, and 'when entered by' runs ({events})")
+	check(events.contains("collided"), "'when collided with' runs when the visitor lands")
+	visitor.destroy()
+	wait 1 frame
+	check(events.contains("visitor destroyed"), "'when destroyed' runs")
+end
+
+when visitor reports with what
+	add what to events
+end
+
+function run_tests()
+	try
+		test_basics()
+		test_scene_queries()
+		test_entities()
+		test_components()
+		test_materials()
+		test_destruction()
+		test_physics()
+		test_events()
+	catch problem
+		add "unexpected error: {problem}" to failures
+	end
+	# Entities destroyed by the tests disappear at the end of this frame, before Python runs.
+	wait 1 frame
+	if failures.is_empty() then
+		say "ForgeScript feature test passed ({checks} checks)"
+		set my name to "ForgeScript Test Passed ({checks} checks)"
+	else
+		say "ForgeScript feature test failed: {length(failures)} of {checks} checks"
+		for each failure in failures
+			say "  - {failure}"
+		end
+		set my name to "ForgeScript Test Failed ({length(failures)} of {checks} checks)"
+	end
+end
+
+when created
+	# Wait a few frames so the update and physics events have run at least once.
+	wait 3 frames
+	run_tests()
+end

@@ -632,7 +632,7 @@ end
 
 - The event name is all the words after `when`, up to `with` or `by`.
 - Names after `with` or `by` receive the values that come with the event. Separate them with `,` or `and`.
-- The engine sends events like `game starts`, `update` and `collision` (see the engine's documentation for the exact names).
+- MageCap Bellows sends these events to entity scripts: `created`, `update` (with the frame time), `physics update`, `destroyed`, `collided` and `collision ends` (with the other entity), and `entered` and `exited` for triggers. The full table is in [Scripting API: ForgeScript entity scripts](../ScriptingAPI.md#forgescript-entity-scripts).
 
 Scripts can send events too:
 
@@ -819,6 +819,8 @@ end
 ```
 
 Each entity gets its own copy of the script's variables, so two doors using `door.forge` open and close independently.
+
+Top-level lines that set a plain value, like `set is_open to false` or `set speed to 2.5`, appear in the Bellows Inspector as settings you can change for each entity without editing the script. Start a name with `_` (`set _timer to 0`) to keep it out of the Inspector. Write `4.0` instead of `4` when a setting should take decimals in the Inspector: `set speed to 4.0` gives a decimal field, `set lives to 3` a whole-number field.
 
 ---
 

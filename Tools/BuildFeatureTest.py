@@ -220,9 +220,11 @@ speaker = create("Speaker", "Builtin/Cone", IRON, position=(0.0, 0.35, 4.5), sca
 source = speaker.add_component(bellows.AudioSource)
 source.clip, source.spatial, source.volume = "Audio/Chime.wav", True, 0.8
 
-# The scripting API test
+# The scripting API tests: FeatureTest.forge runs first, then FeatureTest.py checks its result.
 runner = create("Test Runner")
 add_script(runner, "Scripts/FeatureTest.py")
+forge_runner = create("ForgeScript Test Runner")
+add_script(forge_runner, "Scripts/FeatureTest.forge", label="authored")
 
 # Ball prefab (fired by the cannon and used by the test), saved from a template entity
 ball = create("Ball", "Builtin/Sphere", RED, scale=(0.6, 0.6, 0.6))
