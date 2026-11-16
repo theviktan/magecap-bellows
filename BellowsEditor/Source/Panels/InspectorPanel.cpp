@@ -512,9 +512,10 @@ namespace Bellows {
 		{
 			for (const ScriptFieldInfo& field : info->Fields)
 			{
+				// Show an override set with another number type (10.0 on a whole-number field) as the field's type.
 				auto it = c.Fields.find(field.Name);
-				const bool overridden = it != c.Fields.end() && it->second.index() == field.DefaultValue.index();
-				ScriptFieldValue value = overridden ? it->second : field.DefaultValue;
+				ScriptFieldValue value = field.DefaultValue;
+				const bool overridden = it != c.Fields.end() && ConvertScriptFieldValue(it->second, field.DefaultValue, value);
 				if (DrawFieldValue(field.Name.c_str(), value))
 					c.Fields[field.Name] = value;
 				if (overridden && ImGui::BeginPopupContextItem(field.Name.c_str()))
