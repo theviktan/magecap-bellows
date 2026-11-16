@@ -33,6 +33,7 @@ namespace Bellows {
 		Window(const Window&) = delete;
 		Window& operator=(const Window&) = delete;
 
+		// Processes window events and reads the first gamepad into Input.
 		void PollEvents();
 
 		uint32_t GetWidth() const { return m_Data.Width; }
@@ -53,6 +54,8 @@ namespace Bellows {
 		// GLFW must be initialized once per process before any window is created.
 		static bool InitializeGLFW();
 		static void ShutdownGLFW();
+	private:
+		void PollGamepad();
 	private:
 		struct WindowData
 		{

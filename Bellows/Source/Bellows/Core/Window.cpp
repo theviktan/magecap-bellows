@@ -1,6 +1,8 @@
 #include "bwpch.h"
 #include "Bellows/Core/Window.h"
 
+#include "Bellows/Core/Input.h"
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -208,6 +210,25 @@ namespace Bellows {
 	void Window::PollEvents()
 	{
 		glfwPollEvents();
+		PollGamepad();
+	}
+
+	void Window::PollGamepad()
+	{
+		std::array<bool, MaxGamepadButton> buttons {};
+		for (int joystick = GLFW_JOYSTICK_1; joystick <= GLFW_JOYSTICK_LAST; joystick++)
+		{
+			GLFWgamepadstate state;
+			if (glfwJoystickIsGamepad(joystick) && glfwGetGamepadState(joystick, &state))
+			{
+				static_assert(MaxGamepadButton == GLFW_GAMEPAD_BUTTON_LAST + 1, "GamepadButton must follow GLFW's order");
+				for (int i = 0; i < MaxGamepadButton; i++)
+					buttons[i] = state.buttons[i] == GLFW_PRESS;
+				Input::UpdateGamepad(true, buttons);
+				return;
+			}
+		}
+		Input::UpdateGamepad(false, buttons);
 	}
 
 	uint32_t Window::GetFramebufferWidth() const

@@ -37,18 +37,6 @@ namespace Bellows::Scripting {
 			};
 		}
 
-		// Lower case without spaces or underscores, so "Left Shift", "left_shift" and "LeftShift" match.
-		std::string NormalizeName(const std::string& name)
-		{
-			std::string normalized;
-			for (char c : name)
-			{
-				if (c != '_' && c != ' ')
-					normalized += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-			}
-			return normalized;
-		}
-
 	}
 
 	// -------------------------------------------------------------------------
@@ -201,58 +189,21 @@ namespace Bellows::Scripting {
 
 	const std::vector<KeyName>& GetKeyNames()
 	{
-		static const std::vector<KeyName> s_Keys = {
-			{ "Space", KeyCode::Space }, { "Apostrophe", KeyCode::Apostrophe }, { "Comma", KeyCode::Comma },
-			{ "Minus", KeyCode::Minus }, { "Period", KeyCode::Period }, { "Slash", KeyCode::Slash },
-			{ "D0", KeyCode::D0 }, { "D1", KeyCode::D1 }, { "D2", KeyCode::D2 }, { "D3", KeyCode::D3 }, { "D4", KeyCode::D4 },
-			{ "D5", KeyCode::D5 }, { "D6", KeyCode::D6 }, { "D7", KeyCode::D7 }, { "D8", KeyCode::D8 }, { "D9", KeyCode::D9 },
-			{ "Semicolon", KeyCode::Semicolon }, { "Equal", KeyCode::Equal },
-			{ "A", KeyCode::A }, { "B", KeyCode::B }, { "C", KeyCode::C }, { "D", KeyCode::D }, { "E", KeyCode::E },
-			{ "F", KeyCode::F }, { "G", KeyCode::G }, { "H", KeyCode::H }, { "I", KeyCode::I }, { "J", KeyCode::J },
-			{ "K", KeyCode::K }, { "L", KeyCode::L }, { "M", KeyCode::M }, { "N", KeyCode::N }, { "O", KeyCode::O },
-			{ "P", KeyCode::P }, { "Q", KeyCode::Q }, { "R", KeyCode::R }, { "S", KeyCode::S }, { "T", KeyCode::T },
-			{ "U", KeyCode::U }, { "V", KeyCode::V }, { "W", KeyCode::W }, { "X", KeyCode::X }, { "Y", KeyCode::Y },
-			{ "Z", KeyCode::Z },
-			{ "LeftBracket", KeyCode::LeftBracket }, { "Backslash", KeyCode::Backslash }, { "RightBracket", KeyCode::RightBracket },
-			{ "GraveAccent", KeyCode::GraveAccent },
-			{ "Escape", KeyCode::Escape }, { "Enter", KeyCode::Enter }, { "Tab", KeyCode::Tab }, { "Backspace", KeyCode::Backspace },
-			{ "Insert", KeyCode::Insert }, { "Delete", KeyCode::Delete },
-			{ "Right", KeyCode::Right }, { "Left", KeyCode::Left }, { "Down", KeyCode::Down }, { "Up", KeyCode::Up },
-			{ "PageUp", KeyCode::PageUp }, { "PageDown", KeyCode::PageDown }, { "Home", KeyCode::Home }, { "End", KeyCode::End },
-			{ "CapsLock", KeyCode::CapsLock }, { "Pause", KeyCode::Pause },
-			{ "F1", KeyCode::F1 }, { "F2", KeyCode::F2 }, { "F3", KeyCode::F3 }, { "F4", KeyCode::F4 }, { "F5", KeyCode::F5 },
-			{ "F6", KeyCode::F6 }, { "F7", KeyCode::F7 }, { "F8", KeyCode::F8 }, { "F9", KeyCode::F9 }, { "F10", KeyCode::F10 },
-			{ "F11", KeyCode::F11 }, { "F12", KeyCode::F12 },
-			{ "KP0", KeyCode::KP0 }, { "KP1", KeyCode::KP1 }, { "KP2", KeyCode::KP2 }, { "KP3", KeyCode::KP3 }, { "KP4", KeyCode::KP4 },
-			{ "KP5", KeyCode::KP5 }, { "KP6", KeyCode::KP6 }, { "KP7", KeyCode::KP7 }, { "KP8", KeyCode::KP8 }, { "KP9", KeyCode::KP9 },
-			{ "KPEnter", KeyCode::KPEnter }, { "KPAdd", KeyCode::KPAdd }, { "KPSubtract", KeyCode::KPSubtract },
-			{ "LeftShift", KeyCode::LeftShift }, { "LeftControl", KeyCode::LeftControl }, { "LeftAlt", KeyCode::LeftAlt },
-			{ "RightShift", KeyCode::RightShift }, { "RightControl", KeyCode::RightControl }, { "RightAlt", KeyCode::RightAlt },
-		};
-		return s_Keys;
+		return GetKeyCodeNames();
 	}
 
 	KeyCode KeyFromName(const std::string& name)
 	{
-		const std::string normalized = NormalizeName(name);
-		for (const KeyName& key : GetKeyNames())
-		{
-			if (NormalizeName(key.Name) == normalized)
-				return key.Code;
-		}
-		// Digits written plainly ("1") map to D1.
-		if (normalized.size() == 1 && std::isdigit(static_cast<unsigned char>(normalized[0])))
-			return static_cast<KeyCode>(static_cast<int>(KeyCode::D0) + (normalized[0] - '0'));
+		if (std::optional<KeyCode> key = FindKeyCode(name))
+			return *key;
 		throw ScriptValueError("Unknown key '" + name + "'");
 	}
 
 	MouseButton MouseButtonFromName(const std::string& name)
 	{
-		const std::string normalized = NormalizeName(name);
-		if (normalized == "left") return MouseButton::Left;
-		if (normalized == "right") return MouseButton::Right;
-		if (normalized == "middle") return MouseButton::Middle;
-		throw ScriptValueError("Expected a mouse button: 'left', 'right' or 'middle'");
+		if (std::optional<MouseButton> button = FindMouseButton(name))
+			return *button;
+		throw ScriptValueError("Expected a mouse button: 'left', 'right', 'middle', 'back' or 'forward'");
 	}
 
 	// -------------------------------------------------------------------------
