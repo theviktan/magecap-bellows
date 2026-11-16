@@ -6,6 +6,9 @@
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <set>
+#include <utility>
+#include <vector>
 
 namespace ForgeScript {
 
@@ -43,6 +46,53 @@ namespace ForgeScript {
 			}
 		}
 		return false;
+	}
+
+	bool ContentsEqual(const Value& a, const Value& b)
+	{
+		// Compare with a work list instead of recursion, so deeply nested data cannot overflow the C++
+		// stack. A pair of containers already being compared counts as equal, which ends cycles.
+		std::vector<std::pair<Value, Value>> work = { { a, b } };
+		std::set<std::pair<const Object*, const Object*>> seen;
+		while (!work.empty())
+		{
+			auto [x, y] = work.back();
+			work.pop_back();
+			if (x == y)
+				continue;
+
+			const bool lists = IsObjectType(x, ObjectType::List) && IsObjectType(y, ObjectType::List);
+			const bool maps = IsObjectType(x, ObjectType::Map) && IsObjectType(y, ObjectType::Map);
+			if (!lists && !maps)
+				return false;
+			if (!seen.insert({ x.AsObject(), y.AsObject() }).second)
+				continue;
+
+			if (lists)
+			{
+				const std::vector<Value>& left = static_cast<const List*>(x.AsObject())->Items;
+				const std::vector<Value>& right = static_cast<const List*>(y.AsObject())->Items;
+				if (left.size() != right.size())
+					return false;
+				for (size_t i = 0; i < left.size(); i++)
+					work.push_back({ left[i], right[i] });
+			}
+			else
+			{
+				const Map* left = static_cast<const Map*>(x.AsObject());
+				const Map* right = static_cast<const Map*>(y.AsObject());
+				if (left->Size() != right->Size())
+					return false;
+				for (const Map::Entry& entry : left->Entries)
+				{
+					Value other;
+					if (!right->Get(entry.Key, other))
+						return false;
+					work.push_back({ entry.Item, other });
+				}
+			}
+		}
+		return true;
 	}
 
 	static size_t HashDouble(double number)

@@ -26,6 +26,10 @@ BellowsEditor --check-script Scripts/Player.forge --json   # {"file", "diagnosti
 BellowsEditor --check-script Scripts/Player.forge --stdin  # reads the (unsaved) text from standard input
 ```
 
+`use "Scripts/Helpers"` lines are read from the project's `Assets` folder, as in the game: the
+project is the nearest folder above the script that contains a `.bproject` file (outside a project,
+the script's own folder is used).
+
 Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be read, `64` bad usage,
 `70` Python could not start. The text format and exit codes match `forgescript --check`, which
 checks the language alone (engine functions are unknown to it).

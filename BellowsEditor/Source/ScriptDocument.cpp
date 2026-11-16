@@ -1,5 +1,7 @@
 #include "ScriptDocument.h"
 
+#include "Bellows/Scripting/ForgeScriptBindings.h"
+#include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
@@ -219,6 +221,8 @@ class {Class}(bellows.Script):
 					s_ForgeScriptCheckSetup(*s_CheckVM);
 			}
 
+			// Scripts pulled in with 'use' may have been edited since the last check.
+			s_CheckVM->ClearModuleCache();
 			ForgeScript::CompileError error;
 			if (s_CheckVM->Check(source, fileName, error))
 				return {};
@@ -479,6 +483,12 @@ class {Class}(bellows.Script):
 			case ScriptLanguage::None:			break;
 		}
 		return {};
+	}
+
+	void SetUpEngineForgeScriptCheck(ForgeScript::VM& vm)
+	{
+		Scripting::RegisterForgeScriptApi(vm);
+		Scripting::ForgeScriptRuntime::InstallModuleLoader(vm);
 	}
 
 	void SetForgeScriptCheckSetup(ForgeScriptCheckSetup setup)

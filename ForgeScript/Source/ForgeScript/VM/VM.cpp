@@ -1426,7 +1426,7 @@ namespace ForgeScript {
 		if (IsObjectType(container, ObjectType::List))
 		{
 			const std::vector<Value>& items = As<List>(container)->Items;
-			outResult = std::find(items.begin(), items.end(), item) != items.end();
+			outResult = std::any_of(items.begin(), items.end(), [&item](const Value& v) { return ContentsEqual(v, item); });
 			return true;
 		}
 		if (IsObjectType(container, ObjectType::Map))
@@ -1791,14 +1791,14 @@ namespace ForgeScript {
 				{
 					Value b = stack.back();
 					stack.pop_back();
-					stack.back() = Value::FromBool(stack.back() == b);
+					stack.back() = Value::FromBool(ContentsEqual(stack.back(), b));
 					break;
 				}
 				case OpCode::NotEqual:
 				{
 					Value b = stack.back();
 					stack.pop_back();
-					stack.back() = Value::FromBool(stack.back() != b);
+					stack.back() = Value::FromBool(!ContentsEqual(stack.back(), b));
 					break;
 				}
 				case OpCode::Greater: case OpCode::GreaterEqual: case OpCode::Less: case OpCode::LessEqual:
@@ -1918,7 +1918,7 @@ namespace ForgeScript {
 							items.push_back(amount);
 						else
 						{
-							auto found = std::find(items.begin(), items.end(), amount);
+							auto found = std::find_if(items.begin(), items.end(), [&amount](const Value& v) { return ContentsEqual(v, amount); });
 							if (found != items.end())
 								items.erase(found);
 						}

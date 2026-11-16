@@ -1,0 +1,59 @@
+# 'is' compares what lists and maps hold, not whether they are the same one.
+
+say [1, 2] is [1, 2]                          # expect: true
+say [1, 2] is [2, 1]                          # expect: false
+say [1, 2] is [1, 2, 3]                       # expect: false
+say [1, 2] is not [1, 2]                      # expect: false
+say [] is []                                  # expect: true
+say [[1, "a"], [vector(1, 2, 3)]] is [[1, "a"], [vector(1, 2, 3)]]   # expect: true
+say [1, [2, 3]] is [1, [2, 4]]                # expect: false
+say [1] is 1                                  # expect: false
+
+say { a: 1, b: [2] } is { b: [2], a: 1 }      # expect: true
+say { a: 1 } is { a: 2 }                      # expect: false
+say { a: 1 } is { a: 1, b: 2 }                # expect: false
+say {} is {}                                  # expect: true
+say { a: 1 } is [1]                           # expect: false
+
+# Copies are equal but separate: changing one changes nothing else.
+set original to [1, 2, 3]
+set duplicate to copy(original)
+say duplicate is original                     # expect: true
+add 4 to duplicate
+say duplicate is original                     # expect: false
+
+# Finding things in lists uses the same rule.
+set pairs to [[1, 2], [3, 4]]
+say pairs contains [3, 4]                     # expect: true
+say [1, 2] is in pairs                        # expect: true
+say [5, 6] is not in pairs                    # expect: true
+say pairs.index_of([3, 4])                    # expect: 2
+say pairs.remove([1, 2])                      # expect: true
+say pairs                                     # expect: [[3, 4]]
+take [3, 4] from pairs
+say pairs.is_empty()                          # expect: true
+
+# A list that contains itself is compared safely.
+set loop_a to [1]
+add loop_a to loop_a
+set loop_b to [1]
+add loop_b to loop_b
+say loop_a is loop_b                          # expect: true
+
+# Map keys still mean one particular list, so changing a list never loses its entry.
+set key to [1]
+set scores to {}
+set scores[key] to "found"
+say scores.has([1])                           # expect: false
+add 2 to key
+say scores[key]                               # expect: found
+
+# Objects made from kinds are only equal to themselves.
+kind Point
+	function setup(x)
+		set my x to x
+	end
+end
+set p to new Point(1)
+say p is new Point(1)                         # expect: false
+say p is p                                    # expect: true

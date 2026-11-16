@@ -38,7 +38,7 @@ Everything in the language on one page. For explanations and examples, see the [
 |---|---|
 | Math | `+ - * / % ^` and `-x`. `%` is the remainder, `^` is power. |
 | Join text | `"a" + "b"`, `"Score: " + 10`, `"Hi {name}!"` |
-| Equal | `a is b`, `a is equal to b`, `a == b` |
+| Equal | `a is b`, `a is equal to b`, `a == b` (lists and maps: same items; kinds' objects: the same object) |
 | Not equal | `a is not b`, `a != b` |
 | Greater | `a is above b`, `a is greater than b`, `a > b` |
 | Less | `a is below b`, `a is less than b`, `a < b` |

@@ -9,7 +9,6 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Scene/Components.h"
-#include "Bellows/Scripting/ForgeScriptBindings.h"
 
 #include <TextEditor.h>
 #include <languages/TextEditorC.h>
@@ -209,7 +208,7 @@ namespace Bellows {
 		: m_Editor(editor)
 	{
 		// The checker must know the engine API, or every engine call would be reported as a mistake.
-		SetForgeScriptCheckSetup(Scripting::RegisterForgeScriptApi);
+		SetForgeScriptCheckSetup(SetUpEngineForgeScriptCheck);
 	}
 
 	ScriptEditorPanel::~ScriptEditorPanel() = default;

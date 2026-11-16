@@ -52,6 +52,9 @@ namespace ForgeScript {
 			return true;
 		}
 
+		// Identity for lists, maps and objects (the same one), contents for numbers, text and vectors.
+		// This is what map keys use, so a key stays findable even if a list used as a key changes.
+		// Scripts' 'is' compares contents; see ContentsEqual.
 		bool operator==(const Value& other) const;
 		bool operator!=(const Value& other) const { return !(*this == other); }
 
@@ -69,6 +72,11 @@ namespace ForgeScript {
 	{
 		size_t operator()(const Value& value) const;
 	};
+
+	// What 'is' means in scripts: like operator==, but lists are equal when they hold equal items in
+	// the same order, and maps when they have the same keys with equal values (in any order). Nested
+	// lists and maps are compared the same way; lists that contain themselves are handled safely.
+	bool ContentsEqual(const Value& a, const Value& b);
 
 	// Formats a number the way ForgeScript prints it: whole numbers have no ".0".
 	std::string FormatNumber(double number);

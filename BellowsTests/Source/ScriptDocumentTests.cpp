@@ -1,8 +1,10 @@
 #include <doctest/doctest.h>
 
 #include "ScriptDocument.h"
+#include "TestUtilities.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
@@ -262,4 +264,22 @@ TEST_CASE("Check results are formatted for tools like forgescript --check")
 
 	const Json clean = Json::parse(FormatScriptDiagnosticsJson("Scripts/Good.forge", "say 1\n", {}));
 	CHECK(clean["diagnostics"].empty());
+}
+
+TEST_CASE("The Script Editor's check reads scripts pulled in with use, from the asset folder")
+{
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "CheckUse" / "Assets";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Helpers.forge", "phrase spin (thing) by (amount)\n\treturn amount\nend\n"));
+	AssetManager::SetAssetDirectory(assets);
+	SetForgeScriptCheckSetup(SetUpEngineForgeScriptCheck);
+
+	const std::string source = "use \"Scripts/Helpers\"\nspin 1 by 3\n";
+	CHECK(CheckScript(ScriptLanguage::ForgeScript, source, "Main.forge").empty());
+
+	// An edited helper is read again on the next check, not taken from a cache.
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Helpers.forge", "phrase turn (thing) by (amount)\n\treturn amount\nend\n"));
+	CHECK_FALSE(CheckScript(ScriptLanguage::ForgeScript, source, "Main.forge").empty());
+
+	SetForgeScriptCheckSetup(nullptr);
+	AssetManager::SetAssetDirectory({});
 }

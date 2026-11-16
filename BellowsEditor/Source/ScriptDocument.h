@@ -83,4 +83,8 @@ namespace Bellows {
 	using ForgeScriptCheckSetup = void(*)(ForgeScript::VM& vm);
 	void SetForgeScriptCheckSetup(ForgeScriptCheckSetup setup);
 
+	// The setup the editor and `BellowsEditor --check-script` use: the engine API, and 'use' scripts
+	// read from the project's asset folder (AssetManager's), exactly like the game does.
+	void SetUpEngineForgeScriptCheck(ForgeScript::VM& vm);
+
 }
