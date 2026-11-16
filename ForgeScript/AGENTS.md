@@ -31,7 +31,7 @@ A change is done only when it builds with warnings as errors, every test passes 
 ## How the pieces fit
 
 1. **Lexer** (`Compiler/Lexer.cpp`) turns text into tokens. New lines end statements, except inside `( ) [ ] { }`, but they matter again inside a `function ... end` written within brackets.
-2. **Compiler** (`Compiler/Compiler.cpp`) is a single-pass compiler that emits bytecode (`Core/Chunk.h`). It pre-scans for phrases, script-level names and hoisted `function`/`phrase` definitions, and stops at the first error with a friendly message.
+2. **Compiler** (`Compiler/Compiler.cpp`) is a single-pass compiler that emits bytecode (`Core/Chunk.h`). It pre-scans for phrases, script-level names and hoisted `function`/`phrase` definitions, and stops at the first error with a friendly message. For checkers (`VM::FindMistakes`, `forgescript --check`) it can instead record a mistake, restore its state (`RecoverableUnit`) and continue after the statement (`EndOfUnit`); any new compiler state that a statement changes must be restored there too.
 3. **VM** (`VM/VM.cpp`) runs bytecode in **tasks** (coroutines, `VM/Task.h`). Every `when` handler and `start` is a task. `wait` suspends a task; `VM::Update` resumes it.
 4. **Library** (`VM/Library.cpp`) holds built-in functions, phrases and methods for text, lists, maps and vectors.
 5. **Garbage collector** (mark and sweep, in `VM.cpp`) runs only at instruction boundaries.
@@ -82,6 +82,7 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 - Scripts used with `use` live in `Tests/Scripts/modules/`.
 - C++ tests are doctest `TEST_CASE`s; `Tests/Source/TestFramework.h` adds `RunScript` and `CHECK_CONTAINS`.
 - `Examples/EngineIntegration` runs as a test too; keep it working, since it is the reference for engine integration.
+- `Tests/CLI/CheckCommand.cmake` pins the exact `forgescript --check` output and exit codes (text and JSON). Editors and MageCap Forge parse them, so change them only on purpose, together with `BellowsEditor --check-script`.
 
 ## Commits
 
