@@ -168,3 +168,20 @@ TEST_CASE("FindMistakesAgreesWithCheckOnDamagedScripts")
 	}
 	CHECK(damaged > 500);
 }
+
+TEST_CASE("CheckReportsScriptsThatCannotBeFound")
+{
+	VM vm;
+	UseTestModules(vm);
+	CompileError error;
+	CHECK(vm.Check("use \"helpers\"\n", "uses.forge", error));
+	CHECK_FALSE(vm.Check("say 1\nuse \"Scripts/Missing\"\n", "uses.forge", error));
+	CHECK_EQ(error.Line, 2);
+	CHECK_EQ(error.Message, std::string("Could not find the script \"Scripts/Missing\" to use."));
+
+	// Running is unchanged: the same message comes when the 'use' line runs.
+	std::string reported;
+	vm.SetErrorHandler([&reported](const ScriptError& e) { reported = e.Message; });
+	CHECK_FALSE(vm.Load("use \"Scripts/Missing\"\n", "run.forge").Success);
+	CHECK_EQ(reported, std::string("Could not find the script \"Scripts/Missing\" to use."));
+}

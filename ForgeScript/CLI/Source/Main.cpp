@@ -38,7 +38,7 @@ namespace {
 		return true;
 	}
 
-	// "use "helpers"" looks for helpers.forge next to the script that is running.
+	// "use "helpers"" looks for helpers.forge in 'baseFolder' (see FindUseFolder).
 	void InstallFileLoader(ForgeScript::VM& vm, const std::filesystem::path& baseFolder)
 	{
 		vm.SetModuleLoader([baseFolder](const std::string& path, std::string& outName, std::string& outSource)
@@ -51,6 +51,53 @@ namespace {
 			outName = candidate.filename().string();
 			return true;
 		});
+	}
+
+	// Reads the "AssetDirectory" text setting from a MageCap Bellows .bproject file (JSON). Only this
+	// one value is needed, so a small scan keeps the tool free of a JSON library.
+	std::string ReadAssetDirectorySetting(const std::string& json)
+	{
+		const std::string key = "\"AssetDirectory\"";
+		size_t i = json.find(key);
+		if (i == std::string::npos)
+			return "Assets";
+		i += key.size();
+		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n' || json[i] == ':'))
+			i++;
+		if (i >= json.size() || json[i] != '"')
+			return "Assets";
+		std::string value;
+		for (i++; i < json.size() && json[i] != '"'; i++)
+		{
+			if (json[i] == '\\' && i + 1 < json.size())
+				i++;
+			value += json[i];
+		}
+		return value.empty() ? std::string("Assets") : value;
+	}
+
+	// Where 'use' looks for scripts. Inside a MageCap Bellows project (a folder with a .bproject file,
+	// found by walking up from the script) paths start at the project's asset folder, like the engine:
+	// use "Scripts/Helpers" means Assets/Scripts/Helpers.forge. Anywhere else, next to the script.
+	std::filesystem::path FindUseFolder(const std::string& fileName)
+	{
+		std::error_code error;
+		const std::filesystem::path script = std::filesystem::absolute(fileName, error).lexically_normal();
+		const std::filesystem::path scriptFolder = script.parent_path();
+		for (std::filesystem::path folder = scriptFolder; !folder.empty(); folder = folder.parent_path())
+		{
+			for (const auto& entry : std::filesystem::directory_iterator(folder, error))
+			{
+				if (entry.path().extension() != ".bproject")
+					continue;
+				std::string json;
+				ReadFile(entry.path(), json);
+				return folder / ReadAssetDirectorySetting(json);
+			}
+			if (folder == folder.parent_path())
+				break;
+		}
+		return scriptFolder.empty() ? std::filesystem::path(".") : scriptFolder;
 	}
 
 	void PrintUsage()
@@ -80,7 +127,7 @@ namespace {
 
 		ForgeScript::VM vm;
 		std::filesystem::path path(fileName);
-		InstallFileLoader(vm, path.has_parent_path() ? path.parent_path() : std::filesystem::path("."));
+		InstallFileLoader(vm, FindUseFolder(fileName));
 
 		bool hadError = false;
 		vm.SetErrorHandler([&hadError](const ForgeScript::ScriptError& error)
@@ -202,8 +249,8 @@ namespace {
 		const std::string fileName = options.FileName.empty() ? std::string("stdin") : options.FileName;
 		ForgeScript::VM vm;
 		std::filesystem::path path(fileName);
-		// "use" finds scripts next to the checked file, even when its text came from standard input.
-		InstallFileLoader(vm, path.has_parent_path() ? path.parent_path() : std::filesystem::path("."));
+		// "use" is resolved from the checked file's place, even when its text came from standard input.
+		InstallFileLoader(vm, FindUseFolder(fileName));
 		const std::vector<ForgeScript::CompileError> mistakes = vm.FindMistakes(source, path.filename().string());
 
 		if (options.Json)

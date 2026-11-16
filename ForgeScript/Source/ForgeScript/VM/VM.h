@@ -130,7 +130,8 @@ namespace ForgeScript {
 		LoadResult RunInModule(Module* module, std::string_view source, const std::string& fileName, const CompileOptions& options = CompileOptions());
 		// Convenience: creates a module and runs the code in it.
 		LoadResult Load(std::string_view source, const std::string& fileName);
-		// Checks code for mistakes without running it.
+		// Checks code for mistakes without running it, including a 'use' whose script the module
+		// loader cannot find. Reports the first mistake.
 		bool Check(std::string_view source, const std::string& fileName, CompileError& outError);
 		// Like Check, but reports every mistake it can find (sorted by line), not only the first.
 		std::vector<CompileError> FindMistakes(std::string_view source, const std::string& fileName);
