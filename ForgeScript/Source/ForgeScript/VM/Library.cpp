@@ -540,7 +540,7 @@ namespace ForgeScript {
 		RegisterMethod(ListMethods, "remove", 1, [selfList](CallContext& c)
 		{
 			std::vector<Value>& items = selfList(c)->Items;
-			auto it = std::find(items.begin(), items.end(), c.Arg(0));
+			auto it = std::find_if(items.begin(), items.end(), [&c](const Value& v) { return ContentsEqual(v, c.Arg(0)); });
 			if (it == items.end())
 				return Value::FromBool(false);
 			items.erase(it);
@@ -571,12 +571,12 @@ namespace ForgeScript {
 		RegisterMethod(ListMethods, "contains", 1, [selfList](CallContext& c)
 		{
 			const std::vector<Value>& items = selfList(c)->Items;
-			return Value::FromBool(std::find(items.begin(), items.end(), c.Arg(0)) != items.end());
+			return Value::FromBool(std::any_of(items.begin(), items.end(), [&c](const Value& v) { return ContentsEqual(v, c.Arg(0)); }));
 		});
 		RegisterMethod(ListMethods, "index_of", 1, [selfList](CallContext& c)
 		{
 			const std::vector<Value>& items = selfList(c)->Items;
-			auto it = std::find(items.begin(), items.end(), c.Arg(0));
+			auto it = std::find_if(items.begin(), items.end(), [&c](const Value& v) { return ContentsEqual(v, c.Arg(0)); });
 			if (it == items.end())
 				return Value();
 			return Value::FromNumber(static_cast<double>(it - items.begin() + 1));
