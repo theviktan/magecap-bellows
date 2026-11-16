@@ -300,8 +300,15 @@ if (!m_VM.Check(source, "enemy.forge", error))
 	ShowError(error.Line, error.Column, error.Message);
 ```
 
-- **Hot reload:** call `m_VM.ClearModuleCache()`, unload the entity's module, then attach the script again.
-- **Interactive console:** run typed lines in one module with `CompileOptions::Repl = true`, which prints the value of a line that is only an expression (see `ForgeScriptCLI/src/Main.cpp`).
+- **Settings for an inspector:** `ForgeScript::FindScriptVariables(source)` (`ForgeScript/Compiler/ScriptVariables.h`) lists the top-level `set name to <value>` lines whose value is a plain number, text, true/false, `vector(...)` or color list, with their line numbers, without running the script. Bellows shows these as Inspector fields and, when the entity starts, applies edited values with `m_VM.SetGlobal(module, name, value)` after `RunInModule` and before sending `created`.
+
+```cpp
+for (const ForgeScript::ScriptVariable& variable : ForgeScript::FindScriptVariables(source))
+	AddField(variable.Name, variable.Kind, variable.Number, variable.Text);
+```
+
+- **Hot reload:** call `m_VM.ClearModuleCache()`, unload the entity's module, then attach the script again. (Bellows simply makes a new VM each time play starts, which reads every script again.)
+- **Interactive console:** run typed lines in one module with `CompileOptions::Repl = true`, which prints the value of a line that is only an expression (see `ForgeScript/CLI/Source/Main.cpp`).
 - **Repeatable random numbers** for replays and tests: `m_VM.SetRandomSeed(1234);`
 
 ---

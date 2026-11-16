@@ -5,6 +5,7 @@
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
+#include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/Scripting/ScriptGlue.h"
 
 #include <pybind11/embed.h>
@@ -51,6 +52,8 @@ namespace Bellows {
 			std::unordered_map<UUID, ScriptInstance> Instances;
 			std::unordered_set<UUID> FailedEntities;
 			py::object ScriptBaseClass;
+			// Runs the .forge scripts; entities with Python scripts stay in Instances.
+			Scope<Scripting::ForgeScriptRuntime> ForgeScript;
 			uint32_t ErrorCount = 0;
 			std::string LastError;
 		};
@@ -201,6 +204,14 @@ namespace Bellows {
 			if (component.ScriptPath.empty())
 				return false;
 
+			if (Scripting::ForgeScriptRuntime::IsForgeScript(component.ScriptPath))
+			{
+				if (s_Data->ForgeScript->CreateInstance(entity))
+					return true;
+				s_Data->FailedEntities.insert(uuid);
+				return false;
+			}
+
 			try
 			{
 				py::object module = LoadScriptModule(component.ScriptPath);
@@ -245,6 +256,11 @@ namespace Bellows {
 		{
 			for (UUID uuid : created)
 			{
+				if (s_Data->ForgeScript->HasInstance(uuid))
+				{
+					s_Data->ForgeScript->CallCreated(uuid);
+					continue;
+				}
 				auto it = s_Data->Instances.find(uuid);
 				if (it == s_Data->Instances.end() || it->second.Created)
 					continue;
@@ -294,6 +310,7 @@ sys.stderr = _BellowsLogWriter(2)
 
 		Scripting::LinkBindings();
 		s_Data = new ScriptEngineData();
+		s_Data->ForgeScript = CreateScope<Scripting::ForgeScriptRuntime>(ReportError);
 		const std::filesystem::path engineModuleDirectory = s_EngineModuleDirectory.empty()
 			? Platform::GetExecutableDirectory() / "Python" : s_EngineModuleDirectory;
 
@@ -383,6 +400,7 @@ sys.stderr = _BellowsLogWriter(2)
 		if (!s_Data)
 			return;
 
+		s_Data->ForgeScript->Stop();
 		s_Data->Instances.clear();
 		s_Data->Modules.clear();
 		s_Data->ScriptBaseClass = py::object();
@@ -440,6 +458,7 @@ sys.stderr = _BellowsLogWriter(2)
 		Scripting::SetFrameTiming(0.0f, 0.0f, 0);
 		s_Data->Instances.clear();
 		s_Data->FailedEntities.clear();
+		s_Data->ForgeScript->Start();
 
 		// Make sure the project folder is importable and edited scripts are reloaded.
 		try
@@ -474,6 +493,7 @@ sys.stderr = _BellowsLogWriter(2)
 		}
 		s_Data->Instances.clear();
 		s_Data->FailedEntities.clear();
+		s_Data->ForgeScript->Stop();
 
 		// Run Python's garbage collector so script objects release resources now.
 		try
@@ -500,7 +520,7 @@ sys.stderr = _BellowsLogWriter(2)
 		{
 			Entity entity(handle, &scene);
 			const UUID uuid = entity.GetUUID();
-			if (!s_Data->Instances.contains(uuid) && !s_Data->FailedEntities.contains(uuid) && !scene.IsPendingDestroy(entity))
+			if (!s_Data->Instances.contains(uuid) && !s_Data->ForgeScript->HasInstance(uuid) && !s_Data->FailedEntities.contains(uuid) && !scene.IsPendingDestroy(entity))
 				pending.push_back(entity);
 		}
 
@@ -541,6 +561,8 @@ sys.stderr = _BellowsLogWriter(2)
 			if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
 				again->second.ErrorCount = instance.ErrorCount;
 		}
+
+		s_Data->ForgeScript->Update(scene, timestep);
 	}
 
 	void ScriptEngine::OnFixedUpdate(Scene& scene, float timestep)
@@ -567,6 +589,8 @@ sys.stderr = _BellowsLogWriter(2)
 			if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
 				again->second.ErrorCount = instance.ErrorCount;
 		}
+
+		s_Data->ForgeScript->FixedUpdate(scene, timestep);
 	}
 
 	void ScriptEngine::OnEntityDestroyed(Entity entity)
@@ -575,6 +599,11 @@ sys.stderr = _BellowsLogWriter(2)
 			return;
 
 		const UUID uuid = entity.GetUUID();
+		if (s_Data->ForgeScript->HasInstance(uuid))
+		{
+			s_Data->ForgeScript->EntityDestroyed(uuid);
+			return;
+		}
 		auto it = s_Data->Instances.find(uuid);
 		if (it == s_Data->Instances.end())
 			return;
@@ -592,6 +621,12 @@ sys.stderr = _BellowsLogWriter(2)
 
 		auto dispatch = [&](UUID self, UUID other)
 		{
+			if (s_Data->ForgeScript->HasInstance(self))
+			{
+				if (Entity otherEntity = scene.TryGetEntityByUUID(other))
+					s_Data->ForgeScript->Contact(self, otherEntity, event.Type);
+				return;
+			}
 			auto it = s_Data->Instances.find(self);
 			if (it == s_Data->Instances.end() || !it->second.Created)
 				return;
@@ -624,6 +659,8 @@ sys.stderr = _BellowsLogWriter(2)
 	{
 		if (!IsInitialized() || scriptPath.empty())
 			return false;
+		if (Scripting::ForgeScriptRuntime::IsForgeScript(scriptPath))
+			return s_Data->ForgeScript->GetScriptInfo(scriptPath, outInfo, s_Data->LastError);
 
 		try
 		{

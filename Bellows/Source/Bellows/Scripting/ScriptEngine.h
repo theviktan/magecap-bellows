@@ -29,12 +29,13 @@ namespace Bellows {
 		std::vector<ScriptFieldInfo> Fields;
 	};
 
-	// Embedded CPython runtime that runs game scripts.
+	// Runs game scripts: Python (embedded CPython) and ForgeScript (.forge, through ForgeScriptRuntime).
 	//
-	// Scripts are Python modules inside the project's asset folder. A script class derives from
+	// Python scripts are modules inside the project's asset folder. A script class derives from
 	// bellows.Script and implements any of: on_create, on_update(dt), on_fixed_update(dt), on_destroy,
 	// on_collision_enter(other), on_collision_exit(other), on_trigger_enter(other), on_trigger_exit(other).
-	// Script errors are logged with a traceback and never crash the engine.
+	// ForgeScript scripts handle the matching events with 'when' (see ForgeScriptRuntime.h).
+	// Script errors are logged with their location and never crash the engine.
 	class ScriptEngine
 	{
 	public:

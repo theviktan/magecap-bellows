@@ -7,9 +7,9 @@ Guidelines for AI agents (and humans) changing this repository. Read this first;
 
 MageCap Bellows is a small, production-quality 3D game engine for Windows and Linux:
 C++20, CMake, GLFW, NVRHI (Vulkan 1.3), EnTT, Jolt Physics, miniaudio, embedded CPython 3.13
-(pybind11), Dear ImGui. Games are scripted in Python, and ForgeScript (`ForgeScript/`, Bellows' own
-natural-language language) is becoming the flagship alternative; the editor is fully scriptable so
-agents can build games through it.
+(pybind11), Dear ImGui. Games are scripted in ForgeScript (`ForgeScript/`, Bellows' own
+natural-language language and its flagship) or Python, with one shared engine API; the editor is
+fully scriptable so agents can build games through it.
 
 | Folder | Contents |
 |--------|----------|
@@ -19,7 +19,7 @@ agents can build games through it.
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
 | `ForgeScript/` | The ForgeScript language (compiler, VM, standard library, `forgescript` tool, tests). Engine-independent, `namespace ForgeScript`; read `ForgeScript/AGENTS.md` before changing it. |
 | `Python/bellows/` | The Python package games import (`__init__.py`, `editor.py`). |
-| `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API. Rebuilt by `Tools/BuildFeatureTest.py`. |
+| `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons. |
 | `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), images. |
@@ -47,7 +47,7 @@ The tests:
 | `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor logic (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
-| `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.py` checks the entire Python API. |
+| `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
 | `BellowsEditorFeatureTest` | The same, in editor play mode. |
 
 Without a GPU, run on the Mesa software rasterizer:
@@ -60,9 +60,10 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
 1. **Stay inside this repository.** Do not read, copy from or reference other code on the
    machine. Third-party code comes in only as a submodule in `vendor/` with a compatible license,
    recorded in `ThirdPartyNotices.md`.
-2. **Everything is tested.** New engine behavior gets a doctest case; new Python API gets a check
-   in `FeatureTest.py` (and a line in `docs/ScriptingAPI.md`); new editor automation gets a check
-   in `EditorAutomationTest.py` (and `docs/EditorAutomation.md`). Bug fixes get a regression test.
+2. **Everything is tested.** New engine behavior gets a doctest case; new script API gets a check
+   in `FeatureTest.py` and, when ForgeScript uses it differently, `FeatureTest.forge` (and a line
+   in `docs/ScriptingAPI.md`); new editor automation gets a check in `EditorAutomationTest.py`
+   (and `docs/EditorAutomation.md`). Bug fixes get a regression test.
    All ctest suites must pass before committing.
 3. **Warnings are errors** (`BELLOWS_WARNINGS_AS_ERRORS`, on by default). Fix the cause; do not
    silence warnings in first-party code.
@@ -118,9 +119,10 @@ namespace Bellows {
 * Descriptor set *n* = NVRHI `registerSpace` *n* (`setRegisterSpaceAndDescriptorSet`). Set 0 is
   per-frame scene data, set 1 is per-material. Push constants are per-draw.
 * Entities are identified by `UUID` (persistent) and drawn with render ID = `entt` handle + 1
-  (0 = nothing, used by picking). Python holds `(sceneID, UUID)` handles, never pointers.
-* During play, `DestroyEntity` is deferred to the end of the frame; Python scripts may create and
-  destroy entities freely.
+  (0 = nothing, used by picking). Scripts (Python and ForgeScript) hold `(sceneID, UUID)` handles,
+  never pointers.
+* During play, `DestroyEntity` is deferred to the end of the frame; scripts may create and destroy
+  entities freely.
 * The editor serializes the edited scene for undo (one snapshot per committed change) and plays a
   copy (`Scene::Copy`), so play never modifies the edited scene.
 * Editor automation runs at a *frame boundary* (`EditorLayer::RunAtFrameBoundary`), which is the

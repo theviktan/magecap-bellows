@@ -9,6 +9,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scripting/ForgeScriptRuntime.h"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -472,7 +473,9 @@ namespace Bellows {
 		if (UI::BeginPropertyGrid("Script"))
 		{
 			UI::PropertyAsset("Script", c.ScriptPath, AssetType::Script);
-			UI::Property("Class", c.ClassName, "Leave empty to use the first bellows.Script class in the file");
+			// A ForgeScript file is one script, so only Python files have a class to choose.
+			if (!Scripting::ForgeScriptRuntime::IsForgeScript(c.ScriptPath))
+				UI::Property("Class", c.ClassName, "Leave empty to use the first bellows.Script class in the file");
 			UI::EndPropertyGrid();
 		}
 
