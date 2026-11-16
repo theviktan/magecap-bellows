@@ -12,6 +12,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Bellows::Scripting {
 
@@ -23,6 +24,8 @@ namespace Bellows::Scripting {
 	//   created, update (delta), physics update (delta), destroyed,
 	//   collided (other), collision ends (other), entered (other), exited (other),
 	//   reloaded (after hot reload).
+	// 'trigger' events reach every ForgeScript script directly and other languages through the script
+	// event hub (EmitScriptEvent), whose events from other languages reach ForgeScript's 'when' handlers.
 	class ForgeScriptRuntime
 	{
 	public:
@@ -30,6 +33,7 @@ namespace Bellows::Scripting {
 		using ErrorReporter = std::function<void(const std::string& context, const std::string& message)>;
 
 		explicit ForgeScriptRuntime(ErrorReporter reporter);
+		~ForgeScriptRuntime();
 
 		ForgeScriptRuntime(const ForgeScriptRuntime&) = delete;
 		ForgeScriptRuntime& operator=(const ForgeScriptRuntime&) = delete;
@@ -77,6 +81,8 @@ namespace Bellows::Scripting {
 		};
 
 		Scope<ForgeScript::VM> CreateMachine();
+		// Sends a ForgeScript 'trigger' to the other languages' scripts through the event hub.
+		void ForwardEvent(const std::string& event, const std::vector<ForgeScript::Value>& values);
 		// Runs a script's top level in a new module for 'entity'. Errors are reported; returns nullptr then.
 		ForgeScript::Module* LoadModule(Entity entity, const std::string& scriptPath, const std::string& source);
 		// Inspector values for the script's settings, except the names in 'keep'.
@@ -91,6 +97,8 @@ namespace Bellows::Scripting {
 		// Checks scripts for the Inspector outside play mode; never runs them.
 		Scope<ForgeScript::VM> m_CheckVM;
 		std::unordered_map<UUID, Instance> m_Instances;
+		ScriptEventListenerID m_EventListener = 0;
+		std::unordered_set<std::string> m_WarnedEvents;
 	};
 
 }

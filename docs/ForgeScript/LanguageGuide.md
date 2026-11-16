@@ -646,7 +646,17 @@ trigger hit with 25
 trigger score changed with 100, "bonus"
 ```
 
-Every matching `when` block runs. Missing values arrive as `nothing`; extra values are ignored.
+Every matching `when` block runs, right away, before the line after `trigger`. Missing values arrive as `nothing`; extra values are ignored.
+
+A `when` block may trigger events too, but one that keeps triggering itself (or two that trigger each other forever) is stopped after 64 levels, with an error on the `trigger` line of the deepest one:
+
+```forge
+when echo
+	trigger echo          # Error: The event 'echo' was triggered from inside 64 other events
+end
+```
+
+Give such handlers a way to stop, like a counter or a condition.
 
 ---
 

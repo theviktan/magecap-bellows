@@ -41,7 +41,8 @@ namespace ForgeScript {
 	using ErrorHandler = std::function<void(const ScriptError&)>;
 	// Given the text after "use", find the script. Return false if it does not exist.
 	using ModuleLoader = std::function<bool(const std::string& path, std::string& outName, std::string& outSource)>;
-	// Called by "trigger name with values". The default sends the event to the same script.
+	// Called by "trigger name with values". The default sends the event to the same script. A handler
+	// may throw RuntimeError: it becomes an error on the 'trigger' line, which scripts can catch.
 	using TriggerHandler = std::function<void(Module* source, const std::string& event, const std::vector<Value>& values)>;
 
 	class VM;
@@ -73,7 +74,8 @@ namespace ForgeScript {
 	{
 		// Stop runaway recursion with a clear error instead of a crash.
 		size_t MaxCallDepth = 512;
-		// Limit for built-in functions calling back into scripts (sort_by, map, to_text ...).
+		// Limit for built-in functions calling back into scripts (sort_by, map, to_text ...), and for
+		// 'trigger' inside 'when' handlers, which run inside the triggering line.
 		size_t MaxNestedCalls = 64;
 		// Garbage collection starts after this many bytes have been allocated.
 		size_t InitialGCThreshold = 1024 * 1024;

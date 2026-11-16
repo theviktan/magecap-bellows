@@ -356,6 +356,77 @@ namespace Bellows::Scripting {
 			physics->ApplyBodySettings(entity);
 	}
 
+	namespace {
+
+		struct EventListenerSlot
+		{
+			ScriptEventListenerID ID = 0;
+			ScriptEventListener Listener;
+		};
+
+		std::vector<EventListenerSlot> s_EventListeners;
+		ScriptEventListenerID s_NextEventListenerID = 1;
+		int s_EventDepth = 0;
+		constexpr int c_MaxEventDepth = 64;
+		// Events sent while one outer event runs. Two languages that both answer an event by sending it
+		// again double the work at every level, so a depth limit alone would still take forever.
+		int s_EventsInDispatch = 0;
+		constexpr int c_MaxEventsPerDispatch = 10000;
+
+	}
+
+	ScriptEventListenerID AddScriptEventListener(ScriptEventListener listener)
+	{
+		const ScriptEventListenerID id = s_NextEventListenerID++;
+		s_EventListeners.push_back({ id, std::move(listener) });
+		return id;
+	}
+
+	void RemoveScriptEventListener(ScriptEventListenerID id)
+	{
+		std::erase_if(s_EventListeners, [id](const EventListenerSlot& slot) { return slot.ID == id; });
+	}
+
+	void EmitScriptEvent(const std::string& name, const ScriptValueList& values, ScriptEventListenerID skip)
+	{
+		if (s_EventDepth >= c_MaxEventDepth)
+		{
+			throw ScriptValueError("The event '" + name + "' was sent from inside " + std::to_string(c_MaxEventDepth) +
+				" other events; scripts that answer each other's events need a way to stop");
+		}
+		if (s_EventDepth == 0)
+			s_EventsInDispatch = 0;
+		if (++s_EventsInDispatch > c_MaxEventsPerDispatch)
+		{
+			throw ScriptValueError("The event '" + name + "' is one of more than " + std::to_string(c_MaxEventsPerDispatch) +
+				" events sent while handling a single event; scripts that answer each other's events need a way to stop");
+		}
+
+		// Listeners may be added or removed while handling the event (a script that stops play mode),
+		// so deliver to the ones present now and skip any that are gone by their turn.
+		std::vector<ScriptEventListenerID> ids;
+		for (const EventListenerSlot& slot : s_EventListeners)
+		{
+			if (slot.ID != skip)
+				ids.push_back(slot.ID);
+		}
+
+		struct DepthGuard
+		{
+			DepthGuard() { s_EventDepth++; }
+			~DepthGuard() { s_EventDepth--; }
+		} depth;
+		for (ScriptEventListenerID id : ids)
+		{
+			auto it = std::find_if(s_EventListeners.begin(), s_EventListeners.end(), [id](const EventListenerSlot& slot) { return slot.ID == id; });
+			if (it == s_EventListeners.end())
+				continue;
+			// Copy it: the listener may remove itself while running.
+			const ScriptEventListener listener = it->Listener;
+			listener(name, values);
+		}
+	}
+
 	std::string RegisterRuntimeMaterial(const Ref<Material>& material)
 	{
 		const std::string path = "Runtime/Material_" + std::to_string(++s_RuntimeMaterialCounter);

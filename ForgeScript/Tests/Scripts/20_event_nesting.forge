@@ -1,0 +1,30 @@
+# A handler that triggers its own event stops with a clear error instead of crashing. The error
+# happens on the 'trigger' line of the deepest handler, so that is where 'try' catches it.
+
+set rounds to 0
+
+when echo
+	add 1 to rounds
+	try
+		trigger echo
+	catch problem
+		say problem
+	end
+end
+
+trigger echo
+# expect: The event 'echo' was triggered from inside 64 other events; when handlers that trigger each other need a way to stop.
+say rounds is above 50                 # expect: true
+
+# Without a 'try', the deepest handler reports the error and the game goes on.
+when shout
+	trigger shout
+end
+trigger shout
+# expect error: The event 'shout' was triggered from inside 64 other events
+
+# Events still work afterwards.
+when hello with who
+	say "hello {who}"
+end
+trigger hello with "again"             # expect: hello again

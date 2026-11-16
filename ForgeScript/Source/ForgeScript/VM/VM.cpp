@@ -2349,13 +2349,36 @@ namespace ForgeScript {
 				{
 					String* name = FORGESCRIPT_READ_STRING();
 					uint8_t count = FORGESCRIPT_READ_BYTE();
+					// Handlers run inside this call, so a handler that triggers its own event (or two that
+					// trigger each other) would use up the C++ stack: stop with an error the script can catch.
+					if (m_RunningTasks.size() >= m_Config.MaxNestedCalls)
+					{
+						FORGESCRIPT_FAIL("The event '" + name->Text + "' was triggered from inside " + std::to_string(m_Config.MaxNestedCalls) +
+							" other events; when handlers that trigger each other need a way to stop.");
+					}
 					std::vector<Value> values(stack.end() - count, stack.end());
 					Module* module = frame->Function->Fn->Owner;
 					// The values stay on this task's stack while the event runs, which keeps them alive.
 					if (m_TriggerHandler)
-						m_TriggerHandler(module, name->Text, values);
+					{
+						// A host handler reports problems (like events nested too deep) as RuntimeError: they
+						// become an error on this 'trigger' line, which scripts can catch.
+						std::string failure;
+						try
+						{
+							m_TriggerHandler(module, name->Text, values);
+						}
+						catch (const RuntimeError& error)
+						{
+							failure = error.what();
+						}
+						if (!failure.empty())
+							FORGESCRIPT_FAIL(failure);
+					}
 					else
+					{
 						Emit(module, name->Text, values);
+					}
 					stack.resize(stack.size() - count);
 					FORGESCRIPT_REFRESH();
 					break;
