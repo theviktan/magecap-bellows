@@ -1035,7 +1035,9 @@ namespace Bellows {
 		else
 		{
 			const ScriptDiagnostic& first = document.Diagnostics.front();
-			const std::string text = fmt::format(ICON_CIRCLE_X "  Line {}: {}", first.Line, first.Message);
+			std::string text = fmt::format(ICON_CIRCLE_X "  Line {}: {}", first.Line, first.Message);
+			if (document.Diagnostics.size() > 1)
+				text += fmt::format("  (+{} more)", document.Diagnostics.size() - 1);
 			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
 			ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
 			const float maxWidth = ImGui::GetContentRegionAvail().x - 300.0f * scale;

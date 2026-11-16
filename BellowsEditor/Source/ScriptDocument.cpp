@@ -223,15 +223,24 @@ class {Class}(bellows.Script):
 
 			// Scripts pulled in with 'use' may have been edited since the last check.
 			s_CheckVM->ClearModuleCache();
-			ForgeScript::CompileError error;
-			if (s_CheckVM->Check(source, fileName, error))
-				return {};
-
-			ScriptDiagnostic diagnostic;
-			diagnostic.Message = error.Message;
-			diagnostic.Line = error.Line > 0 ? static_cast<size_t>(error.Line) : 0;
-			diagnostic.Column = error.Column > 0 ? static_cast<size_t>(error.Column) : 0;
-			return { diagnostic };
+			std::vector<ScriptDiagnostic> diagnostics;
+			for (const ForgeScript::CompileError& error : s_CheckVM->FindMistakes(source, fileName))
+			{
+				ScriptDiagnostic diagnostic;
+				diagnostic.Message = error.Message;
+				if (error.File.empty() || error.File == fileName)
+				{
+					diagnostic.Line = error.Line > 0 ? static_cast<size_t>(error.Line) : 0;
+					diagnostic.Column = error.Column > 0 ? static_cast<size_t>(error.Column) : 0;
+				}
+				else
+				{
+					// A mistake inside a script pulled in with 'use': its line numbers belong to that file.
+					diagnostic.Message = error.File + " line " + std::to_string(error.Line) + ": " + error.Message;
+				}
+				diagnostics.push_back(std::move(diagnostic));
+			}
+			return diagnostics;
 		}
 
 		std::vector<ScriptDiagnostic> CheckPython(std::string_view source, const std::string& fileName)
