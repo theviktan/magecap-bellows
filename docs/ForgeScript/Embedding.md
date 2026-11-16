@@ -300,6 +300,8 @@ if (!m_VM.Check(source, "enemy.forge", error))
 	ShowError(error.Line, error.Column, error.Message);
 ```
 
+  `Check` also reports a `use` whose script your module loader cannot find (`Could not find the script "Scripts/Missing" to use.`), so set the same loader the game uses before checking. Call `m_VM.ClearModuleCache()` first if scripts may have changed on disk since the last check.
+
 - **Every mistake at once** (for an editor's problem list): `std::vector<ForgeScript::CompileError> mistakes = m_VM.FindMistakes(source, "enemy.forge");` returns all mistakes it can find, sorted by line, and includes the one `Check` reports. It also reports a `use` whose script your module loader cannot find, so set the loader first.
 - **Settings for an inspector:** `ForgeScript::FindScriptVariables(source)` (`ForgeScript/Compiler/ScriptVariables.h`) lists the top-level `set name to <value>` lines whose value is a plain number, text, true/false, `vector(...)` or color list, with their line numbers, without running the script. Bellows shows these as Inspector fields and, when the entity starts, applies edited values with `m_VM.SetGlobal(module, name, value)` after `RunInModule` and before sending `created`.
 

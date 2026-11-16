@@ -1798,14 +1798,19 @@ namespace ForgeScript {
 			if (!Check(TokenType::String))
 				ErrorAtCurrent("Expected the script name in quotes, like: use \"helpers\"");
 			std::string path = Current().Text;
-			// When looking for every mistake, a script that cannot be found is one too. A normal compile
-			// leaves this to the moment the script runs, which reports the same message.
-			if (m_AllErrors)
+			// When checking, a script that cannot be found is a mistake. A normal compile leaves this to
+			// the moment the script runs, which reports the same message.
+			if (m_Options.ReportMissingScripts)
 			{
 				std::string resolvedName;
 				std::string source;
 				if (!m_VM.ResolveModuleSource(path, resolvedName, source))
-					RecordError(Current(), "Could not find the script \"" + path + "\" to use.");
+				{
+					const std::string message = "Could not find the script \"" + path + "\" to use.";
+					if (!m_AllErrors)
+						ErrorAtCurrent(message);
+					RecordError(Current(), message);
+				}
 			}
 			Advance();
 			bool hasAlias = MatchWord("as");

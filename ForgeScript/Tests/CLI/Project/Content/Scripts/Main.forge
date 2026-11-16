@@ -1,0 +1,3 @@
+# In a project, "use" paths start at the asset folder (here "Content", set in Game.bproject).
+use "Scripts/Helpers"
+say double(21)

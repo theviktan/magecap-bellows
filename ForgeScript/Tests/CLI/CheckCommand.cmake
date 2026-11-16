@@ -46,3 +46,12 @@ expect_run("stdin in another folder" 65
 expect_run("missing file" 66 "Could not open '${FOLDER}/missing.forge'." ARGS --check "${FOLDER}/missing.forge")
 expect_run("json without check" 64 "--json and --stdin work together with --check." ARGS --json "${good}")
 expect_run("name without path" 64 "--name needs the script's path after it, like: --name Scripts/player.forge" ARGS --check --name)
+
+# Inside a MageCap Bellows project, "use" starts at the asset folder named in the .bproject file,
+# like the engine, so Content/Scripts/Main.forge can say use "Scripts/Helpers".
+set(project "${FOLDER}/Project")
+expect_run("project use" 0 "${project}/Content/Scripts/Main.forge: no mistakes found."
+	ARGS --check "${project}/Content/Scripts/Main.forge")
+expect_run("project stdin" 0 "{\"file\":\"${project}/Content/Scripts/Unsaved.forge\",\"diagnostics\":[]}"
+	ARGS --check --json --stdin --name "${project}/Content/Scripts/Unsaved.forge" INPUT "${project}/Content/Scripts/Main.forge")
+expect_run("project run" 0 "42" ARGS "${project}/Content/Scripts/Main.forge")

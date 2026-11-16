@@ -24,6 +24,9 @@ namespace ForgeScript {
 	{
 		// In the interactive prompt, a line that is just a value prints that value.
 		bool Repl = false;
+		// Treat a 'use' whose script the module loader cannot find as a mistake now, instead of
+		// when the script runs. Checkers (VM::Check, VM::FindMistakes) turn this on.
+		bool ReportMissingScripts = false;
 	};
 
 	// Compiles ForgeScript source code into a top-level function that belongs to the given module.
