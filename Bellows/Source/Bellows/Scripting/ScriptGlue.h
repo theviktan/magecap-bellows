@@ -14,4 +14,9 @@ namespace Bellows::Scripting {
 	// Forces the binding translation unit into the link (static library).
 	void LinkBindings();
 
+	// Script event values in Python: None, bool, float, str, Vec3, Entity, list and dict (text keys).
+	pybind11::object ScriptValueToPython(const ScriptValue& value);
+	// The reverse; int becomes a number, tuple a list. Throws ScriptValueError naming any other type.
+	ScriptValue ScriptValueFromPython(const pybind11::handle& value);
+
 }

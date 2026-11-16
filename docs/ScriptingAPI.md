@@ -64,6 +64,7 @@ Derive from `bellows.Script`. The engine sets `self.entity` before any callback 
 | `on_destroy(self)` | When the entity is destroyed or play stops. |
 | `on_collision_enter(self, other)` / `on_collision_exit(self, other)` | Started/stopped touching `other` (an `Entity`). Both bodies need colliders; at least one must be dynamic. |
 | `on_trigger_enter(self, other)` / `on_trigger_exit(self, other)` | `other` entered/left this trigger, or this entity entered/left a trigger. |
+| `on_event(self, name, *values)` | An event sent by any script with `bellows.emit` (Python) or `trigger` (ForgeScript), this one included. |
 | `on_reload(self)` | After the script's file was saved during play and its new code took over (hot reload, below). |
 
 **Exposed fields.** Class attributes with a type annotation of `bool`, `int`, `float`, `str`,
@@ -124,6 +125,7 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | `gamepad_connected()` | True while a gamepad is connected. |
 | `save_screenshot(path="", max_width=1920)` | Saves what the player sees (the game camera's image, never editor overlays) and returns the file's full path. PNG, or JPEG (quality 85) for `.jpg`/`.jpeg`. `""` names it `Screenshots/<scene>-<date>-<time>.png`; relative paths are inside `user_folder()`; missing folders are created. A wider image is scaled down to `max_width` (0 keeps the full size). Raises `ValueError` before anything is drawn, for other formats, or when the file can't be written. |
 | `user_folder()` | The game's own writable folder for saves, screenshots and reports: `%APPDATA%\MageCapBellows\Games\<project name>` on Windows, `~/.local/share/MageCapBellows/Games/<project name>` on Linux (`$XDG_DATA_HOME` if set; `BELLOWS_USER_DATA_DIR` overrides the base folder). |
+| `emit(name, *values)` | Sends an event to every running script, right away and in the order the scripts were created: Python's `on_event(self, name, *values)` and ForgeScript's `when <name> with ...`. Values: `None`, bools, numbers (they arrive as floats), `str`, `Vec3`, `Entity`, lists and dicts with text keys; anything else raises `ValueError`. Events that keep answering each other stop with a `ValueError` after 64 levels. Python only (ForgeScript uses `trigger`). |
 | `log(*values)` / `log_warning(*values)` / `log_error(*values)` | Write to the Console (values are joined with spaces). `print()` also goes to the Console. |
 
 In the editor, game input is only delivered while the Viewport has focus during play.
@@ -312,8 +314,9 @@ engine sends these events, which the script handles with `when`:
   waiting tasks continue each frame.
 - **Talking to other scripts.** `trigger door opened with self` reaches the matching `when` handlers
   of every running script, including the sender's, right away. It also goes to the engine's script
-  event hub (`EmitScriptEvent` in `Scripting/ScriptApi.h`), which other languages' scripts listen to
-  once connected, and events sent through the hub reach ForgeScript's `when` handlers. Values cross
+  event hub (`EmitScriptEvent` in `Scripting/ScriptApi.h`), so Python scripts receive it in
+  `on_event(self, name, *values)`, and `bellows.emit(name, *values)` from Python reaches ForgeScript's
+  `when` handlers. Values cross
   languages as nothing, true/false, numbers, text, vectors, entities, lists and maps with text keys;
   anything else (a function, a kind's object) arrives as nothing in the other language, with one
   Console warning per event name. Events that keep answering each other stop with an error after
