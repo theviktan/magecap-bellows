@@ -62,3 +62,7 @@
 	path = vendor/portable-file-dialogs
 	url = https://github.com/samhocevar/portable-file-dialogs
 	shallow = true
+[submodule "vendor/ImGuiColorTextEdit"]
+	path = vendor/ImGuiColorTextEdit
+	url = https://github.com/goossens/ImGuiColorTextEdit.git
+	shallow = true

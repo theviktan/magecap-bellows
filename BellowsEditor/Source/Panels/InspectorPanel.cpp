@@ -5,10 +5,10 @@
 #include "EditorUI.h"
 #include "IconsLucide.h"
 #include "Panels/ContentBrowserPanel.h"
+#include "Panels/ScriptEditorPanel.h"
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
-#include "Bellows/Core/Platform.h"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -478,9 +478,13 @@ namespace Bellows {
 
 		if (c.ScriptPath.empty())
 		{
-			UI::TextMuted("Choose a Python script (drag one from the Content panel).");
+			UI::TextMuted("Choose a script (drag one from the Content panel).");
 			return;
 		}
+
+		// Shown before the script loads, so a script with a mistake can still be opened and fixed.
+		if (ImGui::Button(ICON_FILE_CODE "  Open in Script Editor", ImVec2(-FLT_MIN, 0.0f)))
+			m_Editor.GetScriptEditor().OpenScript(c.ScriptPath);
 
 		const ScriptClassInfo* info = GetScriptInfo(c.ScriptPath, c.ClassName);
 		if (!info)
@@ -528,9 +532,6 @@ namespace Bellows {
 		{
 			return std::none_of(info->Fields.begin(), info->Fields.end(), [&](const ScriptFieldInfo& field) { return field.Name == entry.first; });
 		});
-
-		if (ImGui::Button(ICON_EXTERNAL_LINK "  Open Script", ImVec2(-FLT_MIN, 0.0f)))
-			Platform::OpenWithDefaultApplication(AssetManager::GetAbsolutePath(c.ScriptPath));
 	}
 
 	void InspectorPanel::DrawAddComponentMenu(Entity entity)

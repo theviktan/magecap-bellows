@@ -24,7 +24,8 @@ ICONS = [
     "ellipsis-vertical", "circle-check", "filter", "arrow-up", "maximize-2", "minimize-2", "palette", "shapes",
     "sparkles", "pencil", "rocket", "bot", "folder-input", "external-link", "scroll-text", "aperture", "focus",
     "crosshair", "flashlight", "cone", "cylinder", "panel-left", "layout-grid", "activity", "gauge", "arrow-left",
-    "moon", "circle-dot", "clapperboard",
+    "moon", "circle-dot", "clapperboard", "square-function", "book-open", "paperclip", "unlink", "file-text",
+    "save-all",
 ]
 
 def main():

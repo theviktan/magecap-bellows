@@ -103,6 +103,12 @@ target_compile_definitions(BellowsImGui PUBLIC IMGUI_DEFINE_MATH_OPERATORS IMGUI
 target_link_libraries(BellowsImGui PUBLIC glfw)
 target_compile_definitions(BellowsImGui PRIVATE GLFW_INCLUDE_NONE)
 
+# --- Code editor widget (ImGuiColorTextEdit, MIT) ------------------------------
+add_library(BellowsTextEditor STATIC ImGuiColorTextEdit/TextEditor.cpp)
+target_include_directories(BellowsTextEditor SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/ImGuiColorTextEdit")
+target_link_libraries(BellowsTextEditor PUBLIC BellowsImGui)
+target_compile_features(BellowsTextEditor PUBLIC cxx_std_17)
+
 # --- Single-header libraries --------------------------------------------------
 add_library(BellowsHeaderLibs INTERFACE)
 target_include_directories(BellowsHeaderLibs SYSTEM INTERFACE

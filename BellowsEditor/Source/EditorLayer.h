@@ -27,12 +27,20 @@ namespace Bellows {
 	class ConsolePanel;
 	class SettingsPanel;
 	class StatisticsPanel;
+	class ScriptEditorPanel;
 
 	enum class SceneState : uint8_t
 	{
 		Edit = 0,
 		Play,
 		Pause,
+	};
+
+	// The main areas of the editor, switched from the toolbar like Godot's 2D/3D/Script buttons.
+	enum class Workspace : uint8_t
+	{
+		Scene = 0,	// The 3D viewport
+		Script		// The built-in Script Editor
 	};
 
 	enum class GizmoMode : uint8_t
@@ -110,6 +118,9 @@ namespace Bellows {
 		void DuplicateSelection();
 		void FocusSelection();
 		bool SavePrefab(Entity entity, const std::string& assetPath);
+		// Gives the entity a Script component running 'scriptPath' (.forge or .py), replacing any script it had.
+		bool AttachScript(Entity entity, const std::string& scriptPath);
+		void DetachScript(Entity entity);
 
 		// Undo: call CommitChange after any change to the edited scene.
 		void CommitChange(const std::string& description);
@@ -125,6 +136,11 @@ namespace Bellows {
 		void SetViewportSizeOverride(uint32_t width, uint32_t height);
 		GizmoMode GetGizmoMode() const { return m_GizmoMode; }
 		bool IsUsingGameCamera() const;
+
+		// Workspaces and the Script Editor ----------------------------------
+		void SetWorkspace(Workspace workspace);
+		Workspace GetWorkspace() const;
+		ScriptEditorPanel& GetScriptEditor() { return *m_ScriptEditorPanel; }
 
 		// Build and settings -------------------------------------------------
 		ExportResult ExportGame(const std::filesystem::path& outputDirectory);
@@ -210,6 +226,9 @@ namespace Bellows {
 		Scope<ConsolePanel> m_ConsolePanel;
 		Scope<SettingsPanel> m_SettingsPanel;
 		Scope<StatisticsPanel> m_StatisticsPanel;
+		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
+		bool m_ViewportVisible = false;
+		bool m_FocusViewport = false;
 
 		// Dialog state
 		bool m_ShowNewProjectDialog = false;

@@ -108,3 +108,9 @@
 #define ICON_MOON                        "\xee\x84\x9e"	// U+E11E
 #define ICON_CIRCLE_DOT                  "\xee\x8d\x85"	// U+E345
 #define ICON_CLAPPERBOARD                "\xee\x8a\x9b"	// U+E29B
+#define ICON_SQUARE_FUNCTION             "\xee\x88\xad"	// U+E22D
+#define ICON_BOOK_OPEN                   "\xee\x81\x9f"	// U+E05F
+#define ICON_PAPERCLIP                   "\xee\x84\xad"	// U+E12D
+#define ICON_UNLINK                      "\xee\x86\x9c"	// U+E19C
+#define ICON_FILE_TEXT                   "\xee\x83\x8c"	// U+E0CC
+#define ICON_SAVE_ALL                    "\xee\x90\x8f"	// U+E40F

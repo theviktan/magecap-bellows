@@ -7,6 +7,7 @@
 #include "Panels/ContentBrowserPanel.h"
 #include "Panels/InspectorPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
+#include "Panels/ScriptEditorPanel.h"
 #include "Panels/SettingsPanel.h"
 #include "Panels/StatisticsPanel.h"
 
@@ -99,6 +100,7 @@ namespace Bellows {
 		m_ConsolePanel = CreateScope<ConsolePanel>(*this);
 		m_SettingsPanel = CreateScope<SettingsPanel>(*this);
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
+		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
 
 		ScriptEngine::SetQuitHandler([this](int exitCode)
 		{
@@ -133,6 +135,7 @@ namespace Bellows {
 	{
 		if (m_SceneState != SceneState::Edit)
 			Stop();
+		m_ScriptEditorPanel->SaveAll();
 		m_AgentServer.Stop();
 		SaveLayout();
 		m_Settings.CameraSpeed = m_Camera.GetFlySpeed();
@@ -180,6 +183,7 @@ namespace Bellows {
 	{
 		if (m_SceneState != SceneState::Edit)
 			Stop();
+		m_ScriptEditorPanel->SaveAll();
 
 		Ref<Project> project = Project::Load(path);
 		if (!project)
@@ -193,6 +197,7 @@ namespace Bellows {
 		FileSystem::CreateDirectories(project->GetEditorDataDirectory());
 
 		m_ContentBrowserPanel->SetCurrentDirectory(project->GetAssetDirectory());
+		m_ScriptEditorPanel->CloseAll();
 
 		const std::string startScene = project->GetConfig().StartScene;
 		if (!startScene.empty() && AssetManager::Exists(startScene))
@@ -392,6 +397,8 @@ namespace Bellows {
 		if (!m_EditorScene || m_SceneState != SceneState::Edit)
 			return;
 		CommitChange("Edit");
+		// Scripts load from disk, so the game runs what is in the Script Editor.
+		m_ScriptEditorPanel->SaveAll();
 
 		m_RuntimeScene = Scene::Copy(m_EditorScene);
 		m_RuntimeScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));
@@ -581,6 +588,31 @@ namespace Bellows {
 		if (!bounds.IsValid())
 			bounds = AABB(glm::vec3(world[3]) - 0.5f, glm::vec3(world[3]) + 0.5f);
 		m_Camera.Focus(bounds.GetCenter(), glm::length(bounds.GetExtents()));
+	}
+
+	bool EditorLayer::AttachScript(Entity entity, const std::string& scriptPath)
+	{
+		if (!entity || m_SceneState != SceneState::Edit)
+			return false;
+		if (AssetManager::GetAssetType(scriptPath) != AssetType::Script)
+		{
+			BW_ERROR("'{}' is not a script (.forge or .py)", scriptPath);
+			return false;
+		}
+		ScriptComponent& script = entity.AddOrReplaceComponent<ScriptComponent>();
+		script.ScriptPath = scriptPath;
+		script.ClassName.clear();
+		script.Fields.clear();
+		CommitChange("Attach Script");
+		return true;
+	}
+
+	void EditorLayer::DetachScript(Entity entity)
+	{
+		if (!entity || m_SceneState != SceneState::Edit || !entity.HasComponent<ScriptComponent>())
+			return;
+		entity.RemoveComponent<ScriptComponent>();
+		CommitChange("Detach Script");
 	}
 
 	bool EditorLayer::SavePrefab(Entity entity, const std::string& assetPath)
@@ -1017,6 +1049,14 @@ namespace Bellows {
 		const bool ctrl = io.KeyCtrl;
 		const bool shift = io.KeyShift;
 
+		// The Script Editor handles its own editing keys (save, undo, ...); only play mode passes through.
+		if (m_ScriptEditorPanel->IsFocused())
+		{
+			if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P, false))
+				m_SceneState == SceneState::Edit ? Play() : Stop();
+			return;
+		}
+
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false))
 		{
 			if (shift)
@@ -1116,6 +1156,7 @@ namespace Bellows {
 		if (m_ShowStatistics)
 			m_StatisticsPanel->OnImGuiRender(&m_ShowStatistics);
 		DrawViewport();
+		m_ScriptEditorPanel->OnImGuiRender();
 		DrawDialogs();
 		if (m_ShowDemoWindow)
 			ImGui::ShowDemoWindow(&m_ShowDemoWindow);
@@ -1129,6 +1170,19 @@ namespace Bellows {
 		m_WasEditingWidget = editing;
 
 		UpdateWindowTitle();
+	}
+
+	void EditorLayer::SetWorkspace(Workspace workspace)
+	{
+		if (workspace == Workspace::Script)
+			m_ScriptEditorPanel->Focus();
+		else
+			m_FocusViewport = true;
+	}
+
+	Workspace EditorLayer::GetWorkspace() const
+	{
+		return m_ScriptEditorPanel->IsVisible() && !m_ViewportVisible ? Workspace::Script : Workspace::Scene;
 	}
 
 	void EditorLayer::BuildDefaultLayout(unsigned int dockspaceID)
@@ -1149,10 +1203,10 @@ namespace Bellows {
 		ImGui::DockBuilderDockWindow("Content", bottom);
 		ImGui::DockBuilderDockWindow("Console", bottom);
 		ImGui::DockBuilderDockWindow("Viewport", center);
+		ImGui::DockBuilderDockWindow(ScriptEditorPanel::WindowName, center);
 		ImGui::DockBuilderFinish(dockspaceID);
 
-		if (ImGuiDockNode* node = ImGui::DockBuilderGetNode(center))
-			node->LocalFlags |= ImGuiDockNodeFlags_NoTabBar;
+		SetWorkspace(Workspace::Scene);
 		ImGui::SetWindowFocus("Inspector");
 		ImGui::SetWindowFocus("Content");
 	}
@@ -1208,6 +1262,8 @@ namespace Bellows {
 				m_DialogPath = m_ScenePath.empty() ? "Scenes/NewScene.bscene" : m_ScenePath;
 				m_ShowSaveSceneAsDialog = true;
 			}
+			if (ImGui::MenuItem(ICON_FILE_CODE "  New Script..."))
+				m_ScriptEditorPanel->ShowCreateDialog();
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_ROCKET "  Export Game..."))
 			{
@@ -1281,8 +1337,8 @@ namespace Bellows {
 
 		if (ImGui::BeginMenu("Help"))
 		{
-			if (ImGui::MenuItem(ICON_SCROLL_TEXT "  Scripting Reference"))
-				Platform::OpenWithDefaultApplication(Platform::GetExecutableDirectory() / "Python" / "bellows" / "__init__.py");
+			m_ScriptEditorPanel->DrawHelpMenuItems();
+			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_INFO "  About MageCap Bellows"))
 				m_ShowAboutDialog = true;
 			ImGui::EndMenu();
@@ -1309,6 +1365,22 @@ namespace Bellows {
 		const float buttonSize = ImGui::GetFrameHeight();
 		const float spacing = 4.0f * scale;
 		const float totalWidth = buttonSize * 3.0f + spacing * 2.0f;
+
+		// Workspace switcher on the left.
+		const Workspace workspace = GetWorkspace();
+		ImGui::SetCursorPos(ImVec2(10.0f * scale, 5.0f * scale));
+		struct WorkspaceButton { const char* Label; const char* Tooltip; Workspace Target; };
+		const WorkspaceButton workspaceButtons[] = {
+			{ ICON_BOX "  Scene", "The 3D scene and viewport", Workspace::Scene },
+			{ ICON_CODE "  Script", "The Script Editor for ForgeScript and Python", Workspace::Script },
+		};
+		for (const WorkspaceButton& button : workspaceButtons)
+		{
+			const ImVec2 size(ImGui::CalcTextSize(button.Label).x + 22.0f * scale, buttonSize);
+			if (UI::IconButton(button.Label, button.Tooltip, workspace == button.Target, size))
+				SetWorkspace(button.Target);
+			ImGui::SameLine(0.0f, spacing);
+		}
 		ImGui::SetCursorPos(ImVec2((ImGui::GetWindowWidth() - totalWidth) * 0.5f, 5.0f * scale));
 
 		const bool editing = m_SceneState == SceneState::Edit;
@@ -1383,8 +1455,14 @@ namespace Bellows {
 	void EditorLayer::DrawViewport()
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		if (m_FocusViewport)
+		{
+			ImGui::SetNextWindowFocus();
+			m_FocusViewport = false;
+		}
 		const bool visible = ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		ImGui::PopStyleVar();
+		m_ViewportVisible = visible;
 		if (!visible)
 		{
 			m_ViewportFocused = false;
