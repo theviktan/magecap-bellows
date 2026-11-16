@@ -5,6 +5,8 @@
 #include "EditorUI.h"
 #include "IconsLucide.h"
 
+#include "Bellows/Audio/AudioEngine.h"
+
 #include <imgui.h>
 
 namespace Bellows {
@@ -148,6 +150,21 @@ namespace Bellows {
 			changed |= UI::Property("Height", config.WindowHeight, 240u, 4320u);
 			changed |= UI::Property("Fullscreen", config.Fullscreen);
 			changed |= UI::Property("VSync", config.VSync);
+			UI::EndPropertyGrid();
+		}
+		UI::SectionHeader("Audio buses");
+		if (UI::BeginPropertyGrid("ProjectAudio"))
+		{
+			for (const std::string& bus : AudioEngine::GetBusNames())
+			{
+				float& volume = config.BusVolumes[bus];
+				if (UI::PropertySlider(bus.c_str(), volume, 0.0f, 1.0f, "%.2f", "Starting volume of this bus in the game"))
+				{
+					changed = true;
+					// Heard right away in the editor, too.
+					AudioEngine::SetBusVolume(bus, volume);
+				}
+			}
 			UI::EndPropertyGrid();
 		}
 		m_ProjectDirty |= changed;

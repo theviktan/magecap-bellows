@@ -161,6 +161,11 @@ class AudioSource:
     def max_distance(self) -> float: ...
     @max_distance.setter
     def max_distance(self, value: float) -> None: ...
+    @property
+    def bus(self) -> str:
+        """The bus the source plays on: 'Master', 'Music' or 'Effects'"""
+    @bus.setter
+    def bus(self, value: str) -> None: ...
     def play(self) -> bool: ...
     def stop(self) -> None: ...
     def pause(self) -> None: ...
@@ -892,6 +897,9 @@ class Vec4:
     def __repr__(self) -> str: ...
 
 
+def bus_names() -> list[str]:
+    """The audio buses: Master, Music, Effects"""
+
 def clamp(value: float, low: float, high: float) -> float: ...
 
 def create_entity(name: str = 'Entity', parent: Entity | None = None) -> Entity:
@@ -907,6 +915,8 @@ def find_entity(name: str) -> Entity | None: ...
 def frame() -> int:
     """Frames since play started"""
 
+def get_bus_volume(bus: str) -> float: ...
+
 def get_entities(component: str | type | None = None) -> list[Entity]:
     """All entities (optionally only those with a component), in hierarchy order"""
 
@@ -918,6 +928,8 @@ def get_master_volume() -> float: ...
 
 def instantiate(prefab: str, position: Vec3 | typing.Sequence[float] | None = None, parent: Entity | None = None) -> Entity:
     """Spawns a .bprefab and returns its root entity"""
+
+def is_bus_muted(bus: str) -> bool: ...
 
 def is_key_down(key: Key | str) -> bool:
     """True while the key is held"""
@@ -954,7 +966,7 @@ def mouse_delta() -> Vec2:
 def mouse_position() -> Vec2:
     """Mouse position in viewport pixels (top-left origin)"""
 
-def play_sound(path: str, volume: float = 1.0) -> bool:
+def play_sound(path: str, volume: float = 1.0, bus: str = 'Effects') -> bool:
     """Plays a one-shot 2D sound"""
 
 def primary_camera() -> Entity | None: ...
@@ -972,6 +984,12 @@ def screen_to_world_ray(screen_position: Vec2 | typing.Sequence[float]) -> tuple
 
 def scroll_delta() -> Vec2:
     """Scroll wheel movement this frame"""
+
+def set_bus_muted(bus: str, muted: bool = True) -> None:
+    """Mutes or unmutes a bus; its volume is kept"""
+
+def set_bus_volume(bus: str, volume: float) -> None:
+    """Sets a bus's volume (1 = normal, 0 = silent)"""
 
 def set_gravity(gravity: Vec3 | typing.Sequence[float]) -> None: ...
 

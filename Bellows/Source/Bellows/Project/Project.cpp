@@ -2,6 +2,7 @@
 #include "Bellows/Project/Project.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/SceneSerializer.h"
@@ -144,10 +145,25 @@ namespace Bellows {
 			JsonRead(*it, "Fullscreen", config.Fullscreen);
 			JsonRead(*it, "VSync", config.VSync);
 		}
+		if (auto it = json.find("Audio"); it != json.end())
+		{
+			for (const std::string& bus : AudioEngine::GetBusNames())
+				JsonRead(*it, bus.c_str(), config.BusVolumes[bus]);
+		}
 
 		SetActive(project);
 		BW_CORE_INFO("Opened project '{}' ({})", config.Name, project->m_ProjectDirectory.string());
 		return project;
+	}
+
+	void Project::ApplyAudioSettings() const
+	{
+		for (const std::string& bus : AudioEngine::GetBusNames())
+		{
+			auto it = m_Config.BusVolumes.find(bus);
+			AudioEngine::SetBusVolume(bus, it != m_Config.BusVolumes.end() ? it->second : 1.0f);
+			AudioEngine::SetBusMuted(bus, false);
+		}
 	}
 
 	bool Project::Save()
@@ -162,6 +178,9 @@ namespace Bellows {
 		runtime["WindowHeight"] = m_Config.WindowHeight;
 		runtime["Fullscreen"] = m_Config.Fullscreen;
 		runtime["VSync"] = m_Config.VSync;
+		Json& audio = json["Audio"];
+		for (const auto& [bus, volume] : m_Config.BusVolumes)
+			audio[bus] = volume;
 
 		if (!FileSystem::WriteTextFile(GetProjectFilePath(), json.dump(1, '\t')))
 		{

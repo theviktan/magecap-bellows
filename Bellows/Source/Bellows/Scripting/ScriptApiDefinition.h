@@ -35,6 +35,13 @@ namespace Bellows::Scripting {
 
 	namespace Detail {
 
+		// Script calls that name an audio bus raise ValueError for unknown names.
+		inline void RequireBus(const std::string& bus)
+		{
+			if (!AudioEngine::IsBus(bus))
+				throw ScriptValueError("Unknown audio bus '" + bus + "'. Buses: Master, Music, Effects");
+		}
+
 		// Assigns (or clears) one texture slot of a material from an asset path.
 		inline void SetMaterialTexture(Material& material, const std::optional<std::string>& value, std::string& pathSlot,
 			TextureColorSpace colorSpace, void (Material::*setter)(Ref<Texture2D>))
@@ -303,6 +310,12 @@ namespace Bellows::Scripting {
 		audioSource.Property("spatial", [](const AudioSourceRef& r) { return r.Get().Spatial; }, [](const AudioSourceRef& r, bool v) { r.Get().Spatial = v; }, "");
 		audioSource.Property("min_distance", [](const AudioSourceRef& r) { return r.Get().MinDistance; }, [](const AudioSourceRef& r, float v) { r.Get().MinDistance = v; }, "");
 		audioSource.Property("max_distance", [](const AudioSourceRef& r) { return r.Get().MaxDistance; }, [](const AudioSourceRef& r, float v) { r.Get().MaxDistance = v; }, "");
+		audioSource.Property("bus", [](const AudioSourceRef& r) { return r.Get().Bus; },
+			[](const AudioSourceRef& r, const std::string& v)
+			{
+				Detail::RequireBus(v);
+				r.Get().Bus = v;
+			}, "The bus the source plays on: 'Master', 'Music' or 'Effects'");
 		audioSource.Method("play", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); return GetAudio(e) ? GetAudio(e)->Play(e) : false; }, "");
 		audioSource.Method("stop", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Stop(e); }, "");
 		audioSource.Method("pause", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Pause(e); }, "");
@@ -495,10 +508,34 @@ namespace Bellows::Scripting {
 		api.Function("quit", [](int exitCode) { RequestQuit(exitCode); }, "Quits the game (stops play mode in the editor)", Arg("exit_code", 0));
 
 		// --- Audio ------------------------------------------------------------
-		api.Function("play_sound", [](const std::string& path, float volume) { return AudioEngine::PlayOneShot(path, volume); },
-			"Plays a one-shot 2D sound", Arg("path"), Arg("volume", 1.0f));
+		api.Function("play_sound", [](const std::string& path, float volume, const std::string& bus)
+			{
+				Detail::RequireBus(bus);
+				return AudioEngine::PlayOneShot(path, volume, bus);
+			}, "Plays a one-shot 2D sound", Arg("path"), Arg("volume", 1.0f), Arg("bus", std::string("Effects")));
 		api.Function("set_master_volume", [](float volume) { AudioEngine::SetMasterVolume(volume); }, "", Arg("volume"));
 		api.Function("get_master_volume", []() { return AudioEngine::GetMasterVolume(); }, "");
+		api.Function("bus_names", []() { return AudioEngine::GetBusNames(); }, "The audio buses: Master, Music, Effects");
+		api.Function("set_bus_volume", [](const std::string& bus, float volume)
+			{
+				Detail::RequireBus(bus);
+				AudioEngine::SetBusVolume(bus, volume);
+			}, "Sets a bus's volume (1 = normal, 0 = silent)", Arg("bus"), Arg("volume"));
+		api.Function("get_bus_volume", [](const std::string& bus)
+			{
+				Detail::RequireBus(bus);
+				return AudioEngine::GetBusVolume(bus);
+			}, "", Arg("bus"));
+		api.Function("set_bus_muted", [](const std::string& bus, bool muted)
+			{
+				Detail::RequireBus(bus);
+				AudioEngine::SetBusMuted(bus, muted);
+			}, "Mutes or unmutes a bus; its volume is kept", Arg("bus"), Arg("muted", true));
+		api.Function("is_bus_muted", [](const std::string& bus)
+			{
+				Detail::RequireBus(bus);
+				return AudioEngine::IsBusMuted(bus);
+			}, "", Arg("bus"));
 	}
 
 }

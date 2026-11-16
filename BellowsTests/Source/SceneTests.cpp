@@ -64,6 +64,7 @@ namespace {
 		auto& audio = entity.AddComponent<AudioSourceComponent>();
 		audio.ClipPath = "Audio/Theme.ogg";
 		audio.Loop = true;
+		audio.Bus = "Music";
 		entity.AddComponent<AudioListenerComponent>();
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
@@ -209,6 +210,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(std::get<std::string>(script.Fields.at("title")) == "Hero");
 	CHECK(std::get<glm::vec3>(script.Fields.at("spawn")) == glm::vec3(1.0f, 2.0f, 3.0f));
 	CHECK(Near(glm::degrees(loadedChild.GetTransform().GetRotationEuler()), { 10.0f, 20.0f, 30.0f }, 1e-3f));
+	CHECK(loadedChild.GetComponent<AudioSourceComponent>().Bus == "Music");
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")

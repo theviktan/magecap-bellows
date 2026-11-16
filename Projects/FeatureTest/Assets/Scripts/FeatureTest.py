@@ -15,6 +15,15 @@ import bellows
 from bellows import Key, MouseButton, Quat, Vec2, Vec3, Vec4
 
 
+def raises(action, error):
+    """True when action() raises the given exception type."""
+    try:
+        action()
+    except error:
+        return True
+    return False
+
+
 def close(a, b, tolerance=1e-4):
     if isinstance(a, (int, float)):
         return abs(a - b) <= tolerance
@@ -433,8 +442,23 @@ class FeatureTest(bellows.Script):
         self.check(close(bellows.get_master_volume(), 0.5), "master volume")
         bellows.set_master_volume(old_volume)
 
+        self.check(bellows.bus_names() == ["Master", "Music", "Effects"], "bus_names")
+        bellows.set_bus_volume("Music", 0.25)
+        self.check(close(bellows.get_bus_volume("Music"), 0.25), "set_bus_volume")
+        bellows.set_bus_muted("Music")
+        self.check(bellows.is_bus_muted("Music") and close(bellows.get_bus_volume("Music"), 0.25), "set_bus_muted keeps the volume")
+        bellows.set_bus_muted("Music", False)
+        bellows.set_bus_volume("Music", 1.0)
+        self.check(bellows.play_sound("Audio/Chime.wav", 0.2, "Music"), "play_sound on a bus")
+        self.check(raises(lambda: bellows.set_bus_volume("Voices", 1.0), ValueError), "unknown buses are rejected")
+
         speaker = bellows.find_entity("Speaker")
         source = speaker.get_component(bellows.AudioSource)
+        self.check(source.bus == "Effects", "AudioSource.bus defaults to Effects")
+        source.bus = "Music"
+        self.check(source.bus == "Music", "AudioSource.bus")
+        self.check(raises(lambda: setattr(source, "bus", "Voices"), ValueError), "AudioSource.bus rejects unknown buses")
+        source.bus = "Effects"
         self.check(source.play() and source.is_playing, "AudioSource.play")
         source.pause()
         self.check(not source.is_playing, "AudioSource.pause")

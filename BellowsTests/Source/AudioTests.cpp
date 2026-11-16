@@ -8,6 +8,7 @@
 #include "Bellows/Scene/Entity.h"
 
 #include <glm/gtc/constants.hpp>
+#include <miniaudio.h>
 
 using namespace Bellows;
 
@@ -74,5 +75,56 @@ TEST_CASE("Audio sources play through the (null) audio engine")
 	AudioEngine::SetMasterVolume(0.25f);
 	CHECK(AudioEngine::GetMasterVolume() == doctest::Approx(0.25f));
 	AudioEngine::SetMasterVolume(1.0f);
+	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("Audio buses set volumes for groups of sounds")
+{
+	REQUIRE(AudioEngine::IsInitialized());
+	CHECK(AudioEngine::GetBusNames() == std::vector<std::string> { "Master", "Music", "Effects" });
+	CHECK(AudioEngine::IsBus("Music"));
+	CHECK_FALSE(AudioEngine::IsBus("music"));
+	CHECK_FALSE(AudioEngine::SetBusVolume("Voices", 0.5f));
+	CHECK_FALSE(AudioEngine::PlayOneShot("Audio/Tone.wav", 1.0f, "Voices"));
+
+	// The engine's own volume is the Master bus; the others are miniaudio groups.
+	CHECK(AudioEngine::GetBusGroup("Master") == nullptr);
+	REQUIRE(AudioEngine::GetBusGroup("Music") != nullptr);
+	CHECK(AudioEngine::SetBusVolume("Music", 0.4f));
+	CHECK(AudioEngine::GetBusVolume("Music") == doctest::Approx(0.4f));
+	CHECK(ma_sound_group_get_volume(AudioEngine::GetBusGroup("Music")) == doctest::Approx(0.4f));
+
+	// Muting silences the bus but keeps its volume for unmuting.
+	CHECK(AudioEngine::SetBusMuted("Music", true));
+	CHECK(AudioEngine::IsBusMuted("Music"));
+	CHECK(ma_sound_group_get_volume(AudioEngine::GetBusGroup("Music")) == doctest::Approx(0.0f));
+	CHECK(AudioEngine::GetBusVolume("Music") == doctest::Approx(0.4f));
+	CHECK(AudioEngine::SetBusMuted("Music", false));
+	CHECK(ma_sound_group_get_volume(AudioEngine::GetBusGroup("Music")) == doctest::Approx(0.4f));
+
+	CHECK(AudioEngine::SetBusVolume("Master", 0.5f));
+	CHECK(AudioEngine::GetMasterVolume() == doctest::Approx(0.5f));
+	AudioEngine::SetMasterVolume(1.0f);
+	AudioEngine::SetBusVolume("Music", 1.0f);
+
+	// A source plays on its bus; changing the bus rebuilds its sound there.
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "AudioBusProject";
+	WriteSineWav(assets / "Audio" / "Tone.wav", 0.2f, 330.0f);
+	AssetManager::SetAssetDirectory(assets);
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity speaker = scene->CreateEntity("Speaker");
+	auto& source = speaker.AddComponent<AudioSourceComponent>();
+	CHECK(source.Bus == "Effects");
+	source.ClipPath = "Audio/Tone.wav";
+	source.Bus = "Music";
+	scene->OnRuntimeStart();
+	CHECK(scene->GetAudio()->Play(speaker));
+	source.Bus = "Effects";
+	CHECK(scene->GetAudio()->Play(speaker));
+	CHECK(scene->GetAudio()->GetSoundCount() == 1);
+	source.Bus = "Nonsense";		// Unknown buses fall back to Effects instead of failing
+	CHECK(scene->GetAudio()->Play(speaker));
+	CHECK(AudioEngine::PlayOneShot("Audio/Tone.wav", 0.5f, "Music"));
+	scene->OnRuntimeStop();
 	AssetManager::SetAssetDirectory({});
 }
