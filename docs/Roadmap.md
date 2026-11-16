@@ -95,7 +95,11 @@ the `forgescript` command line tool (runner, checker, interactive prompt) and a 
 It is covered by `ForgeScriptTests` (every test script also runs with the garbage collector on every
 instruction) and is clean under AddressSanitizer and UndefinedBehaviorSanitizer.
 
-What is missing is the engine side: `.forge` files cannot yet be attached to entities.
+ForgeScript now runs in the engine: `.forge` files attach to entities with the Script component,
+receive the lifecycle and physics events, show their top-level settings in the Inspector, report
+errors with file and line in the Console, and are edited in the editor's Script Editor.
+`FeatureTest.forge` checks the engine API from ForgeScript in the FeatureTest scene. What is left is
+the ForgeScript-only engine phrases (item 3 below), so scripts can read like the target:
 
 ```forge
 # The target: an entity script written in ForgeScript.
@@ -144,10 +148,13 @@ end
 1. Done: the script API is described once (`Scripting/ScriptApiDefinition.h`); the Python module
    is built from it without any change to the Python API, and the ForgeScript binder
    (`Scripting/ForgeScriptBindings.cpp`) exposes the same API to ForgeScript.
-2. `.forge` support in `ScriptEngine` and the Script component, lifecycle events and Inspector
-   fields.
-3. `FeatureTest.forge`, `docs/ScriptingAPI.md` examples in both languages, editor support
-   (create ForgeScript script, highlighting in the content browser).
+2. Done: `.forge` support in `ScriptEngine` and the Script component (`Scripting/ForgeScriptRuntime`),
+   lifecycle and physics events, Inspector fields from top-level `set` lines
+   (`ForgeScript::FindScriptVariables`), `FeatureTest.forge`, and `docs/ScriptingAPI.md` in both
+   languages.
+3. Done: editor support (the Script Editor with ForgeScript highlighting and checking, new
+   ForgeScript scripts from templates, Attach Script). Next: the ForgeScript engine phrases
+   (`move (thing) toward (target) by (amount)`, `play sound (path)`, `key (name) is down`).
 4. Language additions that make game code easier: "did you mean ...?" suggestions for misspelled
    names, warnings for variables set but never used, default parameter values, a `match`
    statement, task handles (`set t to start patrol()`, `stop t`), whole numbers and bit flags,

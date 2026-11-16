@@ -17,14 +17,14 @@ can drive end to end.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.
-* **Scripting** in Python 3: behavior scripts with lifecycle callbacks, Inspector-editable fields,
-  entity creation/destruction, prefabs, input, physics and audio APIs.
-  See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
-* **ForgeScript** (in progress): Bellows' own natural-language scripting language, set to become
-  its flagship way to write game logic, with Python kept alongside. The language, its
+* **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
+  with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
+  prefabs, input, physics and audio. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
+* **ForgeScript**: Bellows' own natural-language scripting language and its flagship way to write
+  game logic (`set speed to 5`, `when collided with other`, `wait 2 seconds`). The language, its
   `forgescript` tool and its tests are in `ForgeScript/` (guide:
-  [docs/ForgeScript/LanguageGuide.md](docs/ForgeScript/LanguageGuide.md)); running `.forge`
-  scripts on entities is the next milestone (see [docs/Roadmap.md](docs/Roadmap.md)).
+  [docs/ForgeScript/LanguageGuide.md](docs/ForgeScript/LanguageGuide.md)); what comes next is in
+  [docs/Roadmap.md](docs/Roadmap.md).
 * **Editor**: hierarchy, inspector, content browser with drag and drop, console with a Python
   prompt, transform gizmos, picking, undo/redo, play/pause/step, prefabs, render settings, project
   hub, and **Export Game** (a standalone build with its own Python runtime).
