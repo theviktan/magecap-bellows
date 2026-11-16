@@ -33,6 +33,9 @@ editor, or unreachable from Python).
      `ValueError`). Changes that must reach a live system (physics, audio) call into it from the setter.
    Both `ScriptBindings.cpp` (Python) and `ForgeScriptBindings.cpp` (ForgeScript) pick it up
    automatically; add Python-only extras (`__repr__`, operators) in `ScriptBindings.cpp` only.
+   Then regenerate the Python type stub: `BellowsEditor --headless --no-agent-server --run-script
+   Tools/GeneratePythonStubs.py --exit` (the editor automation test fails while `Python/_bellows.pyi`
+   is out of date).
 6. **Tests** - doctest coverage for the system behavior; add the component to
    `Projects/FeatureTest/Assets/Scripts/FeatureTest.py` (`test_components` checks every property)
    and, if it is visible, to `Tools/BuildFeatureTest.py` so the sample scene uses it; rebuild the

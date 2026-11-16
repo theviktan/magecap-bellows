@@ -773,7 +773,20 @@ sys.stderr = _BellowsLogWriter(2)
 		}
 		std::ostringstream contents;
 		contents << stream.rdbuf();
-		return ExecuteSource(contents.str(), outOutput, path.string());
+		if (!IsInitialized())
+			return ExecuteSource(contents.str(), outOutput, path.string());
+
+		// Like `python file.py`, the script can find files next to itself through __file__.
+		py::dict globals = py::module_::import("__main__").attr("__dict__");
+		const bool hadFile = globals.contains("__file__");
+		py::object previousFile = hadFile ? py::object(globals["__file__"]) : py::object();
+		globals["__file__"] = std::filesystem::absolute(path).string();
+		const bool success = ExecuteSource(contents.str(), outOutput, path.string());
+		if (hadFile)
+			globals["__file__"] = previousFile;
+		else if (globals.contains("__file__"))
+			PyDict_DelItemString(globals.ptr(), "__file__");
+		return success;
 	}
 
 	uint32_t ScriptEngine::GetErrorCount()

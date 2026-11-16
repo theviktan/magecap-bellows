@@ -6,6 +6,7 @@ Any failed assertion raises, which makes the editor exit with code 1.
 
 import os
 import pathlib
+import runpy
 import shutil
 import tempfile
 
@@ -117,6 +118,12 @@ check(window.is_file() and window.stat().st_size > 1000, "window screenshot")
 
 # Console-style evaluation and errors ---------------------------------------------------
 check(editor.error_count() == 0, f"no errors were logged ({editor.error_count()})")
+
+# The Python type stub matches the running API ------------------------------------------
+repository = pathlib.Path(__file__).resolve().parents[2]
+stubs = runpy.run_path(str(repository / "Tools" / "GeneratePythonStubs.py"))
+committed = (repository / "Python" / "_bellows.pyi").read_text(encoding="utf-8")
+check(stubs["generate"]() == committed, "Python/_bellows.pyi is out of date: run Tools/GeneratePythonStubs.py (see its docstring)")
 
 shutil.rmtree(root, ignore_errors=True)
 print("Editor automation test passed")
