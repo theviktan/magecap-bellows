@@ -33,6 +33,14 @@ namespace Bellows {
 		static bool IsMouseButtonPressed(MouseButton button);
 		static bool IsMouseButtonReleased(MouseButton button);
 
+		// The first connected gamepad (any controller GLFW maps to the standard layout).
+		static bool IsGamepadConnected();
+		static bool IsGamepadButtonDown(GamepadButton button);
+		static bool IsGamepadButtonPressed(GamepadButton button);
+		static bool IsGamepadButtonReleased(GamepadButton button);
+		// Called by the window once per frame with the gamepad's buttons; a disconnect releases them all.
+		static void UpdateGamepad(bool connected, const std::array<bool, MaxGamepadButton>& buttonsDown);
+
 		// Mouse position relative to the active game viewport (top-left origin, in pixels).
 		static glm::vec2 GetMousePosition();
 		static glm::vec2 GetMouseDelta();
@@ -50,6 +58,7 @@ namespace Bellows {
 		// Synthetic input for automated tests and AI agents.
 		static void InjectKey(KeyCode key, bool down);
 		static void InjectMouseButton(MouseButton button, bool down);
+		static void InjectGamepadButton(GamepadButton button, bool down);
 		static void InjectMousePosition(const glm::vec2& viewportPosition);
 
 		// Releases every key and button (used when play mode stops or focus is lost).
@@ -57,6 +66,7 @@ namespace Bellows {
 	private:
 		static void SetKey(KeyCode key, bool down);
 		static void SetMouseButton(MouseButton button, bool down);
+		static void SetGamepadButton(GamepadButton button, bool down);
 	};
 
 }

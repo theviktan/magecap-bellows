@@ -41,4 +41,16 @@ namespace Bellows {
 
 	constexpr uint8_t MaxMouseButton = 8;
 
+	// Buttons of a standard gamepad, in GLFW's gamepad order (Xbox names; A is the bottom face button).
+	enum class GamepadButton : uint8_t
+	{
+		A = 0, B = 1, X = 2, Y = 3,
+		LeftBumper = 4, RightBumper = 5,
+		Back = 6, Start = 7, Guide = 8,
+		LeftThumb = 9, RightThumb = 10,
+		DPadUp = 11, DPadRight = 12, DPadDown = 13, DPadLeft = 14
+	};
+
+	constexpr uint8_t MaxGamepadButton = 15;
+
 }

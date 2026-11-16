@@ -6,8 +6,14 @@
 #include "IconsLucide.h"
 
 #include "Bellows/Audio/AudioEngine.h"
+#include "Bellows/Core/InputNames.h"
 
 #include <imgui.h>
+#include <imgui_stdlib.h>
+
+#include <algorithm>
+#include <optional>
+#include <vector>
 
 namespace Bellows {
 
@@ -167,9 +173,129 @@ namespace Bellows {
 			}
 			UI::EndPropertyGrid();
 		}
+		UI::SectionHeader("Input actions");
+		if (DrawInputActions(config.InputActions))
+		{
+			changed = true;
+			// Play mode and scripts see the change right away.
+			project->ApplyInputSettings();
+		}
 		m_ProjectDirty |= changed;
 		ImGui::Spacing();
 		UI::TextMuted(project->GetProjectFilePath().string().c_str());
+	}
+
+	bool SettingsPanel::DrawInputActions(InputActionMap& actions)
+	{
+		bool changed = false;
+		ImGui::PushTextWrapPos(0.0f);
+		UI::TextMuted("Scripts ask for actions by name, e.g. is_action_down(\"jump\").");
+		ImGui::PopTextWrapPos();
+		ImGui::Spacing();
+
+		std::string removeAction;
+		for (auto& [action, bindings] : actions)
+		{
+			ImGui::PushID(action.c_str());
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(action.c_str());
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::GetFrameHeight() * 2.0f - ImGui::GetStyle().ItemSpacing.x);
+			if (UI::IconButton(ICON_PLUS, "Add an input to this action"))
+			{
+				m_NewBindingDevice = 0;
+				m_NewBindingIndex = 0;
+				ImGui::OpenPopup("AddInput");
+			}
+			ImGui::SameLine();
+			if (UI::IconButton(ICON_TRASH_2, "Delete this action"))
+				removeAction = action;
+
+			// Each input is a chip; clicking it removes the input. Chips wrap at the panel's right edge.
+			const float rowRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+			int removeBinding = -1;
+			for (size_t i = 0; i < bindings.size(); i++)
+			{
+				ImGui::PushID(static_cast<int>(i));
+				const std::string label = bindings[i].ToString() + "  " ICON_X;
+				const float width = ImGui::CalcTextSize(label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+				if (i > 0 && ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + width < rowRight)
+					ImGui::SameLine();
+				if (ImGui::SmallButton(label.c_str()))
+					removeBinding = static_cast<int>(i);
+				UI::Tooltip("Remove this input");
+				ImGui::PopID();
+			}
+			if (bindings.empty())
+				UI::TextMuted("No inputs yet: this action is never down.");
+			if (removeBinding >= 0)
+			{
+				bindings.erase(bindings.begin() + removeBinding);
+				changed = true;
+			}
+
+			if (ImGui::BeginPopup("AddInput"))
+			{
+				const char* devices[] = { "Key", "Mouse", "Gamepad" };
+				std::vector<const char*> names;
+				if (m_NewBindingDevice == 0)
+					for (const KeyName& entry : GetKeyCodeNames()) names.push_back(entry.Name);
+				else if (m_NewBindingDevice == 1)
+					for (const MouseButtonName& entry : GetMouseButtonNames()) names.push_back(entry.Name);
+				else
+					for (const GamepadButtonName& entry : GetGamepadButtonNames()) names.push_back(entry.Name);
+				m_NewBindingIndex = std::clamp(m_NewBindingIndex, 0, static_cast<int>(names.size()) - 1);
+
+				ImGui::SetNextItemWidth(120.0f);
+				if (ImGui::Combo("##Device", &m_NewBindingDevice, devices, 3))
+					m_NewBindingIndex = 0;
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(160.0f);
+				ImGui::Combo("##Input", &m_NewBindingIndex, names.data(), static_cast<int>(names.size()), 12);
+				ImGui::SameLine();
+				if (ImGui::Button("Add"))
+				{
+					const std::string text = std::string(devices[m_NewBindingDevice]) + ":" + names[m_NewBindingIndex];
+					std::optional<InputBinding> binding = InputBinding::Parse(text);
+					if (binding && std::find(bindings.begin(), bindings.end(), *binding) == bindings.end())
+					{
+						bindings.push_back(*binding);
+						changed = true;
+					}
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+			ImGui::Spacing();
+			ImGui::PopID();
+		}
+		if (!removeAction.empty())
+		{
+			actions.erase(removeAction);
+			changed = true;
+		}
+
+		ImGui::Separator();
+		const char* addLabel = ICON_PLUS " Add action";
+		const float addWidth = ImGui::CalcTextSize(addLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - addWidth - ImGui::GetStyle().ItemSpacing.x);
+		const bool submitted = ImGui::InputTextWithHint("##NewAction", "new action name", &m_NewActionName, ImGuiInputTextFlags_EnterReturnsTrue);
+		const bool canAdd = !m_NewActionName.empty() && actions.find(m_NewActionName) == actions.end();
+		ImGui::SameLine();
+		ImGui::BeginDisabled(!canAdd);
+		if ((ImGui::Button(addLabel) || submitted) && canAdd)
+		{
+			actions[m_NewActionName];
+			m_NewActionName.clear();
+			changed = true;
+		}
+		ImGui::EndDisabled();
+		if (ImGui::Button("Add default actions"))
+		{
+			for (auto& [action, bindings] : InputMap::GetDefaultActions())
+				changed |= actions.emplace(action, bindings).second;
+		}
+		UI::Tooltip("Adds move_left, move_right, move_forward, move_back, jump, interact and pause if they are missing");
+		return changed;
 	}
 
 	void SettingsPanel::DrawEditorSettings()

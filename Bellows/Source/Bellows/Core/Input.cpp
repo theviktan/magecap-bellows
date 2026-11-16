@@ -15,6 +15,11 @@ namespace Bellows {
 			std::array<bool, MaxMouseButton> ButtonsPressed {};
 			std::array<bool, MaxMouseButton> ButtonsReleased {};
 
+			bool GamepadConnected = false;
+			std::array<bool, MaxGamepadButton> GamepadDown {};
+			std::array<bool, MaxGamepadButton> GamepadPressed {};
+			std::array<bool, MaxGamepadButton> GamepadReleased {};
+
 			glm::vec2 WindowMousePosition { 0.0f };
 			glm::vec2 MouseDelta { 0.0f };
 			glm::vec2 ScrollDelta { 0.0f };
@@ -36,6 +41,8 @@ namespace Bellows {
 		s_State.KeysReleased.fill(false);
 		s_State.ButtonsPressed.fill(false);
 		s_State.ButtonsReleased.fill(false);
+		s_State.GamepadPressed.fill(false);
+		s_State.GamepadReleased.fill(false);
 		s_State.MouseDelta = glm::vec2(0.0f);
 		s_State.ScrollDelta = glm::vec2(0.0f);
 	}
@@ -125,6 +132,52 @@ namespace Bellows {
 		return index < MaxMouseButton && s_State.ButtonsReleased[index];
 	}
 
+	bool Input::IsGamepadConnected()
+	{
+		return s_State.GamepadConnected;
+	}
+
+	bool Input::IsGamepadButtonDown(GamepadButton button)
+	{
+		const auto index = static_cast<size_t>(button);
+		return index < MaxGamepadButton && s_State.GamepadDown[index];
+	}
+
+	bool Input::IsGamepadButtonPressed(GamepadButton button)
+	{
+		const auto index = static_cast<size_t>(button);
+		return index < MaxGamepadButton && s_State.GamepadPressed[index];
+	}
+
+	bool Input::IsGamepadButtonReleased(GamepadButton button)
+	{
+		const auto index = static_cast<size_t>(button);
+		return index < MaxGamepadButton && s_State.GamepadReleased[index];
+	}
+
+	void Input::UpdateGamepad(bool connected, const std::array<bool, MaxGamepadButton>& buttonsDown)
+	{
+		// Without a gamepad the state is left alone, so injected buttons (tests, agents) stay down.
+		if (!connected)
+		{
+			if (s_State.GamepadConnected)
+			{
+				for (uint8_t i = 0; i < MaxGamepadButton; i++)
+					SetGamepadButton(static_cast<GamepadButton>(i), false);
+			}
+			s_State.GamepadConnected = false;
+			return;
+		}
+
+		s_State.GamepadConnected = true;
+		for (uint8_t i = 0; i < MaxGamepadButton; i++)
+		{
+			// Like keys: presses are ignored while input is disabled, releases always count.
+			const bool down = buttonsDown[i] && (s_State.Enabled || s_State.GamepadDown[i]);
+			SetGamepadButton(static_cast<GamepadButton>(i), down);
+		}
+	}
+
 	glm::vec2 Input::GetMousePosition()
 	{
 		return s_State.WindowMousePosition - s_State.ViewportPosition;
@@ -173,6 +226,11 @@ namespace Bellows {
 		SetMouseButton(button, down);
 	}
 
+	void Input::InjectGamepadButton(GamepadButton button, bool down)
+	{
+		SetGamepadButton(button, down);
+	}
+
 	void Input::InjectMousePosition(const glm::vec2& viewportPosition)
 	{
 		const glm::vec2 windowPosition = viewportPosition + s_State.ViewportPosition;
@@ -193,8 +251,14 @@ namespace Bellows {
 			if (s_State.ButtonsDown[i])
 				s_State.ButtonsReleased[i] = true;
 		}
+		for (size_t i = 0; i < MaxGamepadButton; i++)
+		{
+			if (s_State.GamepadDown[i])
+				s_State.GamepadReleased[i] = true;
+		}
 		s_State.KeysDown.fill(false);
 		s_State.ButtonsDown.fill(false);
+		s_State.GamepadDown.fill(false);
 	}
 
 	void Input::SetKey(KeyCode key, bool down)
@@ -221,6 +285,19 @@ namespace Bellows {
 		else if (!down && s_State.ButtonsDown[index])
 			s_State.ButtonsReleased[index] = true;
 		s_State.ButtonsDown[index] = down;
+	}
+
+	void Input::SetGamepadButton(GamepadButton button, bool down)
+	{
+		const auto index = static_cast<size_t>(button);
+		if (index >= MaxGamepadButton)
+			return;
+
+		if (down && !s_State.GamepadDown[index])
+			s_State.GamepadPressed[index] = true;
+		else if (!down && s_State.GamepadDown[index])
+			s_State.GamepadReleased[index] = true;
+		s_State.GamepadDown[index] = down;
 	}
 
 }

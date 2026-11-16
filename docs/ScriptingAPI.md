@@ -105,9 +105,26 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | `mouse_position()` | `Vec2` in viewport pixels, top-left origin. |
 | `mouse_delta()` / `scroll_delta()` | Movement this frame (`Vec2`). |
 | `viewport_size()` | Size of the game view in pixels (`Vec2`). |
+| `is_action_down(action)` / `is_action_pressed(action)` / `is_action_released(action)` | Input actions by name (`"jump"`): down while any input bound to the action is held; pressed / released on the frame the action starts / ends. Unknown actions raise `ValueError`. |
+| `action_names()` | The project's input actions, sorted by name. |
+| `is_gamepad_down(button)` / `is_gamepad_pressed(button)` / `is_gamepad_released(button)` | Buttons of the first gamepad by name: `"A"`, `"B"`, `"X"`, `"Y"`, `"LeftBumper"`, `"RightBumper"`, `"Back"`, `"Start"`, `"Guide"`, `"LeftThumb"`, `"RightThumb"`, `"DPadUp"`, `"DPadRight"`, `"DPadDown"`, `"DPadLeft"` (Xbox names; any capitalization). Unknown names raise `ValueError`. |
+| `gamepad_connected()` | True while a gamepad is connected. |
 | `log(*values)` / `log_warning(*values)` / `log_error(*values)` | Write to the Console (values are joined with spaces). `print()` also goes to the Console. |
 
 In the editor, game input is only delivered while the Viewport has focus during play.
+
+**Input actions** let a game ask for "jump" instead of naming keys, so the same script works with a
+keyboard, a mouse and a gamepad, and players' controls can change without touching code. Set them
+up in **Settings → Project → Input actions**: each action has a list of inputs (`Key:Space`,
+`Mouse:Left`, `Gamepad:A`). New projects start with `move_left`, `move_right`, `move_forward`,
+`move_back`, `jump`, `interact` and `pause` (WASD, the arrow keys, the D-pad, Space, E, Escape and
+the matching gamepad buttons); **Add default actions** adds any that are missing. The project file
+stores them under `"Input": { "Actions": { "jump": ["Key:Space", "Gamepad:A"] } }`.
+
+```python
+if bellows.is_action_pressed("jump") and self.on_ground:
+    self.body.add_impulse(Vec3(0, 5, 0))
+```
 
 ## Scene and entities
 

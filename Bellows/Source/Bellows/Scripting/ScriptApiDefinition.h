@@ -18,6 +18,8 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/Input.h"
+#include "Bellows/Core/InputMap.h"
+#include "Bellows/Core/InputNames.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scripting/ScriptApi.h"
@@ -34,6 +36,21 @@
 namespace Bellows::Scripting {
 
 	namespace Detail {
+
+		// Script calls that name an input action or gamepad button raise ValueError for unknown names.
+		inline const std::string& RequireAction(const std::string& action)
+		{
+			if (!InputMap::HasAction(action))
+				throw ScriptValueError("Unknown input action '" + action + "'. Actions are set in Project Settings > Input actions");
+			return action;
+		}
+
+		inline GamepadButton RequireGamepadButton(const std::string& name)
+		{
+			if (std::optional<GamepadButton> button = FindGamepadButton(name))
+				return *button;
+			throw ScriptValueError("Unknown gamepad button '" + name + "'. Buttons: A, B, X, Y, LeftBumper, RightBumper, Back, Start, Guide, LeftThumb, RightThumb, DPadUp, DPadRight, DPadDown, DPadLeft");
+		}
 
 		// Script calls that name an audio bus raise ValueError for unknown names.
 		inline void RequireBus(const std::string& bus)
@@ -85,6 +102,26 @@ namespace Bellows::Scripting {
 		api.Function("mouse_delta", []() { return Input::GetMouseDelta(); }, "Mouse movement this frame in pixels");
 		api.Function("scroll_delta", []() { return Input::GetScrollDelta(); }, "Scroll wheel movement this frame");
 		api.Function("viewport_size", []() { return Input::GetViewportSize(); }, "Size of the game viewport in pixels");
+		api.Function("action_names", []()
+			{
+				std::vector<std::string> names;
+				for (const auto& [name, bindings] : InputMap::GetActions())
+					names.push_back(name);
+				return names;
+			}, "The project's input actions, sorted by name");
+		api.Function("is_action_down", [](const std::string& action) { return InputMap::IsActionDown(Detail::RequireAction(action)); },
+			"True while any input bound to the action is held", Arg("action"));
+		api.Function("is_action_pressed", [](const std::string& action) { return InputMap::IsActionPressed(Detail::RequireAction(action)); },
+			"True on the frame the action started", Arg("action"));
+		api.Function("is_action_released", [](const std::string& action) { return InputMap::IsActionReleased(Detail::RequireAction(action)); },
+			"True on the frame the action ended", Arg("action"));
+		api.Function("gamepad_connected", []() { return Input::IsGamepadConnected(); }, "True while a gamepad is connected");
+		api.Function("is_gamepad_down", [](const std::string& button) { return Input::IsGamepadButtonDown(Detail::RequireGamepadButton(button)); },
+			"True while the gamepad button (\"A\", \"Start\", \"DPadLeft\", ...) is held", Arg("button"));
+		api.Function("is_gamepad_pressed", [](const std::string& button) { return Input::IsGamepadButtonPressed(Detail::RequireGamepadButton(button)); },
+			"True on the frame the gamepad button went down", Arg("button"));
+		api.Function("is_gamepad_released", [](const std::string& button) { return Input::IsGamepadButtonReleased(Detail::RequireGamepadButton(button)); },
+			"True on the frame the gamepad button went up", Arg("button"));
 
 		// --- Time -------------------------------------------------------------
 		api.Function("delta_time", []() { return GetDeltaTime(); }, "Seconds since the previous frame");

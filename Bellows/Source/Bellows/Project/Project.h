@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Bellows/Core/Base.h"
+#include "Bellows/Core/InputMap.h"
 
 #include <filesystem>
 #include <map>
@@ -22,6 +23,9 @@ namespace Bellows {
 
 		// Starting volume of each audio bus ("Master", "Music", "Effects"); scripts may change them while playing.
 		std::map<std::string, float> BusVolumes = { { "Master", 1.0f }, { "Music", 1.0f }, { "Effects", 1.0f } };
+
+		// Named input actions scripts ask for (is_action_down("jump")); new projects get InputMap's defaults.
+		InputActionMap InputActions;
 	};
 
 	// A game project: a folder containing '<Name>.bproject' and an asset directory.
@@ -37,6 +41,8 @@ namespace Bellows {
 		bool Save();
 		// Sets the audio buses to the project's starting volumes, unmuted (at game and play start).
 		void ApplyAudioSettings() const;
+		// Makes the project's input actions the ones scripts see.
+		void ApplyInputSettings() const;
 
 		static Ref<Project> GetActive() { return s_ActiveProject; }
 		static void SetActive(const Ref<Project>& project);
@@ -45,13 +51,15 @@ namespace Bellows {
 		const ProjectConfig& GetConfig() const { return m_Config; }
 
 		const std::filesystem::path& GetProjectDirectory() const { return m_ProjectDirectory; }
-		std::filesystem::path GetProjectFilePath() const;
+		// The file the project was loaded from (or created as); renaming the project keeps this file.
+		std::filesystem::path GetProjectFilePath() const { return m_ProjectDirectory / m_ProjectFileName; }
 		std::filesystem::path GetAssetDirectory() const;
 		// Per-project editor data (layout, agent session); not part of exported games.
 		std::filesystem::path GetEditorDataDirectory() const { return m_ProjectDirectory / ".bellows"; }
 	private:
 		ProjectConfig m_Config;
 		std::filesystem::path m_ProjectDirectory;
+		std::filesystem::path m_ProjectFileName;
 
 		static Ref<Project> s_ActiveProject;
 	};
