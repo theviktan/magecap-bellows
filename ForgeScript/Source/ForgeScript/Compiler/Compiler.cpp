@@ -127,15 +127,39 @@ namespace ForgeScript {
 			m_StopWords.push_back(&s_NoStopWords);
 		}
 
+		// Like Compile, but keeps going after a mistake to find the next ones (for editors and checkers).
+		// The compiled code is thrown away, since a script with mistakes never runs.
+		std::vector<CompileError> FindErrors()
+		{
+			std::vector<CompileError> errors;
+			m_AllErrors = &errors;
+			CompileError first;
+			if (!Compile(first) && errors.empty())
+				errors.push_back(first);
+			m_AllErrors = nullptr;
+			std::stable_sort(errors.begin(), errors.end(), [](const CompileError& a, const CompileError& b)
+			{
+				return a.Line != b.Line ? a.Line < b.Line : a.Column < b.Column;
+			});
+			return errors;
+		}
+
 		Function* Compile(CompileError& outError)
 		{
 			try
 			{
+				// Text the lexer could not read (an unfinished string, a stray character). The rest of the
+				// script cannot be trusted after one of these, so errors stop here even when collecting.
 				for (const Token& token : m_Tokens)
 				{
-					if (token.Type == TokenType::Error)
+					if (token.Type != TokenType::Error)
+						continue;
+					if (!m_AllErrors)
 						ErrorAt(token, token.Text);
+					RecordError(token, token.Text);
 				}
+				if (m_AllErrors && !m_AllErrors->empty())
+					throw CompileAbort();
 
 				std::unordered_set<std::string> visited;
 				PrescanPhrases(m_Tokens, visited);
@@ -157,7 +181,7 @@ namespace ForgeScript {
 				for (const auto& [start, end] : hoisted)
 				{
 					m_Pos = start;
-					Statement();
+					RecoverableUnit(script, end, [this] { Statement(); });
 				}
 
 				m_Pos = 0;
@@ -173,10 +197,13 @@ namespace ForgeScript {
 						SkipNewlines();
 						continue;
 					}
-					Statement();
+					const size_t start = m_Pos;
+					RecoverableUnit(script, EndOfUnit(start), [this] { Statement(); });
 					SkipNewlines();
 				}
 
+				if (m_AllErrors && !m_AllErrors->empty())
+					throw CompileAbort();
 				EmitOp(OpCode::Nothing);
 				EmitOp(OpCode::Return);
 				m_State = nullptr;
@@ -185,6 +212,7 @@ namespace ForgeScript {
 			catch (const CompileAbort&)
 			{
 				outError = m_Error;
+				m_State = nullptr;
 				return nullptr;
 			}
 		}
@@ -325,6 +353,71 @@ namespace ForgeScript {
 				default:
 					return false;
 			}
+		}
+
+		// Compiles one statement or definition of the function 'state'. When collecting errors, a mistake
+		// inside it is recorded, the compiler's state is put back as it was before the unit, and compiling
+		// continues at 'resume' (the end of the unit, including any block it opens). Skipping whole
+		// statements keeps one mistake from causing more.
+		template<typename Unit>
+		void RecoverableUnit(FunctionState& state, size_t resume, Unit unit)
+		{
+			const size_t locals = state.Locals.size();
+			const size_t loops = state.Loops.size();
+			const int scopeDepth = state.ScopeDepth;
+			const int tryDepth = state.TryDepth;
+			const size_t stopWords = m_StopWords.size();
+			try
+			{
+				unit();
+			}
+			catch (const CompileAbort&)
+			{
+				if (!m_AllErrors)
+					throw;
+				m_AllErrors->push_back(m_Error);
+				if (m_AllErrors->size() >= c_MaxCollectedErrors)
+					throw;
+				m_State = &state;
+				state.Locals.resize(locals);
+				state.Loops.resize(loops);
+				state.ScopeDepth = scopeDepth;
+				state.TryDepth = tryDepth;
+				m_StopWords.resize(stopWords);
+				m_NoInvoke = false;
+				m_Pos = resume;
+			}
+		}
+
+		void RecordError(const Token& token, const std::string& message)
+		{
+			CompileError error;
+			error.Message = message;
+			error.File = m_FileName;
+			error.Line = token.Line;
+			error.Column = token.Column;
+			m_AllErrors->push_back(error);
+		}
+
+		// Index of the newline (or end of file) that ends the statement starting at 'start',
+		// counting whole blocks, so "when created ... end" or "set f to function() ... end" is one unit.
+		size_t EndOfUnit(size_t start) const
+		{
+			int depth = 0;
+			size_t i = start;
+			while (i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Eof)
+			{
+				if (IsBlockOpener(m_Tokens, i))
+					depth++;
+				// An 'end' with nothing open closes the enclosing block, so stop before it (unless the
+				// statement is that 'end' itself, a stray one at the top level).
+				else if (m_Tokens[i].Type == TokenType::End && --depth < 0)
+					return i == start ? i + 1 : i;
+				else if (m_Tokens[i].Type == TokenType::Newline && depth == 0 && i > start)
+					return i;
+				i++;
+			}
+			return i;
 		}
 
 		// Returns the index just after the 'end' that closes the block starting at index i.
@@ -929,7 +1022,8 @@ namespace ForgeScript {
 			SkipNewlines();
 			while (!IsBlockEnd())
 			{
-				Statement();
+				const size_t start = m_Pos;
+				RecoverableUnit(*m_State, EndOfUnit(start), [this] { Statement(); });
 				SkipNewlines();
 			}
 		}
@@ -1704,6 +1798,15 @@ namespace ForgeScript {
 			if (!Check(TokenType::String))
 				ErrorAtCurrent("Expected the script name in quotes, like: use \"helpers\"");
 			std::string path = Current().Text;
+			// When looking for every mistake, a script that cannot be found is one too. A normal compile
+			// leaves this to the moment the script runs, which reports the same message.
+			if (m_AllErrors)
+			{
+				std::string resolvedName;
+				std::string source;
+				if (!m_VM.ResolveModuleSource(path, resolvedName, source))
+					RecordError(Current(), "Could not find the script \"" + path + "\" to use.");
+			}
 			Advance();
 			bool hasAlias = MatchWord("as");
 			std::string alias;
@@ -2360,6 +2463,9 @@ namespace ForgeScript {
 		bool m_NoInvoke = false;
 		size_t m_LastCallPos = static_cast<size_t>(-1);
 		CompileError m_Error;
+		std::vector<CompileError>* m_AllErrors = nullptr;
+		// A file with this many mistakes is probably not ForgeScript at all; stop there.
+		static constexpr size_t c_MaxCollectedErrors = 100;
 	};
 
 	Function* CompileScript(VM& vm, Module* module, std::string_view source, const std::string& fileName,
@@ -2369,6 +2475,15 @@ namespace ForgeScript {
 		std::vector<Token> tokens = lexer.Tokenize();
 		Compiler compiler(vm, module, std::move(tokens), fileName, options);
 		return compiler.Compile(outError);
+	}
+
+	std::vector<CompileError> FindCompileErrors(VM& vm, Module* module, std::string_view source, const std::string& fileName,
+		const CompileOptions& options)
+	{
+		Lexer lexer(source);
+		std::vector<Token> tokens = lexer.Tokenize();
+		Compiler compiler(vm, module, std::move(tokens), fileName, options);
+		return compiler.FindErrors();
 	}
 
 }

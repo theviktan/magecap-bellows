@@ -1,0 +1,4 @@
+# Two mistakes for the forgescript --check tests.
+set to 5
+say "fine"
+say 1 + * 2

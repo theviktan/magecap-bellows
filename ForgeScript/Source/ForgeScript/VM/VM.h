@@ -132,6 +132,8 @@ namespace ForgeScript {
 		LoadResult Load(std::string_view source, const std::string& fileName);
 		// Checks code for mistakes without running it.
 		bool Check(std::string_view source, const std::string& fileName, CompileError& outError);
+		// Like Check, but reports every mistake it can find (sorted by line), not only the first.
+		std::vector<CompileError> FindMistakes(std::string_view source, const std::string& fileName);
 		// Removes a module, cancels its tasks and lets the garbage collector free it.
 		void UnloadModule(Module* module);
 		// Forgets every script loaded with "use", so the next "use" reads the file again (hot reload).

@@ -44,6 +44,7 @@ The tests:
 |------------|----------------|
 | `ForgeScriptTests` | The ForgeScript language: lexer, compiler errors, embedding API, and every `ForgeScript/Tests/Scripts/*.forge` script (also under GC stress). |
 | `ForgeScriptEngineExample` | The small stand-alone host in `ForgeScript/Examples/EngineIntegration`. |
+| `ForgeScriptCheckCommand` | `forgescript --check` text, `--json`, `--stdin`/`--name` output and exit codes, which editors and MageCap Forge depend on (`ForgeScript/Tests/CLI`). |
 | `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
