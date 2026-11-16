@@ -33,6 +33,9 @@ namespace Bellows::Scripting {
 		ForgeScriptRuntime& operator=(const ForgeScriptRuntime&) = delete;
 
 		static bool IsForgeScript(const std::string& scriptPath);
+		// Makes 'use "Scripts/Helpers"' read Assets/Scripts/Helpers.forge (relative to the asset folder).
+		// Every machine that compiles game scripts needs it, including the ones that only check them.
+		static void InstallModuleLoader(ForgeScript::VM& vm);
 
 		// Play mode lifecycle
 		void Start();

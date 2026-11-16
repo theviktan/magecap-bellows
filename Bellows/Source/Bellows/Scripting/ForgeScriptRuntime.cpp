@@ -110,15 +110,19 @@ namespace Bellows::Scripting {
 		Scope<ForgeScript::VM> vm = CreateScope<ForgeScript::VM>(config);
 		vm->SetPrintHandler([](const std::string& text) { BW_INFO("{}", text); });
 		vm->SetErrorHandler([this](const ForgeScript::ScriptError& error) { m_Reporter("ForgeScript", Describe(error)); });
-		// use "Scripts/Helpers" loads Assets/Scripts/Helpers.forge.
-		vm->SetModuleLoader([](const std::string& path, std::string& outName, std::string& outSource)
+		InstallModuleLoader(*vm);
+		RegisterForgeScriptApi(*vm);
+		return vm;
+	}
+
+	void ForgeScriptRuntime::InstallModuleLoader(ForgeScript::VM& vm)
+	{
+		vm.SetModuleLoader([](const std::string& path, std::string& outName, std::string& outSource)
 		{
 			const std::string scriptPath = std::filesystem::path(path).has_extension() ? path : path + ".forge";
 			outName = scriptPath;
 			return ReadScript(scriptPath, outSource);
 		});
-		RegisterForgeScriptApi(*vm);
-		return vm;
 	}
 
 	void ForgeScriptRuntime::Start()
