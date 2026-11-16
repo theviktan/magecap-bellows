@@ -1,20 +1,29 @@
 #include "ForgeScript/ForgeScript.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 // The forgescript command line tool.
 //
 //   forgescript                      start the interactive prompt
 //   forgescript game.forge           run a script
 //   forgescript --check game.forge   check a script for mistakes without running it
+//   forgescript --check --json game.forge                      the mistakes as JSON, for editors
+//   forgescript --check --stdin --name Scripts/game.forge      check text from standard input
 //   forgescript --realtime game.forge   run with real time, so "wait 2 seconds" really waits
+//
+// Exit codes (tools depend on them): 0 no mistakes / ran fine, 64 wrong usage, 65 the script has
+// mistakes, 66 the file could not be opened, 70 the script failed while running.
 
 namespace {
 
@@ -53,6 +62,9 @@ namespace {
 			"  forgescript                         start the interactive prompt\n"
 			"  forgescript <script.forge>          run a script\n"
 			"  forgescript --check <script.forge>  check a script for mistakes\n"
+			"      --json                          print the mistakes as JSON\n"
+			"      --stdin                         read the script from standard input\n"
+			"      --name <path>                   the script's path, for messages and 'use' (with --stdin)\n"
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --version               show the version\n";
 	}
@@ -103,25 +115,109 @@ namespace {
 		return hadError ? 70 : 0;
 	}
 
-	int CheckFile(const std::string& fileName)
+	std::string JsonString(const std::string& text)
+	{
+		std::string out = "\"";
+		for (unsigned char c : text)
+		{
+			switch (c)
+			{
+				case '"':  out += "\\\""; break;
+				case '\\': out += "\\\\"; break;
+				case '\n': out += "\\n"; break;
+				case '\r': out += "\\r"; break;
+				case '\t': out += "\\t"; break;
+				default:
+					if (c < 0x20)
+					{
+						char escaped[8];
+						std::snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+						out += escaped;
+					}
+					else
+					{
+						out += static_cast<char>(c);
+					}
+			}
+		}
+		return out + "\"";
+	}
+
+	// The same shape as "BellowsEditor --check-script --json", so editors read both tools alike:
+	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message" } ] }.
+	// endColumn is one past the end of the mistake's line, since the checker reports where it starts.
+	std::string MistakesToJson(const std::string& fileName, const std::string& source, const std::vector<ForgeScript::CompileError>& mistakes)
+	{
+		std::vector<size_t> lineLengths;
+		size_t start = 0;
+		while (true)
+		{
+			const size_t end = source.find('\n', start);
+			const size_t lineEnd = end == std::string::npos ? source.size() : end;
+			size_t length = lineEnd - start;
+			if (length > 0 && source[lineEnd - 1] == '\r')
+				length--;
+			lineLengths.push_back(length);
+			if (end == std::string::npos)
+				break;
+			start = end + 1;
+		}
+
+		std::string json = "{\"file\":" + JsonString(fileName) + ",\"diagnostics\":[";
+		for (size_t i = 0; i < mistakes.size(); i++)
+		{
+			const ForgeScript::CompileError& mistake = mistakes[i];
+			const size_t line = static_cast<size_t>(std::max(mistake.Line, 0));
+			const size_t column = static_cast<size_t>(std::max(mistake.Column, 0));
+			const size_t lineLength = line > 0 && line <= lineLengths.size() ? lineLengths[line - 1] : 0;
+			if (i > 0)
+				json += ",";
+			json += "{\"line\":" + std::to_string(line) + ",\"column\":" + std::to_string(column) +
+				",\"endColumn\":" + std::to_string(std::max(lineLength + 1, column + 1)) +
+				",\"severity\":\"error\",\"message\":" + JsonString(mistake.Message) + "}";
+		}
+		return json + "]}";
+	}
+
+	struct CheckOptions
+	{
+		std::string FileName;   // as given; may be empty with --stdin
+		bool Json = false;
+		bool FromStdin = false;
+	};
+
+	int CheckScript(const CheckOptions& options)
 	{
 		std::string source;
-		if (!ReadFile(fileName, source))
+		if (options.FromStdin)
 		{
-			std::cerr << "Could not open '" << fileName << "'." << std::endl;
+			source.assign(std::istreambuf_iterator<char>(std::cin), std::istreambuf_iterator<char>());
+		}
+		else if (!ReadFile(options.FileName, source))
+		{
+			std::cerr << "Could not open '" << options.FileName << "'." << std::endl;
 			return 66;
 		}
+
+		const std::string fileName = options.FileName.empty() ? std::string("stdin") : options.FileName;
 		ForgeScript::VM vm;
 		std::filesystem::path path(fileName);
+		// "use" finds scripts next to the checked file, even when its text came from standard input.
 		InstallFileLoader(vm, path.has_parent_path() ? path.parent_path() : std::filesystem::path("."));
-		ForgeScript::CompileError error;
-		if (!vm.Check(source, path.filename().string(), error))
+		const std::vector<ForgeScript::CompileError> mistakes = vm.FindMistakes(source, path.filename().string());
+
+		if (options.Json)
 		{
-			std::cerr << error.ToString() << std::endl;
-			return 65;
+			std::cout << MistakesToJson(fileName, source, mistakes) << std::endl;
 		}
-		std::cout << fileName << ": no mistakes found." << std::endl;
-		return 0;
+		else
+		{
+			for (const ForgeScript::CompileError& mistake : mistakes)
+				std::cerr << mistake.ToString() << std::endl;
+			if (mistakes.empty())
+				std::cout << fileName << ": no mistakes found." << std::endl;
+		}
+		return mistakes.empty() ? 0 : 65;
 	}
 
 	bool NeedsMoreInput(const std::string& message)
@@ -176,6 +272,7 @@ int main(int argc, char** argv)
 
 	bool realtime = false;
 	bool check = false;
+	CheckOptions checkOptions;
 	std::string file;
 	for (int i = 1; i < argc; i++)
 	{
@@ -193,14 +290,48 @@ int main(int argc, char** argv)
 			realtime = true;
 		else if (std::strcmp(argv[i], "--check") == 0)
 			check = true;
+		else if (std::strcmp(argv[i], "--json") == 0)
+			checkOptions.Json = true;
+		else if (std::strcmp(argv[i], "--stdin") == 0)
+			checkOptions.FromStdin = true;
+		else if (std::strcmp(argv[i], "--name") == 0)
+		{
+			if (i + 1 >= argc)
+			{
+				std::cerr << "--name needs the script's path after it, like: --name Scripts/player.forge" << std::endl;
+				return 64;
+			}
+			file = argv[++i];
+		}
+		else if (std::strncmp(argv[i], "--", 2) == 0)
+		{
+			std::cerr << "Unknown option '" << argv[i] << "'." << std::endl;
+			PrintUsage();
+			return 64;
+		}
 		else
 			file = argv[i];
 	}
 
+	if ((checkOptions.Json || checkOptions.FromStdin) && !check)
+	{
+		std::cerr << "--json and --stdin work together with --check." << std::endl;
+		return 64;
+	}
+	if (check)
+	{
+		checkOptions.FileName = file;
+		if (file.empty() && !checkOptions.FromStdin)
+		{
+			PrintUsage();
+			return 64;
+		}
+		return CheckScript(checkOptions);
+	}
 	if (file.empty())
 	{
 		PrintUsage();
 		return 64;
 	}
-	return check ? CheckFile(file) : RunFile(file, realtime);
+	return RunFile(file, realtime);
 }

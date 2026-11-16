@@ -35,4 +35,7 @@ if(BELLOWS_BUILD_TESTS)
 
 	add_test(NAME ForgeScriptTests COMMAND ForgeScriptTests)
 	add_test(NAME ForgeScriptEngineExample COMMAND ForgeScriptEngineExample)
+	add_test(NAME ForgeScriptCheckCommand
+		COMMAND ${CMAKE_COMMAND} -DFORGESCRIPT=$<TARGET_FILE:ForgeScriptCLI> -DFOLDER=${CMAKE_CURRENT_SOURCE_DIR}/Tests/CLI
+			-P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/CLI/CheckCommand.cmake)
 endif()

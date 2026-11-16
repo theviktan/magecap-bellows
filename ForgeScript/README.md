@@ -28,7 +28,7 @@ ForgeScript runs on its own virtual machine, the way GDScript runs inside Godot.
 
 ForgeScript builds with the rest of Bellows (see the repository [README](../README.md)). After a build:
 
-- the tests run as part of `ctest` (`ForgeScriptTests` and `ForgeScriptEngineExample`),
+- the tests run as part of `ctest` (`ForgeScriptTests`, `ForgeScriptEngineExample` and `ForgeScriptCheckCommand`),
 - the command line tool is `build/<preset>/bin/forgescript` (`forgescript.exe` on Windows).
 
 ```
@@ -38,6 +38,25 @@ forgescript --check game.forge       check a script for mistakes without running
 forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
 forgescript --version                show the version
 ```
+
+### Checking scripts from editors and tools
+
+`--check` lists every mistake it can find, one per line on standard error, sorted by line:
+
+```
+game.forge:12:5: 'to' is a ForgeScript keyword and cannot be used as a variable name.
+game.forge:20:9: Expected a value here, but found '*'.
+```
+
+After a mistake it skips the rest of that statement (or the block the statement opens) and carries on, so one typo is reported once. Unreadable text, like a string without its closing quote, ends the check, and so does a bracket that is never closed (everything after it reads as one line). A `use` whose script cannot be found counts as a mistake.
+
+| Option | |
+|---|---|
+| `--json` | Print `{"file": ..., "diagnostics": [{"line", "column", "endColumn", "severity", "message"}]}` on standard output instead (the same shape as `BellowsEditor --check-script --json`). `endColumn` is one past the end of the mistake's line; `severity` is `"error"`. |
+| `--stdin` | Read the script from standard input, for text an editor has not saved yet. |
+| `--name <path>` | The script's path, used in messages and to find `use` scripts next to it. Needed with `--stdin` so `use` and phrases from other scripts work. |
+
+Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be opened, `64` wrong usage. When running a script, `70` means it failed. Tools depend on the text format and exit codes, so they stay stable.
 
 Try the scripts in [`Examples/Scripts`](Examples/Scripts), for example `forgescript ForgeScript/Examples/Scripts/battle.forge`.
 

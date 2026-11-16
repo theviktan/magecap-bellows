@@ -443,6 +443,13 @@ namespace ForgeScript {
 		return CompileScript(*this, scratch, source, fileName, CompileOptions(), outError) != nullptr;
 	}
 
+	std::vector<CompileError> VM::FindMistakes(std::string_view source, const std::string& fileName)
+	{
+		GCPause pause(*this);
+		Module* scratch = Allocate<Module>(0, fileName);
+		return FindCompileErrors(*this, scratch, source, fileName, CompileOptions());
+	}
+
 	LoadResult VM::RunInModule(Module* module, std::string_view source, const std::string& fileName, const CompileOptions& options)
 	{
 		LoadResult result;
