@@ -105,12 +105,19 @@ namespace Bellows {
 				const std::filesystem::path prefix = sys.attr("base_prefix").cast<std::string>();
 #if defined(BW_PLATFORM_WINDOWS)
 				info.PlatformLibrary = prefix / "DLLs";
-				std::error_code error;
-				for (const auto& entry : std::filesystem::directory_iterator(prefix, error))
+				// The Python and C++ runtime DLLs sit in the Python installation (development builds)
+				// or next to the executable (the downloadable editor, whose Python is bundled).
+				std::unordered_set<std::string> found;
+				for (const std::filesystem::path& directory : { prefix, Platform::GetExecutableDirectory() })
 				{
-					const std::string name = entry.path().filename().string();
-					if (entry.path().extension() == ".dll" && (name.rfind("python3", 0) == 0 || name.rfind("vcruntime", 0) == 0))
-						info.SharedLibraries.push_back(entry.path());
+					std::error_code error;
+					for (const auto& entry : std::filesystem::directory_iterator(directory, error))
+					{
+						const std::string name = entry.path().filename().string();
+						const bool runtimeLibrary = name.rfind("python3", 0) == 0 || name.rfind("vcruntime", 0) == 0 || name.rfind("msvcp", 0) == 0;
+						if (entry.path().extension() == ".dll" && runtimeLibrary && found.insert(name).second)
+							info.SharedLibraries.push_back(entry.path());
+					}
 				}
 #else
 				py::object libraryDirectory = sysconfig.attr("get_config_var")("LIBDIR");
@@ -118,7 +125,13 @@ namespace Bellows {
 				if (libraryName.is_none())
 					libraryName = sysconfig.attr("get_config_var")("LDLIBRARY");
 				if (!libraryDirectory.is_none() && !libraryName.is_none())
-					info.SharedLibraries.push_back(std::filesystem::path(libraryDirectory.cast<std::string>()) / libraryName.cast<std::string>());
+				{
+					// LIBDIR is where Python was built to live; a bundled runtime keeps the library in <prefix>/lib.
+					std::filesystem::path library = std::filesystem::path(libraryDirectory.cast<std::string>()) / libraryName.cast<std::string>();
+					if (!FileSystem::Exists(library))
+						library = prefix / "lib" / libraryName.cast<std::string>();
+					info.SharedLibraries.push_back(library);
+				}
 #endif
 				return true;
 			}
