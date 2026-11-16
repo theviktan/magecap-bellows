@@ -155,48 +155,134 @@ namespace Bellows::Scripting {
 		m_VM.reset();
 	}
 
+	ForgeScript::Module* ForgeScriptRuntime::LoadModule(Entity entity, const std::string& scriptPath, const std::string& source)
+	{
+		ForgeScript::Module* module = m_VM->CreateModule(scriptPath);
+		m_VM->SetGlobal(module, "self", MakeForgeScriptEntity(*m_VM, ScriptEntity(entity)));
+		// Errors in the script's top level reach the reporter through the VM's error handler.
+		if (!m_VM->RunInModule(module, source, scriptPath).Success)
+		{
+			m_VM->UnloadModule(module);
+			return nullptr;
+		}
+		return module;
+	}
+
+	void ForgeScriptRuntime::ApplyFields(ForgeScript::Module* module, Entity entity, const std::string& source, const std::vector<std::string>& keep)
+	{
+		const ScriptComponent& component = entity.GetComponent<ScriptComponent>();
+		if (component.Fields.empty())
+			return;
+
+		const std::vector<ForgeScript::ScriptVariable> variables = ForgeScript::FindScriptVariables(source);
+		for (const auto& [name, value] : component.Fields)
+		{
+			if (std::find(keep.begin(), keep.end(), name) != keep.end())
+				continue;
+			const bool declared = std::any_of(variables.begin(), variables.end(), [&name](const ForgeScript::ScriptVariable& variable) { return variable.Name == name; });
+			if (declared)
+				m_VM->SetGlobal(module, name, FieldToForgeScript(*m_VM, value));
+			else
+				BW_WARN("Script '{}' has no field '{}' (set on '{}')", component.ScriptPath, name, entity.GetName());
+		}
+	}
+
 	bool ForgeScriptRuntime::CreateInstance(Entity entity)
 	{
 		if (!m_VM)
 			return false;
 
 		const ScriptComponent& component = entity.GetComponent<ScriptComponent>();
-		const std::string context = "Script '" + component.ScriptPath + "' on '" + entity.GetName() + "'";
 		std::string source;
 		if (!ReadScript(component.ScriptPath, source))
 		{
-			m_Reporter(context, "Script file '" + component.ScriptPath + "' was not found");
+			m_Reporter("Script '" + component.ScriptPath + "' on '" + entity.GetName() + "'", "Script file '" + component.ScriptPath + "' was not found");
 			return false;
 		}
 
-		ForgeScript::Module* module = m_VM->CreateModule(component.ScriptPath);
-		m_VM->SetGlobal(module, "self", MakeForgeScriptEntity(*m_VM, ScriptEntity(entity)));
-		// Errors in the script's top level reach the reporter through the VM's error handler.
-		if (!m_VM->RunInModule(module, source, component.ScriptPath).Success)
-		{
-			m_VM->UnloadModule(module);
+		ForgeScript::Module* module = LoadModule(entity, component.ScriptPath, source);
+		if (!module)
 			return false;
-		}
-
 		// Inspector values replace the script's own starting values, before 'when created' runs.
-		if (!component.Fields.empty())
-		{
-			const std::vector<ForgeScript::ScriptVariable> variables = ForgeScript::FindScriptVariables(source);
-			for (const auto& [name, value] : component.Fields)
-			{
-				const bool declared = std::any_of(variables.begin(), variables.end(), [&name](const ForgeScript::ScriptVariable& variable) { return variable.Name == name; });
-				if (declared)
-					m_VM->SetGlobal(module, name, FieldToForgeScript(*m_VM, value));
-				else
-					BW_WARN("Script '{}' has no field '{}' (set on '{}')", component.ScriptPath, name, entity.GetName());
-			}
-		}
+		ApplyFields(module, entity, source, {});
 
 		Instance instance;
+		instance.Owner = ScriptEntity(entity);
 		instance.Module = module;
 		instance.ScriptPath = component.ScriptPath;
 		m_Instances[entity.GetUUID()] = instance;
 		return true;
+	}
+
+	void ForgeScriptRuntime::Reload(const std::string& changedPath)
+	{
+		if (!m_VM || !IsForgeScript(changedPath))
+			return;
+
+		// Scripts loaded with 'use' are shared, so any change can affect every script: read them again.
+		m_VM->ClearModuleCache();
+		std::unordered_map<std::string, std::string> sources;
+		std::unordered_map<std::string, bool> usable;
+		for (const auto& [uuid, instance] : m_Instances)
+		{
+			if (usable.contains(instance.ScriptPath))
+				continue;
+			std::string source;
+			bool ok = ReadScript(instance.ScriptPath, source);
+			if (!ok)
+			{
+				m_Reporter("ForgeScript", "Script file '" + instance.ScriptPath + "' was not found; it keeps running its old version");
+			}
+			else
+			{
+				// A script with mistakes keeps running as it was; report each mistake once, not per entity.
+				const std::vector<ForgeScript::CompileError> mistakes = m_VM->FindMistakes(source, instance.ScriptPath);
+				for (const ForgeScript::CompileError& mistake : mistakes)
+					m_Reporter("ForgeScript", Describe(mistake.File, mistake.Line, mistake.Message));
+				ok = mistakes.empty();
+			}
+			usable[instance.ScriptPath] = ok;
+			sources[instance.ScriptPath] = std::move(source);
+		}
+
+		std::vector<UUID> entities;
+		for (const auto& [uuid, instance] : m_Instances)
+		{
+			if (usable[instance.ScriptPath])
+				entities.push_back(uuid);
+		}
+		for (UUID uuid : entities)
+		{
+			auto it = m_Instances.find(uuid);
+			if (it == m_Instances.end())
+				continue;
+			Entity entity = it->second.Owner.TryResolve();
+			if (!entity)
+				continue;
+
+			const std::string scriptPath = it->second.ScriptPath;
+			ForgeScript::Module* oldModule = it->second.Module;
+			ForgeScript::Module* newModule = LoadModule(entity, scriptPath, sources[scriptPath]);
+			if (!newModule)
+				continue;
+
+			const std::vector<std::string> carried = m_VM->CarryOverVariables(oldModule, newModule, { "self" });
+			// Inspector values still apply to settings the new version adds.
+			ApplyFields(newModule, entity, sources[scriptPath], carried);
+			m_VM->UnloadModule(oldModule);
+
+			// Loading ran script code, which may have changed the instance map.
+			auto again = m_Instances.find(uuid);
+			if (again == m_Instances.end())
+			{
+				m_VM->UnloadModule(newModule);
+				continue;
+			}
+			again->second.Module = newModule;
+			again->second.ErrorCount = 0;
+			if (again->second.Created)
+				Emit(uuid, "reloaded", {});
+		}
 	}
 
 	void ForgeScriptRuntime::Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values)
