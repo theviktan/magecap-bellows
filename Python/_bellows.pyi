@@ -1001,6 +1001,9 @@ def quit(exit_code: int = 0) -> None:
 def raycast(origin: Vec3 | typing.Sequence[float], direction: Vec3 | typing.Sequence[float], max_distance: float = 1000.0) -> RaycastHit | None:
     """Casts a ray against physics colliders (play mode); returns RaycastHit or None"""
 
+def save_screenshot(path: str = '', max_width: int = 1920) -> str:
+    """Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; "" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()"""
+
 def scene_name() -> str: ...
 
 def screen_to_world_ray(screen_position: Vec2 | typing.Sequence[float]) -> tuple[Vec3, Vec3] | None:
@@ -1021,6 +1024,9 @@ def set_master_volume(volume: float) -> None: ...
 
 def time() -> float:
     """Seconds since play started"""
+
+def user_folder() -> str:
+    """The game's own writable folder for saves, screenshots and reports"""
 
 def viewport_size() -> Vec2:
     """Size of the game viewport in pixels"""

@@ -38,7 +38,7 @@ add_test(NAME BellowsFeatureTest
 	WORKING_DIRECTORY "${BELLOWS_OUTPUT_DIR}")
 # The pass message is required too: a scene without its test runner would otherwise just run out of frames.
 set_tests_properties(BellowsFeatureTest PROPERTIES
-	ENVIRONMENT "BELLOWS_FEATURE_TEST=1"
+	ENVIRONMENT "BELLOWS_FEATURE_TEST=1;BELLOWS_USER_DATA_DIR=${CMAKE_BINARY_DIR}/TestUserData"
 	PASS_REGULAR_EXPRESSION "FEATURE TEST PASSED"
 	FAIL_REGULAR_EXPRESSION "FEATURE TEST FAILED;Traceback;script error"
 	TIMEOUT 900)
@@ -49,6 +49,6 @@ if(TARGET BellowsEditor)
 			--run-script "${CMAKE_CURRENT_SOURCE_DIR}/Scripts/EditorFeatureTest.py" --exit
 		WORKING_DIRECTORY "${BELLOWS_OUTPUT_DIR}")
 	set_tests_properties(BellowsEditorFeatureTest PROPERTIES
-		ENVIRONMENT "BELLOWS_FEATURE_TEST=1;BELLOWS_CONFIG_DIR=${CMAKE_BINARY_DIR}/TestEditorConfig"
+		ENVIRONMENT "BELLOWS_FEATURE_TEST=1;BELLOWS_CONFIG_DIR=${CMAKE_BINARY_DIR}/TestEditorConfig;BELLOWS_USER_DATA_DIR=${CMAKE_BINARY_DIR}/TestUserData"
 		TIMEOUT 900)
 endif()

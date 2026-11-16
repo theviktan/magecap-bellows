@@ -49,4 +49,71 @@ namespace Bellows {
 		return result != 0;
 	}
 
+	Image Image::Resized(uint32_t width, uint32_t height) const
+	{
+		Image result;
+		if (!IsValid() || width == 0 || height == 0)
+			return result;
+		result.Width = width;
+		result.Height = height;
+		result.Pixels.resize(static_cast<size_t>(width) * height * 4);
+
+		const double scaleX = static_cast<double>(Width) / width;
+		const double scaleY = static_cast<double>(Height) / height;
+		for (uint32_t y = 0; y < height; y++)
+		{
+			// The source rows and columns this pixel covers (at least one of each).
+			const uint32_t y0 = static_cast<uint32_t>(y * scaleY);
+			const uint32_t y1 = std::max(y0 + 1, std::min(Height, static_cast<uint32_t>((y + 1) * scaleY)));
+			for (uint32_t x = 0; x < width; x++)
+			{
+				const uint32_t x0 = static_cast<uint32_t>(x * scaleX);
+				const uint32_t x1 = std::max(x0 + 1, std::min(Width, static_cast<uint32_t>((x + 1) * scaleX)));
+				uint32_t sum[4] = {};
+				for (uint32_t sy = y0; sy < y1; sy++)
+				{
+					const uint8_t* row = &Pixels[(static_cast<size_t>(sy) * Width + x0) * 4];
+					for (uint32_t sx = x0; sx < x1; sx++, row += 4)
+					{
+						for (int c = 0; c < 4; c++)
+							sum[c] += row[c];
+					}
+				}
+				const uint32_t count = (y1 - y0) * (x1 - x0);
+				uint8_t* out = &result.Pixels[(static_cast<size_t>(y) * width + x) * 4];
+				for (int c = 0; c < 4; c++)
+					out[c] = static_cast<uint8_t>((sum[c] + count / 2) / count);
+			}
+		}
+		return result;
+	}
+
+	bool Image::SaveOpaque(const std::filesystem::path& path, int jpegQuality) const
+	{
+		if (!IsValid())
+			return false;
+
+		std::error_code error;
+		if (path.has_parent_path())
+			std::filesystem::create_directories(path.parent_path(), error);
+
+		std::vector<uint8_t> rgb(static_cast<size_t>(Width) * Height * 3);
+		for (size_t i = 0, count = static_cast<size_t>(Width) * Height; i < count; i++)
+		{
+			rgb[i * 3 + 0] = Pixels[i * 4 + 0];
+			rgb[i * 3 + 1] = Pixels[i * 4 + 1];
+			rgb[i * 3 + 2] = Pixels[i * 4 + 2];
+		}
+
+		std::string extension = path.extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		const std::string file = path.string();
+		const int result = extension == ".jpg" || extension == ".jpeg"
+			? stbi_write_jpg(file.c_str(), static_cast<int>(Width), static_cast<int>(Height), 3, rgb.data(), std::clamp(jpegQuality, 1, 100))
+			: stbi_write_png(file.c_str(), static_cast<int>(Width), static_cast<int>(Height), 3, rgb.data(), static_cast<int>(Width * 3));
+		if (result == 0)
+			BW_CORE_ERROR("Failed to write image '{}'", file);
+		return result != 0;
+	}
+
 }

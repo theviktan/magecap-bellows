@@ -362,6 +362,29 @@
 			"doc": "Switches to another scene at the end of the frame"
 		},
 		{
+			"name": "save_screenshot",
+			"params": [
+				{
+					"name": "path",
+					"type": "str",
+					"default": ""
+				},
+				{
+					"name": "max_width",
+					"type": "int",
+					"default": 1920
+				}
+			],
+			"returns": "str",
+			"doc": "Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; \"\" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()"
+		},
+		{
+			"name": "user_folder",
+			"params": [],
+			"returns": "str",
+			"doc": "The game's own writable folder for saves, screenshots and reports"
+		},
+		{
 			"name": "quit",
 			"params": [
 				{

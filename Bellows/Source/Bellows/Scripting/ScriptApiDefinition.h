@@ -542,6 +542,11 @@ namespace Bellows::Scripting {
 		api.Function("scene_name", []() { return RequireContextScene().GetName(); }, "");
 		api.Function("is_playing", []() { Scene* scene = GetContextScene(); return scene && scene->IsRunning(); }, "");
 		api.Function("load_scene", [](const std::string& path) { return RequestLoadScene(path); }, "Switches to another scene at the end of the frame", Arg("path"));
+		api.Function("save_screenshot", [](const std::string& path, int maxWidth) { return SaveScreenshot(path, maxWidth); },
+			"Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; \"\" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()",
+			Arg("path", std::string()), Arg("max_width", 1920));
+		api.Function("user_folder", []() { return GetUserFolder().string(); },
+			"The game's own writable folder for saves, screenshots and reports");
 		api.Function("quit", [](int exitCode) { RequestQuit(exitCode); }, "Quits the game (stops play mode in the editor)", Arg("exit_code", 0));
 
 		// --- Audio ------------------------------------------------------------

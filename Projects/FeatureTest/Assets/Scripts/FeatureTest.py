@@ -9,6 +9,7 @@ runs), the game quits afterwards with exit code 0 (pass) or 1 (fail).
 import math
 import os
 import pathlib
+import struct
 import traceback
 
 import bellows
@@ -99,6 +100,7 @@ class FeatureTest(bellows.Script):
         self.test_scripts()
         self.test_camera_projection()
         self.test_audio()
+        self.test_screenshots()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -473,6 +475,20 @@ class FeatureTest(bellows.Script):
         self.check(not source.is_playing, "AudioSource.stop")
         listener = bellows.primary_camera().get_component(bellows.AudioListener)
         self.check(listener is not None and listener.active, "AudioListener on the camera")
+
+    def test_screenshots(self):
+        folder = bellows.user_folder()
+        self.check(os.path.isabs(folder) and folder.endswith(os.path.join("Games", "Feature Test")), f"user_folder ({folder})")
+        path = bellows.save_screenshot("FeatureTest/shot.png", 320)
+        self.check(path == os.path.join(folder, "FeatureTest", "shot.png"), f"save_screenshot returns the full path ({path})")
+        with open(path, "rb") as file:
+            header = file.read(24)
+        width, height = struct.unpack(">II", header[16:24])
+        self.check(header[:8] == b"\x89PNG\r\n\x1a\n" and width == 320 and 0 < height < width, f"save_screenshot writes a scaled PNG ({width}x{height})")
+        jpeg = bellows.save_screenshot("FeatureTest/shot.jpg", 0)
+        with open(jpeg, "rb") as file:
+            self.check(file.read(2) == b"\xff\xd8", "save_screenshot writes JPEG for .jpg")
+        self.check(raises(lambda: bellows.save_screenshot("shot.gif"), ValueError), "save_screenshot rejects other formats")
 
     def test_destruction(self):
         temporary = bellows.create_entity("Temporary")

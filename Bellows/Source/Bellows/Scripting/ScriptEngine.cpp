@@ -449,6 +449,11 @@ sys.stderr = _BellowsLogWriter(2)
 		Scripting::SetLoadSceneHandler(std::move(handler));
 	}
 
+	void ScriptEngine::SetScreenshotHandler(std::function<std::optional<Image>()> handler)
+	{
+		Scripting::SetScreenshotHandler(std::move(handler));
+	}
+
 	void ScriptEngine::OnRuntimeStart(Scene& scene)
 	{
 		if (!IsInitialized())

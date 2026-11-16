@@ -19,6 +19,10 @@ namespace Bellows {
 		static std::string GetSharedLibraryExtension();
 		static std::string GetExecutableExtension();
 
+		// Where per-user data goes: %APPDATA% on Windows, $XDG_DATA_HOME or ~/.local/share elsewhere.
+		// BELLOWS_USER_DATA_DIR overrides it (tests, portable setups).
+		static std::filesystem::path GetUserDataDirectory();
+
 		static bool SetEnvVar(const std::string& name, const std::string& value);
 		static std::string GetEnvVar(const std::string& name);
 

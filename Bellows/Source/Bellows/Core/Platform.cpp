@@ -78,6 +78,21 @@ namespace Bellows {
 #endif
 	}
 
+	std::filesystem::path Platform::GetUserDataDirectory()
+	{
+		if (const std::string overrideDirectory = GetEnvVar("BELLOWS_USER_DATA_DIR"); !overrideDirectory.empty())
+			return std::filesystem::path(overrideDirectory);
+#if defined(BW_PLATFORM_WINDOWS)
+		const std::string appData = GetEnvVar("APPDATA");
+		return appData.empty() ? GetExecutableDirectory() : std::filesystem::path(appData);
+#else
+		if (const std::string dataHome = GetEnvVar("XDG_DATA_HOME"); !dataHome.empty())
+			return std::filesystem::path(dataHome);
+		const std::string home = GetEnvVar("HOME");
+		return home.empty() ? GetExecutableDirectory() : std::filesystem::path(home) / ".local" / "share";
+#endif
+	}
+
 	bool Platform::SetEnvVar(const std::string& name, const std::string& value)
 	{
 #if defined(BW_PLATFORM_WINDOWS)

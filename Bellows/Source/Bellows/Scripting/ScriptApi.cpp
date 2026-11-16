@@ -3,12 +3,16 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
+#include "Bellows/Core/Platform.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Project/Project.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 #include <cctype>
+#include <cmath>
+#include <ctime>
 
 namespace Bellows::Scripting {
 
@@ -20,6 +24,7 @@ namespace Bellows::Scripting {
 		uint64_t s_ContextSceneID = 0;
 		std::function<void(int)> s_QuitHandler;
 		std::function<bool(const std::string&)> s_LoadSceneHandler;
+		std::function<std::optional<Image>()> s_ScreenshotHandler;
 		float s_DeltaTime = 0.0f;
 		float s_Time = 0.0f;
 		uint64_t s_Frame = 0;
@@ -91,6 +96,7 @@ namespace Bellows::Scripting {
 
 	void SetQuitHandler(std::function<void(int)> handler) { s_QuitHandler = std::move(handler); }
 	void SetLoadSceneHandler(std::function<bool(const std::string&)> handler) { s_LoadSceneHandler = std::move(handler); }
+	void SetScreenshotHandler(std::function<std::optional<Image>()> handler) { s_ScreenshotHandler = std::move(handler); }
 
 	void RequestQuit(int exitCode)
 	{
@@ -101,6 +107,87 @@ namespace Bellows::Scripting {
 	bool RequestLoadScene(const std::string& path)
 	{
 		return s_LoadSceneHandler ? s_LoadSceneHandler(path) : false;
+	}
+
+	namespace {
+
+		// File names keep letters, digits, spaces, '-', '_' and '.'; anything else becomes '_'.
+		std::string SafeFileName(const std::string& name, const char* fallback)
+		{
+			std::string safe;
+			for (unsigned char c : name)
+				safe += std::isalnum(c) || c == ' ' || c == '-' || c == '_' || c == '.' || c >= 0x80 ? static_cast<char>(c) : '_';
+			while (!safe.empty() && (safe.back() == '.' || safe.back() == ' '))
+				safe.pop_back();
+			return safe.empty() ? fallback : safe;
+		}
+
+		std::string Timestamp()
+		{
+			const std::time_t now = std::time(nullptr);
+			std::tm local {};
+#if defined(BW_PLATFORM_WINDOWS)
+			localtime_s(&local, &now);
+#else
+			localtime_r(&now, &local);
+#endif
+			char text[32];
+			std::strftime(text, sizeof(text), "%Y-%m-%d-%H%M%S", &local);
+			return text;
+		}
+
+	}
+
+	std::filesystem::path GetUserFolder()
+	{
+		const Ref<Project> project = Project::GetActive();
+		const std::string game = SafeFileName(project ? project->GetConfig().Name : std::string(), "Untitled");
+		return Platform::GetUserDataDirectory() / "MageCapBellows" / "Games" / std::filesystem::path(game);
+	}
+
+	std::string SaveScreenshot(const std::string& path, int maxWidth)
+	{
+		if (maxWidth < 0)
+			throw ScriptValueError("max_width can't be negative (0 keeps the full size)");
+
+		std::filesystem::path file;
+		if (path.empty())
+		{
+			const Scene* scene = GetContextScene();
+			const std::string stem = SafeFileName(scene ? scene->GetName() : std::string(), "Screenshot") + "-" + Timestamp();
+			const std::filesystem::path folder = GetUserFolder() / "Screenshots";
+			file = folder / std::filesystem::path(stem + ".png");
+			// Two shots in the same second get -2, -3, ...
+			for (int n = 2; std::filesystem::exists(file) && n < 1000; n++)
+				file = folder / std::filesystem::path(stem + "-" + std::to_string(n) + ".png");
+		}
+		else
+		{
+			file = std::filesystem::path(path);
+			if (file.is_relative())
+				file = GetUserFolder() / file;
+			std::string extension = file.extension().string();
+			std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (extension.empty())
+				file += ".png";
+			else if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
+				throw ScriptValueError("Screenshots are saved as .png, .jpg or .jpeg, not '" + extension + "'");
+		}
+
+		std::optional<Image> image = s_ScreenshotHandler ? s_ScreenshotHandler() : std::nullopt;
+		if (!image || !image->IsValid())
+			throw ScriptValueError("There is no game image to save yet: nothing has been drawn, or this program shows no game view");
+		if (maxWidth > 0 && image->Width > static_cast<uint32_t>(maxWidth))
+		{
+			const uint32_t width = static_cast<uint32_t>(maxWidth);
+			const uint32_t height = std::max(1u, static_cast<uint32_t>(std::lround(static_cast<double>(image->Height) * width / image->Width)));
+			image = image->Resized(width, height);
+		}
+
+		file = std::filesystem::absolute(file);
+		if (!image->SaveOpaque(file))
+			throw ScriptValueError("Could not write the screenshot to '" + file.string() + "'");
+		return file.string();
 	}
 
 	void SetFrameTiming(float deltaTime, float time, uint64_t frame)
