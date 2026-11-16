@@ -180,7 +180,8 @@ namespace ForgeScript {
 
 		// Calls a function from native code and returns its result, throwing RuntimeError on failure.
 		Value CallFromNative(const Value& callee, const std::vector<Value>& args);
-		bool ValuesEqual(const Value& a, const Value& b) const { return a == b; }
+		// The script meaning of 'is' (lists and maps compare their contents); see ContentsEqual.
+		bool ValuesEqual(const Value& a, const Value& b) const { return ContentsEqual(a, b); }
 
 	private:
 		template<typename T, typename... Args>
