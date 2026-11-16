@@ -213,13 +213,19 @@ overridden values), `set_field(name, value)`, `instance` (the running object or 
   `play_on_start`, `spatial` (3D), `min_distance`, `max_distance`, `play()`, `stop()`, `pause()`,
   `is_playing`.
 * `AudioListener`: `active`. Without an active listener the primary camera hears the scene.
-* `play_sound(path, volume=1.0, bus="Effects")` plays a one-shot 2D sound; `set_master_volume(v)`,
-  `get_master_volume()`.
-* Audio buses group sounds like a mixer: `"Master"` (everything), `"Music"` and `"Effects"` (both
-  feed Master). `AudioSource.bus` picks a source's bus (default `"Effects"`).
-  `bus_names()`, `set_bus_volume(bus, volume)`, `get_bus_volume(bus)`, `set_bus_muted(bus, muted=True)`
-  (keeps the volume) and `is_bus_muted(bus)`; unknown bus names raise `ValueError`. Each play
-  starts from the volumes in Project Settings → Audio buses.
+* `AudioSource.bus`: the bus the source plays on (default `"Effects"`).
+
+Audio buses group sounds like a mixer: `"Master"` (everything), `"Music"` and `"Effects"` (both feed
+Master). Each play starts from the volumes in Project Settings → Audio buses. Unknown bus names
+raise `ValueError`.
+
+| Function | Description |
+|----------|-------------|
+| `play_sound(path, volume=1.0, bus="Effects")` | Plays a one-shot 2D sound; `False` if the clip can't be loaded. |
+| `set_master_volume(volume)` / `get_master_volume()` | The Master bus volume (1 = normal, 0 = silent). |
+| `bus_names()` | The audio buses: `["Master", "Music", "Effects"]`. |
+| `set_bus_volume(bus, volume)` / `get_bus_volume(bus)` | A bus's volume (1 = normal, 0 = silent). |
+| `set_bus_muted(bus, muted=True)` / `is_bus_muted(bus)` | Mutes or unmutes a bus; its volume is kept for unmuting. |
 
 ## Materials
 
