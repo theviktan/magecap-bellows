@@ -51,6 +51,19 @@ TEST_CASE("Projects are created, saved and loaded")
 	Project::SetActive(nullptr);
 }
 
+TEST_CASE("A minimal project file with only a name and an asset folder loads")
+{
+	// MageCap Forge writes such a project to probe `BellowsEditor --check-script`; keep accepting it.
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "MinimalProject";
+	REQUIRE(FileSystem::WriteTextFile(folder / "Probe.bproject", R"({ "Name": "Probe", "AssetDirectory": "Content" })"));
+	Ref<Project> project = Project::Load(folder / "Probe.bproject");
+	REQUIRE(project);
+	CHECK(project->GetConfig().Name == "Probe");
+	CHECK(project->GetAssetDirectory() == std::filesystem::absolute(folder) / "Content");
+	CHECK(AssetManager::GetAssetDirectory() == project->GetAssetDirectory());
+	Project::SetActive(nullptr);
+}
+
 TEST_CASE("Export sanitizes names and refuses unsafe output folders")
 {
 	CHECK(ProjectExporter::SanitizeName("My Game!") == "My Game");
