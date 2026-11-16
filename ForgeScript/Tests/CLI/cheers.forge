@@ -1,0 +1,4 @@
+# Defines a phrase that good.forge and the --stdin test use.
+phrase cheer (who)
+	say "Go {who}!"
+end
