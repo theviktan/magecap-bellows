@@ -109,7 +109,7 @@ TEST_CASE("ForgeScript hot reload keeps script variables and runs the new code")
 		"when update with delta\n\tset my name to \"count {count}\"\nend\n"
 		"function tick()\n\trepeat forever\n\t\tadd 10 to count\n\t\twait 1 frame\n\tend\nend\n");
 	counter.GetComponent<ScriptComponent>().Fields["extra"] = std::string("from the Inspector");
-	h.Runtime.Reload("Scripts/Counter.forge");
+	CHECK(h.Runtime.Reload("Scripts/Counter.forge"));
 
 	INFO(h.AllErrors());
 	CHECK(h.Errors.empty());
@@ -136,7 +136,7 @@ TEST_CASE("ForgeScript hot reload keeps the old version when the new one has mis
 	h.Start({ first, second });
 
 	h.Write("Scripts/Guard.forge", "when update with delta\n\tset to 5\n\tsay 1 + * 2\nend\n");
-	h.Runtime.Reload("Scripts/Guard.forge");
+	CHECK_FALSE(h.Runtime.Reload("Scripts/Guard.forge"));
 
 	// Each mistake is reported once, not once per entity, with its file and line.
 	INFO(h.AllErrors());
@@ -164,12 +164,12 @@ TEST_CASE("ForgeScript hot reload reads changed helper scripts")
 
 	// Only the helper changed; the script that uses it picks up the new version.
 	h.Write("Scripts/Helpers.forge", "function greeting()\n\treturn \"hi again\"\nend\n");
-	h.Runtime.Reload("Scripts/Helpers.forge");
+	CHECK(h.Runtime.Reload("Scripts/Helpers.forge"));
 	INFO(h.AllErrors());
 	CHECK(h.Errors.empty());
 	CHECK_EQ(greeter.GetName(), std::string("hi again"));
 
 	// Other files never reload ForgeScript.
-	h.Runtime.Reload("Scripts/Mover.py");
+	CHECK(h.Runtime.Reload("Scripts/Mover.py"));
 	CHECK(h.Errors.empty());
 }

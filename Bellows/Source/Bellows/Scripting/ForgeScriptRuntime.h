@@ -58,7 +58,9 @@ namespace Bellows::Scripting {
 		// code, since scripts loaded with 'use' are shared by all of them. A script with mistakes keeps
 		// running its old version and reports the mistakes. Script variables keep their current values
 		// (VM::CarryOverVariables), waiting tasks of the old version stop, and 'when reloaded' runs.
-		void Reload(const std::string& changedPath);
+		// Returns false when any script kept its old version (mistakes, a missing file, an error in its
+		// top level); every problem has been reported then. Paths that are not .forge change nothing.
+		bool Reload(const std::string& changedPath);
 
 		// The Inspector fields of a script: its top-level "set name to <value>" lines.
 		// Returns false with 'outError' set when the script cannot be read or has a mistake.
