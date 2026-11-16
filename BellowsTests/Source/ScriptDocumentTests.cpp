@@ -54,6 +54,8 @@ TEST_CASE("New script templates compile in both languages")
 	{
 		const std::string forge = MakeScriptSource(ScriptLanguage::ForgeScript, scriptTemplate, "Player");
 		CHECK(forge.find("when update with delta") != std::string::npos);
+		if (scriptTemplate == ScriptTemplate::Default)
+			CHECK(forge.find("set speed to 2.0") != std::string::npos);	// A decimal, so the Inspector field takes 2.5
 		CHECK(CheckScript(ScriptLanguage::ForgeScript, forge, "Player.forge").empty());
 
 		const std::string python = MakeScriptSource(ScriptLanguage::Python, scriptTemplate, "my player");
