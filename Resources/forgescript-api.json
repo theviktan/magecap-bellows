@@ -1492,5 +1492,21 @@
 			]
 		}
 	],
-	"phrases": []
+	"phrases": [
+		{
+			"pattern": "save screenshot",
+			"doc": "Saves what the player sees and gives back the file's full path; same as save_screenshot()",
+			"returns": "str"
+		},
+		{
+			"pattern": "save screenshot to (path)",
+			"doc": "Saves what the player sees to path (inside the user folder when relative) and gives back the full path; same as save_screenshot(path)",
+			"returns": "str"
+		},
+		{
+			"pattern": "user folder",
+			"doc": "The game's own folder for saves, reports and screenshots; same as user_folder()",
+			"returns": "str"
+		}
+	]
 }

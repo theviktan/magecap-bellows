@@ -213,3 +213,42 @@ TEST_CASE("ForgeScript engine objects survive garbage collection")
 	CHECK(h.Errors.empty());
 	CHECK_EQ(h.Output, std::string("20\n(20, 0, 0)\n20\n"));
 }
+
+TEST_CASE("ForgeScript engine phrases call the shared API")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	ForgeScriptHarness h(*scene);
+	h.Machine.Load(
+		"say user folder is user_folder()\n"
+		"set folder to user folder\n"
+		"say folder.length is above 0\n"
+		// A variable named 'user' still works: the phrase needs both words.
+		"set user to \"Ron\"\n"
+		"say user\n"
+		// Nothing has been drawn in this test, so both forms fail the same catchable way.
+		"try\n\tsave screenshot to \"shot.png\"\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tsave_screenshot(\"shot.png\")\ncatch problem\n\tsay problem\nend\n",
+		"phrases.forge");
+
+	INFO(h.AllErrors());
+	CHECK(h.Errors.empty());
+	const size_t firstError = h.Output.find("true\ntrue\nRon\n");
+	CHECK_EQ(firstError, 0u);
+	const std::string rest = h.Output.substr(std::string("true\ntrue\nRon\n").size());
+	const size_t split = rest.find('\n');
+	REQUIRE(split != std::string::npos);
+	CHECK_EQ(rest.substr(0, split + 1), rest.substr(split + 1));
+}
+
+TEST_CASE("Engine phrases are listed for tools")
+{
+	const std::vector<Scripting::ForgeScriptPhraseInfo> phrases = Scripting::GetForgeScriptPhrases();
+	std::vector<std::string> patterns;
+	for (const Scripting::ForgeScriptPhraseInfo& phrase : phrases)
+	{
+		patterns.push_back(phrase.Pattern);
+		CHECK_FALSE(phrase.Doc.empty());
+		CHECK_EQ(phrase.Returns, std::string("str"));
+	}
+	CHECK_EQ(patterns, std::vector<std::string>{ "save screenshot", "save screenshot to (path)", "user folder" });
+}
