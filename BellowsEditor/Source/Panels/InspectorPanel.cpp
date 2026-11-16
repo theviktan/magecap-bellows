@@ -8,11 +8,14 @@
 #include "Panels/ScriptEditorPanel.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
+
+#include <vector>
 
 namespace Bellows {
 
@@ -351,6 +354,16 @@ namespace Bellows {
 				UI::PropertySlider("Pitch", c.Pitch, 0.1f, 3.0f);
 				UI::Property("Loop", c.Loop);
 				UI::Property("Play On Start", c.PlayOnStart);
+				std::vector<const char*> buses;
+				int bus = 0;
+				for (const std::string& name : AudioEngine::GetBusNames())
+				{
+					if (name == c.Bus || (name == "Effects" && !AudioEngine::IsBus(c.Bus)))
+						bus = static_cast<int>(buses.size());
+					buses.push_back(name.c_str());
+				}
+				if (UI::PropertyCombo("Bus", bus, buses.data(), static_cast<int>(buses.size()), "Mixer bus: its volume is set in Project Settings or by scripts"))
+					c.Bus = buses[bus];
 				UI::Property("3D Sound", c.Spatial, "Volume and panning follow the listener");
 				if (c.Spatial)
 				{

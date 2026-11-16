@@ -208,6 +208,7 @@ namespace Bellows {
 				JsonRead(*it, "Spatial", component.Spatial);
 				JsonRead(*it, "MinDistance", component.MinDistance);
 				JsonRead(*it, "MaxDistance", component.MaxDistance);
+				JsonRead(*it, "Bus", component.Bus);
 			}
 
 			if (auto it = json.find("AudioListener"); it != json.end())
@@ -368,6 +369,7 @@ namespace Bellows {
 			j["Spatial"] = c->Spatial;
 			j["MinDistance"] = c->MinDistance;
 			j["MaxDistance"] = c->MaxDistance;
+			j["Bus"] = c->Bus;
 		}
 
 		if (const auto* c = entity.TryGetComponent<AudioListenerComponent>())

@@ -219,6 +219,7 @@ namespace Bellows {
 		bool Spatial = true;
 		float MinDistance = 1.0f;
 		float MaxDistance = 50.0f;
+		std::string Bus = "Effects";	// "Master", "Music" or "Effects" (see AudioEngine)
 	};
 
 	struct AudioListenerComponent

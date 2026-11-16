@@ -3,6 +3,7 @@
 #include "Bellows/Core/Base.h"
 
 #include <filesystem>
+#include <map>
 #include <string>
 
 namespace Bellows {
@@ -18,6 +19,9 @@ namespace Bellows {
 		uint32_t WindowHeight = 900;
 		bool Fullscreen = false;
 		bool VSync = true;
+
+		// Starting volume of each audio bus ("Master", "Music", "Effects"); scripts may change them while playing.
+		std::map<std::string, float> BusVolumes = { { "Master", 1.0f }, { "Music", 1.0f }, { "Effects", 1.0f } };
 	};
 
 	// A game project: a folder containing '<Name>.bproject' and an asset directory.
@@ -31,6 +35,8 @@ namespace Bellows {
 		// Loads a .bproject file (or the first .bproject inside a folder) and makes it active.
 		static Ref<Project> Load(const std::filesystem::path& path);
 		bool Save();
+		// Sets the audio buses to the project's starting volumes, unmuted (at game and play start).
+		void ApplyAudioSettings() const;
 
 		static Ref<Project> GetActive() { return s_ActiveProject; }
 		static void SetActive(const Ref<Project>& project);

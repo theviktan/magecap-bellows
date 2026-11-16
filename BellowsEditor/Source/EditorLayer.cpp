@@ -237,6 +237,7 @@ namespace Bellows {
 
 		m_ContentBrowserPanel->SetCurrentDirectory(project->GetAssetDirectory());
 		m_ScriptEditorPanel->CloseAll();
+		project->ApplyAudioSettings();
 
 		const std::string startScene = project->GetConfig().StartScene;
 		if (!startScene.empty() && AssetManager::Exists(startScene))
@@ -438,6 +439,8 @@ namespace Bellows {
 		CommitChange("Edit");
 		// Scripts load from disk, so the game runs what is in the Script Editor.
 		m_ScriptEditorPanel->SaveAll();
+		// Every play starts from the project's mixer, whatever the last session's scripts changed.
+		m_Project->ApplyAudioSettings();
 
 		m_RuntimeScene = Scene::Copy(m_EditorScene);
 		m_RuntimeScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));

@@ -23,6 +23,7 @@ namespace Bellows {
 		m_Renderer = CreateScope<SceneRenderer>();
 		m_Blitter = CreateScope<Blitter>();
 		m_CommandList = Renderer::GetDevice()->createCommandList();
+		m_Project->ApplyAudioSettings();
 
 		ScriptEngine::SetQuitHandler([](int exitCode) { Application::Get().Close(exitCode); });
 		ScriptEngine::SetLoadSceneHandler([this](const std::string& path)

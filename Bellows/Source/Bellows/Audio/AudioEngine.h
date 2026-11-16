@@ -8,9 +8,11 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 struct ma_engine;
 struct ma_sound;
+typedef struct ma_sound ma_sound_group;
 
 namespace Bellows {
 
@@ -32,8 +34,20 @@ namespace Bellows {
 		static void SetMasterVolume(float volume);
 		static float GetMasterVolume();
 
+		// Buses group sounds so their volume can be set together, like a mixer: "Master" (everything),
+		// "Music" and "Effects" (both feed Master). Unknown names are rejected (false / 0).
+		static const std::vector<std::string>& GetBusNames();
+		static bool IsBus(const std::string& bus);
+		static bool SetBusVolume(const std::string& bus, float volume);
+		static float GetBusVolume(const std::string& bus);
+		// Muting keeps the volume, so unmuting restores it.
+		static bool SetBusMuted(const std::string& bus, bool muted);
+		static bool IsBusMuted(const std::string& bus);
+		// The miniaudio group sounds of a bus are created in; null for Master (the engine itself).
+		static ma_sound_group* GetBusGroup(const std::string& bus);
+
 		// Fire-and-forget 2D sound (UI clicks, pickups). Path is absolute or project-relative.
-		static bool PlayOneShot(const std::string& path, float volume = 1.0f);
+		static bool PlayOneShot(const std::string& path, float volume = 1.0f, const std::string& bus = "Effects");
 
 		static void SetListener(const glm::vec3& position, const glm::vec3& forward, const glm::vec3& up);
 	};
@@ -66,7 +80,7 @@ namespace Bellows {
 	private:
 		Scene& m_Scene;
 		std::unordered_map<UUID, ma_sound*> m_Sounds;
-		std::unordered_map<UUID, std::string> m_SoundPaths;
+		std::unordered_map<UUID, std::string> m_SoundKeys;	// Clip and bus a sound was made with
 	};
 
 }

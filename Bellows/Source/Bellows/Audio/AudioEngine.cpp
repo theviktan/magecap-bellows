@@ -12,12 +12,22 @@ namespace Bellows {
 
 	namespace {
 
+		struct Bus
+		{
+			std::string Name;
+			ma_sound_group Group {};		// Unused for Master, which is the engine itself
+			bool GroupReady = false;		// False if the group failed to start: its sounds go straight to Master
+			float Volume = 1.0f;
+			bool Muted = false;
+		};
+
 		struct AudioState
 		{
 			ma_engine Engine {};
 			bool Initialized = false;
 			bool NullDevice = false;
 			std::vector<ma_sound*> OneShots;	// Fire-and-forget sounds, released once finished
+			Bus Buses[3] = { { "Master" }, { "Music" }, { "Effects" } };
 		};
 
 
@@ -40,6 +50,46 @@ namespace Bellows {
 			return AssetManager::GetAbsolutePath(path);
 		}
 
+		Bus* FindBus(const std::string& name)
+		{
+			for (Bus& bus : s_Audio.Buses)
+			{
+				if (bus.Name == name)
+					return &bus;
+			}
+			return nullptr;
+		}
+
+		bool IsMaster(const Bus& bus)
+		{
+			return &bus == &s_Audio.Buses[0];
+		}
+
+		void ApplyBusVolume(Bus& bus)
+		{
+			if (!s_Audio.Initialized)
+				return;
+			const float volume = bus.Muted ? 0.0f : bus.Volume;
+			if (IsMaster(bus))
+				ma_engine_set_volume(&s_Audio.Engine, volume);
+			else if (bus.GroupReady)
+				ma_sound_group_set_volume(&bus.Group, volume);
+		}
+
+		void InitBuses()
+		{
+			for (Bus& bus : s_Audio.Buses)
+			{
+				bus.Volume = 1.0f;
+				bus.Muted = false;
+				if (IsMaster(bus))
+					continue;
+				bus.GroupReady = ma_sound_group_init(&s_Audio.Engine, 0, nullptr, &bus.Group) == MA_SUCCESS;
+				if (!bus.GroupReady)
+					BW_CORE_ERROR("Audio: could not create the '{}' bus; its sounds play on Master", bus.Name);
+			}
+		}
+
 	}
 
 	bool AudioEngine::Init(bool forceNullDevice)
@@ -52,6 +102,7 @@ namespace Bellows {
 		{
 			s_Audio.Initialized = true;
 			s_Audio.NullDevice = false;
+			InitBuses();
 			BW_CORE_INFO("Audio engine ready ({} Hz)", ma_engine_get_sample_rate(&s_Audio.Engine));
 			return true;
 		}
@@ -68,6 +119,7 @@ namespace Bellows {
 		}
 		s_Audio.Initialized = true;
 		s_Audio.NullDevice = true;
+		InitBuses();
 		BW_CORE_INFO("Audio engine ready (no output device, sound is silent)");
 		return true;
 	}
@@ -77,6 +129,12 @@ namespace Bellows {
 		if (!s_Audio.Initialized)
 			return;
 		ReleaseOneShots(true);
+		for (Bus& bus : s_Audio.Buses)
+		{
+			if (bus.GroupReady)
+				ma_sound_group_uninit(&bus.Group);
+			bus.GroupReady = false;
+		}
 		ma_engine_uninit(&s_Audio.Engine);
 		s_Audio.Initialized = false;
 	}
@@ -98,24 +156,77 @@ namespace Bellows {
 
 	void AudioEngine::SetMasterVolume(float volume)
 	{
-		if (s_Audio.Initialized)
-			ma_engine_set_volume(&s_Audio.Engine, std::max(volume, 0.0f));
+		SetBusVolume("Master", volume);
 	}
 
 	float AudioEngine::GetMasterVolume()
 	{
-		return s_Audio.Initialized ? ma_engine_get_volume(&s_Audio.Engine) : 0.0f;
+		return s_Audio.Initialized ? GetBusVolume("Master") : 0.0f;
 	}
 
-	bool AudioEngine::PlayOneShot(const std::string& path, float volume)
+	const std::vector<std::string>& AudioEngine::GetBusNames()
+	{
+		static const std::vector<std::string> s_Names = { "Master", "Music", "Effects" };
+		return s_Names;
+	}
+
+	bool AudioEngine::IsBus(const std::string& bus)
+	{
+		return FindBus(bus) != nullptr;
+	}
+
+	bool AudioEngine::SetBusVolume(const std::string& name, float volume)
+	{
+		Bus* bus = FindBus(name);
+		if (!bus)
+			return false;
+		bus->Volume = std::max(volume, 0.0f);
+		ApplyBusVolume(*bus);
+		return true;
+	}
+
+	float AudioEngine::GetBusVolume(const std::string& name)
+	{
+		const Bus* bus = FindBus(name);
+		return bus ? bus->Volume : 0.0f;
+	}
+
+	bool AudioEngine::SetBusMuted(const std::string& name, bool muted)
+	{
+		Bus* bus = FindBus(name);
+		if (!bus)
+			return false;
+		bus->Muted = muted;
+		ApplyBusVolume(*bus);
+		return true;
+	}
+
+	bool AudioEngine::IsBusMuted(const std::string& name)
+	{
+		const Bus* bus = FindBus(name);
+		return bus && bus->Muted;
+	}
+
+	ma_sound_group* AudioEngine::GetBusGroup(const std::string& name)
+	{
+		Bus* bus = FindBus(name);
+		return s_Audio.Initialized && bus && bus->GroupReady ? &bus->Group : nullptr;
+	}
+
+	bool AudioEngine::PlayOneShot(const std::string& path, float volume, const std::string& bus)
 	{
 		if (!s_Audio.Initialized)
 			return false;
+		if (!IsBus(bus))
+		{
+			BW_CORE_ERROR("Audio: unknown bus '{}'", bus);
+			return false;
+		}
 
 		const std::filesystem::path absolutePath = ResolveAudioPath(path);
 		auto* sound = new ma_sound();
 		if (ma_sound_init_from_file(&s_Audio.Engine, absolutePath.string().c_str(), MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION,
-			nullptr, nullptr, sound) != MA_SUCCESS)
+			GetBusGroup(bus), nullptr, sound) != MA_SUCCESS)
 		{
 			delete sound;
 			BW_CORE_ERROR("Audio: could not load '{}'", path);
@@ -163,12 +274,15 @@ namespace Bellows {
 		const AudioSourceComponent& source = entity.GetComponent<AudioSourceComponent>();
 		const UUID uuid = entity.GetUUID();
 
+		// A sound is made for one clip on one bus; changing either rebuilds it.
+		const std::string bus = AudioEngine::IsBus(source.Bus) ? source.Bus : std::string("Effects");
+		const std::string key = source.ClipPath + "|" + bus;
 		auto it = m_Sounds.find(uuid);
 		if (it != m_Sounds.end())
 		{
-			if (m_SoundPaths[uuid] == source.ClipPath)
+			if (m_SoundKeys[uuid] == key)
 				return it->second;
-			// The clip changed: rebuild the sound.
+			ma_sound_stop(it->second);
 			ma_sound_uninit(it->second);
 			delete it->second;
 			m_Sounds.erase(it);
@@ -186,16 +300,16 @@ namespace Bellows {
 		if (!source.Spatial)
 			flags |= MA_SOUND_FLAG_NO_SPATIALIZATION;
 
-		if (ma_sound_init_from_file(AudioEngine::GetEngine(), path.string().c_str(), flags, nullptr, nullptr, sound) != MA_SUCCESS)
+		if (ma_sound_init_from_file(AudioEngine::GetEngine(), path.string().c_str(), flags, AudioEngine::GetBusGroup(bus), nullptr, sound) != MA_SUCCESS)
 		{
 			delete sound;
 			BW_CORE_ERROR("Audio: could not load '{}' for '{}'", source.ClipPath, entity.GetName());
-			m_SoundPaths[uuid] = source.ClipPath;
+			m_SoundKeys[uuid] = key;
 			return nullptr;
 		}
 
 		m_Sounds[uuid] = sound;
-		m_SoundPaths[uuid] = source.ClipPath;
+		m_SoundKeys[uuid] = key;
 		ApplySettings(entity);
 		return sound;
 	}
@@ -271,7 +385,7 @@ namespace Bellows {
 		ma_sound_uninit(it->second);
 		delete it->second;
 		m_Sounds.erase(it);
-		m_SoundPaths.erase(entity.GetUUID());
+		m_SoundKeys.erase(entity.GetUUID());
 	}
 
 	bool SceneAudio::Play(Entity entity)

@@ -3,6 +3,7 @@
 #include "TestUtilities.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Project/Project.h"
@@ -34,6 +35,7 @@ TEST_CASE("Projects are created, saved and loaded")
 
 	project->GetConfig().WindowWidth = 1024;
 	project->GetConfig().Fullscreen = true;
+	project->GetConfig().BusVolumes["Music"] = 0.3f;
 	REQUIRE(project->Save());
 
 	Ref<Project> loaded = Project::Load(directory);
@@ -41,6 +43,15 @@ TEST_CASE("Projects are created, saved and loaded")
 	CHECK(loaded->GetConfig().Name == "Created Game");
 	CHECK(loaded->GetConfig().WindowWidth == 1024);
 	CHECK(loaded->GetConfig().Fullscreen);
+	CHECK(loaded->GetConfig().BusVolumes["Music"] == doctest::Approx(0.3f));
+	CHECK(loaded->GetConfig().BusVolumes["Effects"] == doctest::Approx(1.0f));
+
+	// Game and play start use the project's mixer, unmuted.
+	AudioEngine::SetBusMuted("Music", true);
+	loaded->ApplyAudioSettings();
+	CHECK(AudioEngine::GetBusVolume("Music") == doctest::Approx(0.3f));
+	CHECK_FALSE(AudioEngine::IsBusMuted("Music"));
+	AudioEngine::SetBusVolume("Music", 1.0f);
 
 	Ref<Scene> scene = CreateRef<Scene>();
 	REQUIRE(SceneSerializer::Deserialize(*scene, loaded->GetAssetDirectory() / loaded->GetConfig().StartScene));
