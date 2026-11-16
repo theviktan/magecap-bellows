@@ -33,7 +33,9 @@ namespace Bellows {
 			bool HasTriggerEnter = false;
 			bool HasTriggerExit = false;
 			bool HasReload = false;
+			bool HasEvent = false;
 			bool Created = false;
+			uint64_t Order = 0;		// Creation order, which is the order events are delivered in
 			uint32_t ErrorCount = 0;
 		};
 
@@ -58,6 +60,8 @@ namespace Bellows {
 			Scope<Scripting::ForgeScriptRuntime> ForgeScript;
 			uint32_t ErrorCount = 0;
 			std::string LastError;
+			uint64_t NextInstanceOrder = 0;
+			Scripting::ScriptEventListenerID EventListener = 0;
 		};
 
 		ScriptEngineData* s_Data = nullptr;
@@ -211,6 +215,7 @@ namespace Bellows {
 			instance.HasTriggerEnter = Overrides(cls, "on_trigger_enter");
 			instance.HasTriggerExit = Overrides(cls, "on_trigger_exit");
 			instance.HasReload = Overrides(cls, "on_reload");
+			instance.HasEvent = Overrides(cls, "on_event");
 		}
 
 		// Reloads helper modules (imported by name from the asset folder) whose file is 'file'.
@@ -330,6 +335,48 @@ namespace Bellows {
 			return allReloaded;
 		}
 
+		// Script events (bellows.emit, ForgeScript's trigger) reach on_event(self, name, *values), in the
+		// order the scripts were created. As the event hub requires, this never throws: errors are
+		// reported as script errors.
+		void DispatchEvent(const std::string& name, const Scripting::ScriptValueList& values)
+		{
+			std::vector<std::pair<uint64_t, UUID>> receivers;
+			for (const auto& [uuid, instance] : s_Data->Instances)
+			{
+				if (instance.HasEvent && instance.Created)
+					receivers.emplace_back(instance.Order, uuid);
+			}
+			if (receivers.empty())
+				return;
+			std::sort(receivers.begin(), receivers.end());
+
+			py::tuple arguments;
+			try
+			{
+				arguments = py::tuple(values.size() + 1);
+				arguments[0] = py::str(name);
+				for (size_t i = 0; i < values.size(); i++)
+					arguments[i + 1] = Scripting::ScriptValueToPython(values[i]);
+			}
+			catch (const std::exception& exception)
+			{
+				ReportError("Event '" + name + "'", exception.what());
+				return;
+			}
+
+			for (const auto& [order, uuid] : receivers)
+			{
+				auto it = s_Data->Instances.find(uuid);
+				if (it == s_Data->Instances.end())
+					continue;
+				// Copy the handle: a handler may spawn entities, which can rehash the instance map.
+				ScriptInstance instance = it->second;
+				Invoke(uuid, instance, "on_event", *arguments);
+				if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
+					again->second.ErrorCount = instance.ErrorCount;
+			}
+		}
+
 		bool CreateInstance(Scene& scene, Entity entity)
 		{
 			const ScriptComponent& component = entity.GetComponent<ScriptComponent>();
@@ -363,6 +410,7 @@ namespace Bellows {
 				ScriptInstance instance;
 				instance.Object = object;
 				instance.ScriptPath = component.ScriptPath;
+				instance.Order = s_Data->NextInstanceOrder++;
 				UseClass(instance, cls);
 				s_Data->Instances[uuid] = std::move(instance);
 				return true;
@@ -438,6 +486,7 @@ sys.stderr = _BellowsLogWriter(2)
 		Scripting::LinkBindings();
 		s_Data = new ScriptEngineData();
 		s_Data->ForgeScript = CreateScope<Scripting::ForgeScriptRuntime>(ReportError);
+		s_Data->EventListener = Scripting::AddScriptEventListener(DispatchEvent);
 		const std::filesystem::path engineModuleDirectory = s_EngineModuleDirectory.empty()
 			? Platform::GetExecutableDirectory() / "Python" : s_EngineModuleDirectory;
 
@@ -527,6 +576,7 @@ sys.stderr = _BellowsLogWriter(2)
 		if (!s_Data)
 			return;
 
+		Scripting::RemoveScriptEventListener(s_Data->EventListener);
 		s_Data->ForgeScript->Stop();
 		s_Data->Instances.clear();
 		s_Data->Modules.clear();

@@ -249,12 +249,79 @@ namespace Bellows::Scripting {
 			return std::visit([](const auto& v) -> py::object { return py::cast(v); }, value);
 		}
 
+		// Python's own types and the scalar values have no class to name, so give them a readable one.
+		std::string PythonTypeName(const py::handle& value)
+		{
+			return py::str(py::type::handle_of(value).attr("__name__")).cast<std::string>();
+		}
+
 		py::object ScriptInstanceOrNone(UUID entity)
 		{
 			void* instance = ScriptEngine::GetScriptInstance(entity);
 			return instance ? py::reinterpret_borrow<py::object>(static_cast<PyObject*>(instance)) : py::none();
 		}
 
+	}
+
+	py::object ScriptValueToPython(const ScriptValue& value)
+	{
+		return std::visit([](const auto& data) -> py::object
+		{
+			using T = std::decay_t<decltype(data)>;
+			if constexpr (std::is_same_v<T, std::monostate>)
+				return py::none();
+			else if constexpr (std::is_same_v<T, ScriptValueList>)
+			{
+				py::list list;
+				for (const ScriptValue& item : data)
+					list.append(ScriptValueToPython(item));
+				return list;
+			}
+			else if constexpr (std::is_same_v<T, ScriptValueMap>)
+			{
+				py::dict dict;
+				for (const auto& [key, item] : data)
+					dict[py::str(key)] = ScriptValueToPython(item);
+				return dict;
+			}
+			else
+				return py::cast(data);
+		}, value.Data);
+	}
+
+	ScriptValue ScriptValueFromPython(const py::handle& value)
+	{
+		if (value.is_none())
+			return ScriptValue();
+		if (py::isinstance<py::bool_>(value))
+			return value.cast<bool>();
+		if (py::isinstance<py::int_>(value) || py::isinstance<py::float_>(value))
+			return value.cast<double>();
+		if (py::isinstance<py::str>(value))
+			return value.cast<std::string>();
+		if (py::isinstance<glm::vec3>(value))
+			return value.cast<glm::vec3>();
+		if (py::isinstance<ScriptEntity>(value))
+			return value.cast<ScriptEntity>();
+		if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value))
+		{
+			ScriptValueList list;
+			for (const py::handle item : value)
+				list.push_back(ScriptValueFromPython(item));
+			return list;
+		}
+		if (py::isinstance<py::dict>(value))
+		{
+			ScriptValueMap map;
+			for (const auto& [key, item] : value.cast<py::dict>())
+			{
+				if (!py::isinstance<py::str>(key))
+					throw ScriptValueError("Event values that are dicts need text keys, not " + PythonTypeName(key));
+				map.emplace_back(key.cast<std::string>(), ScriptValueFromPython(item));
+			}
+			return map;
+		}
+		throw ScriptValueError("Event values can be None, bool, numbers, str, Vec3, Entity, lists and dicts, not " + PythonTypeName(value));
 	}
 
 	// -------------------------------------------------------------------------
@@ -434,6 +501,16 @@ namespace Bellows::Scripting {
 				Entity entity = e.TryResolve();
 				return entity ? "Entity('" + entity.GetName() + "', id=" + std::to_string(static_cast<uint64_t>(e.ID)) + ")" : std::string("Entity(<destroyed>)");
 			});
+
+		// Python-only: a variable number of values doesn't fit the shared API description, so ForgeScript
+		// has 'trigger' instead. The event reaches every script in either language, the sender included.
+		m.def("emit", [](const std::string& name, const py::args& values)
+		{
+			ScriptValueList converted;
+			for (const py::handle value : values)
+				converted.push_back(ScriptValueFromPython(value));
+			EmitScriptEvent(name, converted);
+		}, py::arg("name"), "Sends an event to every script: Python's on_event(self, name, *values) and ForgeScript's 'when <name>' handlers");
 
 		api.Get<RaycastHit>()
 			.def("__repr__", [](const RaycastHit& hit) { return fmt::format("RaycastHit(distance={:.3f})", hit.Distance); });

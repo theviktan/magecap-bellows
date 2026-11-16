@@ -40,7 +40,11 @@ class FeatureTest(bellows.Script):
         self.checks = 0
         self.failures = []
         self.finished = False
+        self.events = []
         self.steps = self.run()
+
+    def on_event(self, name, *values):
+        self.events.append((name, values))
 
     # -- Helpers -----------------------------------------------------------------------
     def check(self, condition, description):
@@ -101,6 +105,7 @@ class FeatureTest(bellows.Script):
         self.test_camera_projection()
         self.test_audio()
         self.test_screenshots()
+        self.test_events()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -489,6 +494,12 @@ class FeatureTest(bellows.Script):
         with open(jpeg, "rb") as file:
             self.check(file.read(2) == b"\xff\xd8", "save_screenshot writes JPEG for .jpg")
         self.check(raises(lambda: bellows.save_screenshot("shot.gif"), ValueError), "save_screenshot rejects other formats")
+
+    def test_events(self):
+        bellows.emit("feature test", 1, "two", [3], {"four": 4.0}, self.entity)
+        self.check(self.events and self.events[-1] == ("feature test", (1.0, "two", [3.0], {"four": 4.0}, self.entity)),
+                   "emit reaches on_event, the sender's own included")
+        self.check(raises(lambda: bellows.emit("bad", object()), ValueError), "emit rejects values other scripts can't read")
 
     def test_destruction(self):
         temporary = bellows.create_entity("Temporary")

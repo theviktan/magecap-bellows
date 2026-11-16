@@ -34,6 +34,8 @@ class Script:
     * ``on_collision_exit(self, other)``
     * ``on_trigger_enter(self, other)``   - ``other`` entered this trigger (or this entered a trigger)
     * ``on_trigger_exit(self, other)``
+    * ``on_event(self, name, *values)``   - an event sent with ``bellows.emit`` or ForgeScript's
+      ``trigger``, by any script (this one included)
     * ``on_reload(self)``                 - after the script's file was saved during play and its new
       code took over (the object and its attribute values stay; only the methods change)
 
@@ -65,6 +67,9 @@ class Script:
         pass
 
     def on_trigger_exit(self, other):
+        pass
+
+    def on_event(self, name, *values):
         pass
 
     def on_reload(self):

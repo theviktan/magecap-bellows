@@ -913,6 +913,9 @@ def delta_time() -> float:
 
 def destroy(entity: Entity) -> None: ...
 
+def emit(name: str, *args: typing.Any) -> None:
+    """Sends an event to every script: Python's on_event(self, name, *values) and ForgeScript's 'when <name>' handlers"""
+
 def find_entity(name: str) -> Entity | None: ...
 
 def frame() -> int:
