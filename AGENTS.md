@@ -18,10 +18,10 @@ fully scriptable so agents can build games through it.
 | `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
 | `ForgeScript/` | The ForgeScript language (compiler, VM, standard library, `forgescript` tool, tests). Engine-independent, `namespace ForgeScript`; read `ForgeScript/AGENTS.md` before changing it. |
-| `Python/bellows/` | The Python package games import (`__init__.py`, `editor.py`). |
+| `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons. |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -135,7 +135,9 @@ namespace Bellows {
   types of `Scripting/ScriptApi.h`. Two binders turn it into a language: `ScriptBindings.cpp`
   (Python module `_bellows`) and `ForgeScriptBindings.cpp` (ForgeScript). Never add an engine
   function to only one binder; only language-specific extras (Python operators, `__repr__`, script
-  objects) belong in a binder.
+  objects) belong in a binder. After any change to the Python API, regenerate `Python/_bellows.pyi`
+  with `BellowsEditor --headless --no-agent-server --run-script Tools/GeneratePythonStubs.py --exit`;
+  `BellowsEditorAutomationTests` fails while it is out of date.
 
 ## Building games as an agent
 
