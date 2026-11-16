@@ -138,6 +138,8 @@ namespace Bellows {
 		SceneRenderer& GetViewportRenderer() { return *m_ViewportRenderer; }
 		// Renders the active scene now and returns the image (used by screenshots and agents).
 		Image CaptureViewport();
+		// What bellows.save_screenshot() saves: the game camera's image without editor overlays.
+		std::optional<Image> CaptureGameView();
 		void SetViewportSizeOverride(uint32_t width, uint32_t height);
 		GizmoMode GetGizmoMode() const { return m_GizmoMode; }
 		bool IsUsingGameCamera() const;
@@ -208,6 +210,10 @@ namespace Bellows {
 
 		EditorCamera m_Camera;
 		Scope<SceneRenderer> m_ViewportRenderer;
+		// Renders the game camera for screenshots while the viewport shows the free camera; made on first use.
+		Scope<SceneRenderer> m_ScreenshotRenderer;
+		// True when the viewport's last image came from the game camera (no editor overlays).
+		bool m_ViewportShowsGameView = false;
 		glm::vec2 m_ViewportSize { 1280.0f, 720.0f };
 		glm::vec2 m_ViewportPosition { 0.0f };
 		glm::uvec2 m_ViewportSizeOverride { 0, 0 };

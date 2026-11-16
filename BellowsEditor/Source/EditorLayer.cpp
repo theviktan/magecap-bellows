@@ -115,6 +115,7 @@ namespace Bellows {
 			else
 				RequestExit(exitCode);
 		});
+		ScriptEngine::SetScreenshotHandler([this] { return CaptureGameView(); });
 		ScriptEngine::SetLoadSceneHandler([this](const std::string& path)
 		{
 			if (!AssetManager::Exists(path))
@@ -148,6 +149,7 @@ namespace Bellows {
 
 		ScriptEngine::SetQuitHandler(nullptr);
 		ScriptEngine::SetLoadSceneHandler(nullptr);
+		ScriptEngine::SetScreenshotHandler(nullptr);
 		ScriptEngine::SetContextScene(nullptr);
 
 		m_HierarchyPanel.reset();
@@ -158,6 +160,7 @@ namespace Bellows {
 		m_StatisticsPanel.reset();
 		m_RuntimeScene.reset();
 		m_EditorScene.reset();
+		m_ScreenshotRenderer.reset();
 		m_ViewportRenderer.reset();
 		Project::SetActive(nullptr);
 	}
@@ -777,9 +780,11 @@ namespace Bellows {
 		if (IsUsingGameCamera())
 			scene->GetPrimaryCamera(aspect, camera);
 
+		// Through the game camera the viewport shows exactly what the player sees.
+		m_ViewportShowsGameView = IsUsingGameCamera();
 		SceneRendererSettings& settings = m_ViewportRenderer->GetSettings();
 		settings.ShowGrid = m_Settings.ShowGrid && m_SceneState == SceneState::Edit;
-		settings.ShowSelectionOutline = true;
+		settings.ShowSelectionOutline = !m_ViewportShowsGameView;
 
 		std::vector<uint32_t> selectedIDs;
 		for (UUID uuid : m_Selection)
@@ -914,6 +919,30 @@ namespace Bellows {
 	{
 		RenderViewport();
 		return Renderer::ReadbackTexture(m_ViewportRenderer->GetFinalImage());
+	}
+
+	std::optional<Image> EditorLayer::CaptureGameView()
+	{
+		// The image on screen, when it is the game's.
+		if (m_ViewportShowsGameView && IsUsingGameCamera())
+			return Renderer::ReadbackTexture(m_ViewportRenderer->GetFinalImage());
+
+		// Otherwise (free camera in play, or edit mode) the game camera is drawn on its own, without overlays.
+		const Ref<Scene>& scene = GetActiveScene();
+		if (!scene || !m_ViewportRenderer)
+			return std::nullopt;
+		const uint32_t width = std::max(m_ViewportRenderer->GetViewportWidth(), 1u);
+		const uint32_t height = std::max(m_ViewportRenderer->GetViewportHeight(), 1u);
+		RenderCamera camera;
+		if (!scene->GetPrimaryCamera(static_cast<float>(width) / static_cast<float>(height), camera))
+			return std::nullopt;
+		if (!m_ScreenshotRenderer)
+			m_ScreenshotRenderer = CreateScope<SceneRenderer>();
+		m_ScreenshotRenderer->SetViewportSize(width, height);
+		m_ScreenshotRenderer->GetSettings().ShowGrid = false;
+		m_ScreenshotRenderer->GetSettings().ShowSelectionOutline = false;
+		scene->OnRender(*m_ScreenshotRenderer, camera);
+		return Renderer::ReadbackTexture(m_ScreenshotRenderer->GetFinalImage());
 	}
 
 	void EditorLayer::PickEntity(const glm::vec2& viewportPosition)

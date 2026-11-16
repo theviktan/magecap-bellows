@@ -41,6 +41,7 @@ namespace Bellows {
 		Scope<Blitter> m_Blitter;
 		nvrhi::CommandListHandle m_CommandList;
 		std::optional<std::string> m_PendingScene;
+		bool m_HasRenderedFrame = false;
 		bool m_Failed = false;
 	};
 

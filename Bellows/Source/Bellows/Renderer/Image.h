@@ -24,6 +24,12 @@ namespace Bellows {
 		glm::vec4 GetAverageColor(uint32_t x, uint32_t y, uint32_t width, uint32_t height) const;
 
 		bool SavePNG(const std::filesystem::path& path) const;
+
+		// A copy scaled to the given size; each output pixel averages the source pixels it covers.
+		Image Resized(uint32_t width, uint32_t height) const;
+		// Writes an opaque image (alpha dropped): JPEG for .jpg/.jpeg at the given quality (1-100),
+		// PNG otherwise. Creates missing folders.
+		bool SaveOpaque(const std::filesystem::path& path, int jpegQuality = 85) const;
 	};
 
 }

@@ -34,6 +34,13 @@ namespace Bellows {
 			m_PendingScene = path;
 			return true;
 		});
+		// The last frame drawn is the one on screen while scripts run.
+		ScriptEngine::SetScreenshotHandler([this]() -> std::optional<Image>
+		{
+			if (!m_HasRenderedFrame)
+				return std::nullopt;
+			return Renderer::ReadbackTexture(m_Renderer->GetFinalImage());
+		});
 
 		const std::string startScene = m_Options.SceneOverride.empty() ? m_Project->GetConfig().StartScene : m_Options.SceneOverride;
 		if (!LoadScene(startScene))
@@ -52,6 +59,7 @@ namespace Bellows {
 		m_Blitter.reset();
 		ScriptEngine::SetQuitHandler(nullptr);
 		ScriptEngine::SetLoadSceneHandler(nullptr);
+		ScriptEngine::SetScreenshotHandler(nullptr);
 	}
 
 	bool RuntimeLayer::LoadScene(const std::string& assetPath)
@@ -107,6 +115,7 @@ namespace Bellows {
 		m_Renderer->GetSettings().ShowGrid = false;
 		m_Renderer->GetSettings().ShowSelectionOutline = false;
 		m_Scene->OnRender(*m_Renderer, camera);
+		m_HasRenderedFrame = true;
 
 		m_CommandList->open();
 		m_Blitter->Blit(m_CommandList, m_Renderer->GetFinalImage(), device.GetCurrentFramebuffer());

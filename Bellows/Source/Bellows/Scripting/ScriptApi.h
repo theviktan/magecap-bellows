@@ -11,6 +11,7 @@
 #include "Bellows/Core/KeyCodes.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Physics/PhysicsWorld.h"
+#include "Bellows/Renderer/Image.h"
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Scene/Components.h"
 #include "Bellows/Scene/Entity.h"
@@ -19,6 +20,7 @@
 #include <glm/glm.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -69,8 +71,19 @@ namespace Bellows::Scripting {
 	// Host callbacks (the runtime and the editor decide what quitting or loading a scene means).
 	void SetQuitHandler(std::function<void(int)> handler);
 	void SetLoadSceneHandler(std::function<bool(const std::string&)> handler);
+	// Returns the image the player sees right now (the game view, without editor overlays), or
+	// nullopt when nothing has been drawn yet.
+	void SetScreenshotHandler(std::function<std::optional<Image>()> handler);
 	void RequestQuit(int exitCode);
 	bool RequestLoadScene(const std::string& path);
+
+	// The game's own folder for saves, screenshots and reports, writable even when the game is
+	// installed read-only: <user data>/MageCapBellows/Games/<project name>.
+	std::filesystem::path GetUserFolder();
+	// Saves what the player sees as PNG (or JPEG for .jpg/.jpeg) and returns the absolute path.
+	// "" names it Screenshots/<scene>-<date>-<time>.png and a relative path is inside GetUserFolder().
+	// max_width > 0 scales a wider image down to that width. Throws ScriptValueError.
+	std::string SaveScreenshot(const std::string& path, int maxWidth);
 
 	// Frame timing published to scripts.
 	void SetFrameTiming(float deltaTime, float time, uint64_t frame);

@@ -3,11 +3,13 @@
 #include "Bellows/Core/Base.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Physics/PhysicsWorld.h"
+#include "Bellows/Renderer/Image.h"
 #include "Bellows/Scene/ScriptField.h"
 
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -87,6 +89,8 @@ namespace Bellows {
 		// What bellows.quit(exit_code) and bellows.load_scene(path) do is decided by the host application.
 		static void SetQuitHandler(std::function<void(int)> handler);
 		static void SetLoadSceneHandler(std::function<bool(const std::string&)> handler);
+		// What bellows.save_screenshot() captures: the game view the host shows (see ScriptApi.h).
+		static void SetScreenshotHandler(std::function<std::optional<Image>()> handler);
 	};
 
 }
