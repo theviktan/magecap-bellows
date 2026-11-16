@@ -98,8 +98,10 @@ TEST_CASE("Images scale down by averaging the pixels they cover")
 TEST_CASE("save_screenshot names, scales and writes PNG and JPEG files in the game's user folder")
 {
 	ScreenshotFixture fixture;
-	Ref<Project> project = Project::Create(BellowsTests::GetTestOutputDirectory() / "ScreenshotProject", "Shot: Game?");
+	Ref<Project> project = Project::Create(BellowsTests::GetTestOutputDirectory() / "ScreenshotProject", "Shot Game");
 	REQUIRE(project);
+	// Characters a folder name can't hold (on Windows) become '_'.
+	project->GetConfig().Name = "Shot: Game?";
 	const std::filesystem::path folder = fixture.UserData / "MageCapBellows" / "Games" / "Shot_ Game_";
 	CHECK(Scripting::GetUserFolder() == folder);
 
