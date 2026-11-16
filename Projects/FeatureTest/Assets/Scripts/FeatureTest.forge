@@ -181,6 +181,15 @@ function test_materials()
 	check(fails(function() set_bus_volume("Nowhere", 1) end), "unknown buses are rejected")
 end
 
+function test_screenshots()
+	set folder to user folder
+	check(folder is user_folder() and folder.ends_with("Feature Test"), "user folder ({folder})")
+	set shot to save screenshot to "FeatureTest/forge.png"
+	check(shot.starts_with(folder) and shot.ends_with("forge.png"), "save screenshot to ({shot})")
+	check(save_screenshot("FeatureTest/forge.jpg", 320).ends_with("forge.jpg"), "save_screenshot as JPEG")
+	check(fails(function() save screenshot to "FeatureTest/forge.bmp" end), "unsupported screenshot formats are rejected")
+end
+
 function test_destruction()
 	set temporary to create_entity("Forge Temporary")
 	destroy(temporary)
@@ -240,6 +249,7 @@ function run_tests()
 		test_entities()
 		test_components()
 		test_materials()
+		test_screenshots()
 		test_destruction()
 		test_physics()
 		test_events()

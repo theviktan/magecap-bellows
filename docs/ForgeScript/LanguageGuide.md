@@ -826,6 +826,20 @@ Each entity gets its own copy of the script's variables, so two doors using `doo
 
 Top-level lines that set a plain value, like `set is_open to false` or `set speed to 2.5`, appear in the Bellows Inspector as settings you can change for each entity without editing the script. Start a name with `_` (`set _timer to 0`) to keep it out of the Inspector. Write `4.0` instead of `4` when a setting should take decimals in the Inspector: `set speed to 4.0` gives a decimal field, `set lives to 3` a whole-number field.
 
+**Changing a script while the game runs.** Save a script during play and Bellows swaps in the new version right away (hot reload). The script's variables keep their current values, so a door stays open and a score stays where it was. Waiting tasks from the old version stop, and the script receives `when reloaded`, which is the place to start them again:
+
+```forge
+when created
+	start patrol()
+end
+
+when reloaded
+	start patrol()      # the old patrol stopped when the new code took over
+end
+```
+
+The script's top level runs again in the new version, so a line there that creates entities creates them again; put such lines in `when created`. If the new version has a mistake, the game keeps running the old one and the Console shows what to fix.
+
 ---
 
 ## 18. Rules worth remembering

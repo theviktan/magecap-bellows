@@ -1,6 +1,7 @@
 #include "bwpch.h"
 #include "Bellows/Scripting/ScriptApiDescription.h"
 
+#include "Bellows/Scripting/ForgeScriptBindings.h"
 #include "Bellows/Scripting/ScriptApiDefinition.h"
 
 #include <deque>
@@ -292,7 +293,11 @@ namespace Bellows::Scripting {
 				Json types = Json::array();
 				for (Json& type : m_Types)
 					types.push_back(std::move(type));
-				return Json { { "version", 1 }, { "functions", std::move(functions) }, { "types", std::move(types) }, { "phrases", Json::array() } };
+				// ForgeScript's engine phrases (save screenshot to "bug.png"), so tools know them too.
+				Json phrases = Json::array();
+				for (const ForgeScriptPhraseInfo& phrase : GetForgeScriptPhrases())
+					phrases.push_back(Json { { "pattern", phrase.Pattern }, { "doc", phrase.Doc }, { "returns", phrase.Returns } });
+				return Json { { "version", 1 }, { "functions", std::move(functions) }, { "types", std::move(types) }, { "phrases", std::move(phrases) } };
 			}
 
 		private:
