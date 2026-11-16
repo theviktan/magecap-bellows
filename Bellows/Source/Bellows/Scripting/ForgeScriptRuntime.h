@@ -4,6 +4,7 @@
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include "ForgeScript/ForgeScript.h"
@@ -20,7 +21,8 @@ namespace Bellows::Scripting {
 	// Every play session gets a fresh virtual machine, and every scripted entity its own module with
 	// 'self' set to the entity. Engine callbacks become events the script handles with 'when':
 	//   created, update (delta), physics update (delta), destroyed,
-	//   collided (other), collision ends (other), entered (other), exited (other).
+	//   collided (other), collision ends (other), entered (other), exited (other),
+	//   reloaded (after hot reload).
 	class ForgeScriptRuntime
 	{
 	public:
@@ -52,6 +54,14 @@ namespace Bellows::Scripting {
 		void EntityDestroyed(UUID entity);
 		void Contact(UUID self, Entity other, ContactEventType type);
 
+		// Hot reload during play: a .forge file changed on disk. Every ForgeScript instance gets the new
+		// code, since scripts loaded with 'use' are shared by all of them. A script with mistakes keeps
+		// running its old version and reports the mistakes. Script variables keep their current values
+		// (VM::CarryOverVariables), waiting tasks of the old version stop, and 'when reloaded' runs.
+		// Returns false when any script kept its old version (mistakes, a missing file, an error in its
+		// top level); every problem has been reported then. Paths that are not .forge change nothing.
+		bool Reload(const std::string& changedPath);
+
 		// The Inspector fields of a script: its top-level "set name to <value>" lines.
 		// Returns false with 'outError' set when the script cannot be read or has a mistake.
 		bool GetScriptInfo(const std::string& scriptPath, ScriptClassInfo& outInfo, std::string& outError);
@@ -59,6 +69,7 @@ namespace Bellows::Scripting {
 	private:
 		struct Instance
 		{
+			ScriptEntity Owner;
 			ForgeScript::Module* Module = nullptr;
 			std::string ScriptPath;
 			bool Created = false;
@@ -66,6 +77,10 @@ namespace Bellows::Scripting {
 		};
 
 		Scope<ForgeScript::VM> CreateMachine();
+		// Runs a script's top level in a new module for 'entity'. Errors are reported; returns nullptr then.
+		ForgeScript::Module* LoadModule(Entity entity, const std::string& scriptPath, const std::string& source);
+		// Inspector values for the script's settings, except the names in 'keep'.
+		void ApplyFields(ForgeScript::Module* module, Entity entity, const std::string& source, const std::vector<std::string>& keep);
 		void Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values);
 		// Sends an event with the timestep to every created script that handles it, skipping entities about to be destroyed.
 		void EmitTimed(Scene& scene, const std::string& event, float timestep);
