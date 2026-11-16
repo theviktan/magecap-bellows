@@ -25,6 +25,8 @@ from __future__ import annotations
 import enum
 import typing
 
+_Component = typing.TypeVar("_Component")
+
 '''
 
 STUB_PATH = pathlib.Path(__file__).resolve().parent.parent / "Python" / "_bellows.pyi"
@@ -49,6 +51,9 @@ _SIGNATURE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)?\((?P<args>.*)\)(?:\
 
 def _clean_type(text):
     text = text.strip()
+    # Script instances are the game's own classes; "object" would hide every field they define.
+    if text == "object":
+        return "typing.Any"
     for old, new in _TYPE_REPLACEMENTS:
         text = text.replace(old, new)
     for pattern, replacement in _GENERIC_DEFAULTS:
@@ -160,8 +165,41 @@ def _docstring(text, indent):
     return f'{indent}"""{text}"""\n'
 
 
+# The Script component's class is ScriptComponent, but its name is "Script" (FindComponentInfo accepts both).
+_COMPONENT_NAME_ALIASES = {"ScriptComponent": ("Script", "ScriptComponent")}
+
+
+def _component_overloads(name, signature):
+    """get_component/add_component return one of many classes; give each component name its own type.
+
+    Type checkers then know entity.get_component("RigidBody") is a RigidBody (or None), and that
+    get_component(bellows.RigidBody) is too, instead of a union of every component class.
+    """
+    match = re.match(r"^\((self, \w+): [^)]*\) -> (.+)$", signature)
+    if not match:
+        return None
+    classes = [part.strip() for part in match.group(2).split("|")]
+    optional = "None" in classes
+    classes = [cls for cls in classes if cls != "None"]
+    if len(classes) < 2:
+        return None
+    suffix = " | None" if optional else ""
+    parameter = match.group(1)
+    overloads = []
+    for cls in classes:
+        for literal in _COMPONENT_NAME_ALIASES.get(cls, (cls,)):
+            overloads.append(f"({parameter}: typing.Literal[{literal!r}]) -> {cls}{suffix}")
+    overloads.append(f"({parameter}: type[_Component]) -> _Component{suffix}")
+    overloads.append(f"({parameter}: str) -> typing.Any")
+    return overloads
+
+
 def _function(name, obj, indent, is_method, decorator=None):
     signatures, description = _signatures(getattr(obj, "__doc__", None), name, is_method)
+    if is_method and name in ("get_component", "add_component") and len(signatures) == 1:
+        overloads = _component_overloads(name, signatures[0])
+        if overloads:
+            signatures = overloads
     out = ""
     for signature in signatures:
         if len(signatures) > 1:
