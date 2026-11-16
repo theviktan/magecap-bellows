@@ -63,6 +63,46 @@ namespace Bellows::Scripting {
 		bool operator==(const ScriptEntity& other) const { return SceneID == other.SceneID && ID == other.ID; }
 	};
 
+	// -------------------------------------------------------------------------
+	// Script events between entities and languages
+	// -------------------------------------------------------------------------
+
+	// A value sent with a script event, in a form every scripting language can read: nothing,
+	// true/false, a number, text, a vector, an entity, a list of these, or a map from text to these
+	// (kept in order).
+	struct ScriptValue;
+	using ScriptValueList = std::vector<ScriptValue>;
+	using ScriptValueMap = std::vector<std::pair<std::string, ScriptValue>>;
+
+	struct ScriptValue
+	{
+		std::variant<std::monostate, bool, double, std::string, glm::vec3, ScriptEntity, ScriptValueList, ScriptValueMap> Data;
+
+		ScriptValue() = default;
+		template<typename T>
+		ScriptValue(T value) : Data(std::move(value)) {}
+
+		bool IsNothing() const { return std::holds_alternative<std::monostate>(Data); }
+		bool operator==(const ScriptValue& other) const { return Data == other.Data; }
+	};
+
+	// Receives every script event: ForgeScript's 'trigger door opened with self' and Python's
+	// bellows.emit("door opened", self.entity). Each language registers one listener that hands events
+	// to its scripts (ForgeScript's 'when door opened with who', Python's on_event(self, name, *values)).
+	// A listener must not throw: it reports its own scripts' errors (including a ScriptValueError from an
+	// EmitScriptEvent its scripts called), the same way it reports any other script error.
+	using ScriptEventListener = std::function<void(const std::string& name, const ScriptValueList& values)>;
+	using ScriptEventListenerID = uint64_t;
+
+	ScriptEventListenerID AddScriptEventListener(ScriptEventListener listener);
+	void RemoveScriptEventListener(ScriptEventListenerID id);
+	// Delivers an event right away to every listener, in the order they were added, except 'skip' (the
+	// sender's own listener, when the sender has already delivered it to its own scripts). Events sent
+	// from inside an event handler nest; past 64 levels, or past 10,000 events caused by one outer event,
+	// this throws ScriptValueError instead, so scripts that answer each other's events forever stop
+	// with a clear error.
+	void EmitScriptEvent(const std::string& name, const ScriptValueList& values, ScriptEventListenerID skip = 0);
+
 	// The scene that module-level functions (create_entity, find_entity, ...) operate on.
 	void SetContextScene(Scene* scene);
 	Scene* GetContextScene();			// May be null

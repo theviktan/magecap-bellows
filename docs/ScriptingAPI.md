@@ -311,7 +311,13 @@ engine sends these events, which the script handles with `when`:
 - **Waiting.** `wait` and `start` work in every handler (`wait 2 seconds`, `wait until ready`);
   waiting tasks continue each frame.
 - **Talking to other scripts.** `trigger door opened with self` reaches the matching `when` handlers
-  of every running script, including the sender's.
+  of every running script, including the sender's, right away. It also goes to the engine's script
+  event hub (`EmitScriptEvent` in `Scripting/ScriptApi.h`), which other languages' scripts listen to
+  once connected, and events sent through the hub reach ForgeScript's `when` handlers. Values cross
+  languages as nothing, true/false, numbers, text, vectors, entities, lists and maps with text keys;
+  anything else (a function, a kind's object) arrives as nothing in the other language, with one
+  Console warning per event name. Events that keep answering each other stop with an error after
+  64 levels, or after 10,000 events caused by one event.
 - **Other files.** `use "Scripts/Helpers"` loads `Assets/Scripts/Helpers.forge`.
 - **Errors** appear in the Console as `Scripts/Player.forge line 12: <message>`; a script with a
   mistake is not started, and one that fails 10 times is switched off, as in Python. A frame that

@@ -98,6 +98,12 @@ namespace Bellows::Scripting {
 	{
 	}
 
+	ForgeScriptRuntime::~ForgeScriptRuntime()
+	{
+		// The hub must never call a runtime that is gone, even if play mode was never stopped.
+		RemoveScriptEventListener(m_EventListener);
+	}
+
 	bool ForgeScriptRuntime::IsForgeScript(const std::string& scriptPath)
 	{
 		return std::filesystem::path(scriptPath).extension() == ".forge";
@@ -128,13 +134,48 @@ namespace Bellows::Scripting {
 	void ForgeScriptRuntime::Start()
 	{
 		m_Instances.clear();
+		m_WarnedEvents.clear();
 		m_VM = CreateMachine();
-		ForgeScript::VM* vm = m_VM.get();
-		// "trigger name" reaches every script, so entities can talk to each other.
-		vm->SetTriggerHandler([vm](ForgeScript::Module*, const std::string& event, const std::vector<ForgeScript::Value>& values)
+
+		// Events from other languages (Python's bellows.emit) reach every ForgeScript 'when' handler.
+		m_EventListener = AddScriptEventListener([this](const std::string& event, const ScriptValueList& values)
 		{
-			vm->EmitAll(event, values);
+			if (!m_VM)
+				return;
+			std::vector<ForgeScript::Value> converted;
+			for (const ScriptValue& value : values)
+				converted.push_back(FromScriptValue(*m_VM, value));
+			m_VM->EmitAll(event, converted);
 		});
+
+		// "trigger name" reaches every script, so entities can talk to each other: ForgeScript scripts get
+		// the values as they are, and other languages get them through the event hub.
+		m_VM->SetTriggerHandler([this](ForgeScript::Module*, const std::string& event, const std::vector<ForgeScript::Value>& values)
+		{
+			m_VM->EmitAll(event, values);
+			ForwardEvent(event, values);
+		});
+	}
+
+	void ForgeScriptRuntime::ForwardEvent(const std::string& event, const std::vector<ForgeScript::Value>& values)
+	{
+		if (!m_VM)
+			return;
+		ScriptValueList converted;
+		std::vector<std::string> unsendable;
+		for (const ForgeScript::Value& value : values)
+			converted.push_back(ToScriptValue(*m_VM, value, unsendable));
+		// One warning per event name, so an event sent every frame does not flood the Console.
+		if (!unsendable.empty() && m_WarnedEvents.insert(event).second)
+			BW_WARN("ForgeScript event '{}': {} cannot be sent to scripts in other languages; they receive nothing in its place", event, unsendable.front());
+		try
+		{
+			EmitScriptEvent(event, converted, m_EventListener);
+		}
+		catch (const ScriptValueError& error)
+		{
+			throw ForgeScript::RuntimeError(error.what());
+		}
 	}
 
 	void ForgeScriptRuntime::Stop()
@@ -152,6 +193,8 @@ namespace Bellows::Scripting {
 			Emit(uuid, "destroyed", {});
 
 		m_Instances.clear();
+		RemoveScriptEventListener(m_EventListener);
+		m_EventListener = 0;
 		m_VM.reset();
 	}
 
