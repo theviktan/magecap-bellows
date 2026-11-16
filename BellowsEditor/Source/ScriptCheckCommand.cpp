@@ -1,10 +1,12 @@
 #include "ScriptCheckCommand.h"
 
+#include "ProjectList.h"
 #include "ScriptDocument.h"
 
+#include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Log.h"
-#include "Bellows/Scripting/ForgeScriptBindings.h"
+#include "Bellows/Project/Project.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include <iostream>
@@ -49,11 +51,28 @@ namespace Bellows {
 		logSpecification.EnableConsole = false;
 		Log::Init(logSpecification);
 
+		// 'use "Scripts/Helpers"' is relative to the project's asset folder: find the project the
+		// script belongs to (the nearest .bproject above it). Outside a project, the script's own folder is used.
+		const std::filesystem::path scriptPath = std::filesystem::absolute(fileName).lexically_normal();
+		std::filesystem::path assetDirectory = scriptPath.parent_path();
+		for (std::filesystem::path folder = scriptPath.parent_path(); !folder.empty(); folder = folder.parent_path())
+		{
+			if (!FindProjects(folder, 0).empty())
+			{
+				if (Ref<Project> project = Project::Load(folder))
+					assetDirectory = project->GetAssetDirectory();
+				break;
+			}
+			if (folder == folder.parent_path())
+				break;
+		}
+		AssetManager::SetAssetDirectory(assetDirectory);
+
 		bool pythonReady = true;
 		if (language == ScriptLanguage::Python)
 			pythonReady = ScriptEngine::Init();
 		else
-			SetForgeScriptCheckSetup(Scripting::RegisterForgeScriptApi);
+			SetForgeScriptCheckSetup(SetUpEngineForgeScriptCheck);
 
 		int exitCode = 0;
 		if (!pythonReady)
@@ -79,6 +98,7 @@ namespace Bellows {
 		}
 
 		SetForgeScriptCheckSetup(nullptr);
+		Project::SetActive(nullptr);
 		if (ScriptEngine::IsInitialized())
 			ScriptEngine::Shutdown();
 		Log::Shutdown();

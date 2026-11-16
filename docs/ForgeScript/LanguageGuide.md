@@ -385,6 +385,8 @@ say monsters                                               # ["rat", "wolf", "dr
 
 Lists are **shared**: `set b to a` makes both names point at the same list. Use `copy(a)` when you need a separate one.
 
+`is` compares what lists hold: `[1, 2] is [1, 2]` is `true`, and so is a list and its copy until one of them changes. `contains`, `is in`, `index_of`, `remove` and `take ... from` use the same rule, so `[[1, 2], [3, 4]] contains [3, 4]` is `true`.
+
 ---
 
 ## 8. Maps
@@ -419,6 +421,8 @@ Maps can hold functions, which makes them handy as simple objects:
 set actions to { greet: function(who) return "Hi, " + who end }
 say actions.greet("Ron")
 ```
+
+Two maps are equal (`is`) when they have the same keys with equal values, in any order: `{ a: 1, b: 2 } is { b: 2, a: 1 }` is `true`. A list or map used as a **key** means that one particular list or map, not any list with the same items.
 
 ---
 
