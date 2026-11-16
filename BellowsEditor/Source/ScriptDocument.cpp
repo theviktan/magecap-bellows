@@ -17,7 +17,8 @@ namespace Bellows {
 		constexpr const char* c_ForgeScriptDefault =
 R"(# {Name} - a ForgeScript script. Attach it to an entity to give the entity behavior.
 # Variables set at the top become settings you can change in the Inspector.
-set speed to 2
+# Write 2.0 rather than 2 so the Inspector accepts decimals like 2.5.
+set speed to 2.0
 
 when created
 	# Runs once, when the game starts.
