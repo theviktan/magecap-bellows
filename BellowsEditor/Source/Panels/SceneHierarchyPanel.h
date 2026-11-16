@@ -15,7 +15,8 @@ namespace Bellows {
 		explicit SceneHierarchyPanel(EditorLayer& editor)
 			: m_Editor(editor) {}
 
-		void OnImGuiRender();
+		// The panel is drawn as a closable tab; closing it clears *open (View > Panels shows it again).
+		void OnImGuiRender(bool* open);
 		bool IsFocused() const { return m_Focused; }
 
 		// The "create entity" menu, shared with the main menu bar. New entities become children of 'parent'.

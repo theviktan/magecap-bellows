@@ -4,14 +4,69 @@
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
+#include <algorithm>
+#include <chrono>
+
 namespace Bellows {
 
-	void EditorSettings::AddRecentProject(const std::string& path)
+	void EditorSettings::AddRecentProject(const std::string& path, int64_t now)
 	{
-		std::erase(RecentProjects, path);
-		RecentProjects.insert(RecentProjects.begin(), path);
-		if (RecentProjects.size() > 12)
-			RecentProjects.resize(12);
+		if (ProjectEntry* entry = FindProject(path))
+		{
+			entry->LastOpened = now;
+			return;
+		}
+
+		ProjectEntry entry;
+		entry.Path = path;
+		entry.LastOpened = now;
+		Projects.push_back(entry);
+
+		// Over the limit, forget the project opened longest ago (favorites are kept).
+		while (Projects.size() > MaxProjects)
+		{
+			auto oldest = Projects.end();
+			for (auto it = Projects.begin(); it != Projects.end(); ++it)
+			{
+				if (!it->Favorite && (oldest == Projects.end() || it->LastOpened < oldest->LastOpened))
+					oldest = it;
+			}
+			if (oldest == Projects.end())
+				break;
+			Projects.erase(oldest);
+		}
+	}
+
+	ProjectEntry* EditorSettings::FindProject(const std::string& path)
+	{
+		auto it = std::find_if(Projects.begin(), Projects.end(), [&path](const ProjectEntry& entry) { return entry.Path == path; });
+		return it == Projects.end() ? nullptr : &*it;
+	}
+
+	bool EditorSettings::RemoveProject(const std::string& path)
+	{
+		return std::erase_if(Projects, [&path](const ProjectEntry& entry) { return entry.Path == path; }) > 0;
+	}
+
+	std::vector<std::string> EditorSettings::GetRecentProjects(size_t count) const
+	{
+		std::vector<const ProjectEntry*> sorted;
+		for (const ProjectEntry& entry : Projects)
+		{
+			if (entry.LastOpened > 0)
+				sorted.push_back(&entry);
+		}
+		std::stable_sort(sorted.begin(), sorted.end(), [](const ProjectEntry* a, const ProjectEntry* b) { return a->LastOpened > b->LastOpened; });
+
+		std::vector<std::string> paths;
+		for (size_t i = 0; i < sorted.size() && i < count; i++)
+			paths.push_back(sorted[i]->Path);
+		return paths;
+	}
+
+	int64_t EditorSettings::Now()
+	{
+		return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	}
 
 	std::filesystem::path EditorSettings::GetConfigDirectory()
@@ -45,24 +100,67 @@ namespace Bellows {
 		if (json.is_discarded())
 			return settings;
 
-		JsonRead(json, "RecentProjects", settings.RecentProjects);
+		if (auto projects = json.find("Projects"); projects != json.end() && projects->is_array())
+		{
+			for (const Json& item : *projects)
+			{
+				ProjectEntry entry;
+				JsonRead(item, "Path", entry.Path);
+				JsonRead(item, "LastOpened", entry.LastOpened);
+				JsonRead(item, "Favorite", entry.Favorite);
+				if (!entry.Path.empty() && !settings.FindProject(entry.Path))
+					settings.Projects.push_back(entry);
+			}
+		}
+		else
+		{
+			// Settings from before the Project Manager kept a plain list, most recent first.
+			std::vector<std::string> recent;
+			JsonRead(json, "RecentProjects", recent);
+			const int64_t now = Now();
+			for (size_t i = 0; i < recent.size(); i++)
+				settings.AddRecentProject(recent[i], now - static_cast<int64_t>(i));
+		}
+
 		JsonRead(json, "AgentServerEnabled", settings.AgentServerEnabled);
 		JsonRead(json, "AgentServerPort", settings.AgentServerPort);
 		JsonRead(json, "UIScale", settings.UIScale);
 		JsonRead(json, "ShowGrid", settings.ShowGrid);
 		JsonRead(json, "CameraSpeed", settings.CameraSpeed);
+		JsonRead(json, "ShowContentFolderTree", settings.ShowContentFolderTree);
+		JsonRead(json, "LastProjectLocation", settings.LastProjectLocation);
+		if (auto panels = json.find("Panels"); panels != json.end())
+		{
+			JsonRead(*panels, "Hierarchy", settings.Panels.Hierarchy);
+			JsonRead(*panels, "Inspector", settings.Panels.Inspector);
+			JsonRead(*panels, "Content", settings.Panels.Content);
+			JsonRead(*panels, "Console", settings.Panels.Console);
+			JsonRead(*panels, "Settings", settings.Panels.Settings);
+		}
 		return settings;
 	}
 
 	bool EditorSettings::Save() const
 	{
 		Json json;
-		json["RecentProjects"] = RecentProjects;
+		Json projects = Json::array();
+		for (const ProjectEntry& entry : Projects)
+			projects.push_back({ { "Path", entry.Path }, { "LastOpened", entry.LastOpened }, { "Favorite", entry.Favorite } });
+		json["Projects"] = projects;
 		json["AgentServerEnabled"] = AgentServerEnabled;
 		json["AgentServerPort"] = AgentServerPort;
 		json["UIScale"] = UIScale;
 		json["ShowGrid"] = ShowGrid;
 		json["CameraSpeed"] = CameraSpeed;
+		json["ShowContentFolderTree"] = ShowContentFolderTree;
+		json["LastProjectLocation"] = LastProjectLocation;
+		json["Panels"] = {
+			{ "Hierarchy", Panels.Hierarchy },
+			{ "Inspector", Panels.Inspector },
+			{ "Content", Panels.Content },
+			{ "Console", Panels.Console },
+			{ "Settings", Panels.Settings },
+		};
 		return FileSystem::WriteTextFile(GetConfigDirectory() / "EditorSettings.json", json.dump(1, '\t'));
 	}
 
