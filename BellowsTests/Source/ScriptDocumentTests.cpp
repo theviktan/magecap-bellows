@@ -4,6 +4,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
+#include "Bellows/Serialization/JsonUtils.h"
 
 #include <ForgeScript/VM/VM.h>
 
@@ -238,4 +239,27 @@ TEST_CASE("Entity scripts using the engine API pass the Script Editor's check")
 		"end\n";
 	CHECK(CheckScript(ScriptLanguage::ForgeScript, source, "Player.forge").empty());
 	SetForgeScriptCheckSetup(nullptr);
+}
+
+TEST_CASE("Check results are formatted for tools like forgescript --check")
+{
+	ScriptDiagnostic diagnostic;
+	diagnostic.Message = "Expected a value here, but the line ended.";
+	diagnostic.Line = 2;
+	diagnostic.Column = 8;
+	CHECK(FormatScriptDiagnostic("Scripts/Bad.forge", diagnostic) == "Scripts/Bad.forge:2:8: Expected a value here, but the line ended.");
+
+	const std::string source = "when created\r\n\tset x to\r\nend\n";
+	const Json json = Json::parse(FormatScriptDiagnosticsJson("Scripts/Bad.forge", source, { diagnostic }));
+	CHECK(json["file"] == "Scripts/Bad.forge");
+	REQUIRE(json["diagnostics"].size() == 1);
+	const Json& item = json["diagnostics"][0];
+	CHECK(item["line"] == 2);
+	CHECK(item["column"] == 8);
+	CHECK(item["endColumn"] == 10);		// "\tset x to" is 9 characters; the line ending is not counted
+	CHECK(item["severity"] == "error");
+	CHECK(item["message"] == diagnostic.Message);
+
+	const Json clean = Json::parse(FormatScriptDiagnosticsJson("Scripts/Good.forge", "say 1\n", {}));
+	CHECK(clean["diagnostics"].empty());
 }

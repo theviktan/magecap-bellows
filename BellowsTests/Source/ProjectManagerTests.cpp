@@ -6,6 +6,7 @@
 
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Serialization/JsonUtils.h"
 
 #include <algorithm>
 
@@ -243,4 +244,30 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		CHECK(recent[1] == "/old.bproject");
 		CHECK_FALSE(loaded.ShowGrid);
 	}
+}
+
+TEST_CASE("Install.json tells other tools where this editor is")
+{
+	const std::filesystem::path config = MakeFolder("InstallInfo");
+	ScopedConfigDirectory scoped(config);
+	const std::filesystem::path bin = MakeFolder("InstallBin");
+	const std::string extension = Platform::GetExecutableExtension();
+	REQUIRE(FileSystem::WriteTextFile(bin / ("forgescript" + extension), "tool"));
+	REQUIRE(FileSystem::WriteTextFile(bin / "Docs" / "ScriptingAPI.md", "# API"));
+
+	REQUIRE(EditorSettings::WriteInstallInfo(bin));
+	const std::optional<std::string> text = FileSystem::ReadTextFile(config / "Install.json");
+	REQUIRE(text);
+	const Json json = Json::parse(*text);
+	const std::filesystem::path absoluteBin = std::filesystem::absolute(bin).lexically_normal();
+	CHECK(json["EngineVersion"] == BW_VERSION);
+	CHECK(json["ForgeScriptVersion"] == FORGESCRIPT_VERSION);
+	CHECK(json["EditorPath"] == (absoluteBin / ("BellowsEditor" + extension)).string());
+	CHECK(json["ForgeScriptPath"] == (absoluteBin / ("forgescript" + extension)).string());
+	CHECK(json["DocsDirectory"] == (absoluteBin / "Docs").string());
+
+	// Unchanged information is not rewritten.
+	const auto writeTime = std::filesystem::last_write_time(config / "Install.json");
+	REQUIRE(EditorSettings::WriteInstallInfo(bin));
+	CHECK(std::filesystem::last_write_time(config / "Install.json") == writeTime);
 }

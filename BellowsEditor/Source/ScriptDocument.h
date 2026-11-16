@@ -67,6 +67,13 @@ namespace Bellows {
 		size_t Column = 0;		// 1-based; 0 when unknown
 	};
 
+	// "Scripts/Player.forge:12:5: message", the format of `forgescript --check` (tools parse it).
+	std::string FormatScriptDiagnostic(const std::string& fileName, const ScriptDiagnostic& diagnostic);
+	// The same mistakes as JSON for editors and tools:
+	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message" } ] }.
+	// endColumn is one past the last character of the line, since the checker reports where a mistake starts.
+	std::string FormatScriptDiagnosticsJson(const std::string& fileName, std::string_view source, const std::vector<ScriptDiagnostic>& diagnostics);
+
 	// Compiles the script without running it and reports the first mistake, if any.
 	// Python needs the script engine to be initialized; without it Python scripts are not checked.
 	std::vector<ScriptDiagnostic> CheckScript(ScriptLanguage language, std::string_view source, const std::string& fileName);
