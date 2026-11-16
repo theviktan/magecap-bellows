@@ -114,3 +114,4 @@
 #define ICON_UNLINK                      "\xee\x86\x9c"	// U+E19C
 #define ICON_FILE_TEXT                   "\xee\x83\x8c"	// U+E0CC
 #define ICON_SAVE_ALL                    "\xee\x90\x8f"	// U+E40F
+#define ICON_STAR                        "\xee\x85\xb6"	// U+E176

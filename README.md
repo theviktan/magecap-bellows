@@ -27,7 +27,11 @@ can drive end to end.
   scripts on entities is the next milestone (see [docs/Roadmap.md](docs/Roadmap.md)).
 * **Editor**: hierarchy, inspector, content browser with drag and drop, console with a Python
   prompt, transform gizmos, picking, undo/redo, play/pause/step, prefabs, render settings, project
-  hub, and **Export Game** (a standalone build with its own Python runtime).
+  manager, and **Export Game** (a standalone build with its own Python runtime).
+* **Project Manager** like Godot's: every project in one list with search, sorting, favorites,
+  New Project templates, Import and Scan. Panels can be closed from their tab and brought back from
+  **View → Panels**, docked anywhere by dragging their tab, and reset with **View → Reset Layout**;
+  the Content panel has a folder tree.
 * **Script Editor** built in, like Godot's: a **Scene / Script** switch in the toolbar, tabs for
   open scripts, ForgeScript and Python highlighting, an outline of functions and events, find and
   replace, completion, live error checking (the line turns red as you type), and the ForgeScript
@@ -114,7 +118,11 @@ tested version.
 
 ## Your first game
 
-1. Start the editor and click **New Project**, give it a name and a folder, click **Create**.
+1. Start the editor. The **Project Manager** opens: click **New Project**, type a name, keep or
+   change the location (**Browse...**), pick **3D Starter** and click **Create & Open**. Every
+   project you open is listed there with search, sorting and favorites (the star); **Import** adds
+   an existing `.bproject` and **Scan** finds all projects in a folder. Come back to it any time
+   with **File → Project Manager...**.
 2. Use **Entity → 3D Object** to add shapes, select them in the viewport or the **Hierarchy**
    panel, and move them with the gizmo (**W** move, **E** rotate, **R** scale; hold **Ctrl** to snap).
    Fly around the viewport with the **right mouse button** held plus **W A S D**.

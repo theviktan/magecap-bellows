@@ -10,6 +10,7 @@
 #include "Panels/ScriptEditorPanel.h"
 #include "Panels/SettingsPanel.h"
 #include "Panels/StatisticsPanel.h"
+#include "ProjectManager.h"
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
@@ -101,6 +102,7 @@ namespace Bellows {
 		m_SettingsPanel = CreateScope<SettingsPanel>(*this);
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
 		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
+		m_ProjectManager = CreateScope<ProjectManager>(*this);
 
 		ScriptEngine::SetQuitHandler([this](int exitCode)
 		{
@@ -169,14 +171,48 @@ namespace Bellows {
 	// Project and scene management
 	// -------------------------------------------------------------------------
 
-	bool EditorLayer::NewProject(const std::filesystem::path& directory, const std::string& name)
+	bool EditorLayer::NewProject(const std::filesystem::path& directory, const std::string& name, bool emptyScene)
 	{
 		if (m_SceneState != SceneState::Edit)
 			Stop();
 		Ref<Project> project = Project::Create(directory, name);
 		if (!project)
 			return false;
+		if (emptyScene)
+		{
+			// The "Empty" template: replace the starter scene with one that has nothing in it.
+			const std::filesystem::path startScene = project->GetAssetDirectory() / project->GetConfig().StartScene;
+			Scene scene(std::filesystem::path(project->GetConfig().StartScene).stem().string());
+			if (!SceneSerializer::Serialize(scene, startScene))
+				BW_WARN("Could not write an empty start scene; the project keeps the starter scene");
+		}
 		return OpenProject(project->GetProjectFilePath());
+	}
+
+	void EditorLayer::CloseProject()
+	{
+		if (!m_Project)
+			return;
+		if (m_SceneState != SceneState::Edit)
+			Stop();
+		m_ScriptEditorPanel->SaveAll();
+		m_ScriptEditorPanel->CloseAll();
+		SaveLayout();
+
+		m_Selection.clear();
+		m_UndoHistory.Clear();
+		ScriptEngine::SetContextScene(nullptr);
+		m_RuntimeScene.reset();
+		m_EditorScene.reset();
+		m_PendingSceneLoad.reset();
+		m_ScenePath.clear();
+		m_CurrentSnapshot.clear();
+		m_SavedSnapshot.clear();
+		m_Project.reset();
+		Project::SetActive(nullptr);
+		m_ProjectManager->Invalidate();
+		UpdateWindowTitle();
+		BW_INFO("Closed the project");
 	}
 
 	bool EditorLayer::OpenProject(const std::filesystem::path& path)
@@ -192,7 +228,8 @@ namespace Bellows {
 			return false;
 		}
 		m_Project = project;
-		m_Settings.AddRecentProject(project->GetProjectFilePath().string());
+		m_Settings.AddRecentProject(project->GetProjectFilePath().string(), EditorSettings::Now());
+		m_ProjectManager->Invalidate();
 		m_Settings.Save();
 		FileSystem::CreateDirectories(project->GetEditorDataDirectory());
 
@@ -1107,7 +1144,7 @@ namespace Bellows {
 	{
 		if (!m_Project)
 		{
-			DrawProjectHub();
+			m_ProjectManager->OnImGuiRender();
 			DrawDialogs();
 			return;
 		}
@@ -1148,11 +1185,17 @@ namespace Bellows {
 		ImGui::End();
 		(void)toolbarHeight;
 
-		m_HierarchyPanel->OnImGuiRender();
-		m_InspectorPanel->OnImGuiRender();
-		m_ContentBrowserPanel->OnImGuiRender();
-		m_ConsolePanel->OnImGuiRender();
-		m_SettingsPanel->OnImGuiRender();
+		EditorPanelVisibility& panels = m_Settings.Panels;
+		if (panels.Hierarchy)
+			m_HierarchyPanel->OnImGuiRender(&panels.Hierarchy);
+		if (panels.Inspector)
+			m_InspectorPanel->OnImGuiRender(&panels.Inspector);
+		if (panels.Content)
+			m_ContentBrowserPanel->OnImGuiRender(&panels.Content);
+		if (panels.Console)
+			m_ConsolePanel->OnImGuiRender(&panels.Console);
+		if (panels.Settings)
+			m_SettingsPanel->OnImGuiRender(&panels.Settings);
 		if (m_ShowStatistics)
 			m_StatisticsPanel->OnImGuiRender(&m_ShowStatistics);
 		DrawViewport();
@@ -1233,16 +1276,13 @@ namespace Bellows {
 		if (ImGui::BeginMenu("File"))
 		{
 			if (ImGui::MenuItem(ICON_FOLDER_PLUS "  New Project..."))
-			{
-				m_DialogName = "My Game";
-				m_DialogPath = (m_Project ? m_Project->GetProjectDirectory().parent_path() : std::filesystem::current_path()).string();
-				m_ShowNewProjectDialog = true;
-			}
+				m_ProjectManager->ShowNewProjectDialog();
 			if (ImGui::MenuItem(ICON_FOLDER_OPEN "  Open Project..."))
 				m_ShowOpenProjectDialog = true;
-			if (ImGui::BeginMenu(ICON_REFRESH_CW "  Recent Projects", !m_Settings.RecentProjects.empty()))
+			const std::vector<std::string> recentProjects = m_Settings.GetRecentProjects(12);
+			if (ImGui::BeginMenu(ICON_REFRESH_CW "  Recent Projects", !recentProjects.empty()))
 			{
-				for (const std::string& recent : m_Settings.RecentProjects)
+				for (const std::string& recent : recentProjects)
 				{
 					if (ImGui::MenuItem(recent.c_str()))
 					{
@@ -1251,6 +1291,14 @@ namespace Bellows {
 					}
 				}
 				ImGui::EndMenu();
+			}
+			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Project Manager..."))
+			{
+				// Like Godot's "Quit to Project List": asks about unsaved scene changes first.
+				if (IsSceneDirty() && m_SceneState == SceneState::Edit)
+					m_ShowCloseProjectDialog = true;
+				else
+					Application::Get().SubmitToMainThread([this] { CloseProject(); });
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_FILE_PLUS "  New Scene", "Ctrl+N", false, editing))
@@ -1304,12 +1352,27 @@ namespace Bellows {
 
 		if (ImGui::BeginMenu("View"))
 		{
+			if (ImGui::BeginMenu(ICON_PANEL_LEFT "  Panels"))
+			{
+				EditorPanelVisibility& panels = m_Settings.Panels;
+				ImGui::MenuItem(ICON_LIST_TREE "  Hierarchy", nullptr, &panels.Hierarchy);
+				ImGui::MenuItem(ICON_SLIDERS_HORIZONTAL "  Inspector", nullptr, &panels.Inspector);
+				ImGui::MenuItem(ICON_FOLDER "  Content", nullptr, &panels.Content);
+				ImGui::MenuItem(ICON_TERMINAL "  Console", nullptr, &panels.Console);
+				ImGui::MenuItem(ICON_SETTINGS "  Settings", nullptr, &panels.Settings);
+				ImGui::EndMenu();
+			}
+			ImGui::Separator();
 			ImGui::MenuItem(ICON_GRID_3X3 "  Grid", nullptr, &m_Settings.ShowGrid);
 			ImGui::MenuItem(ICON_BOX "  Collider Outlines", nullptr, &m_ShowColliders);
 			ImGui::MenuItem(ICON_ACTIVITY "  Statistics", nullptr, &m_ShowStatistics);
 			ImGui::Separator();
-			if (ImGui::MenuItem(ICON_PANEL_LEFT "  Reset Layout"))
+			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Reset Layout"))
+			{
+				// Back to the default arrangement, with every panel shown.
+				m_Settings.Panels = EditorPanelVisibility();
 				m_LayoutInitialized = false;
+			}
 #ifdef BW_DEBUG
 			ImGui::Separator();
 			ImGui::MenuItem("Dear ImGui Demo", nullptr, &m_ShowDemoWindow);
@@ -1720,113 +1783,6 @@ namespace Bellows {
 	// Project hub and dialogs
 	// -------------------------------------------------------------------------
 
-	void EditorLayer::DrawProjectHub()
-	{
-		const float scale = Theme::GetScale();
-		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		ImGui::SetNextWindowPos(viewport->WorkPos);
-		ImGui::SetNextWindowSize(viewport->WorkSize);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::ToVec4(Theme::Background));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-		ImGui::Begin("##ProjectHub", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus);
-		ImGui::PopStyleVar();
-		ImGui::PopStyleColor();
-
-		const ImVec2 windowPos = ImGui::GetWindowPos();
-		const ImVec2 windowSize = ImGui::GetWindowSize();
-		const float sideWidth = std::min(420.0f * scale, windowSize.x * 0.38f);
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-		// Brand side
-		drawList->AddRectFilled(windowPos, ImVec2(windowPos.x + sideWidth, windowPos.y + windowSize.y), Theme::Panel);
-		drawList->AddLine(ImVec2(windowPos.x + sideWidth, windowPos.y), ImVec2(windowPos.x + sideWidth, windowPos.y + windowSize.y), Theme::Border);
-		const ImVec2 markCenter(windowPos.x + 56.0f * scale, windowPos.y + 92.0f * scale);
-		drawList->AddCircleFilled(markCenter, 26.0f * scale, Theme::AccentSubtle, 48);
-		drawList->AddCircle(markCenter, 26.0f * scale, Theme::Accent, 48, 1.5f * scale);
-		ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 1.6f);
-		const ImVec2 iconSize = ImGui::CalcTextSize(ICON_FLAME);
-		drawList->AddText(ImVec2(markCenter.x - iconSize.x * 0.5f, markCenter.y - iconSize.y * 0.55f), Theme::Accent, ICON_FLAME);
-		ImGui::PopFont();
-
-		ImGui::SetCursorPos(ImVec2(40.0f * scale, 140.0f * scale));
-		ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 2.1f);
-		ImGui::TextUnformatted("MageCap Bellows");
-		ImGui::PopFont();
-		ImGui::SetCursorPosX(40.0f * scale);
-		UI::TextMuted("Build 3D games, simply.");
-		ImGui::SetCursorPos(ImVec2(40.0f * scale, windowSize.y - 60.0f * scale));
-		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-		ImGui::TextDisabled("Version " BW_VERSION "  -  MageCap Games");
-		ImGui::PopFont();
-
-		// Actions
-		ImGui::SetCursorPos(ImVec2(40.0f * scale, 220.0f * scale));
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::Accent));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.04f, 0.03f, 1.0f));
-		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
-		if (ImGui::Button(ICON_FOLDER_PLUS "   New Project", ImVec2(sideWidth - 80.0f * scale, 40.0f * scale)))
-		{
-			m_DialogName = "My Game";
-			m_DialogPath = std::filesystem::current_path().string();
-			m_ShowNewProjectDialog = true;
-		}
-		ImGui::PopFont();
-		ImGui::PopStyleColor(4);
-		ImGui::SetCursorPosX(40.0f * scale);
-		if (ImGui::Button(ICON_FOLDER_OPEN "   Open Project...", ImVec2(sideWidth - 80.0f * scale, 40.0f * scale)))
-			m_ShowOpenProjectDialog = true;
-
-		// Recent projects
-		ImGui::SetCursorPos(ImVec2(sideWidth + 48.0f * scale, 70.0f * scale));
-		ImGui::PushFont(Theme::GetFonts().SemiBold, Theme::BaseFontSize * scale * 1.25f);
-		ImGui::TextUnformatted("Recent projects");
-		ImGui::PopFont();
-		ImGui::SetCursorPosX(sideWidth + 48.0f * scale);
-		ImGui::BeginChild("##Recent", ImVec2(windowSize.x - sideWidth - 96.0f * scale, windowSize.y - 140.0f * scale));
-		if (m_Settings.RecentProjects.empty())
-		{
-			UI::CenteredText("Projects you create or open appear here.", -40.0f * scale);
-		}
-		std::optional<std::string> toOpen;
-		std::optional<std::string> toForget;
-		for (const std::string& recent : m_Settings.RecentProjects)
-		{
-			const std::filesystem::path path(recent);
-			const bool exists = FileSystem::Exists(path);
-			ImGui::PushID(recent.c_str());
-			const ImVec2 itemPos = ImGui::GetCursorScreenPos();
-			const float itemHeight = 58.0f * scale;
-			if (ImGui::Selectable("##item", false, ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, itemHeight)) && exists)
-				toOpen = recent;
-			if (ImGui::BeginPopupContextItem())
-			{
-				if (ImGui::MenuItem(ICON_X "  Remove from list"))
-					toForget = recent;
-				ImGui::EndPopup();
-			}
-			ImDrawList* list = ImGui::GetWindowDrawList();
-			list->AddRectFilled(ImVec2(itemPos.x + 12.0f * scale, itemPos.y + 12.0f * scale), ImVec2(itemPos.x + 46.0f * scale, itemPos.y + 46.0f * scale), Theme::Field, 6.0f * scale);
-			list->AddText(ImVec2(itemPos.x + 20.0f * scale, itemPos.y + 20.0f * scale), exists ? Theme::Accent : Theme::TextDisabled, ICON_PACKAGE);
-			list->AddText(Theme::GetFonts().SemiBold, Theme::BaseFontSize * scale, ImVec2(itemPos.x + 60.0f * scale, itemPos.y + 11.0f * scale),
-				exists ? Theme::Text : Theme::TextDisabled, path.stem().string().c_str());
-			list->AddText(Theme::GetFonts().Regular, Theme::BaseFontSize * scale * 0.9f, ImVec2(itemPos.x + 60.0f * scale, itemPos.y + 32.0f * scale),
-				Theme::TextMuted, exists ? path.parent_path().string().c_str() : "Missing - right-click to remove");
-			ImGui::PopID();
-		}
-		ImGui::EndChild();
-		ImGui::End();
-
-		if (toForget)
-		{
-			std::erase(m_Settings.RecentProjects, *toForget);
-			m_Settings.Save();
-		}
-		if (toOpen)
-			OpenProject(*toOpen);
-	}
-
 	void EditorLayer::DrawDialogs()
 	{
 		const float scale = Theme::GetScale();
@@ -1879,38 +1835,41 @@ namespace Bellows {
 			ImGui::PopID();
 		};
 
-		if (beginModal("New Project", m_ShowNewProjectDialog, 520.0f))
+		if (m_Project)
+			m_ProjectManager->DrawDialogs();
+
+		if (beginModal("Close Project", m_ShowCloseProjectDialog, 480.0f))
 		{
-			UI::TextMuted("Project name");
-			ImGui::SetNextItemWidth(-FLT_MIN);
-			if (ImGui::IsWindowAppearing())
-				ImGui::SetKeyboardFocusHere();
-			ImGui::InputText("##name", &m_DialogName);
-			ImGui::Spacing();
-			UI::TextMuted("Location");
-			pathField("location", m_DialogPath, true, {});
-			const std::filesystem::path target = std::filesystem::path(m_DialogPath) / ProjectExporter::SanitizeName(m_DialogName);
-			ImGui::Spacing();
-			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-			ImGui::TextDisabled("Creates %s", target.string().c_str());
-			ImGui::PopFont();
+			const bool untitled = m_ScenePath.empty();
+			ImGui::PushTextWrapPos(0.0f);
+			if (untitled)
+				ImGui::TextUnformatted("The scene has never been saved. Close the project anyway? Its changes will be lost.");
+			else
+				ImGui::Text("Save changes to '%s' before closing the project?", m_ScenePath.c_str());
+			ImGui::PopTextWrapPos();
 			ImGui::Spacing();
 			ImGui::Separator();
 			ImGui::Spacing();
-			const bool valid = !m_DialogName.empty() && !m_DialogPath.empty();
-			if (primaryButton("Create", valid))
+			bool close = false;
+			if (!untitled)
 			{
-				if (NewProject(target, m_DialogName))
-					m_ShowNewProjectDialog = false;
-				else
-					m_DialogMessage = "The project could not be created in '" + target.string() + "'.";
-				ImGui::CloseCurrentPopup();
+				if (primaryButton(ICON_SAVE "  Save & Close"))
+					close = SaveScene();
+				ImGui::SameLine();
 			}
+			if (ImGui::Button("Close Without Saving", ImVec2(170.0f * scale, 0.0f)))
+				close = true;
 			ImGui::SameLine();
 			if (ImGui::Button("Cancel", ImVec2(120.0f * scale, 0.0f)))
 			{
-				m_ShowNewProjectDialog = false;
+				m_ShowCloseProjectDialog = false;
 				ImGui::CloseCurrentPopup();
+			}
+			if (close)
+			{
+				m_ShowCloseProjectDialog = false;
+				ImGui::CloseCurrentPopup();
+				Application::Get().SubmitToMainThread([this] { CloseProject(); });
 			}
 			ImGui::EndPopup();
 		}

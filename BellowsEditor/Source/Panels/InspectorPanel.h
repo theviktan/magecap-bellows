@@ -19,7 +19,8 @@ namespace Bellows {
 		explicit InspectorPanel(EditorLayer& editor)
 			: m_Editor(editor) {}
 
-		void OnImGuiRender();
+		// The panel is drawn as a closable tab; closing it clears *open (View > Panels shows it again).
+		void OnImGuiRender(bool* open);
 	private:
 		void FlushMaterialSave();
 		void DrawEntity(Entity entity);

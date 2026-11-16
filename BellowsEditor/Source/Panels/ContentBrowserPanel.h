@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -16,7 +17,8 @@ namespace Bellows {
 		explicit ContentBrowserPanel(EditorLayer& editor)
 			: m_Editor(editor) {}
 
-		void OnImGuiRender();
+		// The panel is drawn as a closable tab; closing it clears *open (View > Panels shows it again).
+		void OnImGuiRender(bool* open);
 
 		void SetCurrentDirectory(const std::filesystem::path& directory);
 		const std::filesystem::path& GetCurrentDirectory() const { return m_CurrentDirectory; }
@@ -41,6 +43,9 @@ namespace Bellows {
 		void DrawCreateMenu();
 		void DrawDialogs();
 		void OpenItem(const Item& item);
+		void DrawFolderNode(const std::filesystem::path& folder, const std::string& label);
+		const std::vector<std::filesystem::path>& GetSubfolders(const std::filesystem::path& folder);
+		void MoveAsset(const std::string& assetPath, const std::filesystem::path& folder);
 		std::filesystem::path MakeUniquePath(const std::string& stem, const std::string& extension) const;
 	private:
 		EditorLayer& m_Editor;
@@ -51,6 +56,8 @@ namespace Bellows {
 		std::string m_SelectedAsset;
 		float m_ThumbnailSize = 84.0f;
 		std::unordered_set<std::string> m_FailedThumbnails;	// Not retried until the folder is rescanned
+		std::unordered_map<std::string, std::vector<std::filesystem::path>> m_Subfolders;	// Folder tree cache, cleared on rescan
+		bool m_RevealCurrentFolder = true;
 
 		std::filesystem::path m_RenamePath;
 		std::string m_RenameBuffer;

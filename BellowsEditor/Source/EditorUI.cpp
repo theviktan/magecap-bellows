@@ -412,6 +412,14 @@ namespace Bellows::UI {
 		}
 	}
 
+	bool BeginPanel(const char* name, bool* open, ImGuiWindowFlags flags)
+	{
+		ImGuiWindowClass windowClass;
+		windowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoCloseButton;
+		ImGui::SetNextWindowClass(&windowClass);
+		return ImGui::Begin(name, open, flags);
+	}
+
 	void TextMuted(const char* text)
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextMuted));

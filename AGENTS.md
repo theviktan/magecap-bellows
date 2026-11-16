@@ -14,7 +14,7 @@ agents can build games through it.
 | Folder | Contents |
 |--------|----------|
 | `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
-| `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport, Scene/Script workspaces), `Panels/` (including `ScriptEditorPanel`, the built-in code editor and Attach Script dialog), `ScriptDocument` (UI-free script logic: languages, templates, outlines, syntax checks; compiled into `BellowsTests`), `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
+| `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport, Scene/Script workspaces), `Panels/` (including `ScriptEditorPanel`, the built-in code editor and Attach Script dialog), `ProjectManager` (the window shown when no project is open, and the New Project dialog), UI-free logic compiled into `BellowsTests` (`ScriptDocument`: script languages, templates, outlines, syntax checks; `ProjectList`: project names, scanning, sorting, new-project checks; `EditorSettings`), `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
 | `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
 | `ForgeScript/` | The ForgeScript language (compiler, VM, standard library, `forgescript` tool, tests). Engine-independent, `namespace ForgeScript`; read `ForgeScript/AGENTS.md` before changing it. |
@@ -44,7 +44,7 @@ The tests:
 |------------|----------------|
 | `ForgeScriptTests` | The ForgeScript language: lexer, compiler errors, embedding API, and every `ForgeScript/Tests/Scripts/*.forge` script (also under GC stress). |
 | `ForgeScriptEngineExample` | The small stand-alone host in `ForgeScript/Examples/EngineIntegration`. |
-| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor logic (no GPU). |
+| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.py` checks the entire Python API. |
