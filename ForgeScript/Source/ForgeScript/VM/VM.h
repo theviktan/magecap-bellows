@@ -139,6 +139,13 @@ namespace ForgeScript {
 		void UnloadModule(Module* module);
 		// Forgets every script loaded with "use", so the next "use" reads the file again (hot reload).
 		void ClearModuleCache();
+		// The names of a module's script variables, functions and other globals, in the order they were made.
+		std::vector<std::string> GetGlobalNames(Module* module) const;
+		// Hot reload: gives every variable of 'to' that 'from' also has the value it has in 'from', so a
+		// reloaded script keeps its state. Skipped: names in 'skip', constants, and functions, phrases, kinds
+		// and modules (the new code wins), and values whose type changed (2 became "fast": the new value).
+		// Returns the names that were carried over.
+		std::vector<std::string> CarryOverVariables(Module* from, Module* to, const std::vector<std::string>& skip = {});
 
 		Value GetGlobal(Module* module, const std::string& name);
 		void SetGlobal(Module* module, const std::string& name, Value value);

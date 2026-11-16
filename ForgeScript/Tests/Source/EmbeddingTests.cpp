@@ -470,3 +470,38 @@ TEST_CASE("NativeFunctionsCanHaveMembers")
 	CHECK_EQ(h.Output, std::string("20\n0\n1\n0\n'Point' has nothing called 'missing'.\n"));
 	CHECK(h.Errors.empty());
 }
+
+TEST_CASE("GetGlobalNamesListsAModulesNamesInOrder")
+{
+	Harness h;
+	Module* module = h.Machine.CreateModule("names.forge");
+	h.Machine.RunInModule(module, "set speed to 2\nfunction jump()\nend\nset title to \"x\"\n", "names.forge");
+	const std::vector<std::string> names = h.Machine.GetGlobalNames(module);
+	CHECK(std::find(names.begin(), names.end(), "speed") != names.end());
+	CHECK(std::find(names.begin(), names.end(), "jump") != names.end());
+	CHECK(std::find(names.begin(), names.end(), "title") != names.end());
+	CHECK(std::find(names.begin(), names.end(), "speed") < std::find(names.begin(), names.end(), "title"));
+}
+
+TEST_CASE("CarryOverVariablesKeepsStateButNotCode")
+{
+	Harness h;
+	Module* before = h.Machine.CreateModule("v1.forge");
+	h.Machine.RunInModule(before,
+		"set score to 0\nset name to \"old\"\nset items to [1]\nset mode to \"slow\"\nconstant LIMIT is 3\n"
+		"function describe()\n\treturn \"old code\"\nend\n"
+		"add 5 to score\nadd 2 to items\n", "v1.forge");
+
+	Module* after = h.Machine.CreateModule("v2.forge");
+	h.Machine.RunInModule(after,
+		"set score to 0\nset name to \"new\"\nset items to []\nset mode to 3\nconstant LIMIT is 9\nset added to true\n"
+		"function describe()\n\treturn \"new code\"\nend\n", "v2.forge");
+
+	std::vector<std::string> carried = h.Machine.CarryOverVariables(before, after, { "name" });
+	std::sort(carried.begin(), carried.end());
+	CHECK_EQ(carried, std::vector<std::string>{ "items", "score" });
+
+	h.Machine.RunInModule(after, "say score\nsay name\nsay items\nsay mode\nsay LIMIT\nsay added\nsay describe()\n", "v2.forge");
+	CHECK(h.Errors.empty());
+	CHECK_EQ(h.Output, std::string("5\nnew\n[1, 2]\n3\n9\ntrue\nnew code\n"));
+}

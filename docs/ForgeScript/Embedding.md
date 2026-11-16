@@ -310,7 +310,7 @@ for (const ForgeScript::ScriptVariable& variable : ForgeScript::FindScriptVariab
 	AddField(variable.Name, variable.Kind, variable.Number, variable.Text);
 ```
 
-- **Hot reload:** call `m_VM.ClearModuleCache()`, unload the entity's module, then attach the script again. (Bellows simply makes a new VM each time play starts, which reads every script again.)
+- **Hot reload** while the game runs: check the new text first (`FindMistakes`) and keep the old module if it has mistakes. Otherwise call `m_VM.ClearModuleCache()`, run the new source in a fresh module for the entity, then `m_VM.CarryOverVariables(oldModule, newModule, {"self"})` so script variables keep their values (constants, functions, phrases, kinds and values whose type changed take the new version), and unload the old module, which stops its waiting tasks. `m_VM.GetGlobalNames(module)` lists a module's names. Bellows' `ForgeScriptRuntime::Reload` does exactly this and then sends `reloaded`.
 - **Interactive console:** run typed lines in one module with `CompileOptions::Repl = true`, which prints the value of a line that is only an expression (see `ForgeScript/CLI/Source/Main.cpp`).
 - **Repeatable random numbers** for replays and tests: `m_VM.SetRandomSeed(1234);`
 
