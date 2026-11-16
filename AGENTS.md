@@ -25,6 +25,15 @@ fully scriptable so agents can build games through it.
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
+## Coordination between chats
+
+Three chats work on this project: the Bellows development chat (engine, editor, tools), the ForgeScript
+chat (`ForgeScript/` and the ForgeScript runtime) and the MageCap Forge chat (the Forge app's Bellows
+integration). They share the **MageCap Bellows Sync Board**
+(https://claude.ai/artifact/YAjJThc6uiNbyX2ybiP8rL): current state, who owns what, the contracts each
+side relies on, open requests, decisions and a change log. Read it before starting work and update it
+after merging.
+
 ## Build and test
 
 ```bash
