@@ -666,10 +666,52 @@ namespace Bellows::Scripting {
 
 	}
 
+	namespace {
+
+		struct EnginePhrase
+		{
+			ForgeScriptPhraseInfo Info;
+			FS::NativeFn Function;
+		};
+
+		// The phrases are thin wrappers over functions of the shared API, so both spellings behave alike.
+		const std::vector<EnginePhrase>& GetEnginePhrases()
+		{
+			static const std::vector<EnginePhrase> s_Phrases = {
+				{ { "save screenshot", "Saves what the player sees and gives back the file's full path; same as save_screenshot()", "str" },
+					[](FS::CallContext& context) { return context.GetVM().MakeText(Guard([] { return SaveScreenshot("", 1920); })); } },
+				{ { "save screenshot to (path)", "Saves what the player sees to path (inside the user folder when relative) and gives back the full path; same as save_screenshot(path)", "str" },
+					[](FS::CallContext& context)
+					{
+						const std::string path = context.Text(0);
+						return context.GetVM().MakeText(Guard([&path] { return SaveScreenshot(path, 1920); }));
+					} },
+				{ { "user folder", "The game's own folder for saves, reports and screenshots; same as user_folder()", "str" },
+					[](FS::CallContext& context) { return context.GetVM().MakeText(GetUserFolder().string()); } },
+			};
+			return s_Phrases;
+		}
+
+	}
+
+	std::vector<ForgeScriptPhraseInfo> GetForgeScriptPhrases()
+	{
+		std::vector<ForgeScriptPhraseInfo> phrases;
+		for (const EnginePhrase& phrase : GetEnginePhrases())
+			phrases.push_back(phrase.Info);
+		return phrases;
+	}
+
 	void RegisterForgeScriptApi(FS::VM& vm)
 	{
 		ForgeScriptApi api(vm);
 		DefineScriptApi(api);
+		for (const EnginePhrase& phrase : GetEnginePhrases())
+		{
+			std::string error;
+			const bool registered = vm.RegisterPhrase(phrase.Info.Pattern, phrase.Function, &error);
+			BW_CORE_VERIFY(registered, "Engine phrase '{}' is not valid: {}", phrase.Info.Pattern, error);
+		}
 	}
 
 	FS::Value MakeForgeScriptEntity(FS::VM& vm, const ScriptEntity& entity)
