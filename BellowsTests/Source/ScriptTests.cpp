@@ -227,6 +227,18 @@ TEST_CASE("ExecuteSource evaluates expressions and reports exceptions")
 	CHECK(output.find("SyntaxError") != std::string::npos);
 }
 
+TEST_CASE("ExecuteFile gives the script its own path in __file__")
+{
+	const std::filesystem::path script = std::filesystem::absolute(BellowsTests::GetTestOutputDirectory() / "FileScript" / "where.py");
+	REQUIRE(FileSystem::WriteTextFile(script, "location = __file__\nprint(location)"));
+	std::string output;
+	REQUIRE(ScriptEngine::ExecuteFile(script, output));
+	CHECK(output == script.string() + "\n");
+	// Afterwards the prompt's globals are back to normal: no stale __file__.
+	REQUIRE(ScriptEngine::ExecuteSource("'__file__' in globals()", output));
+	CHECK(output == "False\n");
+}
+
 TEST_CASE("Stale entity handles fail safely")
 {
 	Ref<Scene> scene = CreateRef<Scene>();
