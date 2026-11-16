@@ -45,6 +45,10 @@ namespace Bellows::UI {
 	void SectionHeader(const char* text);
 	void HelpMarker(const char* text);
 
+	// Begins a dockable panel the user can close from its tab (View > Panels shows it again).
+	// The dock area's own close button is hidden, so one click never closes several panels at once.
+	bool BeginPanel(const char* name, bool* open, ImGuiWindowFlags flags = 0);
+
 	// Centered text inside the current window (empty states).
 	void CenteredText(const char* text, float verticalOffset = 0.0f);
 
