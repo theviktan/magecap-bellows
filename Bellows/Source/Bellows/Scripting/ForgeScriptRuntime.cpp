@@ -214,10 +214,10 @@ namespace Bellows::Scripting {
 		return true;
 	}
 
-	void ForgeScriptRuntime::Reload(const std::string& changedPath)
+	bool ForgeScriptRuntime::Reload(const std::string& changedPath)
 	{
 		if (!m_VM || !IsForgeScript(changedPath))
-			return;
+			return true;
 
 		// Scripts loaded with 'use' are shared, so any change can affect every script: read them again.
 		m_VM->ClearModuleCache();
@@ -245,6 +245,7 @@ namespace Bellows::Scripting {
 			sources[instance.ScriptPath] = std::move(source);
 		}
 
+		bool allReloaded = std::all_of(usable.begin(), usable.end(), [](const auto& entry) { return entry.second; });
 		std::vector<UUID> entities;
 		for (const auto& [uuid, instance] : m_Instances)
 		{
@@ -264,7 +265,10 @@ namespace Bellows::Scripting {
 			ForgeScript::Module* oldModule = it->second.Module;
 			ForgeScript::Module* newModule = LoadModule(entity, scriptPath, sources[scriptPath]);
 			if (!newModule)
+			{
+				allReloaded = false;
 				continue;
+			}
 
 			const std::vector<std::string> carried = m_VM->CarryOverVariables(oldModule, newModule, { "self" });
 			// Inspector values still apply to settings the new version adds.
@@ -283,6 +287,7 @@ namespace Bellows::Scripting {
 			if (again->second.Created)
 				Emit(uuid, "reloaded", {});
 		}
+		return allReloaded;
 	}
 
 	void ForgeScriptRuntime::Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values)
