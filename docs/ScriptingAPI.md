@@ -227,7 +227,7 @@ to [ForgeScript](ForgeScript/LanguageGuide.md), with the same names:
 The Python example at the top of this page, written in ForgeScript (`Scripts/Player.forge`):
 
 ```forge
-set speed to 5                               # Shown and editable in the Inspector
+set speed to 5.0                             # Shown and editable in the Inspector
 
 when update with delta
 	set direction to vector()
@@ -254,10 +254,12 @@ engine sends these events, which the script handles with `when`:
 | `on_trigger_enter(self, other)` / `on_trigger_exit` | `when entered by other` / `when exited by other` | `other` entered/left this trigger, or this entity entered/left a trigger. |
 
 - **Inspector fields.** Top-level lines that set a name to a plain value appear in the Inspector:
-  numbers (`set speed to 2.5`; `set lives to 3` is a whole number), text, `true`/`false`/`yes`/`no`,
-  `vector(x, y)`, `vector(x, y, z)` and colors (`[r, g, b]` or `[r, g, b, a]`). Names starting with
-  `_` stay hidden. Values edited in the Inspector replace the script's own values after the top
-  level has run and before `when created`.
+  numbers, text, `true`/`false`/`yes`/`no`, `vector(x, y)`, `vector(x, y, z)` and colors
+  (`[r, g, b]` or `[r, g, b, a]`). Names starting with `_` stay hidden. Values edited in the
+  Inspector replace the script's own values after the top level has run and before `when created`.
+- **Decimal or whole number?** How you write the starting value decides the Inspector field:
+  `set speed to 4.0` makes a decimal field (you can type 4.5), while `set lives to 4` makes a
+  whole-number field (4, 5, 6...). Write `.0` when a setting should take decimals.
 - **Waiting.** `wait` and `start` work in every handler (`wait 2 seconds`, `wait until ready`);
   waiting tasks continue each frame.
 - **Talking to other scripts.** `trigger door opened with self` reaches the matching `when` handlers

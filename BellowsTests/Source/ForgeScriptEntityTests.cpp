@@ -243,3 +243,38 @@ TEST_CASE("ForgeScript sees frame timing as numbers")
 	CHECK_EQ(ScriptEngine::GetErrorCount(), 0u);
 	AssetManager::SetAssetDirectory({});
 }
+
+TEST_CASE("Script field overrides of another number type are shown and applied as the field's type")
+{
+	// Regression: set_field("walk_speed", 10.0) on "set walk_speed to 4" ran with 10, but the Inspector showed 4.
+	ScriptEngine::ResetErrorCount();
+	MakeForgeProject("ForgeFieldTypes", { { "Scripts/Walker.forge",
+		"set walk_speed to 4\n"
+		"set turn_speed to 90.0\n"
+		"when created\n\tset my name to \"{walk_speed} {turn_speed}\"\nend\n" } });
+
+	ScriptClassInfo info;
+	REQUIRE(ScriptEngine::GetClassInfo("Scripts/Walker.forge", "", info));
+	REQUIRE_EQ(info.Fields.size(), static_cast<size_t>(2));
+
+	ScriptFieldValue shown;
+	REQUIRE(ConvertScriptFieldValue(ScriptFieldValue(10.0), info.Fields[0].DefaultValue, shown));
+	CHECK_EQ(std::get<int64_t>(shown), 10);
+	REQUIRE(ConvertScriptFieldValue(ScriptFieldValue(2.6), info.Fields[0].DefaultValue, shown));
+	CHECK_EQ(std::get<int64_t>(shown), 3);
+	REQUIRE(ConvertScriptFieldValue(ScriptFieldValue(int64_t(45)), info.Fields[1].DefaultValue, shown));
+	CHECK_EQ(std::get<double>(shown), 45.0);
+	CHECK_FALSE(ConvertScriptFieldValue(ScriptFieldValue(std::string("fast")), info.Fields[0].DefaultValue, shown));
+	CHECK_FALSE(ConvertScriptFieldValue(ScriptFieldValue(true), info.Fields[1].DefaultValue, shown));
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity walker = AddScripted(*scene, "Walker", "Scripts/Walker.forge");
+	ScriptComponent& script = walker.GetComponent<ScriptComponent>();
+	script.Fields["walk_speed"] = 10.0;
+	script.Fields["turn_speed"] = int64_t(45);
+	scene->OnRuntimeStart();
+	CHECK_EQ(walker.GetName(), std::string("10 45"));
+	scene->OnRuntimeStop();
+	CHECK_EQ(ScriptEngine::GetErrorCount(), 0u);
+	AssetManager::SetAssetDirectory({});
+}

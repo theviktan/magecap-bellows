@@ -22,6 +22,26 @@ namespace Bellows {
 		return "float";
 	}
 
+	bool ConvertScriptFieldValue(const ScriptFieldValue& value, const ScriptFieldValue& field, ScriptFieldValue& outValue)
+	{
+		if (value.index() == field.index())
+		{
+			outValue = value;
+			return true;
+		}
+		if (std::holds_alternative<int64_t>(value) && std::holds_alternative<double>(field))
+		{
+			outValue = static_cast<double>(std::get<int64_t>(value));
+			return true;
+		}
+		if (std::holds_alternative<double>(value) && std::holds_alternative<int64_t>(field))
+		{
+			outValue = static_cast<int64_t>(std::llround(std::get<double>(value)));
+			return true;
+		}
+		return false;
+	}
+
 	glm::mat4 TransformComponent::GetTransform() const
 	{
 		return Math::ComposeTransform(Translation, m_Rotation, Scale);
