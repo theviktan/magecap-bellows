@@ -54,9 +54,11 @@ After a mistake it skips the rest of that statement (or the block the statement 
 |---|---|
 | `--json` | Print `{"file": ..., "diagnostics": [{"line", "column", "endColumn", "severity", "message"}]}` on standard output instead (the same shape as `BellowsEditor --check-script --json`). `endColumn` is one past the end of the mistake's line; `severity` is `"error"`. |
 | `--stdin` | Read the script from standard input, for text an editor has not saved yet. |
-| `--name <path>` | The script's path, used in messages and to find `use` scripts next to it. Needed with `--stdin` so `use` and phrases from other scripts work. |
+| `--name <path>` | The script's path, used in messages and to find `use` scripts (from its project's asset folder, or next to it). Needed with `--stdin` so `use` and phrases from other scripts work. |
 
 Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be opened, `64` wrong usage. When running a script, `70` means it failed. Tools depend on the text format and exit codes, so they stay stable.
+
+**Where `use` looks.** Inside a MageCap Bellows project (a folder with a `.bproject` file, found by walking up from the script), `use` paths start at the project's asset folder, the same as in the engine: `use "Scripts/Helpers"` in `Assets/Scripts/Main.forge` means `Assets/Scripts/Helpers.forge`. Anywhere else they start next to the script.
 
 Try the scripts in [`Examples/Scripts`](Examples/Scripts), for example `forgescript ForgeScript/Examples/Scripts/battle.forge`.
 

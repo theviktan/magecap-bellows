@@ -440,14 +440,18 @@ namespace ForgeScript {
 	{
 		GCPause pause(*this);
 		Module* scratch = Allocate<Module>(0, fileName);
-		return CompileScript(*this, scratch, source, fileName, CompileOptions(), outError) != nullptr;
+		CompileOptions options;
+		options.ReportMissingScripts = true;
+		return CompileScript(*this, scratch, source, fileName, options, outError) != nullptr;
 	}
 
 	std::vector<CompileError> VM::FindMistakes(std::string_view source, const std::string& fileName)
 	{
 		GCPause pause(*this);
 		Module* scratch = Allocate<Module>(0, fileName);
-		return FindCompileErrors(*this, scratch, source, fileName, CompileOptions());
+		CompileOptions options;
+		options.ReportMissingScripts = true;
+		return FindCompileErrors(*this, scratch, source, fileName, options);
 	}
 
 	LoadResult VM::RunInModule(Module* module, std::string_view source, const std::string& fileName, const CompileOptions& options)
