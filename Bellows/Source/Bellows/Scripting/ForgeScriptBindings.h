@@ -16,9 +16,24 @@
 
 #include "ForgeScript/ForgeScript.h"
 
+#include <string>
+#include <vector>
+
 namespace Bellows::Scripting {
 
-	// Adds every engine function and class to a ForgeScript virtual machine. Call once per VM.
+	// An engine phrase: English words for a common engine call, registered for ForgeScript only, next to
+	// the shared API (save screenshot to "bug.png" means save_screenshot("bug.png")).
+	struct ForgeScriptPhraseInfo
+	{
+		std::string Pattern;    // words, with each value in parentheses: "save screenshot to (path)"
+		std::string Doc;
+		std::string Returns;    // the type of what it gives back, like the API description's "returns"
+	};
+
+	// Every engine phrase RegisterForgeScriptApi adds, for tools (forgescript-api.json's "phrases").
+	std::vector<ForgeScriptPhraseInfo> GetForgeScriptPhrases();
+
+	// Adds every engine function, class and phrase to a ForgeScript virtual machine. Call once per VM.
 	void RegisterForgeScriptApi(ForgeScript::VM& vm);
 
 	// The ForgeScript value for an entity (what an entity script gets as 'self').

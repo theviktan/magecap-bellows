@@ -299,6 +299,7 @@ engine sends these events, which the script handles with `when`:
 | `on_destroy(self)` | `when destroyed` | When the entity is destroyed or play stops. |
 | `on_collision_enter(self, other)` / `on_collision_exit` | `when collided with other` / `when collision ends with other` | Started/stopped touching `other`. |
 | `on_trigger_enter(self, other)` / `on_trigger_exit` | `when entered by other` / `when exited by other` | `other` entered/left this trigger, or this entity entered/left a trigger. |
+| `on_reload(self)` | `when reloaded` | After the script's file was saved during play and its new code took over (`when created` does not run again). |
 
 - **Inspector fields.** Top-level lines that set a name to a plain value appear in the Inspector:
   numbers, text, `true`/`false`/`yes`/`no`, `vector(x, y)`, `vector(x, y, z)` and colors
@@ -315,7 +316,22 @@ engine sends these events, which the script handles with `when`:
 - **Errors** appear in the Console as `Scripts/Player.forge line 12: <message>`; a script with a
   mistake is not started, and one that fails 10 times is switched off, as in Python. A frame that
   runs a loop without any `wait` for too long is stopped with an error instead of freezing the game.
-- **Reloading.** Scripts are read again every time play starts, so edits apply on the next Play.
+- **Hot reload.** Saving any `.forge` file during play reloads every ForgeScript script (helpers
+  loaded with `use` are shared). Each script's top level runs again in the new version, so a line
+  there that spawns entities spawns them again. Script variables keep their current values, except
+  constants and variables whose kind of value changed (`2` became `"fast"`). Inspector values fill
+  only settings the new version adds. Waiting tasks of the old version stop, so restart them in
+  `when reloaded`. A version with mistakes is not used: the mistakes go to the Console and the old
+  code keeps running. Scripts are also read again every time play starts.
+- **Engine phrases.** Some engine calls also read as English, in ForgeScript only:
+
+  | Phrase | Same as |
+  |--------|---------|
+  | `save screenshot` | `save_screenshot()` |
+  | `save screenshot to (path)` | `save_screenshot(path)` |
+  | `user folder` | `user_folder()` |
+
+  Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works.
 
 How values look in ForgeScript:
 
