@@ -24,8 +24,8 @@ class Player(bellows.Script):
 
 Attach a script to an entity with a **Script** component (Inspector → Add Component → Script, or
 drag a `.py` or `.forge` file onto the component's Script field). The project's `Assets` folder is on
-`sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Edited
-scripts are reloaded the next time play starts.
+`sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Scripts saved
+during play are reloaded right away (see Hot reload below).
 
 The API is described once (`Bellows/Source/Bellows/Scripting/ScriptApiDefinition.h`), so both
 languages always offer the same functions.
@@ -64,12 +64,23 @@ Derive from `bellows.Script`. The engine sets `self.entity` before any callback 
 | `on_destroy(self)` | When the entity is destroyed or play stops. |
 | `on_collision_enter(self, other)` / `on_collision_exit(self, other)` | Started/stopped touching `other` (an `Entity`). Both bodies need colliders; at least one must be dynamic. |
 | `on_trigger_enter(self, other)` / `on_trigger_exit(self, other)` | `other` entered/left this trigger, or this entity entered/left a trigger. |
+| `on_reload(self)` | After the script's file was saved during play and its new code took over (hot reload, below). |
 
 **Exposed fields.** Class attributes with a type annotation of `bool`, `int`, `float`, `str`,
 `Vec2`, `Vec3` or `Vec4` appear in the Inspector. Values edited there are saved with the scene and
 assigned to the instance before `on_create`.
 
 `Script` also offers the shortcuts `self.transform` and `self.get_component(component)`.
+
+**Hot reload.** Saving a `.py` or `.forge` script while the editor is playing swaps in its new code
+within half a second, and the Console shows `Reloaded <file>`. A Python script's module runs again and
+each running object switches to the new class: its attribute values (including Inspector fields) stay,
+only the methods change, then `on_reload` runs. Attributes the new version first sets in `on_create`
+don't exist on objects that were already running, so set defaults as class attributes. Saving a helper
+module that scripts import reloads it and every script. A script with a mistake (a syntax error, an
+exception while its module runs, a renamed class) keeps running its old version and the mistake goes
+to the Console. ForgeScript scripts reload the same way and receive `when reloaded`
+(see the ForgeScript guide).
 
 ## Math
 

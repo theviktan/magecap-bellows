@@ -23,6 +23,7 @@ namespace Bellows {
 		struct ScriptInstance
 		{
 			py::object Object;
+			std::string ScriptPath;
 			std::string ClassName;
 			bool HasUpdate = false;
 			bool HasFixedUpdate = false;
@@ -31,6 +32,7 @@ namespace Bellows {
 			bool HasCollisionExit = false;
 			bool HasTriggerEnter = false;
 			bool HasTriggerExit = false;
+			bool HasReload = false;
 			bool Created = false;
 			uint32_t ErrorCount = 0;
 		};
@@ -197,6 +199,137 @@ namespace Bellows {
 			}
 		}
 
+		// Points an instance at its class and notes which callbacks the class implements.
+		void UseClass(ScriptInstance& instance, const py::object& cls)
+		{
+			instance.ClassName = cls.attr("__name__").cast<std::string>();
+			instance.HasUpdate = Overrides(cls, "on_update");
+			instance.HasFixedUpdate = Overrides(cls, "on_fixed_update");
+			instance.HasDestroy = Overrides(cls, "on_destroy");
+			instance.HasCollisionEnter = Overrides(cls, "on_collision_enter");
+			instance.HasCollisionExit = Overrides(cls, "on_collision_exit");
+			instance.HasTriggerEnter = Overrides(cls, "on_trigger_enter");
+			instance.HasTriggerExit = Overrides(cls, "on_trigger_exit");
+			instance.HasReload = Overrides(cls, "on_reload");
+		}
+
+		// Reloads helper modules (imported by name from the asset folder) whose file is 'file'.
+		// Returns true when one was found; reload errors are reported and set 'outFailed'.
+		bool ReloadHelperModules(const std::filesystem::path& file, bool& outFailed)
+		{
+			py::module_ importlib = py::module_::import("importlib");
+			py::dict modules = py::module_::import("sys").attr("modules");
+			std::vector<std::pair<std::string, py::object>> matches;
+			for (auto item : modules)
+			{
+				const std::string name = py::str(item.first);
+				py::object module = py::reinterpret_borrow<py::object>(item.second);
+				if (name.rfind("bellows_script_", 0) == 0 || !py::hasattr(module, "__file__") || module.attr("__file__").is_none())
+					continue;
+				std::error_code error;
+				if (std::filesystem::equivalent(module.attr("__file__").cast<std::string>(), file, error))
+					matches.emplace_back(name, module);
+			}
+			for (auto& [name, module] : matches)
+			{
+				try
+				{
+					importlib.attr("reload")(module);
+				}
+				catch (const py::error_already_set& exception)
+				{
+					ReportError("Module '" + name + "' was not reloaded", exception.what());
+					outFailed = true;
+				}
+			}
+			return !matches.empty();
+		}
+
+		bool ReloadPythonScripts(const std::string& changedPath)
+		{
+			const std::filesystem::path file = AssetManager::GetAbsolutePath(changedPath);
+			bool failed = false;
+			const bool helper = ReloadHelperModules(file, failed);
+			if (failed)
+				return false;
+
+			// The scripts to run again: the changed one, or every script when a helper they may import changed.
+			std::vector<std::string> paths;
+			for (const auto& [uuid, instance] : s_Data->Instances)
+			{
+				if ((helper || instance.ScriptPath == changedPath) && std::find(paths.begin(), paths.end(), instance.ScriptPath) == paths.end())
+					paths.push_back(instance.ScriptPath);
+			}
+
+			bool allReloaded = true;
+			py::object sysModules = py::module_::import("sys").attr("modules");
+			for (const std::string& path : paths)
+			{
+				// Run the module again; on any error the old module stays in use.
+				auto old = s_Data->Modules.find(path);
+				std::optional<LoadedModule> previous;
+				if (old != s_Data->Modules.end())
+				{
+					previous = old->second;
+					s_Data->Modules.erase(old);
+				}
+				py::object module;
+				try
+				{
+					module = LoadScriptModule(path);
+				}
+				catch (const std::exception& exception)
+				{
+					ReportError("Script '" + path + "' kept its old version", exception.what());
+					if (previous)
+					{
+						s_Data->Modules[path] = *previous;
+						sysModules[py::str(ModuleNameForPath(path))] = previous->Module;
+					}
+					allReloaded = false;
+					continue;
+				}
+
+				std::vector<UUID> uuids;
+				for (const auto& [uuid, instance] : s_Data->Instances)
+				{
+					if (instance.ScriptPath == path)
+						uuids.push_back(uuid);
+				}
+				for (UUID uuid : uuids)
+				{
+					auto it = s_Data->Instances.find(uuid);
+					if (it == s_Data->Instances.end())
+						continue;
+					try
+					{
+						if (!py::hasattr(module, it->second.ClassName.c_str()))
+							throw std::runtime_error("Class '" + it->second.ClassName + "' is no longer in the script");
+						py::object cls = module.attr(it->second.ClassName.c_str());
+						// The object keeps its attributes (current values and Inspector fields); only its methods change.
+						it->second.Object.attr("__class__") = cls;
+						UseClass(it->second, cls);
+						it->second.ErrorCount = 0;
+					}
+					catch (const std::exception& exception)
+					{
+						ReportError("Script '" + path + "' kept its old version", exception.what());
+						allReloaded = false;
+						continue;
+					}
+					if (it->second.Created && it->second.HasReload)
+					{
+						// Copy the handle: on_reload may spawn entities, which can rehash the instance map.
+						ScriptInstance instance = it->second;
+						Invoke(uuid, instance, "on_reload");
+						if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
+							again->second.ErrorCount = instance.ErrorCount;
+					}
+				}
+			}
+			return allReloaded;
+		}
+
 		bool CreateInstance(Scene& scene, Entity entity)
 		{
 			const ScriptComponent& component = entity.GetComponent<ScriptComponent>();
@@ -229,14 +362,8 @@ namespace Bellows {
 
 				ScriptInstance instance;
 				instance.Object = object;
-				instance.ClassName = cls.attr("__name__").cast<std::string>();
-				instance.HasUpdate = Overrides(cls, "on_update");
-				instance.HasFixedUpdate = Overrides(cls, "on_fixed_update");
-				instance.HasDestroy = Overrides(cls, "on_destroy");
-				instance.HasCollisionEnter = Overrides(cls, "on_collision_enter");
-				instance.HasCollisionExit = Overrides(cls, "on_collision_exit");
-				instance.HasTriggerEnter = Overrides(cls, "on_trigger_enter");
-				instance.HasTriggerExit = Overrides(cls, "on_trigger_exit");
+				instance.ScriptPath = component.ScriptPath;
+				UseClass(instance, cls);
 				s_Data->Instances[uuid] = std::move(instance);
 				return true;
 			}
@@ -511,6 +638,25 @@ sys.stderr = _BellowsLogWriter(2)
 
 		if (Scripting::GetContextScene() == &scene)
 			Scripting::SetContextScene(nullptr);
+	}
+
+	bool ScriptEngine::ReloadScripts(const std::string& scriptPath)
+	{
+		if (!IsInitialized())
+			return true;
+		if (Scripting::ForgeScriptRuntime::IsForgeScript(scriptPath))
+			return s_Data->ForgeScript->Reload(scriptPath);
+		if (std::filesystem::path(scriptPath).extension() != ".py")
+			return true;
+		try
+		{
+			return ReloadPythonScripts(scriptPath);
+		}
+		catch (const std::exception& exception)
+		{
+			ReportError("Reloading '" + scriptPath + "'", exception.what());
+			return false;
+		}
 	}
 
 	void ScriptEngine::InstantiatePendingScripts(Scene& scene)

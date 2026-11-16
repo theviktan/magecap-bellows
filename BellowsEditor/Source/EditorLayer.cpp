@@ -455,6 +455,9 @@ namespace Bellows {
 		Input::ResetState();
 		ScriptEngine::ResetErrorCount();
 		m_RuntimeScene->OnRuntimeStart();
+		// Saving a script during play swaps in its new code (hot reload).
+		m_ScriptWatcher.Start(m_Project->GetAssetDirectory(), { ".py", ".forge" });
+		m_ScriptWatchElapsed = 0.0f;
 		BW_INFO("Play mode started");
 	}
 
@@ -462,6 +465,7 @@ namespace Bellows {
 	{
 		if (m_SceneState == SceneState::Edit)
 			return;
+		m_ScriptWatcher.Stop();
 		if (m_RuntimeScene)
 			m_RuntimeScene->OnRuntimeStop();
 		m_RuntimeScene.reset();
@@ -728,6 +732,16 @@ namespace Bellows {
 		Input::SetEnabled(IsViewportInputActive());
 		Input::SetViewportRect(m_ViewportPosition, m_ViewportSize);
 
+		if (m_ScriptWatcher.IsWatching())
+		{
+			m_ScriptWatchElapsed += timestep.GetSeconds();
+			if (m_ScriptWatchElapsed >= c_ScriptWatchInterval)
+			{
+				m_ScriptWatchElapsed = 0.0f;
+				ReloadChangedScripts();
+			}
+		}
+
 		if (m_SceneState == SceneState::Edit)
 		{
 			if (m_EditorScene)
@@ -743,6 +757,17 @@ namespace Bellows {
 		m_ViewportMouseWheel = 0.0f;
 
 		RenderViewport();
+	}
+
+	void EditorLayer::ReloadChangedScripts()
+	{
+		for (const std::string& path : m_ScriptWatcher.Poll())
+		{
+			if (ScriptEngine::ReloadScripts(path))
+				BW_INFO("Reloaded {}", path);
+			else
+				BW_WARN("{} was not reloaded; the game keeps running the old code", path);
+		}
 	}
 
 	bool EditorLayer::IsUsingGameCamera() const

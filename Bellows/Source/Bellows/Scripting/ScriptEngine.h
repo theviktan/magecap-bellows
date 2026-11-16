@@ -64,6 +64,13 @@ namespace Bellows {
 		static void OnEntityDestroyed(Entity entity);
 		static void OnContactEvent(Scene& scene, const ContactEvent& event);
 
+		// Hot reload during play: the script file at 'scriptPath' (asset-relative) changed on disk.
+		// Python: the module runs again and each running instance switches to the new class, keeping its
+		// attribute values, then on_reload() runs; a changed helper module (imported by other scripts)
+		// reloads every script. ForgeScript: see ForgeScriptRuntime::Reload. A script with mistakes keeps
+		// running its old version. Returns false when any script kept its old version (problems are reported).
+		static bool ReloadScripts(const std::string& scriptPath);
+
 		// Reads the class (and its annotated fields) declared in a script file without running play mode.
 		static bool GetClassInfo(const std::string& scriptPath, const std::string& className, ScriptClassInfo& outInfo);
 

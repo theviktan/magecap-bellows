@@ -34,6 +34,8 @@ class Script:
     * ``on_collision_exit(self, other)``
     * ``on_trigger_enter(self, other)``   - ``other`` entered this trigger (or this entered a trigger)
     * ``on_trigger_exit(self, other)``
+    * ``on_reload(self)``                 - after the script's file was saved during play and its new
+      code took over (the object and its attribute values stay; only the methods change)
 
     Class attributes with type annotations (bool, int, float, str, Vec2, Vec3, Vec4) are exposed
     as editable fields in the inspector and stored with the scene.
@@ -63,6 +65,9 @@ class Script:
         pass
 
     def on_trigger_exit(self, other):
+        pass
+
+    def on_reload(self):
         pass
 
     # Convenience accessors -------------------------------------------------
