@@ -24,6 +24,9 @@ drag a `.py` file onto the component's Script field). The project's `Assets` fol
 `sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Edited
 scripts are reloaded the next time play starts.
 
+The API is described once (`Bellows/Source/Bellows/Scripting/ScriptApiDefinition.h`) and is also
+available to ForgeScript with the same names; see [Using the API from ForgeScript](#using-the-api-from-forgescript).
+
 The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`; when in
 doubt, that file shows working usage of every function below.
 
@@ -209,3 +212,31 @@ a `.bmat`.
 Inside the editor (Console, `--run-script` automation and the agent server) the additional module
 `bellows.editor` controls the editor itself: projects, scenes, play mode, undo, selection,
 screenshots and exporting. See [EditorAutomation.md](EditorAutomation.md).
+
+## Using the API from ForgeScript
+
+Every function, class and property on this page that is not marked Python-only is also available
+to [ForgeScript](ForgeScript/LanguageGuide.md), with the same names:
+`find_entity("Player").position`, `self.add_component("RigidBody")`, `body.add_force(vector(0, 5, 0))`,
+`Material("Gold", [1, 0.8, 0])`, `Material.load("Materials/Gold.bmat")`. Attaching `.forge` scripts
+to entities is the next step of the ForgeScript milestone (see `docs/Roadmap.md`); today the API is
+used through `Bellows::Scripting::RegisterForgeScriptApi` (`Scripting/ForgeScriptBindings.h`).
+
+How values look in ForgeScript:
+
+| Python | ForgeScript |
+|--------|-------------|
+| `Vec3` | `vector(x, y, z)` (a list of 3 numbers is accepted too) |
+| `Vec2` | a vector with `z = 0` (a list of 2 numbers is accepted too) |
+| colors (`Vec4`) | a list `[r, g, b, a]`; `[r, g, b]` or a vector means opaque |
+| `Quat` | a list `[w, x, y, z]` |
+| `bellows.Key.W`, `MouseButton.Left` | names: `"W"`, `"space"`, `"left"` |
+| entity ids (`Entity.id`) | text, because a number cannot hold every 64-bit id exactly |
+| `None` | `nothing` |
+| `RigidBody`, `"RigidBody"` (component arguments) | `"RigidBody"` |
+
+Python-only: `Vec2`/`Vec3`/`Vec4`/`Quat` classes and their operators (ForgeScript has its own
+`vector`), the `Key` and `MouseButton` enums, `lerp`, `clamp` and `log*` (ForgeScript has built-in
+`lerp`, `clamp`, `say` and `print`), `Entity.script`, and `ScriptComponent.fields`, `set_field` and
+`instance`. Engine errors become ForgeScript errors with the same message, so `try ... catch` works.
+

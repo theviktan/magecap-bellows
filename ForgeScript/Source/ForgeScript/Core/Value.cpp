@@ -1,5 +1,6 @@
 #include "ForgeScript/Core/Value.h"
 
+#include "ForgeScript/API/Native.h"
 #include "ForgeScript/Core/Object.h"
 
 #include <cmath>
@@ -30,6 +31,13 @@ namespace ForgeScript {
 					const Vector* a = static_cast<const Vector*>(m_Object);
 					const Vector* b = static_cast<const Vector*>(other.m_Object);
 					return a->X == b->X && a->Y == b->Y && a->Z == b->Z;
+				}
+				// Two wrappers of the same C++ object are equal when the type says so.
+				if (m_Object->GetType() == ObjectType::NativeObject && other.m_Object->GetType() == ObjectType::NativeObject)
+				{
+					const NativeObject* a = static_cast<const NativeObject*>(m_Object);
+					const NativeObject* b = static_cast<const NativeObject*>(other.m_Object);
+					return a->Type == b->Type && a->Type->Equals && a->Type->Equals(a->Data, b->Data);
 				}
 				return false;
 			}
@@ -64,6 +72,12 @@ namespace ForgeScript {
 					hash ^= HashDouble(v->Y) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
 					hash ^= HashDouble(v->Z) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
 					return hash;
+				}
+				if (object->GetType() == ObjectType::NativeObject)
+				{
+					const NativeObject* native = static_cast<const NativeObject*>(object);
+					if (native->Type->Equals && native->Type->Hash)
+						return native->Type->Hash(native->Data);
 				}
 				return std::hash<const void*>{}(object);
 			}

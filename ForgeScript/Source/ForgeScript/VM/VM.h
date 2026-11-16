@@ -115,6 +115,9 @@ namespace ForgeScript {
 		Value MakeVector(double x, double y, double z);
 		Value MakeNative(const NativeType& type, void* data);
 		Value MakeFunction(const std::string& name, int arity, NativeFn fn);
+		// Attaches a value to a native function so scripts can reach it as function.name.
+		// Returns false when 'function' is not a native function.
+		bool SetFunctionMember(const Value& function, const std::string& name, Value member);
 
 		std::string ToText(const Value& value);
 		std::string TypeOf(const Value& value) const;

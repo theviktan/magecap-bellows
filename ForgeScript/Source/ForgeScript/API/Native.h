@@ -42,6 +42,10 @@ namespace ForgeScript {
 		std::function<bool(void*)> IsAlive;
 		// Optional: how the object looks when printed.
 		std::function<std::string(void*)> ToText;
+		// Optional: when two wrappers stand for the same C++ object (for example two handles to one
+		// entity), Equals makes "is" treat them as equal and Hash lets them work as map keys.
+		std::function<bool(void*, void*)> Equals;
+		std::function<size_t(void*)> Hash;
 	};
 
 	// Everything a native function needs: its arguments, "self" for methods, and the VM.
