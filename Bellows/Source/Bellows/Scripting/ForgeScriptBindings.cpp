@@ -719,4 +719,96 @@ namespace Bellows::Scripting {
 		return Convert<ScriptEntity>::To(vm, entity);
 	}
 
+	namespace {
+
+		// Deeper data is almost certainly a list that contains itself.
+		constexpr int c_MaxEventValueDepth = 32;
+
+		ScriptValue ToScriptValueAt(FS::VM& vm, const FS::Value& value, std::vector<std::string>& outUnsendable, int depth)
+		{
+			if (value.IsNothing())
+				return {};
+			if (value.IsBool())
+				return value.AsBool();
+			if (value.IsNumber())
+				return value.AsNumber();
+			if (FS::IsObjectType(value, FS::ObjectType::String))
+				return FS::As<FS::String>(value)->Text;
+			if (FS::IsObjectType(value, FS::ObjectType::Vector))
+				return Convert<glm::vec3>::From(vm, value, "an event value");
+			if (FS::IsObjectType(value, FS::ObjectType::NativeObject) && FS::As<FS::NativeObject>(value)->Type == &TypeFor<ScriptEntity>())
+				return Convert<ScriptEntity>::From(vm, value, "an event value");
+
+			const bool container = FS::IsObjectType(value, FS::ObjectType::List) || FS::IsObjectType(value, FS::ObjectType::Map);
+			if (container && depth >= c_MaxEventValueDepth)
+			{
+				outUnsendable.push_back("a list or map nested more than " + std::to_string(c_MaxEventValueDepth) + " deep");
+				return {};
+			}
+			if (FS::IsObjectType(value, FS::ObjectType::List))
+			{
+				ScriptValueList items;
+				for (const FS::Value& item : FS::As<FS::List>(value)->Items)
+					items.push_back(ToScriptValueAt(vm, item, outUnsendable, depth + 1));
+				return items;
+			}
+			if (FS::IsObjectType(value, FS::ObjectType::Map))
+			{
+				ScriptValueMap entries;
+				for (const FS::Map::Entry& entry : FS::As<FS::Map>(value)->Entries)
+				{
+					if (!FS::IsObjectType(entry.Key, FS::ObjectType::String))
+					{
+						outUnsendable.push_back("a map key that is not text (" + Describe(vm, entry.Key) + ")");
+						continue;
+					}
+					entries.emplace_back(FS::As<FS::String>(entry.Key)->Text, ToScriptValueAt(vm, entry.Item, outUnsendable, depth + 1));
+				}
+				return entries;
+			}
+			outUnsendable.push_back(Describe(vm, value));
+			return {};
+		}
+
+	}
+
+	ScriptValue ToScriptValue(FS::VM& vm, const FS::Value& value, std::vector<std::string>& outUnsendable)
+	{
+		return ToScriptValueAt(vm, value, outUnsendable, 0);
+	}
+
+	FS::Value FromScriptValue(FS::VM& vm, const ScriptValue& value)
+	{
+		return std::visit([&vm](const auto& data) -> FS::Value
+		{
+			using T = std::decay_t<decltype(data)>;
+			if constexpr (std::is_same_v<T, std::monostate>)
+				return FS::Value();
+			else if constexpr (std::is_same_v<T, bool>)
+				return FS::Value::FromBool(data);
+			else if constexpr (std::is_same_v<T, double>)
+				return FS::Value::FromNumber(data);
+			else if constexpr (std::is_same_v<T, std::string>)
+				return vm.MakeText(data);
+			else if constexpr (std::is_same_v<T, glm::vec3>)
+				return vm.MakeVector(data.x, data.y, data.z);
+			else if constexpr (std::is_same_v<T, ScriptEntity>)
+				return Convert<ScriptEntity>::To(vm, data);
+			else if constexpr (std::is_same_v<T, ScriptValueList>)
+			{
+				std::vector<FS::Value> items;
+				for (const ScriptValue& item : data)
+					items.push_back(FromScriptValue(vm, item));
+				return vm.MakeList(std::move(items));
+			}
+			else
+			{
+				FS::Value map = vm.MakeMap();
+				for (const auto& [key, item] : data)
+					FS::As<FS::Map>(map)->Set(vm.MakeText(key), FromScriptValue(vm, item));
+				return map;
+			}
+		}, value.Data);
+	}
+
 }

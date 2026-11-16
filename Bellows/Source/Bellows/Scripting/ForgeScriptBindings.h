@@ -39,4 +39,10 @@ namespace Bellows::Scripting {
 	// The ForgeScript value for an entity (what an entity script gets as 'self').
 	ForgeScript::Value MakeForgeScriptEntity(ForgeScript::VM& vm, const ScriptEntity& entity);
 
+	// Script event values (see EmitScriptEvent). A ForgeScript value that other languages cannot read
+	// (a function, a kind's object, a map with non-text keys, lists nested more than 32 deep) becomes
+	// nothing, and a description of it is added to 'outUnsendable'.
+	ScriptValue ToScriptValue(ForgeScript::VM& vm, const ForgeScript::Value& value, std::vector<std::string>& outUnsendable);
+	ForgeScript::Value FromScriptValue(ForgeScript::VM& vm, const ScriptValue& value);
+
 }
