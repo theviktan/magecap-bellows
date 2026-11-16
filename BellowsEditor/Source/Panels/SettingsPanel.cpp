@@ -9,7 +9,7 @@
 
 namespace Bellows {
 
-	void SettingsPanel::OnImGuiRender()
+	void SettingsPanel::OnImGuiRender(bool* open)
 	{
 		if (!ImGui::IsAnyItemActive())
 		{
@@ -21,7 +21,7 @@ namespace Bellows {
 			m_SettingsDirty = false;
 		}
 
-		if (!ImGui::Begin("Settings"))
+		if (!UI::BeginPanel("Settings", open))
 		{
 			ImGui::End();
 			return;

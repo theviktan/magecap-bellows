@@ -113,13 +113,13 @@ namespace Bellows {
 		m_PendingMaterialPath.clear();
 	}
 
-	void InspectorPanel::OnImGuiRender()
+	void InspectorPanel::OnImGuiRender(bool* open)
 	{
 		// Material files are saved as soon as the user lets go of the widget, like other asset changes.
 		if (m_PendingMaterialSave && !ImGui::IsAnyItemActive())
 			FlushMaterialSave();
 
-		if (!ImGui::Begin("Inspector"))
+		if (!UI::BeginPanel("Inspector", open))
 		{
 			ImGui::End();
 			return;

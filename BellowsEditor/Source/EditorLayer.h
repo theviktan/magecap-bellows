@@ -28,6 +28,7 @@ namespace Bellows {
 	class SettingsPanel;
 	class StatisticsPanel;
 	class ScriptEditorPanel;
+	class ProjectManager;
 
 	enum class SceneState : uint8_t
 	{
@@ -79,9 +80,13 @@ namespace Bellows {
 		static bool HasInstance() { return s_Instance != nullptr; }
 
 		// Project ------------------------------------------------------------
-		bool NewProject(const std::filesystem::path& directory, const std::string& name);
+		// Creates a project in 'directory' and opens it. 'emptyScene' starts with an empty scene
+		// instead of the starter scene (camera, light, ground and a cube).
+		bool NewProject(const std::filesystem::path& directory, const std::string& name, bool emptyScene = false);
 		bool OpenProject(const std::filesystem::path& path);
 		Ref<Project> GetProject() const { return m_Project; }
+		// Saves open scripts, closes the project and returns to the Project Manager.
+		void CloseProject();
 
 		// Scenes (paths are asset paths or absolute paths) -------------------
 		void NewScene(const std::string& name = "Untitled");
@@ -159,7 +164,6 @@ namespace Bellows {
 		// Executes Python in the editor context and records one undo step if the scene changed.
 		bool ExecutePython(const std::string& source, std::string& outOutput);
 	private:
-		void DrawProjectHub();
 		void DrawMenuBar();
 		void DrawToolbar();
 		void DrawStatusBar();
@@ -227,18 +231,18 @@ namespace Bellows {
 		Scope<SettingsPanel> m_SettingsPanel;
 		Scope<StatisticsPanel> m_StatisticsPanel;
 		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
+		Scope<ProjectManager> m_ProjectManager;
 		bool m_ViewportVisible = false;
 		bool m_FocusViewport = false;
 
 		// Dialog state
-		bool m_ShowNewProjectDialog = false;
+		bool m_ShowCloseProjectDialog = false;
 		bool m_ShowOpenProjectDialog = false;
 		bool m_ShowExportDialog = false;
 		bool m_ShowAboutDialog = false;
 		bool m_ShowSaveSceneAsDialog = false;
 		bool m_ShowStatistics = false;
 		bool m_ShowDemoWindow = false;
-		std::string m_DialogName;
 		std::string m_DialogPath;
 		std::string m_DialogMessage;
 		ExportResult m_LastExport;

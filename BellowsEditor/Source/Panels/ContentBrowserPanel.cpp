@@ -31,12 +31,14 @@ namespace Bellows {
 		m_CurrentDirectory = directory;
 		m_LastRefreshTime = -1.0;
 		m_SelectedAsset.clear();
+		m_RevealCurrentFolder = true;
 	}
 
 	void ContentBrowserPanel::Refresh()
 	{
 		m_Items.clear();
 		m_FailedThumbnails.clear();
+		m_Subfolders.clear();
 		std::error_code error;
 		if (!std::filesystem::is_directory(m_CurrentDirectory, error))
 			m_CurrentDirectory = AssetManager::GetAssetDirectory();
@@ -97,9 +99,9 @@ namespace Bellows {
 		m_LastRefreshTime = -1.0;
 	}
 
-	void ContentBrowserPanel::OnImGuiRender()
+	void ContentBrowserPanel::OnImGuiRender(bool* open)
 	{
-		if (!ImGui::Begin("Content"))
+		if (!UI::BeginPanel("Content", open))
 		{
 			ImGui::End();
 			return;
@@ -118,6 +120,10 @@ namespace Bellows {
 		const float scale = Theme::GetScale();
 
 		// Toolbar
+		bool& showFolders = m_Editor.GetSettings().ShowContentFolderTree;
+		if (UI::IconButton(ICON_PANEL_LEFT, showFolders ? "Hide the folder tree" : "Show the folder tree", showFolders))
+			showFolders = !showFolders;
+		ImGui::SameLine();
 		std::error_code error;
 		const bool atRoot = m_CurrentDirectory == AssetManager::GetAssetDirectory() || std::filesystem::equivalent(m_CurrentDirectory, AssetManager::GetAssetDirectory(), error);
 		ImGui::BeginDisabled(atRoot);
@@ -151,6 +157,20 @@ namespace Bellows {
 		ImGui::SliderFloat("##size", &m_ThumbnailSize, 56.0f, 160.0f, "");
 		UI::Tooltip("Thumbnail size");
 		ImGui::Separator();
+
+		// Folder tree on the left (like Godot's FileSystem dock), asset grid on the right.
+		const bool split = showFolders && ImGui::BeginTable("##ContentSplit", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_NoPadOuterX);
+		if (split)
+		{
+			ImGui::TableSetupColumn("Folders", ImGuiTableColumnFlags_WidthFixed, 190.0f * scale);
+			ImGui::TableSetupColumn("Assets", ImGuiTableColumnFlags_WidthStretch);
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::BeginChild("##Folders");
+			DrawFolderNode(AssetManager::GetAssetDirectory(), "Assets");
+			ImGui::EndChild();
+			ImGui::TableSetColumnIndex(1);
+		}
 
 		// Grid
 		ImGui::BeginChild("##Grid");
@@ -203,9 +223,113 @@ namespace Bellows {
 			}
 			ImGui::EndDragDropTarget();
 		}
+		if (split)
+			ImGui::EndTable();
 
 		DrawDialogs();
 		ImGui::End();
+	}
+
+	const std::vector<std::filesystem::path>& ContentBrowserPanel::GetSubfolders(const std::filesystem::path& folder)
+	{
+		// Listed once per rescan (Refresh clears the cache), not every frame.
+		auto [it, inserted] = m_Subfolders.try_emplace(folder.string());
+		if (inserted)
+		{
+			std::error_code error;
+			for (const auto& entry : std::filesystem::directory_iterator(folder, error))
+			{
+				std::error_code entryError;
+				const std::string name = entry.path().filename().string();
+				if (entry.is_directory(entryError) && !name.empty() && name.front() != '.')
+					it->second.push_back(entry.path());
+			}
+			std::sort(it->second.begin(), it->second.end());
+		}
+		return it->second;
+	}
+
+	void ContentBrowserPanel::DrawFolderNode(const std::filesystem::path& folder, const std::string& label)
+	{
+		const std::vector<std::filesystem::path>& children = GetSubfolders(folder);
+		// Both paths are built from the asset folder, so a plain comparison is enough (no disk access per frame).
+		const bool current = folder.lexically_normal() == m_CurrentDirectory.lexically_normal();
+
+		// Folders on the way to the current one open, so navigating elsewhere reveals it in the tree.
+		const std::filesystem::path relative = m_CurrentDirectory.lexically_relative(folder);
+		const bool containsCurrent = !current && !relative.empty() && *relative.begin() != "..";
+		if (containsCurrent && m_RevealCurrentFolder)
+			ImGui::SetNextItemOpen(true);
+
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanFullWidth
+			| ImGuiTreeNodeFlags_FramePadding;
+		if (current)
+			flags |= ImGuiTreeNodeFlags_Selected;
+		if (children.empty())
+			flags |= ImGuiTreeNodeFlags_Leaf;
+		if (folder == AssetManager::GetAssetDirectory())
+			flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+		ImGui::PushID(folder.string().c_str());
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+		const bool open = ImGui::TreeNodeEx("##folder", flags);
+		ImGui::PopStyleVar();
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
+			SetCurrentDirectory(folder);
+
+		// Assets dropped on a folder move into it.
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(UI::AssetPayload))
+				MoveAsset(static_cast<const char*>(payload->Data), folder);
+			ImGui::EndDragDropTarget();
+		}
+		if (ImGui::BeginPopupContextItem("##FolderContext"))
+		{
+			if (ImGui::MenuItem(ICON_FOLDER_PLUS "  New Folder"))
+			{
+				SetCurrentDirectory(folder);
+				const std::filesystem::path path = MakeUniquePath("New Folder", "");
+				FileSystem::CreateDirectories(path);
+				m_RenamePath = path;
+				m_RenameBuffer = path.filename().string();
+				m_OpenRename = true;
+			}
+			if (ImGui::MenuItem(ICON_EXTERNAL_LINK "  Show in File Manager"))
+				Platform::OpenWithDefaultApplication(folder);
+			ImGui::EndPopup();
+		}
+
+		ImGui::SameLine(0.0f, 2.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(IM_COL32(232, 184, 92, 255)));
+		ImGui::TextUnformatted(open && !children.empty() ? ICON_FOLDER_OPEN : ICON_FOLDER);
+		ImGui::PopStyleColor();
+		ImGui::SameLine();
+		ImGui::TextUnformatted(label.c_str());
+
+		if (open)
+		{
+			for (const std::filesystem::path& child : children)
+				DrawFolderNode(child, child.filename().string());
+			ImGui::TreePop();
+		}
+		ImGui::PopID();
+
+		if (folder == AssetManager::GetAssetDirectory())
+			m_RevealCurrentFolder = false;
+	}
+
+	void ContentBrowserPanel::MoveAsset(const std::string& assetPath, const std::filesystem::path& folder)
+	{
+		const std::filesystem::path source = AssetManager::GetAbsolutePath(assetPath);
+		if (source.parent_path() == folder || source == folder)
+			return;
+		std::error_code error;
+		std::filesystem::rename(source, folder / source.filename(), error);
+		if (error)
+			BW_ERROR("Could not move '{}': {}", source.filename().string(), error.message());
+		AssetManager::Invalidate(assetPath);
+		m_LastRefreshTime = -1.0;
 	}
 
 	void ContentBrowserPanel::DrawBreadcrumbs()
@@ -321,15 +445,7 @@ namespace Bellows {
 		if (item.IsDirectory && ImGui::BeginDragDropTarget())
 		{
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(UI::AssetPayload))
-			{
-				const std::filesystem::path source = AssetManager::GetAbsolutePath(static_cast<const char*>(payload->Data));
-				std::error_code error;
-				std::filesystem::rename(source, item.Path / source.filename(), error);
-				if (error)
-					BW_ERROR("Could not move '{}': {}", source.filename().string(), error.message());
-				AssetManager::Invalidate(static_cast<const char*>(payload->Data));
-				m_LastRefreshTime = -1.0;
-			}
+				MoveAsset(static_cast<const char*>(payload->Data), item.Path);
 			ImGui::EndDragDropTarget();
 		}
 

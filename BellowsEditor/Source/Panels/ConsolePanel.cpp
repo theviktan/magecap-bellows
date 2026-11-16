@@ -71,11 +71,11 @@ namespace Bellows {
 		return 0;
 	}
 
-	void ConsolePanel::OnImGuiRender()
+	void ConsolePanel::OnImGuiRender(bool* open)
 	{
 		PullMessages();
 
-		if (!ImGui::Begin("Console"))
+		if (!UI::BeginPanel("Console", open))
 		{
 			ImGui::End();
 			return;

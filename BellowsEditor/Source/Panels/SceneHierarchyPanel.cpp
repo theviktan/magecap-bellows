@@ -45,9 +45,9 @@ namespace Bellows {
 
 	}
 
-	void SceneHierarchyPanel::OnImGuiRender()
+	void SceneHierarchyPanel::OnImGuiRender(bool* open)
 	{
-		if (!ImGui::Begin("Hierarchy"))
+		if (!UI::BeginPanel("Hierarchy", open))
 		{
 			m_Focused = false;
 			ImGui::End();
