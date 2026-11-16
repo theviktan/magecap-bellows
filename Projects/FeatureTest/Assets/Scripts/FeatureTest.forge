@@ -149,6 +149,9 @@ function test_components()
 	set source to thing.add_component("AudioSource")
 	set source.clip to "Audio/Chime.wav"
 	check(source.clip is "Audio/Chime.wav", "AudioSource properties")
+	set source.bus to "Music"
+	check(source.bus is "Music", "AudioSource bus")
+	check(fails(function() set source.bus to "Nowhere" end), "unknown buses are rejected for sources")
 
 	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource", "components list ({thing.components})")
 	thing.remove_component("PointLight")
@@ -166,6 +169,16 @@ function test_materials()
 	check(loaded.path is "Materials/Gold.bmat" and loaded.metallic is above 0.9, "Material.load")
 	check(fails(function() Material.load("Materials/Missing.bmat") end), "loading a missing material fails")
 	check(play_sound("Audio/Chime.wav", 0.1) and not play_sound("Audio/Missing.wav"), "play_sound")
+	check(play_sound("Audio/Chime.wav", 0.1, "Music"), "play_sound on a bus")
+	check(bus_names().join(", ") is "Master, Music, Effects", "bus_names")
+	set_bus_volume("Music", 0.5)
+	check(near(get_bus_volume("Music"), 0.5, 0.001), "set_bus_volume")
+	set_bus_volume("Music", 1.0)
+	set_bus_muted("Music")
+	check(is_bus_muted("Music"), "set_bus_muted")
+	set_bus_muted("Music", false)
+	check(not is_bus_muted("Music"), "unmuting a bus")
+	check(fails(function() set_bus_volume("Nowhere", 1) end), "unknown buses are rejected")
 end
 
 function test_destruction()

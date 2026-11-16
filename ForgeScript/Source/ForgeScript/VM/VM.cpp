@@ -1469,6 +1469,43 @@ namespace ForgeScript {
 		m_UsedModules.clear();
 	}
 
+	std::vector<std::string> VM::GetGlobalNames(Module* module) const
+	{
+		std::vector<std::string> names;
+		names.reserve(module->GlobalOrder.size());
+		for (String* name : module->GlobalOrder)
+			names.push_back(name->Text);
+		return names;
+	}
+
+	std::vector<std::string> VM::CarryOverVariables(Module* from, Module* to, const std::vector<std::string>& skip)
+	{
+		// Code and imported scripts always come from the new version.
+		auto isCode = [](const Value& value)
+		{
+			return IsObjectType(value, ObjectType::Function) || IsObjectType(value, ObjectType::Closure) ||
+				IsObjectType(value, ObjectType::NativeFunction) || IsObjectType(value, ObjectType::Kind) ||
+				IsObjectType(value, ObjectType::BoundMethod) || IsObjectType(value, ObjectType::Module);
+		};
+
+		GCPause pause(*this);
+		std::vector<std::string> carried;
+		for (String* name : to->GlobalOrder)
+		{
+			if (std::find(skip.begin(), skip.end(), name->Text) != skip.end() || to->Constants.count(name))
+				continue;
+			auto old = from->Globals.find(name);
+			if (old == from->Globals.end())
+				continue;
+			const Value& current = to->Globals[name];
+			if (isCode(old->second) || isCode(current) || TypeOf(old->second) != TypeOf(current))
+				continue;
+			to->SetGlobal(name, old->second);
+			carried.push_back(name->Text);
+		}
+		return carried;
+	}
+
 	Module* VM::UseModule(Task* task, const std::string& path)
 	{
 		(void)task;
