@@ -35,6 +35,7 @@ A change is done only when it builds with warnings as errors, every test passes 
 3. **VM** (`VM/VM.cpp`) runs bytecode in **tasks** (coroutines, `VM/Task.h`). Every `when` handler and `start` is a task. `wait` suspends a task; `VM::Update` resumes it.
 4. **Library** (`VM/Library.cpp`) holds built-in functions, phrases and methods for text, lists, maps and vectors.
 5. **Garbage collector** (mark and sweep, in `VM.cpp`) runs only at instruction boundaries.
+6. **Script variables** (`Compiler/ScriptVariables.cpp`) reads a script's top-level `set name to <plain value>` lines from the tokens, without compiling or running it, for host settings such as the Bellows Inspector. If the compiler learns a new block-opening word, update `OpensBlock` there too.
 
 ## Code style
 
@@ -70,7 +71,7 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 
 **A statement or expression form:**
 1. Lexer: new keyword only if unavoidable (see Names).
-2. Compiler: a `...Statement()` function; if it opens a block, update `IsBlockOpener` in the compiler **and** `IsBlockOpenerWord` in the lexer.
+2. Compiler: a `...Statement()` function; if it opens a block, update `IsBlockOpener` in the compiler, `IsBlockOpenerWord` in the lexer **and** `OpensBlock` in `ScriptVariables.cpp`.
 3. Opcode (if needed): add it to `OpCode` with its operand comment, then handle it in `VM::Execute`.
 4. Tests: an expectation script, plus compile-error tests in `Tests/Source/LanguageTests.cpp` for its mistakes.
 5. Docs: guide, reference, and the VS Code grammar in `Editor/vscode-forgescript`.

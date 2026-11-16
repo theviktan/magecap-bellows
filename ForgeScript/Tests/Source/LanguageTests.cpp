@@ -1,5 +1,7 @@
 #include "TestFramework.h"
 
+#include "ForgeScript/Compiler/ScriptVariables.h"
+
 using namespace ForgeScript;
 
 // Compile errors: every mistake should point at the right line with a helpful message.
@@ -134,4 +136,64 @@ TEST_CASE("ReplShowsExpressionValues")
 	vm.RunInModule(module, "x + 1\n", "prompt", options);
 	vm.RunInModule(module, "\"text\"\n", "prompt", options);
 	CHECK_EQ(output, std::string("6\n\"text\"\n"));
+}
+
+TEST_CASE("FindScriptVariablesListsTopLevelPlainValues")
+{
+	const std::string source =
+		"# Settings shown in the editor\n"
+		"set speed to 2.5\n"
+		"set lives to 3\n"
+		"set offset to -4\n"
+		"set title to \"Hero\"\n"
+		"set alive to yes\n"
+		"set spawn to vector(1, -2, 3)\n"
+		"set size to vector(4, 5)\n"
+		"set tint to [1, 0.5, 0]\n"
+		"set glow to [0, 0, 1, 0.25]\n"
+		"set _secret to 1\n"
+		"set computed to speed * 2\n"
+		"set speed to 99\n"
+		"set my_list to [1, 2]\n"
+		"when update with delta\n"
+		"\tset inside to 5\n"
+		"\tif true then\n\t\tset deeper to 1\n\tend\n"
+		"end\n"
+		"set after to \"still top level\"\n";
+
+	std::vector<ScriptVariable> variables = FindScriptVariables(source);
+	REQUIRE_EQ(variables.size(), static_cast<size_t>(10));
+	using Kind = ScriptVariable::ValueKind;
+	CHECK_EQ(variables[0].Name, std::string("speed"));
+	CHECK(variables[0].Kind == Kind::Number);
+	CHECK_EQ(variables[0].Number, 2.5);
+	CHECK_EQ(variables[0].Line, 2);
+	CHECK(variables[1].Kind == Kind::WholeNumber);
+	CHECK_EQ(variables[1].Number, 3.0);
+	CHECK_EQ(variables[2].Number, -4.0);
+	CHECK(variables[3].Kind == Kind::Text);
+	CHECK_EQ(variables[3].Text, std::string("Hero"));
+	CHECK(variables[4].Kind == Kind::Boolean);
+	CHECK(variables[4].Boolean);
+	CHECK(variables[5].Kind == Kind::Vector3);
+	CHECK_EQ(variables[5].Components[1], -2.0);
+	CHECK(variables[6].Kind == Kind::Vector2);
+	CHECK_EQ(variables[6].Components[1], 5.0);
+	CHECK(variables[7].Kind == Kind::Color);
+	CHECK_EQ(variables[7].Components[3], 1.0);
+	CHECK(variables[8].Kind == Kind::Color);
+	CHECK_EQ(variables[8].Components[3], 0.25);
+	CHECK_EQ(variables[9].Name, std::string("after"));
+}
+
+TEST_CASE("FindScriptVariablesIgnoresBrokenAndEmptyScripts")
+{
+	CHECK(FindScriptVariables("").empty());
+	CHECK(FindScriptVariables("set x to\n").empty());
+	CHECK(FindScriptVariables("set name to \"unfinished\n").empty());
+	CHECK(FindScriptVariables("set greeting to \"Hi {name}\"\n").empty());
+	// Words after '.' are property names, not blocks, so the line below still counts.
+	std::vector<ScriptVariable> variables = FindScriptVariables("say thing.repeat\nset count to 1\n");
+	REQUIRE_EQ(variables.size(), static_cast<size_t>(1));
+	CHECK_EQ(variables[0].Name, std::string("count"));
 }

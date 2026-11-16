@@ -24,7 +24,7 @@ def close(a, b, tolerance=1e-4):
 class FeatureTest(bellows.Script):
     """Runs the scripting API test suite while the scene plays."""
 
-    timeout: float = 30.0                    # Seconds before the test gives up
+    timeout: float = 60.0                    # Seconds before the test gives up
 
     def on_create(self):
         self.checks = 0
@@ -80,6 +80,7 @@ class FeatureTest(bellows.Script):
 
     # -- The test sequence -------------------------------------------------------------
     def run(self):
+        yield from self.test_forgescript()
         self.test_math()
         self.test_time_and_input()
         self.test_scene_queries()
@@ -95,6 +96,17 @@ class FeatureTest(bellows.Script):
         yield from self.test_collisions_and_triggers()
         yield from self.test_raycasts()
         yield from self.test_gameplay_scripts()
+
+    def test_forgescript(self):
+        """FeatureTest.forge tests the API from ForgeScript first; it reports by renaming its entity."""
+        runner = bellows.find_entity("ForgeScript Test Runner")
+        self.check(runner is not None and runner.get_component(bellows.ScriptComponent).path == "Scripts/FeatureTest.forge",
+                   "the ForgeScript test runner is in the scene")
+        if runner is None:
+            return
+        yield from self.wait_until(lambda: runner.name.startswith("ForgeScript Test P") or runner.name.startswith("ForgeScript Test F"), 20.0)
+        self.check(runner.name.startswith("ForgeScript Test Passed"), f"FeatureTest.forge ({runner.name})")
+        self.check(runner.get_component(bellows.ScriptComponent).instance is None, "ForgeScript scripts have no Python instance")
 
     def test_math(self):
         a, b = Vec3(1.0, 2.0, 3.0), Vec3(4.0, 5.0, 6.0)
