@@ -4,6 +4,7 @@
 //                      [--width N] [--height N] [--frames N] [--no-agent-server] [--agent-port N]
 //                      [--validation]
 //        BellowsEditor --check-script <file> [--json] [--stdin]
+//        BellowsEditor --write-forgescript-api <file>
 //
 //   --project          Opens a project (.bproject file or its folder) instead of the Project Manager.
 //   --run-script       Runs a Python automation script once the editor is ready (bellows.editor API).
@@ -11,6 +12,7 @@
 //   --headless         Runs without a window (rendering still happens offscreen); implies a fixed timestep.
 //   --no-agent-server  Disables the localhost automation server for this session.
 //   --check-script     Checks a .forge or .py script for mistakes without opening the editor (see ScriptCheckCommand.h).
+//   --write-forgescript-api  Writes the script API description forgescript --lsp reads (see ScriptApiDescription.h).
 
 #include "EditorLayer.h"
 #include "EditorScriptAPI.h"
@@ -18,7 +20,9 @@
 
 #include "Bellows/Core/Application.h"
 #include "Bellows/Core/Log.h"
+#include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Scripting/ScriptApiDescription.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include <cstdio>
@@ -44,7 +48,9 @@ namespace {
 			"  --agent-port <n>       Automation server port (default 7420)\n"
 			"  --validation           Enable Vulkan validation layers\n"
 			"  --check-script <file>  Check a .forge or .py script for mistakes and exit\n"
-			"                         (--json for JSON output, --stdin to read the text from stdin)\n");
+			"                         (--json for JSON output, --stdin to read the text from stdin)\n"
+			"  --write-forgescript-api <file>\n"
+			"                         Write the script API description (forgescript-api.json) and exit\n");
 	}
 
 	uint32_t ParseUnsigned(const ApplicationCommandLineArgs& args, const char* name, uint32_t fallback)
@@ -75,6 +81,21 @@ int main(int argc, char** argv)
 	}
 	if (args.Has("--check-script"))
 		return RunScriptCheckCommand(args);
+	if (args.Has("--write-forgescript-api"))
+	{
+		const std::string path = args.GetValue("--write-forgescript-api");
+		if (path.empty())
+		{
+			std::fprintf(stderr, "--write-forgescript-api needs a file name\n");
+			return 64;
+		}
+		if (!FileSystem::WriteTextFile(path, Scripting::WriteScriptApiDescription()))
+		{
+			std::fprintf(stderr, "Could not write '%s'\n", path.c_str());
+			return 73;
+		}
+		return 0;
+	}
 
 	Log::Specification logSpecification;
 	logSpecification.LogFilePath = (EditorSettings::GetConfigDirectory() / "Editor.log").string();

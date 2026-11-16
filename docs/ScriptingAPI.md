@@ -33,6 +33,8 @@ languages always offer the same functions.
 For code editors and type checkers, `Python/_bellows.pyi` (next to the `bellows` package, and in
 every exported game's `Python` folder) describes every function and class with its types and
 documentation. It is generated from the running engine by `Tools/GeneratePythonStubs.py`.
+`forgescript-api.json` (next to the programs) describes the same API for ForgeScript tools such as
+`forgescript --lsp`; `BellowsEditor --write-forgescript-api <file>` writes it.
 
 The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`, and from
 ForgeScript by `FeatureTest.forge` next to it; when in doubt, those files show working usage of
