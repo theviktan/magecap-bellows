@@ -173,6 +173,15 @@ TEST_CASE("Script checks report the line and column of the first mistake")
 		CHECK_FALSE(problems[0].Message.empty());
 	}
 
+	SUBCASE("Every ForgeScript mistake, sorted by line")
+	{
+		const std::vector<ScriptDiagnostic> problems = CheckScript(ScriptLanguage::ForgeScript,
+			"when update with delta\n\tset x to\nend\n\nwhen created\n\tset y to\nend\n", "Two.forge");
+		REQUIRE(problems.size() == 2);
+		CHECK(problems[0].Line == 2);
+		CHECK(problems[1].Line == 6);
+	}
+
 	SUBCASE("Python")
 	{
 		const std::vector<ScriptDiagnostic> problems = CheckScript(ScriptLanguage::Python, "import bellows\n\ndef broken(:\n    pass\n", "bad.py");
@@ -279,6 +288,10 @@ TEST_CASE("The Script Editor's check reads scripts pulled in with use, from the 
 	// An edited helper is read again on the next check, not taken from a cache.
 	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Helpers.forge", "phrase turn (thing) by (amount)\n\treturn amount\nend\n"));
 	CHECK_FALSE(CheckScript(ScriptLanguage::ForgeScript, source, "Main.forge").empty());
+
+	const std::vector<ScriptDiagnostic> missing = CheckScript(ScriptLanguage::ForgeScript, "say 1\nuse \"Scripts/Missing\"\n", "Main.forge");
+	REQUIRE(missing.size() == 1);
+	CHECK(missing[0].Line == 2);
 
 	SetForgeScriptCheckSetup(nullptr);
 	AssetManager::SetAssetDirectory({});

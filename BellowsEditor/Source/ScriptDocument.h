@@ -74,7 +74,8 @@ namespace Bellows {
 	// endColumn is one past the last character of the line, since the checker reports where a mistake starts.
 	std::string FormatScriptDiagnosticsJson(const std::string& fileName, std::string_view source, const std::vector<ScriptDiagnostic>& diagnostics);
 
-	// Compiles the script without running it and reports the first mistake, if any.
+	// Compiles the script without running it and reports its mistakes: every one ForgeScript can find
+	// (sorted by line, including 'use' scripts that cannot be found), or Python's first.
 	// Python needs the script engine to be initialized; without it Python scripts are not checked.
 	std::vector<ScriptDiagnostic> CheckScript(ScriptLanguage language, std::string_view source, const std::string& fileName);
 
