@@ -891,7 +891,7 @@ namespace Bellows {
 			ImGui::PushID(static_cast<int>(i));
 			const bool dirty = IsDirty(document);
 			const bool hasErrors = !document.Diagnostics.empty();
-			const std::string label = document.Name + (dirty ? " *" : "");
+
 			const ImVec2 start = ImGui::GetCursorScreenPos();
 			const float rowRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 			if (ImGui::Selectable("##script", i == m_ActiveDocument, ImGuiSelectableFlags_AllowOverlap, ImVec2(0.0f, ImGui::GetFrameHeight())))
@@ -901,7 +901,8 @@ namespace Bellows {
 			}
 			if (ImGui::IsItemHovered())
 			{
-				UI::Tooltip(document.AssetPath.empty() ? document.Path.string().c_str() : document.AssetPath.c_str());
+				const std::string tooltip = (document.AssetPath.empty() ? document.Path.string() : document.AssetPath) + (dirty ? "  (unsaved changes)" : "");
+				UI::Tooltip(tooltip.c_str());
 				if (ImGui::IsMouseReleased(ImGuiMouseButton_Middle))
 					closeIndex = i;
 			}
@@ -923,7 +924,13 @@ namespace Bellows {
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
 			const float textY = start.y + (ImGui::GetFrameHeight() - ImGui::GetFontSize()) * 0.5f;
 			drawList->AddText(ImVec2(start.x + 4.0f * scale, textY), hasErrors ? Theme::Error : LanguageColor(document.Language), LanguageIcon(document.Language));
-			drawList->AddText(ImVec2(start.x + 24.0f * scale, textY), dirty ? Theme::Text : Theme::TextMuted, label.c_str());
+			// Long names are clipped before the unsaved-changes dot and the close button, so both stay visible.
+			const float rightEdge = ImGui::GetWindowPos().x - ImGui::GetScrollX() + rowRight - ImGui::GetFrameHeight();
+			const ImVec4 clip(start.x, start.y, rightEdge - 14.0f * scale, start.y + ImGui::GetFrameHeight());
+			drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(start.x + 24.0f * scale, textY), dirty ? Theme::Text : Theme::TextMuted,
+				document.Name.c_str(), nullptr, 0.0f, &clip);
+			if (dirty)
+				drawList->AddCircleFilled(ImVec2(rightEdge - 7.0f * scale, start.y + ImGui::GetFrameHeight() * 0.5f), 3.5f * scale, Theme::Accent);
 
 			// Close button on the right.
 			ImGui::SameLine(rowRight - ImGui::GetFrameHeight());
