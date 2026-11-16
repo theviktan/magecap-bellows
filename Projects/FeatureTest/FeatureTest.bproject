@@ -8,5 +8,17 @@
 		"WindowHeight": 900,
 		"Fullscreen": false,
 		"VSync": true
+	},
+	"Input": {
+		"Actions": {
+			"fire": [
+				"Mouse:Left",
+				"Gamepad:RightBumper"
+			],
+			"jump": [
+				"Key:Space",
+				"Gamepad:A"
+			]
+		}
 	}
 }

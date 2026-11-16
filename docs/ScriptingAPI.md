@@ -33,6 +33,8 @@ languages always offer the same functions.
 For code editors and type checkers, `Python/_bellows.pyi` (next to the `bellows` package, and in
 every exported game's `Python` folder) describes every function and class with its types and
 documentation. It is generated from the running engine by `Tools/GeneratePythonStubs.py`.
+`forgescript-api.json` (next to the programs) describes the same API for ForgeScript tools such as
+`forgescript --lsp`; `BellowsEditor --write-forgescript-api <file>` writes it.
 
 The complete API is exercised by `Projects/FeatureTest/Assets/Scripts/FeatureTest.py`, and from
 ForgeScript by `FeatureTest.forge` next to it; when in doubt, those files show working usage of
@@ -105,9 +107,26 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | `mouse_position()` | `Vec2` in viewport pixels, top-left origin. |
 | `mouse_delta()` / `scroll_delta()` | Movement this frame (`Vec2`). |
 | `viewport_size()` | Size of the game view in pixels (`Vec2`). |
+| `is_action_down(action)` / `is_action_pressed(action)` / `is_action_released(action)` | Input actions by name (`"jump"`): down while any input bound to the action is held; pressed / released on the frame the action starts / ends. Unknown actions raise `ValueError`. |
+| `action_names()` | The project's input actions, sorted by name. |
+| `is_gamepad_down(button)` / `is_gamepad_pressed(button)` / `is_gamepad_released(button)` | Buttons of the first gamepad by name: `"A"`, `"B"`, `"X"`, `"Y"`, `"LeftBumper"`, `"RightBumper"`, `"Back"`, `"Start"`, `"Guide"`, `"LeftThumb"`, `"RightThumb"`, `"DPadUp"`, `"DPadRight"`, `"DPadDown"`, `"DPadLeft"` (Xbox names; any capitalization). Unknown names raise `ValueError`. |
+| `gamepad_connected()` | True while a gamepad is connected. |
 | `log(*values)` / `log_warning(*values)` / `log_error(*values)` | Write to the Console (values are joined with spaces). `print()` also goes to the Console. |
 
 In the editor, game input is only delivered while the Viewport has focus during play.
+
+**Input actions** let a game ask for "jump" instead of naming keys, so the same script works with a
+keyboard, a mouse and a gamepad, and players' controls can change without touching code. Set them
+up in **Settings → Project → Input actions**: each action has a list of inputs (`Key:Space`,
+`Mouse:Left`, `Gamepad:A`). New projects start with `move_left`, `move_right`, `move_forward`,
+`move_back`, `jump`, `interact` and `pause` (WASD, the arrow keys, the D-pad, Space, E, Escape and
+the matching gamepad buttons); **Add default actions** adds any that are missing. The project file
+stores them under `"Input": { "Actions": { "jump": ["Key:Space", "Gamepad:A"] } }`.
+
+```python
+if bellows.is_action_pressed("jump") and self.on_ground:
+    self.body.add_impulse(Vec3(0, 5, 0))
+```
 
 ## Scene and entities
 
@@ -196,13 +215,19 @@ overridden values), `set_field(name, value)`, `instance` (the running object or 
   `play_on_start`, `spatial` (3D), `min_distance`, `max_distance`, `play()`, `stop()`, `pause()`,
   `is_playing`.
 * `AudioListener`: `active`. Without an active listener the primary camera hears the scene.
-* `play_sound(path, volume=1.0, bus="Effects")` plays a one-shot 2D sound; `set_master_volume(v)`,
-  `get_master_volume()`.
-* Audio buses group sounds like a mixer: `"Master"` (everything), `"Music"` and `"Effects"` (both
-  feed Master). `AudioSource.bus` picks a source's bus (default `"Effects"`).
-  `bus_names()`, `set_bus_volume(bus, volume)`, `get_bus_volume(bus)`, `set_bus_muted(bus, muted=True)`
-  (keeps the volume) and `is_bus_muted(bus)`; unknown bus names raise `ValueError`. Each play
-  starts from the volumes in Project Settings → Audio buses.
+* `AudioSource.bus`: the bus the source plays on (default `"Effects"`).
+
+Audio buses group sounds like a mixer: `"Master"` (everything), `"Music"` and `"Effects"` (both feed
+Master). Each play starts from the volumes in Project Settings → Audio buses. Unknown bus names
+raise `ValueError`.
+
+| Function | Description |
+|----------|-------------|
+| `play_sound(path, volume=1.0, bus="Effects")` | Plays a one-shot 2D sound; `False` if the clip can't be loaded. |
+| `set_master_volume(volume)` / `get_master_volume()` | The Master bus volume (1 = normal, 0 = silent). |
+| `bus_names()` | The audio buses: `["Master", "Music", "Effects"]`. |
+| `set_bus_volume(bus, volume)` / `get_bus_volume(bus)` | A bus's volume (1 = normal, 0 = silent). |
+| `set_bus_muted(bus, muted=True)` / `is_bus_muted(bus)` | Mutes or unmutes a bus; its volume is kept for unmuting. |
 
 ## Materials
 

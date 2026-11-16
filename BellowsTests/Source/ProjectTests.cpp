@@ -5,6 +5,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Project/Project.h"
 #include "Bellows/Project/ProjectExporter.h"
@@ -36,6 +37,10 @@ TEST_CASE("Projects are created, saved and loaded")
 	project->GetConfig().WindowWidth = 1024;
 	project->GetConfig().Fullscreen = true;
 	project->GetConfig().BusVolumes["Music"] = 0.3f;
+	// New projects start with the default input actions.
+	CHECK(project->GetConfig().InputActions == InputMap::GetDefaultActions());
+	project->GetConfig().InputActions["dash"] = { InputBinding::Key(KeyCode::LeftShift), InputBinding::Gamepad(GamepadButton::RightBumper) };
+	project->GetConfig().InputActions.erase("pause");
 	REQUIRE(project->Save());
 
 	Ref<Project> loaded = Project::Load(directory);
@@ -45,6 +50,11 @@ TEST_CASE("Projects are created, saved and loaded")
 	CHECK(loaded->GetConfig().Fullscreen);
 	CHECK(loaded->GetConfig().BusVolumes["Music"] == doctest::Approx(0.3f));
 	CHECK(loaded->GetConfig().BusVolumes["Effects"] == doctest::Approx(1.0f));
+	CHECK(loaded->GetConfig().InputActions == project->GetConfig().InputActions);
+	loaded->ApplyInputSettings();
+	CHECK(InputMap::HasAction("dash"));
+	CHECK_FALSE(InputMap::HasAction("pause"));
+	InputMap::SetActions({});
 
 	// Game and play start use the project's mixer, unmuted.
 	AudioEngine::SetBusMuted("Music", true);
@@ -72,6 +82,42 @@ TEST_CASE("A minimal project file with only a name and an asset folder loads")
 	CHECK(project->GetConfig().Name == "Probe");
 	CHECK(project->GetAssetDirectory() == std::filesystem::absolute(folder) / "Content");
 	CHECK(AssetManager::GetAssetDirectory() == project->GetAssetDirectory());
+	CHECK(project->GetConfig().InputActions.empty());
+	Project::SetActive(nullptr);
+}
+
+TEST_CASE("Saving a project writes the file it was loaded from, whatever the project's name")
+{
+	// Regression: Save used to write '<Name>.bproject', leaving a second project file next to the first.
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "RenamedProject";
+	REQUIRE(FileSystem::WriteTextFile(folder / "Game.bproject", R"({ "Name": "My Great Game" })"));
+	Ref<Project> project = Project::Load(folder / "Game.bproject");
+	REQUIRE(project);
+	CHECK(project->GetProjectFilePath() == std::filesystem::absolute(folder) / "Game.bproject");
+	project->GetConfig().Name = "Renamed";
+	REQUIRE(project->Save());
+	CHECK_FALSE(FileSystem::Exists(folder / "My Great Game.bproject"));
+	CHECK_FALSE(FileSystem::Exists(folder / "Renamed.bproject"));
+	Ref<Project> reloaded = Project::Load(folder);
+	REQUIRE(reloaded);
+	CHECK(reloaded->GetConfig().Name == "Renamed");
+	Project::SetActive(nullptr);
+}
+
+TEST_CASE("Project input actions skip bindings they cannot read")
+{
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "InputProject";
+	REQUIRE(FileSystem::WriteTextFile(folder / "Input.bproject", R"({
+		"Name": "Input",
+		"Input": { "Actions": { "jump": ["Key:Space", "Key:NoSuchKey", 7, "gamepad:a"], "broken": "Key:W" } }
+	})"));
+	Ref<Project> project = Project::Load(folder / "Input.bproject");
+	REQUIRE(project);
+	const InputActionMap& actions = project->GetConfig().InputActions;
+	REQUIRE(actions.count("jump") == 1);
+	CHECK(actions.at("jump") == std::vector<InputBinding> { InputBinding::Key(KeyCode::Space), InputBinding::Gamepad(GamepadButton::A) });
+	// An action whose inputs are not a list is kept, with no inputs, so it can be fixed in Project Settings.
+	CHECK(actions.at("broken").empty());
 	Project::SetActive(nullptr);
 }
 

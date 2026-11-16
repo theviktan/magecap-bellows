@@ -7,6 +7,7 @@
 // description into its own module, so both languages always offer the same functions.
 
 #include "Bellows/Core/Base.h"
+#include "Bellows/Core/InputNames.h"
 #include "Bellows/Core/KeyCodes.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Physics/PhysicsWorld.h"
@@ -167,13 +168,7 @@ namespace Bellows::Scripting {
 		MouseButton Button = MouseButton::Left;
 	};
 
-	struct KeyName
-	{
-		const char* Name;
-		KeyCode Code;
-	};
-
-	// Every key scripts can name, with the spelling Python's bellows.Key enum uses.
+	// Every key scripts can name (Bellows::KeyName), with the spelling Python's bellows.Key enum uses.
 	const std::vector<KeyName>& GetKeyNames();
 	// Accepts any capitalization and ignores spaces and underscores; "1" means D1. Throws ScriptValueError.
 	KeyCode KeyFromName(const std::string& name);

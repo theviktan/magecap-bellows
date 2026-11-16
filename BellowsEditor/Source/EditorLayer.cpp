@@ -16,6 +16,7 @@
 #include "Bellows/Core/Application.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Input.h"
+#include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Physics/PhysicsWorld.h"
@@ -212,6 +213,7 @@ namespace Bellows {
 		m_SavedSnapshot.clear();
 		m_Project.reset();
 		Project::SetActive(nullptr);
+		InputMap::SetActions({});
 		m_ProjectManager->Invalidate();
 		UpdateWindowTitle();
 		BW_INFO("Closed the project");
@@ -238,6 +240,7 @@ namespace Bellows {
 		m_ContentBrowserPanel->SetCurrentDirectory(project->GetAssetDirectory());
 		m_ScriptEditorPanel->CloseAll();
 		project->ApplyAudioSettings();
+		project->ApplyInputSettings();
 
 		const std::string startScene = project->GetConfig().StartScene;
 		if (!startScene.empty() && AssetManager::Exists(startScene))
@@ -441,6 +444,7 @@ namespace Bellows {
 		m_ScriptEditorPanel->SaveAll();
 		// Every play starts from the project's mixer, whatever the last session's scripts changed.
 		m_Project->ApplyAudioSettings();
+		m_Project->ApplyInputSettings();
 
 		m_RuntimeScene = Scene::Copy(m_EditorScene);
 		m_RuntimeScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));

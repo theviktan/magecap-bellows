@@ -166,6 +166,12 @@ class FeatureTest(bellows.Script):
         # No device input is delivered in automated runs, but every query must work.
         self.check(not bellows.is_key_down(Key.Space) and not bellows.is_key_pressed(Key.W) and not bellows.is_key_released(Key.Escape), "keyboard queries")
         self.check(not bellows.is_key_down("A"), "keys by name")
+        self.check(bellows.action_names() == ["fire", "jump"], "action_names lists the project's actions")
+        self.check(not bellows.is_action_down("jump") and not bellows.is_action_pressed("fire") and not bellows.is_action_released("jump"), "input action queries")
+        self.check(raises(lambda: bellows.is_action_down("dance"), ValueError), "unknown input actions are rejected")
+        self.check(not bellows.is_gamepad_down("A") and not bellows.is_gamepad_pressed("dpad_up") and not bellows.is_gamepad_released("Start"), "gamepad button queries")
+        self.check(raises(lambda: bellows.is_gamepad_down("Z"), ValueError), "unknown gamepad buttons are rejected")
+        self.check(isinstance(bellows.gamepad_connected(), bool), "gamepad_connected")
         self.check(not bellows.is_mouse_down(MouseButton.Right) and not bellows.is_mouse_pressed() and not bellows.is_mouse_released(MouseButton.Middle), "mouse button queries")
         self.check(isinstance(bellows.mouse_position(), Vec2) and isinstance(bellows.mouse_delta(), Vec2) and isinstance(bellows.scroll_delta(), Vec2), "mouse position queries")
         size = bellows.viewport_size()

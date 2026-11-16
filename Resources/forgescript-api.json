@@ -1,0 +1,1473 @@
+{
+	"version": 1,
+	"functions": [
+		{
+			"name": "is_key_down",
+			"params": [
+				{
+					"name": "key",
+					"type": "Key | str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True while the key is held"
+		},
+		{
+			"name": "is_key_pressed",
+			"params": [
+				{
+					"name": "key",
+					"type": "Key | str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the key went down"
+		},
+		{
+			"name": "is_key_released",
+			"params": [
+				{
+					"name": "key",
+					"type": "Key | str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the key went up"
+		},
+		{
+			"name": "is_mouse_down",
+			"params": [
+				{
+					"name": "button",
+					"type": "MouseButton | str",
+					"default": "Left"
+				}
+			],
+			"returns": "bool",
+			"doc": ""
+		},
+		{
+			"name": "is_mouse_pressed",
+			"params": [
+				{
+					"name": "button",
+					"type": "MouseButton | str",
+					"default": "Left"
+				}
+			],
+			"returns": "bool",
+			"doc": ""
+		},
+		{
+			"name": "is_mouse_released",
+			"params": [
+				{
+					"name": "button",
+					"type": "MouseButton | str",
+					"default": "Left"
+				}
+			],
+			"returns": "bool",
+			"doc": ""
+		},
+		{
+			"name": "mouse_position",
+			"params": [],
+			"returns": "Vec2",
+			"doc": "Mouse position in viewport pixels (top-left origin)"
+		},
+		{
+			"name": "mouse_delta",
+			"params": [],
+			"returns": "Vec2",
+			"doc": "Mouse movement this frame in pixels"
+		},
+		{
+			"name": "scroll_delta",
+			"params": [],
+			"returns": "Vec2",
+			"doc": "Scroll wheel movement this frame"
+		},
+		{
+			"name": "viewport_size",
+			"params": [],
+			"returns": "Vec2",
+			"doc": "Size of the game viewport in pixels"
+		},
+		{
+			"name": "action_names",
+			"params": [],
+			"returns": "list[str]",
+			"doc": "The project's input actions, sorted by name"
+		},
+		{
+			"name": "is_action_down",
+			"params": [
+				{
+					"name": "action",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True while any input bound to the action is held"
+		},
+		{
+			"name": "is_action_pressed",
+			"params": [
+				{
+					"name": "action",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the action started"
+		},
+		{
+			"name": "is_action_released",
+			"params": [
+				{
+					"name": "action",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the action ended"
+		},
+		{
+			"name": "gamepad_connected",
+			"params": [],
+			"returns": "bool",
+			"doc": "True while a gamepad is connected"
+		},
+		{
+			"name": "is_gamepad_down",
+			"params": [
+				{
+					"name": "button",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True while the gamepad button (\"A\", \"Start\", \"DPadLeft\", ...) is held"
+		},
+		{
+			"name": "is_gamepad_pressed",
+			"params": [
+				{
+					"name": "button",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the gamepad button went down"
+		},
+		{
+			"name": "is_gamepad_released",
+			"params": [
+				{
+					"name": "button",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True on the frame the gamepad button went up"
+		},
+		{
+			"name": "delta_time",
+			"params": [],
+			"returns": "float",
+			"doc": "Seconds since the previous frame"
+		},
+		{
+			"name": "time",
+			"params": [],
+			"returns": "float",
+			"doc": "Seconds since play started"
+		},
+		{
+			"name": "frame",
+			"params": [],
+			"returns": "int",
+			"doc": "Frames since play started"
+		},
+		{
+			"name": "raycast",
+			"params": [
+				{
+					"name": "origin",
+					"type": "Vec3"
+				},
+				{
+					"name": "direction",
+					"type": "Vec3"
+				},
+				{
+					"name": "max_distance",
+					"type": "float",
+					"default": 1000.0
+				}
+			],
+			"returns": "RaycastHit | None",
+			"doc": "Casts a ray against physics colliders (play mode); returns RaycastHit or None"
+		},
+		{
+			"name": "get_gravity",
+			"params": [],
+			"returns": "Vec3",
+			"doc": ""
+		},
+		{
+			"name": "set_gravity",
+			"params": [
+				{
+					"name": "gravity",
+					"type": "Vec3"
+				}
+			],
+			"returns": "None",
+			"doc": ""
+		},
+		{
+			"name": "create_entity",
+			"params": [
+				{
+					"name": "name",
+					"type": "str",
+					"default": "Entity"
+				},
+				{
+					"name": "parent",
+					"type": "Entity | None",
+					"default": null
+				}
+			],
+			"returns": "Entity",
+			"doc": "Creates an entity in the active scene"
+		},
+		{
+			"name": "destroy",
+			"params": [
+				{
+					"name": "entity",
+					"type": "Entity"
+				}
+			],
+			"returns": "None",
+			"doc": ""
+		},
+		{
+			"name": "find_entity",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				}
+			],
+			"returns": "Entity | None",
+			"doc": ""
+		},
+		{
+			"name": "get_entity",
+			"params": [
+				{
+					"name": "id",
+					"type": "int"
+				}
+			],
+			"returns": "Entity | None",
+			"doc": ""
+		},
+		{
+			"name": "get_entities",
+			"params": [
+				{
+					"name": "component",
+					"type": "str | None",
+					"default": null
+				}
+			],
+			"returns": "list[Entity]",
+			"doc": "All entities (optionally only those with a component), in hierarchy order"
+		},
+		{
+			"name": "instantiate",
+			"params": [
+				{
+					"name": "prefab",
+					"type": "str"
+				},
+				{
+					"name": "position",
+					"type": "Vec3 | None",
+					"default": null
+				},
+				{
+					"name": "parent",
+					"type": "Entity | None",
+					"default": null
+				}
+			],
+			"returns": "Entity",
+			"doc": "Spawns a .bprefab and returns its root entity"
+		},
+		{
+			"name": "primary_camera",
+			"params": [],
+			"returns": "Entity | None",
+			"doc": ""
+		},
+		{
+			"name": "screen_to_world_ray",
+			"params": [
+				{
+					"name": "screen_position",
+					"type": "Vec2"
+				}
+			],
+			"returns": "tuple[Vec3, Vec3] | None",
+			"doc": "Returns (origin, direction) of a ray through a viewport pixel, or None without a camera"
+		},
+		{
+			"name": "world_to_screen",
+			"params": [
+				{
+					"name": "world_position",
+					"type": "Vec3"
+				}
+			],
+			"returns": "Vec2 | None",
+			"doc": ""
+		},
+		{
+			"name": "scene_name",
+			"params": [],
+			"returns": "str",
+			"doc": ""
+		},
+		{
+			"name": "is_playing",
+			"params": [],
+			"returns": "bool",
+			"doc": ""
+		},
+		{
+			"name": "load_scene",
+			"params": [
+				{
+					"name": "path",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "Switches to another scene at the end of the frame"
+		},
+		{
+			"name": "quit",
+			"params": [
+				{
+					"name": "exit_code",
+					"type": "int",
+					"default": 0
+				}
+			],
+			"returns": "None",
+			"doc": "Quits the game (stops play mode in the editor)"
+		},
+		{
+			"name": "play_sound",
+			"params": [
+				{
+					"name": "path",
+					"type": "str"
+				},
+				{
+					"name": "volume",
+					"type": "float",
+					"default": 1.0
+				},
+				{
+					"name": "bus",
+					"type": "str",
+					"default": "Effects"
+				}
+			],
+			"returns": "bool",
+			"doc": "Plays a one-shot 2D sound"
+		},
+		{
+			"name": "set_master_volume",
+			"params": [
+				{
+					"name": "volume",
+					"type": "float"
+				}
+			],
+			"returns": "None",
+			"doc": ""
+		},
+		{
+			"name": "get_master_volume",
+			"params": [],
+			"returns": "float",
+			"doc": ""
+		},
+		{
+			"name": "bus_names",
+			"params": [],
+			"returns": "list[str]",
+			"doc": "The audio buses: Master, Music, Effects"
+		},
+		{
+			"name": "set_bus_volume",
+			"params": [
+				{
+					"name": "bus",
+					"type": "str"
+				},
+				{
+					"name": "volume",
+					"type": "float"
+				}
+			],
+			"returns": "None",
+			"doc": "Sets a bus's volume (1 = normal, 0 = silent)"
+		},
+		{
+			"name": "get_bus_volume",
+			"params": [
+				{
+					"name": "bus",
+					"type": "str"
+				}
+			],
+			"returns": "float",
+			"doc": ""
+		},
+		{
+			"name": "set_bus_muted",
+			"params": [
+				{
+					"name": "bus",
+					"type": "str"
+				},
+				{
+					"name": "muted",
+					"type": "bool",
+					"default": true
+				}
+			],
+			"returns": "None",
+			"doc": "Mutes or unmutes a bus; its volume is kept"
+		},
+		{
+			"name": "is_bus_muted",
+			"params": [
+				{
+					"name": "bus",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": ""
+		}
+	],
+	"types": [
+		{
+			"name": "Material",
+			"doc": "PBR material that can be assigned to a MeshRenderer",
+			"members": [
+				{
+					"name": "load",
+					"kind": "static",
+					"params": [
+						{
+							"name": "path",
+							"type": "str"
+						}
+					],
+					"returns": "Material",
+					"doc": "Loads a .bmat material from the project"
+				},
+				{
+					"name": "path",
+					"kind": "property",
+					"type": "str",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "name",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": ""
+				},
+				{
+					"name": "metallic",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "roughness",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "emissive",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "emissive_intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "alpha_mode",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "double_sided",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "normal_strength",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "alpha_cutoff",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "uv_tiling",
+					"kind": "property",
+					"type": "Vec2",
+					"doc": ""
+				},
+				{
+					"name": "uv_offset",
+					"kind": "property",
+					"type": "Vec2",
+					"doc": ""
+				},
+				{
+					"name": "albedo_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Albedo (base color) texture path, or None"
+				},
+				{
+					"name": "normal_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Tangent-space normal map path, or None"
+				},
+				{
+					"name": "metallic_roughness_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "glTF metallic (B) / roughness (G) texture path, or None"
+				},
+				{
+					"name": "occlusion_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Ambient occlusion (R) texture path, or None"
+				},
+				{
+					"name": "emissive_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Emissive texture path, or None"
+				},
+				{
+					"name": "save",
+					"kind": "method",
+					"params": [
+						{
+							"name": "path",
+							"type": "str"
+						}
+					],
+					"returns": "None",
+					"doc": "Writes the material to a .bmat file in the project"
+				}
+			],
+			"constructor": {
+				"params": [
+					{
+						"name": "name",
+						"type": "str",
+						"default": "Material"
+					},
+					{
+						"name": "color",
+						"type": "Vec4 | list[float] | None",
+						"default": null
+					},
+					{
+						"name": "metallic",
+						"type": "float",
+						"default": 0.0
+					},
+					{
+						"name": "roughness",
+						"type": "float",
+						"default": 0.5
+					}
+				]
+			}
+		},
+		{
+			"name": "Transform",
+			"doc": "Position, rotation and scale relative to the parent",
+			"members": [
+				{
+					"name": "translation",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Local position (same as translation)"
+				},
+				{
+					"name": "rotation",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Euler angles in radians"
+				},
+				{
+					"name": "rotation_degrees",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "quaternion",
+					"kind": "property",
+					"type": "Quat",
+					"doc": ""
+				},
+				{
+					"name": "scale",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "world_position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "forward",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "right",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "up",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "MeshRenderer",
+			"doc": "Draws a mesh (glTF file or Builtin/Cube, Sphere, Plane, Capsule, Cylinder, Cone, Quad)",
+			"members": [
+				{
+					"name": "mesh",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "material",
+					"kind": "property",
+					"type": "str",
+					"doc": "Material path (.bmat or runtime material); None uses the mesh's own materials"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Albedo color; setting it gives the entity its own material"
+				},
+				{
+					"name": "cast_shadows",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "Camera",
+			"doc": "",
+			"members": [
+				{
+					"name": "projection",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "fov",
+					"kind": "property",
+					"type": "float",
+					"doc": "Vertical field of view in degrees"
+				},
+				{
+					"name": "orthographic_size",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "near_clip",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "far_clip",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "primary",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "DirectionalLight",
+			"doc": "Sun-like light shining along the entity's forward (-Z)",
+			"members": [
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "cast_shadows",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "PointLight",
+			"doc": "",
+			"members": [
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "range",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "SpotLight",
+			"doc": "Cone light shining along the entity's forward (-Z)",
+			"members": [
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "range",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "inner_angle",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees"
+				},
+				{
+					"name": "outer_angle",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees"
+				}
+			]
+		},
+		{
+			"name": "SkyLight",
+			"doc": "Environment lighting: an HDRI (.hdr) or the procedural sky",
+			"members": [
+				{
+					"name": "environment",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "rotation",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees"
+				},
+				{
+					"name": "skybox_blur",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "RigidBody",
+			"doc": "Physics body. Needs a collider component on the same entity.",
+			"members": [
+				{
+					"name": "type",
+					"kind": "property",
+					"type": "str",
+					"doc": "'Static', 'Dynamic' or 'Kinematic' (set before play)"
+				},
+				{
+					"name": "mass",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "friction",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "restitution",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "linear_damping",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "angular_damping",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "gravity_scale",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "is_trigger",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "lock_rotation_x",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "lock_rotation_y",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "lock_rotation_z",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "continuous",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Continuous collision detection for fast bodies (set before play)"
+				},
+				{
+					"name": "velocity",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Linear velocity (play mode)"
+				},
+				{
+					"name": "angular_velocity",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "add_force",
+					"kind": "method",
+					"params": [
+						{
+							"name": "force",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "add_impulse",
+					"kind": "method",
+					"params": [
+						{
+							"name": "impulse",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "add_torque",
+					"kind": "method",
+					"params": [
+						{
+							"name": "torque",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "teleport",
+					"kind": "method",
+					"params": [
+						{
+							"name": "position",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "BoxCollider",
+			"doc": "",
+			"members": [
+				{
+					"name": "half_extents",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "offset",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "SphereCollider",
+			"doc": "",
+			"members": [
+				{
+					"name": "radius",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "offset",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "CapsuleCollider",
+			"doc": "",
+			"members": [
+				{
+					"name": "radius",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "half_height",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "offset",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "MeshCollider",
+			"doc": "Static triangle-mesh collider built from the MeshRenderer",
+			"members": [
+				{
+					"name": "use_mesh_renderer",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "ScriptComponent",
+			"doc": "Attaches a script to the entity",
+			"members": [
+				{
+					"name": "path",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "class_name",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "AudioSource",
+			"doc": "",
+			"members": [
+				{
+					"name": "clip",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "volume",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "pitch",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "loop",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "play_on_start",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "spatial",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "min_distance",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "max_distance",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "bus",
+					"kind": "property",
+					"type": "str",
+					"doc": "The bus the source plays on: 'Master', 'Music' or 'Effects'"
+				},
+				{
+					"name": "play",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": ""
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "pause",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "is_playing",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "AudioListener",
+			"doc": "",
+			"members": [
+				{
+					"name": "active",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "Entity",
+			"doc": "A handle to an entity in a scene",
+			"members": [
+				{
+					"name": "id",
+					"kind": "property",
+					"type": "int",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "valid",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "False once the entity has been destroyed"
+				},
+				{
+					"name": "name",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "transform",
+					"kind": "property",
+					"type": "Transform",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "World-space position"
+				},
+				{
+					"name": "local_position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "rotation",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Local rotation as Euler angles in degrees"
+				},
+				{
+					"name": "scale",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": ""
+				},
+				{
+					"name": "forward",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "right",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "up",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "parent",
+					"kind": "property",
+					"type": "Entity | None",
+					"doc": ""
+				},
+				{
+					"name": "children",
+					"kind": "property",
+					"type": "list[Entity]",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "find_child",
+					"kind": "method",
+					"params": [
+						{
+							"name": "name",
+							"type": "str"
+						}
+					],
+					"returns": "Entity | None",
+					"doc": "Finds a descendant by name"
+				},
+				{
+					"name": "has_component",
+					"kind": "method",
+					"params": [
+						{
+							"name": "component",
+							"type": "str"
+						}
+					],
+					"returns": "bool",
+					"doc": ""
+				},
+				{
+					"name": "get_component",
+					"kind": "method",
+					"params": [
+						{
+							"name": "component",
+							"type": "str"
+						}
+					],
+					"returns": "Component | None",
+					"doc": "Returns the component or None, e.g. entity.get_component('RigidBody')"
+				},
+				{
+					"name": "add_component",
+					"kind": "method",
+					"params": [
+						{
+							"name": "component",
+							"type": "str"
+						}
+					],
+					"returns": "Component",
+					"doc": "Adds the component (if missing) and returns it"
+				},
+				{
+					"name": "remove_component",
+					"kind": "method",
+					"params": [
+						{
+							"name": "component",
+							"type": "str"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "components",
+					"kind": "property",
+					"type": "list[str]",
+					"readonly": true,
+					"doc": "Names of the components on this entity"
+				},
+				{
+					"name": "destroy",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Destroys the entity (at the end of the frame during play)"
+				},
+				{
+					"name": "look_at",
+					"kind": "method",
+					"params": [
+						{
+							"name": "target",
+							"type": "Vec3"
+						},
+						{
+							"name": "up",
+							"type": "Vec3",
+							"default": [
+								0.0,
+								1.0,
+								0.0
+							]
+						}
+					],
+					"returns": "None",
+					"doc": "Rotates the entity so -Z faces the target"
+				},
+				{
+					"name": "translate",
+					"kind": "method",
+					"params": [
+						{
+							"name": "delta",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "rotate",
+					"kind": "method",
+					"params": [
+						{
+							"name": "degrees",
+							"type": "Vec3"
+						}
+					],
+					"returns": "None",
+					"doc": "Rotates by Euler angles (degrees) in local space"
+				}
+			]
+		},
+		{
+			"name": "RaycastHit",
+			"doc": "",
+			"members": [
+				{
+					"name": "entity",
+					"kind": "property",
+					"type": "Entity | None",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "point",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "normal",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "distance",
+					"kind": "property",
+					"type": "float",
+					"readonly": true,
+					"doc": ""
+				}
+			]
+		}
+	],
+	"phrases": []
+}

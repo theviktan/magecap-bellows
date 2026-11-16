@@ -897,6 +897,9 @@ class Vec4:
     def __repr__(self) -> str: ...
 
 
+def action_names() -> list[str]:
+    """The project's input actions, sorted by name"""
+
 def bus_names() -> list[str]:
     """The audio buses: Master, Music, Effects"""
 
@@ -915,6 +918,9 @@ def find_entity(name: str) -> Entity | None: ...
 def frame() -> int:
     """Frames since play started"""
 
+def gamepad_connected() -> bool:
+    """True while a gamepad is connected"""
+
 def get_bus_volume(bus: str) -> float: ...
 
 def get_entities(component: str | type | None = None) -> list[Entity]:
@@ -929,7 +935,25 @@ def get_master_volume() -> float: ...
 def instantiate(prefab: str, position: Vec3 | typing.Sequence[float] | None = None, parent: Entity | None = None) -> Entity:
     """Spawns a .bprefab and returns its root entity"""
 
+def is_action_down(action: str) -> bool:
+    """True while any input bound to the action is held"""
+
+def is_action_pressed(action: str) -> bool:
+    """True on the frame the action started"""
+
+def is_action_released(action: str) -> bool:
+    """True on the frame the action ended"""
+
 def is_bus_muted(bus: str) -> bool: ...
+
+def is_gamepad_down(button: str) -> bool:
+    """True while the gamepad button ("A", "Start", "DPadLeft", ...) is held"""
+
+def is_gamepad_pressed(button: str) -> bool:
+    """True on the frame the gamepad button went down"""
+
+def is_gamepad_released(button: str) -> bool:
+    """True on the frame the gamepad button went up"""
 
 def is_key_down(key: Key | str) -> bool:
     """True while the key is held"""

@@ -4,6 +4,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Core/InputMap.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Serialization/JsonUtils.h"
@@ -54,11 +55,6 @@ namespace Bellows {
 		AssetManager::SetAssetDirectory(project ? project->GetAssetDirectory() : std::filesystem::path());
 	}
 
-	std::filesystem::path Project::GetProjectFilePath() const
-	{
-		return m_ProjectDirectory / (m_Config.Name + FileExtension);
-	}
-
 	std::filesystem::path Project::GetAssetDirectory() const
 	{
 		return m_ProjectDirectory / m_Config.AssetDirectory;
@@ -75,6 +71,8 @@ namespace Bellows {
 		Ref<Project> project = CreateRef<Project>();
 		project->m_ProjectDirectory = std::filesystem::absolute(directory);
 		project->m_Config.Name = name;
+		project->m_ProjectFileName = name + FileExtension;
+		project->m_Config.InputActions = InputMap::GetDefaultActions();
 
 		const std::filesystem::path assets = project->GetAssetDirectory();
 		for (const char* folder : { "Scenes", "Scripts", "Models", "Materials", "Textures", "Environments", "Audio", "Prefabs" })
@@ -133,6 +131,7 @@ namespace Bellows {
 
 		Ref<Project> project = CreateRef<Project>();
 		project->m_ProjectDirectory = std::filesystem::absolute(projectFile).parent_path();
+		project->m_ProjectFileName = projectFile.filename();
 		ProjectConfig& config = project->m_Config;
 		config.Name = projectFile.stem().string();
 		JsonRead(json, "Name", config.Name);
@@ -150,6 +149,26 @@ namespace Bellows {
 			for (const std::string& bus : AudioEngine::GetBusNames())
 				JsonRead(*it, bus.c_str(), config.BusVolumes[bus]);
 		}
+		if (auto input = json.find("Input"); input != json.end())
+		{
+			if (auto actions = input->find("Actions"); actions != input->end() && actions->is_object())
+			{
+				for (const auto& [action, bindings] : actions->items())
+				{
+					std::vector<InputBinding>& list = config.InputActions[action];
+					if (!bindings.is_array())
+						continue;
+					for (const Json& binding : bindings)
+					{
+						std::optional<InputBinding> parsed = binding.is_string() ? InputBinding::Parse(binding.get<std::string>()) : std::nullopt;
+						if (parsed)
+							list.push_back(*parsed);
+						else
+							BW_CORE_WARN("Project '{}': input action '{}' has an unknown binding {}", config.Name, action, binding.dump());
+					}
+				}
+			}
+		}
 
 		SetActive(project);
 		BW_CORE_INFO("Opened project '{}' ({})", config.Name, project->m_ProjectDirectory.string());
@@ -164,6 +183,11 @@ namespace Bellows {
 			AudioEngine::SetBusVolume(bus, it != m_Config.BusVolumes.end() ? it->second : 1.0f);
 			AudioEngine::SetBusMuted(bus, false);
 		}
+	}
+
+	void Project::ApplyInputSettings() const
+	{
+		InputMap::SetActions(m_Config.InputActions);
 	}
 
 	bool Project::Save()
@@ -181,6 +205,15 @@ namespace Bellows {
 		Json& audio = json["Audio"];
 		for (const auto& [bus, volume] : m_Config.BusVolumes)
 			audio[bus] = volume;
+		Json& actions = json["Input"]["Actions"];
+		actions = Json::object();
+		for (const auto& [action, bindings] : m_Config.InputActions)
+		{
+			Json& list = actions[action];
+			list = Json::array();
+			for (const InputBinding& binding : bindings)
+				list.push_back(binding.ToString());
+		}
 
 		if (!FileSystem::WriteTextFile(GetProjectFilePath(), json.dump(1, '\t')))
 		{
