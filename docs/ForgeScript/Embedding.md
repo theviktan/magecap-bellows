@@ -247,6 +247,8 @@ m_VM.SetTriggerHandler([this](ForgeScript::Module*, const std::string& event, co
 });
 ```
 
+  The handler may throw `ForgeScript::RuntimeError` (for example when your own event system refuses the event): it becomes an error on the `trigger` line, which the script can catch. A `trigger` nested more than `VMConfig::MaxNestedCalls` (64) deep inside `when` handlers fails the same way, so a handler that triggers itself can never use up the C++ stack.
+
 To call a script function from C++ and get a result (for example an AI scoring function):
 
 ```cpp
