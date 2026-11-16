@@ -27,12 +27,13 @@ fully scriptable so agents can build games through it.
 
 ## Coordination between chats
 
-Three chats work on this project: the Bellows development chat (engine, editor, tools), the ForgeScript
-chat (`ForgeScript/` and the ForgeScript runtime) and the MageCap Forge chat (the Forge app's Bellows
+Three chats work on this project: **MCBellows** (engine, editor, tools), **FSC** (the ForgeScript chat:
+`ForgeScript/` and the ForgeScript runtime) and **MFC** (the MageCap Forge chat: the Forge app's Bellows
 integration). They share the **MageCap Bellows Sync Board**
-(https://claude.ai/artifact/YAjJThc6uiNbyX2ybiP8rL): current state, who owns what, the contracts each
-side relies on, open requests, decisions and a change log. Read it before starting work and update it
-after merging.
+(https://claude.ai/artifact/YAjJThc6uiNbyX2ybiP8rL): current state, the phase plan, who owns what, the
+contracts each side relies on, open requests, decisions and a change log. Chats talk to each other in its
+comments, tagged `@MCBellows`, `@FSC`, `@MFC`, `@Ron` or `@All`. Read it before starting work, follow the
+phase plan in order, and update it after every merged step.
 
 ## Build and test
 
