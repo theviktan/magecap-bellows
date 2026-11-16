@@ -101,6 +101,22 @@ check(bellows.find_entity("Player").transform.position.x == paused_x, "paused ga
 editor.step(1)
 editor.run_frames(1)
 check(bellows.find_entity("Player").transform.position.x > paused_x, "step advances a paused game")
+
+# Hot reload: saving a script during play swaps in its new code (polled twice a second).
+editor.pause(False)
+mover = scripts / "Mover.py"
+mover.write_text(
+    "import bellows\n\n"
+    "class Mover(bellows.Script):\n"
+    "    speed: float = 2.0\n\n"
+    "    def on_update(self, dt):\n"
+    "        self.entity.name = 'Reloaded Player'\n",
+    encoding="utf-8")
+# The new file must look newer even when written within the same clock tick.
+stat = mover.stat()
+os.utime(mover, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
+editor.run_frames(45)
+check(bellows.find_entity("Reloaded Player") is not None, "a script saved during play is reloaded")
 editor.stop()
 check(editor.state() == "edit", "stop")
 check(abs(bellows.find_entity("Player").transform.position.x - 1.0) < 1e-5, "stopping restores the edited scene")

@@ -5,6 +5,7 @@
 #include "EditorSettings.h"
 #include "UndoHistory.h"
 
+#include "Bellows/Core/FileWatcher.h"
 #include "Bellows/Core/Layer.h"
 #include "Bellows/Project/Project.h"
 #include "Bellows/Project/ProjectExporter.h"
@@ -143,6 +144,8 @@ namespace Bellows {
 		void SetViewportSizeOverride(uint32_t width, uint32_t height);
 		GizmoMode GetGizmoMode() const { return m_GizmoMode; }
 		bool IsUsingGameCamera() const;
+		// Hot reload: hands scripts saved since the last poll to the script engine.
+		void ReloadChangedScripts();
 
 		// Workspaces and the Script Editor ----------------------------------
 		void SetWorkspace(Workspace workspace);
@@ -221,6 +224,10 @@ namespace Bellows {
 		bool m_ViewportFocused = false;
 		float m_ViewportMouseWheel = 0.0f;		// Collected during the UI frame for the next camera update
 		bool m_CameraControlActive = false;
+		// Hot reload: script files saved during play are polled a few times a second.
+		static constexpr float c_ScriptWatchInterval = 0.5f;
+		FileWatcher m_ScriptWatcher;
+		float m_ScriptWatchElapsed = 0.0f;
 		bool m_FreeCameraInPlay = false;
 		bool m_ShowColliders = true;
 		GizmoMode m_GizmoMode = GizmoMode::Translate;
