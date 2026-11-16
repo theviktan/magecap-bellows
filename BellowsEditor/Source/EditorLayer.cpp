@@ -73,6 +73,8 @@ namespace Bellows {
 	void EditorLayer::OnAttach()
 	{
 		m_Settings = EditorSettings::Load();
+		if (!EditorSettings::WriteInstallInfo(Platform::GetExecutableDirectory()))
+			BW_CORE_WARN("Could not write Install.json; other tools will not find this editor automatically");
 		if (m_Options.AgentServerPort != 0)
 			m_Settings.AgentServerPort = m_Options.AgentServerPort;
 

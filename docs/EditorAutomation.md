@@ -15,6 +15,27 @@ All three run the code on the editor's main thread between frames, with `bellows
 API, see [ScriptingAPI.md](ScriptingAPI.md)) and `bellows.editor` available. In the Console and
 through the agent server, a trailing expression prints its value, like the Python prompt.
 
+## For other tools: checking scripts and finding the editor
+
+**Checking a script** without opening the editor, exactly as the Script Editor does (ForgeScript
+with the engine's functions and phrases known, Python with the bundled interpreter):
+
+```
+BellowsEditor --check-script Scripts/Player.forge          # mistakes on stderr: file:line:column: message
+BellowsEditor --check-script Scripts/Player.forge --json   # {"file", "diagnostics": [{line, column, endColumn, severity, message}]}
+BellowsEditor --check-script Scripts/Player.forge --stdin  # reads the (unsaved) text from standard input
+```
+
+Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be read, `64` bad usage,
+`70` Python could not start. The text format and exit codes match `forgescript --check`, which
+checks the language alone (engine functions are unknown to it).
+
+**Finding the editor.** Every time the editor starts it writes `Install.json` to its
+configuration folder (Windows: `%APPDATA%\MageCapBellows`, Linux: `~/.config/MageCapBellows`):
+`Engine`, `EngineVersion`, `ForgeScriptVersion`, `EditorPath`, `RuntimePath`, `ForgeScriptPath`
+(empty if the `forgescript` tool is missing) and `DocsDirectory` (the folder with
+`ScriptingAPI.md` and `ForgeScript/`).
+
 ## The agent server
 
 When the editor starts it listens on `127.0.0.1:7420` (Settings → Editor → Agent automation, or

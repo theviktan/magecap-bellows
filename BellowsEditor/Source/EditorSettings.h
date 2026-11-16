@@ -48,6 +48,11 @@ namespace Bellows {
 		// The most recently opened projects, newest first.
 		std::vector<std::string> GetRecentProjects(size_t count) const;
 
+		// Writes Install.json to the configuration folder so other tools (MageCap Forge) can find this
+		// editor: its path, the engine and ForgeScript versions, the forgescript tool and the docs.
+		// Only rewritten when something changed. Returns false if it could not be written.
+		static bool WriteInstallInfo(const std::filesystem::path& executableDirectory);
+
 		static int64_t Now();
 		static std::filesystem::path GetConfigDirectory();
 		static EditorSettings Load();

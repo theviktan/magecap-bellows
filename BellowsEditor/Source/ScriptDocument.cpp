@@ -1,10 +1,12 @@
 #include "ScriptDocument.h"
 
 #include "Bellows/Scripting/ScriptEngine.h"
+#include "Bellows/Serialization/JsonUtils.h"
 
 #include <ForgeScript/VM/VM.h>
 #include <pybind11/pybind11.h>
 
+#include <algorithm>
 #include <cctype>
 #include <memory>
 
@@ -425,6 +427,47 @@ class {Class}(bellows.Script):
 			lineNumber++;
 		}
 		return items;
+	}
+
+	std::string FormatScriptDiagnostic(const std::string& fileName, const ScriptDiagnostic& diagnostic)
+	{
+		return fileName + ":" + std::to_string(diagnostic.Line) + ":" + std::to_string(diagnostic.Column) + ": " + diagnostic.Message;
+	}
+
+	std::string FormatScriptDiagnosticsJson(const std::string& fileName, std::string_view source, const std::vector<ScriptDiagnostic>& diagnostics)
+	{
+		// Line lengths, so each mistake can be marked to the end of its line.
+		std::vector<size_t> lineLengths;
+		size_t start = 0;
+		while (start <= source.size())
+		{
+			size_t end = source.find('\n', start);
+			const size_t lineEnd = end == std::string_view::npos ? source.size() : end;
+			size_t length = lineEnd - start;
+			if (length > 0 && source[lineEnd - 1] == '\r')
+				length--;
+			lineLengths.push_back(length);
+			if (end == std::string_view::npos)
+				break;
+			start = end + 1;
+		}
+
+		Json items = Json::array();
+		for (const ScriptDiagnostic& diagnostic : diagnostics)
+		{
+			const size_t lineLength = diagnostic.Line > 0 && diagnostic.Line <= lineLengths.size() ? lineLengths[diagnostic.Line - 1] : 0;
+			items.push_back({
+				{ "line", diagnostic.Line },
+				{ "column", diagnostic.Column },
+				{ "endColumn", std::max(lineLength + 1, diagnostic.Column + 1) },
+				{ "severity", "error" },
+				{ "message", diagnostic.Message },
+			});
+		}
+		Json json;
+		json["file"] = fileName;
+		json["diagnostics"] = items;
+		return json.dump();
 	}
 
 	std::vector<ScriptDiagnostic> CheckScript(ScriptLanguage language, std::string_view source, const std::string& fileName)

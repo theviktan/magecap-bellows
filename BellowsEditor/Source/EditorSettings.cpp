@@ -64,6 +64,43 @@ namespace Bellows {
 		return paths;
 	}
 
+	bool EditorSettings::WriteInstallInfo(const std::filesystem::path& executableDirectory)
+	{
+		const std::string extension = Platform::GetExecutableExtension();
+		const std::filesystem::path directory = std::filesystem::absolute(executableDirectory).lexically_normal();
+		Json json;
+		json["Engine"] = "MageCap Bellows";
+		json["EngineVersion"] = BW_VERSION;
+		json["ForgeScriptVersion"] = FORGESCRIPT_VERSION;
+		json["EditorPath"] = (directory / ("BellowsEditor" + extension)).string();
+		json["RuntimePath"] = (directory / ("BellowsRuntime" + extension)).string();
+
+		const std::filesystem::path forgescript = directory / ("forgescript" + extension);
+		json["ForgeScriptPath"] = FileSystem::Exists(forgescript) ? forgescript.string() : std::string();
+
+		// Packages keep the guides in "Docs" next to the editor; a build tree has them in the repository's "docs".
+		std::string docs;
+		std::filesystem::path search = directory;
+		for (int depth = 0; depth < 5 && docs.empty(); depth++)
+		{
+			for (const char* folder : { "Docs", "docs" })
+			{
+				if (docs.empty() && FileSystem::Exists(search / folder / "ScriptingAPI.md"))
+					docs = (search / folder).string();
+			}
+			if (search == search.parent_path())
+				break;
+			search = search.parent_path();
+		}
+		json["DocsDirectory"] = docs;
+
+		const std::filesystem::path path = GetConfigDirectory() / "Install.json";
+		const std::string text = json.dump(1, '\t');
+		if (const std::optional<std::string> existing = FileSystem::ReadTextFile(path); existing && *existing == text)
+			return true;
+		return FileSystem::WriteTextFile(path, text);
+	}
+
 	int64_t EditorSettings::Now()
 	{
 		return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
