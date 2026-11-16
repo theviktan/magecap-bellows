@@ -4,6 +4,7 @@
 #include "EditorTheme.h"
 #include "EditorUI.h"
 #include "IconsLucide.h"
+#include "Panels/ScriptEditorPanel.h"
 
 #include "Bellows/Asset/AssetManager.h"
 
@@ -148,7 +149,7 @@ namespace Bellows {
 		const bool selected = m_Editor.IsSelected(entity);
 
 		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanFullWidth
-			| ImGuiTreeNodeFlags_FramePadding;
+			| ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap;
 		if (selected)
 			flags |= ImGuiTreeNodeFlags_Selected;
 		if (children.empty())
@@ -159,6 +160,7 @@ namespace Bellows {
 		char id[24];
 		std::snprintf(id, sizeof(id), "%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(uuid)));
 		ImGui::PushID(id);
+		const float rowRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
 		const bool open = ImGui::TreeNodeEx("##node", flags);
 		ImGui::PopStyleVar();
@@ -183,6 +185,13 @@ namespace Bellows {
 				Entity dragged = scene->TryGetEntityByUUID(*static_cast<const uint64_t*>(payload->Data));
 				if (dragged && dragged != entity && scene->SetParent(dragged, entity, true))
 					m_Editor.CommitChange("Reparent");
+			}
+			// Dropping a script from the Content panel attaches it, like dropping a script on a node in Godot.
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(UI::AssetPayload))
+			{
+				const std::string path(static_cast<const char*>(payload->Data));
+				if (AssetManager::GetAssetType(path) == AssetType::Script)
+					m_Editor.AttachScript(entity, path);
 			}
 			ImGui::EndDragDropTarget();
 		}
@@ -218,6 +227,23 @@ namespace Bellows {
 			ImGui::PopStyleColor();
 		}
 
+		// A script badge at the end of the row opens the entity's script in the Script Editor.
+		if (const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>(); script && !script->ScriptPath.empty())
+		{
+			const float badgeWidth = ImGui::GetFrameHeight();
+			ImGui::SameLine(rowRight - badgeWidth);
+			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::FieldHovered));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 3.0f));	// Matches the tree row
+			if (ImGui::Button(ICON_FILE_CODE "##script", ImVec2(badgeWidth, 0.0f)))
+				m_Editor.GetScriptEditor().OpenScript(script->ScriptPath);
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor(3);
+			const std::string tooltip = "Open " + script->ScriptPath;
+			UI::Tooltip(tooltip.c_str());
+		}
+
 		if (ImGui::BeginPopupContextItem("##EntityContext"))
 		{
 			if (!selected)
@@ -242,6 +268,19 @@ namespace Bellows {
 				scene->Unparent(entity, true);
 				m_Editor.CommitChange("Unparent");
 			}
+			ImGui::Separator();
+			const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>();
+			const bool editing = m_Editor.GetSceneState() == SceneState::Edit;
+			if (ImGui::MenuItem(ICON_PAPERCLIP "  Attach Script...", nullptr, false, editing))
+				m_Editor.GetScriptEditor().ShowAttachDialog(entity);
+			if (script && !script->ScriptPath.empty())
+			{
+				if (ImGui::MenuItem(ICON_FILE_CODE "  Open Script"))
+					m_Editor.GetScriptEditor().OpenScript(script->ScriptPath);
+				if (ImGui::MenuItem(ICON_UNLINK "  Detach Script", nullptr, false, editing))
+					m_Editor.DetachScript(entity);
+			}
+			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_PACKAGE "  Save as Prefab"))
 			{
 				const std::string path = "Prefabs/" + entity.GetName() + ".bprefab";

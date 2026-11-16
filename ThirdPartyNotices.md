@@ -19,6 +19,7 @@ Exported games include the runtime libraries marked with *.
 | [CPython](https://www.python.org) * | 3.13 | Embedded scripting runtime (bundled with exported games) | PSF License |
 | [Dear ImGui](https://github.com/ocornut/imgui) | 1.93 (docking) | Editor UI | MIT |
 | [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) | master | Editor transform gizmo | MIT |
+| [ImGuiColorTextEdit](https://github.com/goossens/ImGuiColorTextEdit) | master | Script Editor code editing widget | MIT |
 | [spdlog](https://github.com/gabime/spdlog) * | 1.17.0 | Logging | MIT |
 | [cgltf](https://github.com/jkuhlmann/cgltf) * | 1.15 | glTF loading | MIT |
 | [stb](https://github.com/nothings/stb) * | master | Image loading and writing | MIT / Public domain |

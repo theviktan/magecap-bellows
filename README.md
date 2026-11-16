@@ -28,6 +28,11 @@ can drive end to end.
 * **Editor**: hierarchy, inspector, content browser with drag and drop, console with a Python
   prompt, transform gizmos, picking, undo/redo, play/pause/step, prefabs, render settings, project
   hub, and **Export Game** (a standalone build with its own Python runtime).
+* **Script Editor** built in, like Godot's: a **Scene / Script** switch in the toolbar, tabs for
+  open scripts, ForgeScript and Python highlighting, an outline of functions and events, find and
+  replace, completion, live error checking (the line turns red as you type), and the ForgeScript
+  guides one click away in **Help**. Attach scripts with right-click → **Attach Script...** in the
+  Hierarchy or by dragging a script onto an entity.
 * **Automation**: everything in the editor is scriptable (`bellows.editor`), from the Console,
   from `--run-script`, or remotely through the local agent server - ask an AI agent to build a
   game and it can create, play-test, screenshot and export it.
@@ -113,8 +118,12 @@ tested version.
 2. Use **Entity → 3D Object** to add shapes, select them in the viewport or the **Hierarchy**
    panel, and move them with the gizmo (**W** move, **E** rotate, **R** scale; hold **Ctrl** to snap).
    Fly around the viewport with the **right mouse button** held plus **W A S D**.
-3. In the **Content** panel, right-click → **Python Script**, double-click it to edit, then drag it
-   onto an entity's **Add Component → Script** field.
+3. Right-click an entity in the **Hierarchy** and choose **Attach Script...**. Pick **ForgeScript**
+   or **Python**, keep the suggested path (for example `Scripts/Cube.forge`) and click **Create**.
+   The new script opens in the **Script** workspace: type your code, press **Ctrl+S** to save, and
+   click **Scene** in the top-left toolbar to go back to the 3D view. (You can also create scripts
+   in the **Content** panel with right-click → **ForgeScript Script** / **Python Script**, and drag
+   a script onto an entity in the Hierarchy to attach it.)
 4. Press **Play** (Ctrl+P) to run the game in the editor, Stop to return to the unchanged scene.
 5. **File → Save Scene** (Ctrl+S), then **File → Export Game...** to build a standalone game.
 

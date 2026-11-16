@@ -4,6 +4,8 @@
 #include "EditorTheme.h"
 #include "EditorUI.h"
 #include "IconsLucide.h"
+#include "Panels/ScriptEditorPanel.h"
+#include "ScriptDocument.h"
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
@@ -21,44 +23,6 @@ namespace Bellows {
 	namespace {
 
 		constexpr double c_RefreshInterval = 1.0;	// Seconds between folder rescans
-
-		constexpr const char* c_ScriptTemplate =
-R"(import bellows
-
-
-class {name}(bellows.Script):
-    """Attach this script to an entity with a Script component."""
-
-    # Annotated class attributes become editable fields in the Inspector.
-    speed: float = 2.0
-
-    def on_create(self):
-        pass
-
-    def on_update(self, dt: float):
-        pass
-)";
-
-		std::string ToClassName(const std::string& stem)
-		{
-			std::string result;
-			bool upper = true;
-			for (char c : stem)
-			{
-				if (std::isalnum(static_cast<unsigned char>(c)))
-				{
-					result += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : c;
-					upper = false;
-				}
-				else
-				{
-					upper = true;
-				}
-			}
-			if (result.empty() || std::isdigit(static_cast<unsigned char>(result.front())))
-				result = "Script" + result;
-			return result;
-		}
 
 	}
 
@@ -171,7 +135,7 @@ class {name}(bellows.Script):
 		ImGui::SameLine();
 		if (UI::IconButton(ICON_DOWNLOAD, "Import files..."))
 		{
-			const std::string file = UI::OpenFileDialog("Import asset", { "Assets", "*.gltf *.glb *.png *.jpg *.jpeg *.tga *.bmp *.hdr *.wav *.mp3 *.flac *.ogg *.py", "All files", "*" });
+			const std::string file = UI::OpenFileDialog("Import asset", { "Assets", "*.gltf *.glb *.png *.jpg *.jpeg *.tga *.bmp *.hdr *.wav *.mp3 *.flac *.ogg *.forge *.py", "All files", "*" });
 			if (!file.empty())
 				ImportFiles({ std::filesystem::path(reinterpret_cast<const char8_t*>(file.c_str())) });
 		}
@@ -377,6 +341,10 @@ class {name}(bellows.Script):
 				m_Editor.InstantiatePrefab(item.AssetPath, m_Editor.GetCamera().GetFocusPoint());
 			if (type == AssetType::Mesh && ImGui::MenuItem(ICON_PLUS "  Add to Scene"))
 				m_Editor.CreateMeshEntity(item.AssetPath, m_Editor.GetCamera().GetFocusPoint());
+			if (type == AssetType::Script && ImGui::MenuItem(ICON_EXTERNAL_LINK "  Open in External Editor"))
+				Platform::OpenWithDefaultApplication(item.Path);
+			if (type == AssetType::Script && m_Editor.GetPrimarySelection() && ImGui::MenuItem(ICON_PAPERCLIP "  Attach to Selected Entity"))
+				m_Editor.AttachScript(m_Editor.GetPrimarySelection(), item.AssetPath);
 			if (ImGui::MenuItem(ICON_PENCIL "  Rename"))
 			{
 				m_RenamePath = item.Path;
@@ -416,6 +384,8 @@ class {name}(bellows.Script):
 				break;
 			}
 			case AssetType::Script:
+				m_Editor.GetScriptEditor().OpenScript(item.Path);
+				break;
 			case AssetType::Audio:
 			case AssetType::Texture:
 				Platform::OpenWithDefaultApplication(item.Path);
@@ -438,14 +408,19 @@ class {name}(bellows.Script):
 			m_LastRefreshTime = -1.0;
 		}
 		ImGui::Separator();
-		if (ImGui::MenuItem(ICON_FILE_CODE "  Python Script"))
+		for (ScriptLanguage language : { ScriptLanguage::ForgeScript, ScriptLanguage::Python })
 		{
-			const std::filesystem::path path = MakeUniquePath("NewScript", ".py");
-			std::string source = c_ScriptTemplate;
-			source.replace(source.find("{name}"), 6, ToClassName(path.stem().string()));
-			FileSystem::WriteTextFile(path, source);
-			m_SelectedAsset = AssetManager::GetAssetPath(path);
-			m_LastRefreshTime = -1.0;
+			const std::string label = std::string(ICON_FILE_CODE "  ") + GetScriptLanguageName(language) + " Script";
+			if (ImGui::MenuItem(label.c_str()))
+			{
+				const std::filesystem::path path = MakeUniquePath("NewScript", GetScriptExtension(language));
+				if (FileSystem::WriteTextFile(path, MakeScriptSource(language, ScriptTemplate::Default, path.stem().string())))
+				{
+					m_SelectedAsset = AssetManager::GetAssetPath(path);
+					m_Editor.GetScriptEditor().OpenScript(path);
+				}
+				m_LastRefreshTime = -1.0;
+			}
 		}
 		if (ImGui::MenuItem(ICON_PALETTE "  Material"))
 		{

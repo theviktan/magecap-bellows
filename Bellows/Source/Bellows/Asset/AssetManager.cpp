@@ -109,7 +109,7 @@ namespace Bellows {
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".bmp") return AssetType::Texture;
 		if (extension == ".hdr") return AssetType::Environment;
 		if (extension == ".wav" || extension == ".mp3" || extension == ".flac" || extension == ".ogg") return AssetType::Audio;
-		if (extension == ".py") return AssetType::Script;
+		if (extension == ".forge" || extension == ".py") return AssetType::Script;
 		return AssetType::None;
 	}
 

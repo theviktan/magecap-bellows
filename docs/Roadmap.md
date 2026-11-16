@@ -21,7 +21,7 @@ integration with MageCap Forge.
 | Physics | Jolt (default since 4.6), Godot Physics 2D | Jolt 3D, triggers, raycasts | 2D physics, joints, character controller, shape casts |
 | Audio | Buses, effects, streams, spatial audio | 2D/3D sources, listener, one-shots | Buses, effects, streaming music |
 | Scripting | GDScript (with LSP, debugger, refactoring), C#, GDExtension (C/C++/Rust) | Python 3.13 with a full API | Debugger, hot reload, signals/events, native plugin API, ForgeScript |
-| Editor | Docks, scene tabs, inspector, Asset Store (4.7), runtime 2D manipulation (4.8), symbol renaming (4.8), profiler, remote scene tree | Docked editor, inspector, content browser, console, undo, play mode, agent server | Multiple scenes, script editor, profiler, plugin API, asset store |
+| Editor | Docks, scene tabs, inspector, Asset Store (4.7), runtime 2D manipulation (4.8), symbol renaming (4.8), profiler, remote scene tree | Docked editor, inspector, content browser, console, undo, play mode, built-in script editor (ForgeScript and Python), agent server | Multiple scenes, profiler, plugin API, asset store |
 | Platforms | Windows, macOS, Linux, Android, iOS, Web, XR (Android XR, Steam Frame), visionOS (4.8) | Windows, Linux (Vulkan) | macOS, mobile, Web, consoles, XR |
 | Other | Navigation, multiplayer, localization (pseudolocalization in 4.8), input map, resources, signals | Prefabs, JSON scenes, export | Navigation, networking, localization, input actions |
 | AI automation | None built in | Agent server, `bellows.editor` API, CLI, skills | Bellows leads |

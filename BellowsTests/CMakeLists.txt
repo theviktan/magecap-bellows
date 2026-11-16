@@ -2,8 +2,14 @@
 
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
 
-add_executable(BellowsTests ${TEST_SOURCES})
-target_link_libraries(BellowsTests PRIVATE Bellows BellowsDoctest)
+# Editor logic without UI (script languages, templates, outlines, checks) is compiled in and tested directly.
+set(EDITOR_LOGIC_SOURCES
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDocument.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDocument.h")
+
+add_executable(BellowsTests ${TEST_SOURCES} ${EDITOR_LOGIC_SOURCES})
+target_include_directories(BellowsTests PRIVATE "${PROJECT_SOURCE_DIR}/BellowsEditor/Source")
+target_link_libraries(BellowsTests PRIVATE Bellows BellowsDoctest ForgeScript)
 bellows_set_compile_options(BellowsTests)
 bellows_copy_python_runtime(BellowsTests)
 target_compile_definitions(BellowsTests PRIVATE BELLOWS_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
