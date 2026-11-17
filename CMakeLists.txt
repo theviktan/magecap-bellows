@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(MageCapBellows
-	VERSION 0.1.0
+	VERSION 0.3.0
 	DESCRIPTION "MageCap Bellows - a simple, production-grade 3D game engine"
 	LANGUAGES C CXX)
 
@@ -42,6 +42,7 @@ option(BELLOWS_BUILD_TESTS "Build the MageCap Bellows unit tests" ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(BellowsCompileOptions)
 include(BellowsShaders)
+include(BellowsBuildInfo)
 
 # -----------------------------------------------------------------------------
 # Third-party libraries

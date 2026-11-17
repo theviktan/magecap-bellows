@@ -4,6 +4,7 @@
 #include "ProjectList.h"
 #include "TestUtilities.h"
 
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Serialization/JsonUtils.h"
@@ -261,6 +262,7 @@ TEST_CASE("Install.json tells other tools where this editor is")
 	const Json json = Json::parse(*text);
 	const std::filesystem::path absoluteBin = std::filesystem::absolute(bin).lexically_normal();
 	CHECK(json["EngineVersion"] == BW_VERSION);
+	CHECK(json["EngineCommit"] == BuildInfo::GetCommit());
 	CHECK(json["ForgeScriptVersion"] == FORGESCRIPT_VERSION);
 	CHECK(json["EditorPath"] == (absoluteBin / ("BellowsEditor" + extension)).string());
 	CHECK(json["ForgeScriptPath"] == (absoluteBin / ("forgescript" + extension)).string());

@@ -1,5 +1,6 @@
 #include "EditorSettings.h"
 
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Serialization/JsonUtils.h"
@@ -71,6 +72,7 @@ namespace Bellows {
 		Json json;
 		json["Engine"] = "MageCap Bellows";
 		json["EngineVersion"] = BW_VERSION;
+		json["EngineCommit"] = BuildInfo::GetCommit();
 		json["ForgeScriptVersion"] = FORGESCRIPT_VERSION;
 		json["EditorPath"] = (directory / ("BellowsEditor" + extension)).string();
 		json["RuntimePath"] = (directory / ("BellowsRuntime" + extension)).string();
