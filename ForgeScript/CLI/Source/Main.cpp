@@ -16,8 +16,7 @@
 #include <vector>
 
 #ifdef _WIN32
-	#define NOMINMAX
-	#define WIN32_LEAN_AND_MEAN
+	// NOMINMAX and WIN32_LEAN_AND_MEAN come from BellowsCompileOptions.cmake.
 	#include <fcntl.h>
 	#include <io.h>
 	#include <windows.h>
