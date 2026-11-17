@@ -45,6 +45,44 @@ namespace ForgeScript {
 	// may throw RuntimeError: it becomes an error on the 'trigger' line, which scripts can catch.
 	using TriggerHandler = std::function<void(Module* source, const std::string& event, const std::vector<Value>& values)>;
 
+	// ---------------------------------------------------------------- Debugger
+
+	// Why the debugger stopped a task.
+	enum class DebugStopReason
+	{
+		Breakpoint,
+		Step,
+		Pause
+	};
+
+	struct DebugStop
+	{
+		DebugStopReason Reason = DebugStopReason::Breakpoint;
+		std::string File; // The name the script was loaded with, as in error messages.
+		int Line = 0;
+	};
+
+	// One function call on the stopped task's stack.
+	struct DebugFrame
+	{
+		std::string Function; // Empty for a script's own top level.
+		std::string File;
+		int Line = 0;
+		Module* Owner = nullptr; // For GetGlobals.
+	};
+
+	// A variable as the debugger shows it.
+	struct DebugVariable
+	{
+		std::string Name;
+		std::string Type; // As type() names it, or the kind's name.
+		std::string Text; // As 'say' would print it, with text in quotes; long values are shortened.
+	};
+
+	// Called when a task stops. It must not wait for the user: note the stop, pause the game and return.
+	// It may call Continue or a step, which take effect when it returns.
+	using DebugHandler = std::function<void(const DebugStop&)>;
+
 	class VM;
 
 	// Keeps a value alive while C++ holds it. Values stored in C++ between frames must use a Handle,
@@ -173,6 +211,39 @@ namespace ForgeScript {
 		size_t GetTaskCount() const { return m_Tasks.size(); }
 		void CancelTasks(Module* module);
 
+		// ---------------------------------------------------------- Debugger
+		//
+		// A stop holds one task where it is, like a 'wait' with no end, until Continue or a step. While
+		// a task is stopped, Update runs nothing and time does not move, so the game behind it stays
+		// still. Only code that may wait can stop: code that native functions call back (sort_by, map,
+		// filter, to_text) and VM::Call never stop, and their breakpoints are passed over. Lines are
+		// only checked while there are breakpoints, a pause request or a step, so a game without them
+		// runs at full speed. Another task that reaches a breakpoint while one is stopped stops too and
+		// waits its turn: when the first one goes on, the handler is called for the next.
+
+		void SetDebugHandler(DebugHandler handler) { m_DebugHandler = std::move(handler); }
+		// The lines (1-based) to stop at in one script, by the name it was loaded with. Replaces that
+		// script's earlier breakpoints; an empty list removes them.
+		void SetBreakpoints(const std::string& file, const std::vector<int>& lines);
+		void ClearBreakpoints();
+		// Stops the next task that runs a line.
+		void Pause();
+		bool IsStopped() const { return m_StoppedTask != nullptr; }
+		const DebugStop& GetStop() const { return m_Stop; }
+		// Lets the stopped task go on. Each returns false when no task is stopped.
+		bool Continue();
+		bool StepOver();
+		bool StepIn();
+		bool StepOut();
+		// The stopped task's calls, innermost first. Empty when nothing is stopped.
+		std::vector<DebugFrame> GetCallStack() const;
+		// The variables of one frame of the stopped task (0 = innermost): parameters, its own
+		// variables that are in use at its line, 'self' in a kind's functions, and the outer variables
+		// it uses.
+		std::vector<DebugVariable> GetVariables(size_t frame);
+		// A script's variables. Functions, phrases, kinds and used scripts are left out.
+		std::vector<DebugVariable> GetGlobals(Module* module);
+
 		void CollectGarbage();
 		size_t GetBytesAllocated() const { return m_BytesAllocated; }
 		size_t GetObjectCount() const { return m_ObjectCount; }
@@ -240,6 +311,15 @@ namespace ForgeScript {
 		bool ContainsValue(Task* task, const Value& container, const Value& item, bool& outResult);
 		Module* UseModule(Task* task, const std::string& path);
 
+		// Debugger
+		bool DebugLineReached(Task* task, CallFrame* frame);
+		void TaskStopped(Task* task);
+		bool Resume(StepMode step);
+		void RunStops();
+		void ReleaseStep(Task* task);
+		void RefreshDebugActive();
+		DebugVariable DescribeForDebugger(const std::string& name, const Value& value);
+
 		// Errors
 		bool RuntimeFailure(Task* task, const std::string& message);
 		bool ThrowValue(Task* task, const Value& error);
@@ -294,6 +374,22 @@ namespace ForgeScript {
 		size_t m_NextGC = 0;
 		size_t m_ObjectCount = 0;
 		int m_GCPaused = 0;
+
+		// Debugger state
+		DebugHandler m_DebugHandler;
+		std::unordered_map<std::string, std::vector<int>> m_Breakpoints; // Sorted lines per script.
+		bool m_DebugActive = false;
+		bool m_PauseRequested = false;
+		size_t m_SteppingTasks = 0;
+		Task* m_StoppedTask = nullptr;
+		std::vector<std::pair<Task*, DebugStop>> m_QueuedStops;
+		DebugStop m_PendingStop; // Set by DebugLineReached for the task that is stopping.
+		DebugStop m_Stop;
+		bool m_InDebugHandler = false;
+		bool m_RunningStops = false;
+		bool m_ResumeRequested = false;
+		StepMode m_ResumeStep = StepMode::None;
+		bool m_PlainText = false; // Describe without calling kinds' to_text (the debugger runs no script code).
 
 		double m_Time = 0.0;
 		uint64_t m_Frame = 0;

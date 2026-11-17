@@ -28,3 +28,17 @@ when hello with who
 	say "hello {who}"
 end
 trigger hello with "again"             # expect: hello again
+
+# A handler that waits is no longer inside the trigger, so triggering itself after a wait has no limit.
+set pings to 0
+when ping
+	add 1 to pings
+	wait 1 frame
+	if pings is below 100 then
+		trigger ping
+	else
+		say "pinged {pings} times"
+	end
+end
+trigger ping
+# expect: pinged 100 times
