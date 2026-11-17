@@ -117,6 +117,16 @@ namespace ForgeScript {
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
 		std::vector<CompileError> FindMistakesIn(const std::filesystem::path& path, const std::string& text) const;
 		std::vector<Symbol> UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const;
+		// The diagnostics of the open documents that use 'changed', which may have changed what they show.
+		void PublishDependents(const std::filesystem::path& changed, const std::string& skipUri, std::vector<Json>& replies);
+		// What a name holds at a line, judged from the last 'set <name> to ...' above it: an engine type
+		// ("Entity"), a built-in kind of value ("text", "list", "map", "vector", "number"), "kind:<Name>"
+		// for a script's kind, or "" when it can't be told.
+		std::string GuessType(const std::vector<std::string_view>& lines, const std::vector<Symbol>& symbols, const std::string& name, int lineIndex, int depth) const;
+		std::string ExpressionType(std::string_view expression, const std::vector<std::string_view>& lines, const std::vector<Symbol>& symbols, int lineIndex, int depth) const;
+		// The first type in an API type text ("Entity | None") that completion can use.
+		std::string TypeFromApi(std::string_view type) const;
+		const ApiType* FindApiType(std::string_view name) const;
 		const Document* FindDocument(const std::string& uri) const;
 
 	private:

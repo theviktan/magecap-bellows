@@ -11,7 +11,7 @@ foreach(expected
 		"\"id\":1,\"result\":{\"capabilities\""
 		"\"method\":\"textDocument/publishDiagnostics\""
 		"\"message\":\"'to' is a ForgeScript keyword and cannot be used as a variable name.\""
-		"\"id\":2,\"result\":{\"contents\":{\"kind\":\"markdown\",\"value\":\"```forge\\nsave screenshot to (path) -> str"
+		"\"id\":2,\"result\":{\"contents\":{\"kind\":\"markdown\",\"value\":\"```forge\\nsave screenshot to (path) -> text"
 		"\"id\":3,\"result\":null")
 	string(FIND "${out}" "${expected}" found)
 	if(found EQUAL -1)
