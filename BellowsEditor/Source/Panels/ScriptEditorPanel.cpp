@@ -30,6 +30,10 @@ namespace Bellows {
 		constexpr int c_AnalysisDelay = 300;			// Milliseconds after the last keystroke before checking for mistakes
 		constexpr size_t c_MaxSuggestions = 40;
 		constexpr const char* c_ScriptFolder = "Scripts";
+		constexpr size_t c_GutterGlyphs = 2;				// Width of the breakpoint column, in characters
+
+		// The line data that marks a breakpoint line in a code editor (only its address matters).
+		char s_BreakpointMark = 0;
 
 		// Words that control the flow of a ForgeScript program or start a statement.
 		constexpr const char* c_ForgeKeywords[] = {
@@ -320,6 +324,7 @@ namespace Bellows {
 
 		document.UsesCrLf = text->find("\r\n") != std::string::npos;
 		document.Editor->SetText(*text);
+		ShowBreakpoints(document);
 		document.SavedUndoIndex = document.Editor->GetUndoIndex();
 		document.DiskTime = GetWriteTime(document.Path);
 		document.ChangedOnDisk = false;
@@ -451,6 +456,13 @@ namespace Bellows {
 			};
 			editor.SetAutoCompleteConfig(&autoComplete);
 			editor.SetTextHoverCallback([this, target](TextEditor::PopupData& data) { DrawForgeScriptHover(*target, data.pos.line, data.pos.index); });
+			if (CanHaveBreakpoints(document))
+			{
+				editor.SetLineDecorator(c_GutterGlyphs, [this, target](TextEditor::Decorator& decorator)
+				{
+					DrawBreakpointGutter(*target, decorator.line, decorator.width, decorator.height);
+				});
+			}
 		}
 		else if (document.Language == ScriptLanguage::Python)
 		{
@@ -523,7 +535,13 @@ namespace Bellows {
 
 		document.Outline = ParseScriptOutline(document.Language, text);
 		document.Diagnostics = CheckScript(document.Language, text, document.Name);
+		UpdateMarkers(document);
+		// Edits move breakpoints with their lines (or remove them with a deleted line).
+		SaveBreakpoints(document);
+	}
 
+	void ScriptEditorPanel::UpdateMarkers(Document& document)
+	{
 		TextEditor& editor = *document.Editor;
 		editor.ClearMarkers();
 		editor.ClearSquiggles();
@@ -539,6 +557,98 @@ namespace Bellows {
 			const size_t end = std::max(start + 1, lineLength);
 			editor.AddSquiggle(TextEditor::DocPos(line, start), TextEditor::DocPos(line, end), 0, Theme::Error, diagnostic.Message);
 		}
+
+		const ScriptDebugger& debugger = m_Editor.GetScriptDebugger();
+		if (debugger.IsStopped())
+		{
+			const int stopLine = debugger.GetStop().Line;
+			if (stopLine > 0 && IsStoppedAt(document, static_cast<size_t>(stopLine - 1)))
+			{
+				constexpr const char* message = "The script is stopped before this line. Continue with F5, or step with F10 and F11.";
+				editor.AddMarker(static_cast<size_t>(stopLine - 1), Theme::Warning, IM_COL32(240, 185, 64, 46), message, message);
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Breakpoints
+	// -------------------------------------------------------------------------
+
+	bool ScriptEditorPanel::CanHaveBreakpoints(const Document& document) const
+	{
+		// The game knows scripts by asset path, so only the project's ForgeScript files can stop.
+		return document.Language == ScriptLanguage::ForgeScript && !document.AssetPath.empty() && !document.ReadOnly;
+	}
+
+	void ScriptEditorPanel::ToggleBreakpoint(Document& document, size_t line)
+	{
+		if (!CanHaveBreakpoints(document) || line >= document.Editor->GetLineCount())
+			return;
+		TextEditor& editor = *document.Editor;
+		editor.SetUserData(line, editor.GetUserData(line) == &s_BreakpointMark ? nullptr : &s_BreakpointMark);
+		SaveBreakpoints(document);
+	}
+
+	void ScriptEditorPanel::ShowBreakpoints(Document& document)
+	{
+		TextEditor& editor = *document.Editor;
+		const std::vector<int>& lines = m_Editor.GetScriptDebugger().GetBreakpoints(document.AssetPath);
+		const size_t lineCount = editor.GetLineCount();
+		for (size_t line = 0; line < lineCount; line++)
+		{
+			const bool marked = CanHaveBreakpoints(document) && std::binary_search(lines.begin(), lines.end(), static_cast<int>(line + 1));
+			editor.SetUserData(line, marked ? &s_BreakpointMark : nullptr);
+		}
+	}
+
+	void ScriptEditorPanel::SaveBreakpoints(Document& document)
+	{
+		if (!CanHaveBreakpoints(document))
+			return;
+		std::vector<int> lines;
+		document.Editor->IterateUserData([&lines](size_t line, void* data)
+		{
+			if (data == &s_BreakpointMark)
+				lines.push_back(static_cast<int>(line + 1));
+		});
+		m_Editor.GetScriptDebugger().SetBreakpoints(document.AssetPath, std::move(lines));
+	}
+
+	bool ScriptEditorPanel::IsStoppedAt(const Document& document, size_t line) const
+	{
+		const ScriptDebugger& debugger = m_Editor.GetScriptDebugger();
+		return debugger.IsStopped() && debugger.GetStop().Line == static_cast<int>(line + 1)
+			&& !document.AssetPath.empty() && debugger.GetStop().File == document.AssetPath;
+	}
+
+	void ScriptEditorPanel::DrawBreakpointGutter(Document& document, size_t line, float width, float height)
+	{
+		const ImVec2 position = ImGui::GetCursorScreenPos();
+		ImGui::InvisibleButton("##Breakpoint", ImVec2(width, height));
+		const bool hovered = ImGui::IsItemHovered();
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+			ToggleBreakpoint(document, line);
+
+		const bool marked = document.Editor->GetUserData(line) == &s_BreakpointMark;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 center(position.x + width * 0.5f, position.y + height * 0.5f);
+		const float radius = std::min(width, height) * 0.3f;
+		if (marked)
+			drawList->AddCircleFilled(center, radius, Theme::Error);
+		else if (hovered)
+			drawList->AddCircleFilled(center, radius, IM_COL32(236, 84, 84, 90));
+
+		if (IsStoppedAt(document, line))
+		{
+			// An arrow over the dot: where the script is held.
+			const float half = height * 0.32f;
+			drawList->AddTriangleFilled(ImVec2(center.x - half * 0.8f, center.y - half), ImVec2(center.x - half * 0.8f, center.y + half),
+				ImVec2(center.x + half, center.y), Theme::Warning);
+		}
+
+		if (hovered)
+			UI::Tooltip(marked ? "Breakpoint: the game stops before this line runs. Click to remove (F9)."
+				: "Click to add a breakpoint (F9). The game stops before this line runs.");
 	}
 
 	void ScriptEditorPanel::CheckDiskChanges()
@@ -835,10 +945,23 @@ namespace Bellows {
 		m_Focused = m_Visible && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
 		CheckDiskChanges();
+
+		// Breakpoints changed elsewhere (the Debugger panel, automation) are shown before any analysis
+		// below saves the documents' breakpoint lines, so an edit in the same frame cannot undo them.
+		const ScriptDebugger& debugger = m_Editor.GetScriptDebugger();
+		const bool breakpointsChanged = debugger.GetBreakpointRevision() != m_ShownBreakpoints;
+		const bool stopChanged = debugger.IsStopped() != m_ShownStopped || debugger.GetStopCount() != m_ShownStop;
+		m_ShownBreakpoints = debugger.GetBreakpointRevision();
+		m_ShownStopped = debugger.IsStopped();
+		m_ShownStop = debugger.GetStopCount();
 		for (const Scope<Document>& document : m_Documents)
 		{
+			if (breakpointsChanged)
+				ShowBreakpoints(*document);
 			if (document->NeedsAnalysis)
 				Analyze(*document);
+			else if (stopChanged)
+				UpdateMarkers(*document);
 		}
 
 		if (m_Visible)
@@ -1221,6 +1344,8 @@ namespace Bellows {
 			RequestClose(m_ActiveDocument);
 		else if (m_Documents.size() > 1 && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Tab))
 			m_ActiveDocument = (m_ActiveDocument + 1) % m_Documents.size();
+		else if (document && ImGui::IsKeyPressed(ImGuiKey_F9, false))
+			ToggleBreakpoint(*document, document->Editor->GetMainCursorPosition().line);
 	}
 
 }

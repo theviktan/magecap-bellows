@@ -115,3 +115,8 @@
 #define ICON_FILE_TEXT                   "\xee\x83\x8c"	// U+E0CC
 #define ICON_SAVE_ALL                    "\xee\x90\x8f"	// U+E40F
 #define ICON_STAR                        "\xee\x85\xb6"	// U+E176
+#define ICON_BUG                         "\xee\x88\x8c"	// U+E20C
+#define ICON_REDO_DOT                    "\xee\x91\x90"	// U+E450
+#define ICON_ARROW_DOWN_TO_DOT           "\xee\x91\x8d"	// U+E44D
+#define ICON_ARROW_UP_FROM_DOT           "\xee\x91\x8e"	// U+E44E
+#define ICON_LIST_X                      "\xee\x89\x80"	// U+E240

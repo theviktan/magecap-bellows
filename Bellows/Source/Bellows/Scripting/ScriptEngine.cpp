@@ -599,6 +599,11 @@ sys.stderr = _BellowsLogWriter(2)
 		return s_Data && s_Data->Initialized;
 	}
 
+	Scripting::ForgeScriptRuntime* ScriptEngine::GetForgeScriptRuntime()
+	{
+		return s_Data ? s_Data->ForgeScript.get() : nullptr;
+	}
+
 	void ScriptEngine::SetEngineModuleDirectory(const std::filesystem::path& directory)
 	{
 		s_EngineModuleDirectory = directory;
