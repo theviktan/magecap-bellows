@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <istream>
 #include <ostream>
 #include <set>
@@ -33,6 +34,14 @@ namespace ForgeScript {
 		constexpr int c_CompletionProperty = 10;
 		constexpr int c_CompletionKeyword = 14;
 		constexpr int c_CompletionConstant = 21;
+		// LSP SymbolKind values for the outline.
+		constexpr int c_SymbolClass = 5;
+		constexpr int c_SymbolMethod = 6;
+		constexpr int c_SymbolField = 8;
+		constexpr int c_SymbolFunction = 12;
+		constexpr int c_SymbolVariable = 13;
+		constexpr int c_SymbolConstant = 14;
+		constexpr int c_SymbolEvent = 24;
 
 		// A message larger than this is refused: it is almost certainly not an editor talking.
 		constexpr size_t c_MaxMessageBytes = 64 * 1024 * 1024;
@@ -817,6 +826,10 @@ namespace ForgeScript {
 			replies.push_back(Response(*id, Hover(params)));
 		else if (method == "textDocument/definition")
 			replies.push_back(Response(*id, Definition(params)));
+		else if (method == "textDocument/documentSymbol")
+			replies.push_back(Response(*id, DocumentSymbols(params)));
+		else if (method == "textDocument/signatureHelp")
+			replies.push_back(Response(*id, SignatureHelp(params)));
 		else
 			replies.push_back(ErrorResponse(*id, c_MethodNotFound, "'" + method + "' is not something this server does."));
 		return replies;
@@ -835,6 +848,10 @@ namespace ForgeScript {
 		capabilities.Set("completionProvider", std::move(completion));
 		capabilities.Set("hoverProvider", true);
 		capabilities.Set("definitionProvider", true);
+		capabilities.Set("documentSymbolProvider", true);
+		Json signatures;
+		signatures.Set("triggerCharacters", Json(Json::Array { Json("("), Json(",") }));
+		capabilities.Set("signatureHelpProvider", std::move(signatures));
 		Json info;
 		info.Set("name", "forgescript").Set("version", FORGESCRIPT_VERSION);
 		Json result;
@@ -1471,6 +1488,422 @@ namespace ForgeScript {
 			}
 		}
 		return Json();
+	}
+
+
+	std::vector<OutlineItem> FindOutline(const std::string& source)
+	{
+		using Kind = OutlineItem::Kind;
+		Lexer lexer(source);
+		const std::vector<Token> tokens = lexer.Tokenize();
+
+		// Items are collected flat with their parent, and nested at the end, so growing the list never
+		// leaves a dangling reference.
+		struct Flat
+		{
+			OutlineItem Item;
+			int Parent = -1;
+		};
+		std::vector<Flat> flat;
+		// One entry per open block: the item it belongs to, or -1 for a block that is not an item.
+		std::vector<int> open;
+		std::set<std::pair<int, std::string>> variables;
+
+		auto lineText = [&tokens](size_t first)
+		{
+			std::string text;
+			for (size_t j = first; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				text += (text.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+			return text;
+		};
+		auto add = [&flat](Kind kind, std::string name, std::string detail, const Token& at, const Token& nameToken, int length, int parent)
+		{
+			Flat entry;
+			entry.Item.ItemKind = kind;
+			entry.Item.Name = std::move(name);
+			entry.Item.Detail = std::move(detail);
+			entry.Item.StartLine = at.Line;
+			entry.Item.EndLine = at.Line;
+			entry.Item.NameLine = nameToken.Line;
+			entry.Item.NameColumn = nameToken.Column;
+			entry.Item.NameLength = length;
+			entry.Parent = parent;
+			flat.push_back(std::move(entry));
+			return static_cast<int>(flat.size()) - 1;
+		};
+
+		int lastLine = 1;
+		for (size_t i = 0; i < tokens.size() && tokens[i].Type != TokenType::Eof; i++)
+		{
+			const Token& token = tokens[i];
+			lastLine = token.Line;
+			if (token.Type == TokenType::End)
+			{
+				if (!open.empty())
+				{
+					if (open.back() >= 0)
+						flat[static_cast<size_t>(open.back())].Item.EndLine = token.Line;
+					open.pop_back();
+				}
+				continue;
+			}
+
+			// Only the script's top level and a kind's body are listed, not the code inside functions.
+			const int parent = open.empty() ? -1 : open.back();
+			const bool listed = open.empty() || (parent >= 0 && flat[static_cast<size_t>(parent)].Item.ItemKind == Kind::KindType);
+			const bool inKind = !open.empty();
+			const bool opens = TokenOpensBlock(tokens, i);
+			const Token* next = i + 1 < tokens.size() ? &tokens[i + 1] : nullptr;
+			int item = -1;
+
+			if (listed && opens && token.Type == TokenType::Function && next && next->Type == TokenType::Identifier)
+			{
+				std::string params;
+				for (size_t j = i + 3; j < tokens.size() && tokens[i + 2].Type == TokenType::LeftParen && tokens[j].Type != TokenType::RightParen &&
+					tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				{
+					if (tokens[j].Type == TokenType::Identifier)
+						params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
+				}
+				item = add(Kind::Function, std::string(next->Lexeme), "function " + std::string(next->Lexeme) + "(" + params + ")", token, *next,
+					static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && !inKind && opens && token.Type == TokenType::Phrase && next)
+			{
+				std::string pattern;
+				for (size_t j = i + 1; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				{
+					if (tokens[j].Type == TokenType::LeftParen && j + 2 < tokens.size() && tokens[j + 2].Type == TokenType::RightParen)
+					{
+						pattern += (pattern.empty() ? "(" : " (") + std::string(tokens[j + 1].Lexeme) + ")";
+						j += 2;
+					}
+					else if (tokens[j].IsWord())
+					{
+						pattern += (pattern.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+					}
+				}
+				item = add(Kind::Phrase, pattern, "phrase " + pattern, token, *next, static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && !inKind && opens && token.Type == TokenType::Kind && next && next->Type == TokenType::Identifier)
+			{
+				std::string detail = "kind " + std::string(next->Lexeme);
+				if (i + 3 < tokens.size() && tokens[i + 2].Type == TokenType::Extends)
+					detail += " extends " + std::string(tokens[i + 3].Lexeme);
+				item = add(Kind::KindType, std::string(next->Lexeme), detail, token, *next, static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && opens && token.Type == TokenType::When)
+			{
+				// The whole 'when ...' line names the handler; it is selected from 'when' to its last word.
+				size_t last = i;
+				for (size_t j = i + 1; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+					last = j;
+				const int length = tokens[last].Column + static_cast<int>(tokens[last].Lexeme.size()) - token.Column;
+				item = add(Kind::Handler, lineText(i), "", token, token, length, parent);
+			}
+			else if (listed && token.Type == TokenType::Set && next && next->Type == TokenType::Identifier &&
+				i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::To)
+			{
+				// The first 'set' of a name defines it.
+				if (variables.insert({ parent, std::string(next->Lexeme) }).second)
+					add(Kind::Variable, std::string(next->Lexeme), "set " + std::string(next->Lexeme) + " to " + lineText(i + 3), token, *next,
+						static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && !inKind && token.Type == TokenType::Constant && next && next->Type == TokenType::Identifier)
+			{
+				add(Kind::Constant, std::string(next->Lexeme), "constant " + lineText(i + 1), token, *next, static_cast<int>(next->Lexeme.size()), parent);
+			}
+
+			if (opens)
+				open.push_back(item);
+		}
+		// A block left open (a mistake) runs to the end of the script.
+		for (int entry : open)
+		{
+			if (entry >= 0)
+				flat[static_cast<size_t>(entry)].Item.EndLine = lastLine;
+		}
+
+		// Nest children under their parents, last first, so each moves into a parent still in 'flat'.
+		for (size_t i = flat.size(); i-- > 0;)
+		{
+			if (flat[i].Parent >= 0)
+			{
+				std::vector<OutlineItem>& children = flat[static_cast<size_t>(flat[i].Parent)].Item.Children;
+				children.insert(children.begin(), std::move(flat[i].Item));
+			}
+		}
+		std::vector<OutlineItem> outline;
+		for (Flat& entry : flat)
+		{
+			if (entry.Parent < 0)
+				outline.push_back(std::move(entry.Item));
+		}
+		return outline;
+	}
+
+	Json LanguageServer::DocumentSymbols(const Json& params)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		if (!document)
+			return Json();
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const std::string& text = document->Text;
+
+		std::function<Json(const OutlineItem&, bool)> toJson = [&](const OutlineItem& item, bool inKind)
+		{
+			int kind = c_SymbolFunction;
+			switch (item.ItemKind)
+			{
+				case OutlineItem::Kind::Function: kind = inKind ? c_SymbolMethod : c_SymbolFunction; break;
+				case OutlineItem::Kind::Phrase:   kind = c_SymbolFunction; break;
+				case OutlineItem::Kind::KindType: kind = c_SymbolClass; break;
+				case OutlineItem::Kind::Handler:  kind = c_SymbolEvent; break;
+				case OutlineItem::Kind::Variable: kind = inKind ? c_SymbolField : c_SymbolVariable; break;
+				case OutlineItem::Kind::Constant: kind = c_SymbolConstant; break;
+			}
+			// The whole lines from the definition to its 'end'.
+			const size_t endIndex = static_cast<size_t>(std::clamp(item.EndLine - 1, 0, static_cast<int>(lines.size()) - 1));
+			Json range;
+			range.Set("start", Position(std::max(item.StartLine - 1, 0), 0));
+			range.Set("end", Position(static_cast<int>(endIndex), ToUtf16(lines[endIndex], lines[endIndex].size())));
+			Json symbol;
+			symbol.Set("name", item.Name).Set("kind", kind).Set("range", std::move(range))
+				.Set("selectionRange", RangeOf(text, item.NameLine, item.NameColumn, item.NameLength));
+			if (!item.Detail.empty())
+				symbol.Set("detail", item.Detail);
+			if (!item.Children.empty())
+			{
+				Json children = Json(Json::Array());
+				for (const OutlineItem& child : item.Children)
+					children.Add(toJson(child, item.ItemKind == OutlineItem::Kind::KindType));
+				symbol.Set("children", std::move(children));
+			}
+			return symbol;
+		};
+
+		Json symbols = Json(Json::Array());
+		for (const OutlineItem& item : FindOutline(text))
+			symbols.Add(toJson(item, false));
+		return symbols;
+	}
+
+	namespace {
+
+		// Where each parameter sits in a signature label such as "play_sound(path: text, volume: number = 1)",
+		// as [start, end) UTF-16 offsets, which LSP clients use to highlight the current one.
+		Json ParameterRanges(const std::string& label)
+		{
+			Json ranges = Json(Json::Array());
+			const size_t open = label.find('(');
+			if (open == std::string::npos)
+				return ranges;
+			int depth = 0;
+			bool quoted = false;
+			size_t start = open + 1;
+			for (size_t i = open + 1; i < label.size(); i++)
+			{
+				const char c = label[i];
+				if (c == '"')
+					quoted = !quoted;
+				if (quoted)
+					continue;
+				if (c == '(' || c == '[' || c == '{')
+					depth++;
+				else if ((c == ')' || c == ']' || c == '}') && depth > 0)
+					depth--;
+				else if ((c == ',' || c == ')') && depth == 0)
+				{
+					size_t first = start;
+					size_t last = i;
+					while (first < last && label[first] == ' ')
+						first++;
+					while (last > first && label[last - 1] == ' ')
+						last--;
+					if (last > first)
+					{
+						Json range;
+						range.Add(Json(static_cast<double>(ToUtf16(label, first)))).Add(Json(static_cast<double>(ToUtf16(label, last))));
+						Json parameter;
+						parameter.Set("label", std::move(range));
+						ranges.Add(std::move(parameter));
+					}
+					start = i + 1;
+					if (c == ')')
+						break;
+				}
+			}
+			return ranges;
+		}
+
+	}
+
+	Json LanguageServer::SignatureHelp(const Json& params)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		if (!document)
+			return Json();
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const int lineIndex = static_cast<int>(params.Get("position").Get("line").AsNumber());
+		if (lineIndex < 0 || lineIndex >= static_cast<int>(lines.size()))
+			return Json();
+		const std::string_view line = lines[static_cast<size_t>(lineIndex)];
+		const size_t offset = std::min(FromUtf16(line, static_cast<int>(params.Get("position").Get("character").AsNumber())), line.size());
+
+		// The innermost '(' still open before the cursor, and how many of its commas come before it.
+		struct Bracket
+		{
+			char Open;
+			size_t Position;
+			int Commas;
+		};
+		std::vector<Bracket> brackets;
+		bool quoted = false;
+		for (size_t i = 0; i < offset; i++)
+		{
+			const char c = line[i];
+			if (c == '"' && (i == 0 || line[i - 1] != '\\'))
+				quoted = !quoted;
+			if (quoted)
+				continue;
+			if (c == '#')
+				break;
+			if (c == '(' || c == '[' || c == '{')
+				brackets.push_back({ c, i, 0 });
+			else if ((c == ')' || c == ']' || c == '}') && !brackets.empty())
+				brackets.pop_back();
+			else if (c == ',' && !brackets.empty())
+				brackets.back().Commas++;
+		}
+		if (quoted)
+			return Json();
+		const Bracket* call = nullptr;
+		for (auto it = brackets.rbegin(); it != brackets.rend() && !call; ++it)
+		{
+			if (it->Open == '(')
+				call = &*it;
+		}
+		if (!call)
+			return Json();
+
+		// The name right before the '(' (spaces allowed), and what it belongs to after a '.'.
+		size_t nameEnd = call->Position;
+		while (nameEnd > 0 && line[nameEnd - 1] == ' ')
+			nameEnd--;
+		size_t nameStart = nameEnd;
+		while (nameStart > 0 && IsWordChar(line[nameStart - 1]))
+			nameStart--;
+		if (nameStart == nameEnd)
+			return Json();
+		const std::string name(line.substr(nameStart, nameEnd - nameStart));
+		bool member = false;
+		const std::string receiver = ReceiverBefore(line, nameStart, member);
+		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
+
+		std::vector<std::pair<std::string, std::string>> found; // Label and documentation.
+		auto offer = [&found](std::string label, std::string doc)
+		{
+			for (const auto& existing : found)
+			{
+				if (existing.first == label)
+					return;
+			}
+			found.emplace_back(std::move(label), std::move(doc));
+		};
+		auto scriptLabel = [](const std::string& signature)
+		{
+			// "function Door.open(force)" shows as "open(force)" while it is being called.
+			std::string label = signature.starts_with("function ") ? signature.substr(9) : signature;
+			const size_t dot = label.find('.');
+			const size_t paren = label.find('(');
+			if (dot != std::string::npos && dot < paren)
+				label = label.substr(dot + 1);
+			return label;
+		};
+
+		if (member)
+		{
+			const std::string known = GuessType(lines, symbols, receiver, lineIndex, 0);
+			if (const ApiType* apiType = FindApiType(known))
+			{
+				for (const ApiMember& entry : apiType->Members)
+				{
+					if (entry.Name == name && !entry.IsProperty)
+						offer(entry.Signature, entry.Doc);
+				}
+			}
+			else if (known.starts_with("kind:"))
+			{
+				for (const Symbol& symbol : symbols)
+				{
+					if (symbol.SymbolKind == Symbol::Kind::Function && symbol.Name == name && !symbol.Owner.empty())
+						offer(scriptLabel(symbol.Signature), symbol.Doc);
+				}
+			}
+			else
+			{
+				// Not known: every method of that name, from the engine, the language and the script's kinds.
+				if (known.empty() || known == "text" || known == "list" || known == "map" || known == "vector")
+				{
+					for (const HelpEntry& help : GetLanguageHelp())
+					{
+						if (help.EntryKind == HelpEntry::Kind::Method && !help.IsProperty && help.Name == name && (known.empty() || help.Owner == known))
+							offer(help.Signature, help.Doc);
+					}
+				}
+				if (known.empty())
+				{
+					for (const ApiType& type : m_ApiTypes)
+					{
+						for (const ApiMember& entry : type.Members)
+						{
+							if (entry.Name == name && !entry.IsProperty)
+								offer(entry.Signature, entry.Doc);
+						}
+					}
+					for (const Symbol& symbol : symbols)
+					{
+						if (symbol.SymbolKind == Symbol::Kind::Function && symbol.Name == name && !symbol.Owner.empty())
+							offer(scriptLabel(symbol.Signature), symbol.Doc);
+					}
+				}
+			}
+		}
+		else
+		{
+			for (const Symbol& symbol : symbols)
+			{
+				if (symbol.SymbolKind == Symbol::Kind::Function && symbol.Name == name && symbol.Owner.empty())
+					offer(scriptLabel(symbol.Signature), symbol.Doc);
+			}
+			for (const ApiFunction& function : m_ApiFunctions)
+			{
+				if (function.Name == name)
+					offer(function.Signature, function.Doc);
+			}
+			if (const HelpEntry* help = FindFunctionHelp(name); help && help->EntryKind == HelpEntry::Kind::Function)
+				offer(help->Signature, help->Doc);
+		}
+		if (found.empty())
+			return Json();
+
+		constexpr size_t c_MaxSignatures = 8;
+		Json signatures = Json(Json::Array());
+		for (size_t i = 0; i < found.size() && i < c_MaxSignatures; i++)
+		{
+			Json signature;
+			signature.Set("label", found[i].first).Set("parameters", ParameterRanges(found[i].first));
+			if (!found[i].second.empty())
+			{
+				Json documentation;
+				documentation.Set("kind", "markdown").Set("value", found[i].second);
+				signature.Set("documentation", std::move(documentation));
+			}
+			signatures.Add(std::move(signature));
+		}
+		Json result;
+		result.Set("signatures", std::move(signatures)).Set("activeSignature", 0).Set("activeParameter", call->Commas);
+		return result;
 	}
 
 }

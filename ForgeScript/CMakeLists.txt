@@ -9,7 +9,9 @@ file(GLOB_RECURSE FORGESCRIPT_SOURCES CONFIGURE_DEPENDS
 
 add_library(ForgeScript STATIC ${FORGESCRIPT_SOURCES})
 target_include_directories(ForgeScript PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Source")
-# The version is set in ForgeScript.h; every target that uses the library sees the same one.
+# The version is set in ForgeScript.h; every target that uses the library sees the same one. CMake
+# reads it when it configures, so a change to the header must make it configure again.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/ForgeScript/ForgeScript.h")
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Source/ForgeScript/ForgeScript.h" FORGESCRIPT_VERSION_LINE
 	REGEX "#define FORGESCRIPT_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" FORGESCRIPT_VERSION "${FORGESCRIPT_VERSION_LINE}")
