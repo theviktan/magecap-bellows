@@ -87,7 +87,10 @@ jobs:
           $redist = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory |
             Sort-Object FullName | Select-Object -Last 1
           if (-not $redist) { Write-Output "::error::Visual C++ runtime DLLs not found"; exit 1 }
-          python Tools/PackageRelease.py --build-dir build/windows --output dist --msvc-redist $redist.FullName --no-zip
+          # Builds between releases carry their commit in the name (MageCap-Bellows-0.3.0-3f8b735-Windows);
+          # a version tag makes the release package (MageCap-Bellows-0.3.0-Windows).
+          $naming = if ($env:GITHUB_REF -like 'refs/tags/v*') { @() } else { @('--name-with-commit') }
+          python Tools/PackageRelease.py --build-dir build/windows --output dist --msvc-redist $redist.FullName --no-zip @naming
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       # The unit tests run from inside the package, so its bundled Python is the one in use.
@@ -117,9 +120,19 @@ jobs:
           path: dist/${{ env.PACKAGE_NAME }}
           retention-days: 30
 
+      # A tag must match the engine version, or the release would be named for another version.
+      - name: Check the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern '^\s+VERSION\s+([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { Write-Output "::error::Tag $env:GITHUB_REF_NAME does not match the engine version $version"; exit 1 }
+          if (-not (Test-Path "docs/ReleaseNotes/$version.md")) { Write-Output "::error::docs/ReleaseNotes/$version.md is missing"; exit 1 }
+          "RELEASE_NOTES=docs/ReleaseNotes/$version.md" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/${{ env.PACKAGE_NAME }}.zip
+          body_path: ${{ env.RELEASE_NOTES }}
           generate_release_notes: true

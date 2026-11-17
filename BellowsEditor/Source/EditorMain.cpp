@@ -19,6 +19,7 @@
 #include "ScriptCheckCommand.h"
 
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
@@ -100,7 +101,7 @@ int main(int argc, char** argv)
 	Log::Specification logSpecification;
 	logSpecification.LogFilePath = (EditorSettings::GetConfigDirectory() / "Editor.log").string();
 	Log::Init(logSpecification);
-	BW_CORE_INFO("MageCap Bellows Editor {}", BW_VERSION);
+	BW_CORE_INFO("MageCap Bellows Editor {}", BuildInfo::GetVersionText());
 
 	EditorOptions options;
 	options.ProjectPath = args.GetValue("--project");

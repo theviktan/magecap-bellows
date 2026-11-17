@@ -19,6 +19,7 @@ import pathlib
 import platform
 import re
 import shutil
+import subprocess
 import sys
 import sysconfig
 
@@ -46,6 +47,16 @@ def engine_version() -> str:
     if not match:
         raise SystemExit("Could not read the engine version from CMakeLists.txt")
     return match.group(1)
+
+
+def build_commit() -> str:
+    """The short commit of the checkout, as the build reports it (cmake/BellowsBuildInfo.cmake)."""
+    try:
+        result = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=REPOSITORY,
+                                capture_output=True, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return result.stdout.strip() or "unknown"
 
 
 def copy_python_runtime(package: pathlib.Path):
@@ -78,6 +89,8 @@ def main(argv=None) -> int:
     parser.add_argument("--output", type=pathlib.Path, default=REPOSITORY / "dist", help="Where the package is written")
     parser.add_argument("--msvc-redist", type=pathlib.Path, help="Folder with the Visual C++ runtime DLLs (Windows)")
     parser.add_argument("--no-zip", action="store_true", help="Only create the folder")
+    parser.add_argument("--name-with-commit", action="store_true",
+                        help="Put the commit in the package name, so builds between releases can be told apart")
     args = parser.parse_args(argv)
 
     binaries = args.build_dir / "bin"
@@ -86,7 +99,9 @@ def main(argv=None) -> int:
         raise SystemExit(f"{binaries} has no BellowsEditor{extension}; build the Release configuration first")
 
     system = "Windows" if sys.platform == "win32" else platform.system()
-    name = f"MageCap-Bellows-{engine_version()}-{system}"
+    commit = build_commit()
+    name = f"MageCap-Bellows-{engine_version()}-{commit}-{system}" if args.name_with_commit \
+        else f"MageCap-Bellows-{engine_version()}-{system}"
     package = args.output / name
     shutil.rmtree(package, ignore_errors=True)
     package.mkdir(parents=True)
@@ -121,7 +136,7 @@ def main(argv=None) -> int:
     shutil.copy2(REPOSITORY / "README.md", package / "README.md")
 
     (package / "START HERE.txt").write_text(
-        f"MageCap Bellows {engine_version()}\n\n"
+        f"MageCap Bellows {engine_version()} (build {commit})\n\n"
         f"1. Double-click BellowsEditor{extension} to start the editor.\n"
         "2. Click Open Project... and open Projects/FeatureTest/FeatureTest.bproject to see a sample scene,\n"
         "   or click New Project to start your own.\n"

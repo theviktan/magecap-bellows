@@ -51,19 +51,23 @@ can drive end to end.
 
 ## Download (Windows)
 
-You don't need to build the engine to use it. Every change to `main` is built on GitHub into a
-ready-to-run package with Python and everything else included:
+You don't need to build the engine to use it. Releases are on the
+[Releases page](https://github.com/theviktan/magecap-bellows/releases):
 
-1. Sign in to GitHub and open https://github.com/theviktan/magecap-bellows/actions/workflows/ci.yml.
-2. Click the newest run with a green check mark.
-3. Scroll to **Artifacts** at the bottom and click **MageCap-Bellows-<version>-Windows** to download it.
-4. Right-click the downloaded zip, choose **Extract All...**, and extract it anywhere (for example
+1. Open https://github.com/theviktan/magecap-bellows/releases and find the newest release
+   (for example **MageCap Bellows 0.3.0**).
+2. Under **Assets**, click **MageCap-Bellows-<version>-Windows.zip** to download it.
+3. Right-click the downloaded zip, choose **Extract All...**, and extract it anywhere (for example
    `C:\MageCapBellows`).
-5. Open the extracted folder and double-click **BellowsEditor.exe**. If Windows SmartScreen says
+4. Open the extracted folder and double-click **BellowsEditor.exe**. If Windows SmartScreen says
    "Windows protected your PC", click **More info** and then **Run anyway** (the editor is not
    code-signed yet).
 
-Version tags (`v0.1.0`, ...) also publish the same zip on the repository's **Releases** page.
+To try changes made since the last release, take a build of `main`: open
+https://github.com/theviktan/magecap-bellows/actions/workflows/ci.yml, click the newest run on
+`main` with a green check mark, and download **MageCap-Bellows-<version>-<commit>-Windows** from
+**Artifacts** (you need to be signed in to GitHub). The commit in the name, also shown in
+**Help → About**, tells builds apart. Release notes are in [docs/ReleaseNotes](docs/ReleaseNotes).
 The only requirement is a graphics driver with Vulkan 1.3 (any recent Intel, AMD or NVIDIA driver).
 
 ## Building on Windows 11 (step by step)

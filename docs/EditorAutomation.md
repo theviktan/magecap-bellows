@@ -76,7 +76,7 @@ One JSON object per line over TCP, one response line per request:
 
 | Method | Params | Result |
 |--------|--------|--------|
-| `ping` | – | `{engine, version, project, scene, state}` |
+| `ping` | – | `{engine, version, commit, project, scene, state}` |
 | `exec` | `code` | `{success, output}` (stdout, stderr and the value of a trailing expression) |
 | `logs` | `since` (sequence number) | `[{sequence, level, source, text}]` |
 | `wait_frames` | `frames` | `true` after that many frames |

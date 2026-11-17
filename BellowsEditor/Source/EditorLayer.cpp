@@ -15,6 +15,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/InputMap.h"
@@ -1182,6 +1183,7 @@ namespace Bellows {
 			Json result;
 			result["engine"] = "MageCap Bellows";
 			result["version"] = BW_VERSION;
+			result["commit"] = BuildInfo::GetCommit();
 			result["project"] = m_Project ? m_Project->GetConfig().Name : "";
 			result["scene"] = m_ScenePath;
 			result["state"] = m_SceneState == SceneState::Edit ? "edit" : (m_SceneState == SceneState::Play ? "play" : "pause");
@@ -2150,7 +2152,7 @@ namespace Bellows {
 			ImGui::SameLine();
 			ImGui::TextUnformatted("MageCap Bellows");
 			ImGui::PopFont();
-			UI::TextMuted("Version " BW_VERSION "  -  (c) MageCap Games");
+			UI::TextMuted(("Version " + BuildInfo::GetVersionText() + "  -  (c) MageCap Games").c_str());
 			ImGui::Spacing();
 			ImGui::TextWrapped("Renderer: %s (Vulkan via NVRHI)", Application::Get().GetRenderDevice().GetAdapterName().c_str());
 			ImGui::Spacing();

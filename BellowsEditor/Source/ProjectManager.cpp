@@ -6,6 +6,7 @@
 #include "IconsLucide.h"
 
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Project/Project.h"
@@ -250,10 +251,10 @@ namespace Bellows {
 		drawList->AddText(bold, titleSize, ImVec2(position.x + 72.0f * scale, position.y + height * 0.5f - titleSize - 1.0f * scale), Theme::Text, "MageCap Bellows");
 		drawList->AddText(ImVec2(position.x + 72.0f * scale, position.y + height * 0.5f + 2.0f * scale), Theme::TextMuted, "Project Manager");
 
-		const char* version = "Version " BW_VERSION;
-		const float versionWidth = ImGui::CalcTextSize(version).x;
+		const std::string version = "Version " + BuildInfo::GetVersionText();
+		const float versionWidth = ImGui::CalcTextSize(version.c_str()).x;
 		drawList->AddText(ImVec2(position.x + width - versionWidth - 24.0f * scale, position.y + height * 0.5f - ImGui::GetFontSize() * 0.5f),
-			Theme::TextDisabled, version);
+			Theme::TextDisabled, version.c_str());
 	}
 
 	void ProjectManager::DrawToolbar()

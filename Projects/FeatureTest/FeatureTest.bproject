@@ -1,6 +1,6 @@
 {
 	"Name": "Feature Test",
-	"Engine": "MageCap Bellows 0.1.0",
+	"Engine": "MageCap Bellows 0.3.0",
 	"StartScene": "Scenes/FeatureTest.bscene",
 	"AssetDirectory": "Assets",
 	"Runtime": {

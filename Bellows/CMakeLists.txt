@@ -6,6 +6,8 @@ file(GLOB_RECURSE BELLOWS_SOURCES CONFIGURE_DEPENDS
 
 add_library(Bellows STATIC ${BELLOWS_SOURCES})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/Source" FILES ${BELLOWS_SOURCES})
+# The build's commit (cmake/BellowsBuildInfo.cmake).
+target_sources(Bellows PRIVATE "${PROJECT_BINARY_DIR}/Generated/BuildInfo.cpp")
 
 target_include_directories(Bellows PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Source")
 target_precompile_headers(Bellows PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source/bwpch.h")

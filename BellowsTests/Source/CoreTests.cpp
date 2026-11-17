@@ -3,12 +3,14 @@
 #include "TestUtilities.h"
 
 #include "Bellows/Core/Buffer.h"
+#include "Bellows/Core/BuildInfo.h"
 #include "Bellows/Core/Events.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/UUID.h"
 
+#include <string>
 #include <unordered_set>
 
 using namespace Bellows;
@@ -144,4 +146,14 @@ TEST_CASE("Log keeps a history and counts errors")
 	CHECK(messages.back().Level == LogLevel::Error);
 	CHECK(messages.back().Source == LogSource::Client);
 	CHECK(Log::GetErrorCount() == errorsBefore + 1);
+}
+
+TEST_CASE("The build knows its version and commit")
+{
+	const std::string commit = BuildInfo::GetCommit();
+	CHECK_FALSE(commit.empty());
+	// A short git hash (this repository is built from a checkout), or "unknown" outside one.
+	const bool shortHash = commit.size() >= 7 && commit.find_first_not_of("0123456789abcdef") == std::string::npos;
+	CHECK((shortHash || commit == "unknown"));
+	CHECK_EQ(BuildInfo::GetVersionText(), std::string(BW_VERSION) + " (" + commit + ")");
 }
