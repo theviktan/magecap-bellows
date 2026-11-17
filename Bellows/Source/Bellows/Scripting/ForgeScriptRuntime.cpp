@@ -118,7 +118,34 @@ namespace Bellows::Scripting {
 		vm->SetErrorHandler([this](const ForgeScript::ScriptError& error) { m_Reporter("ForgeScript", Describe(error)); });
 		InstallModuleLoader(*vm);
 		RegisterForgeScriptApi(*vm);
+		vm->SetDebugHandler(m_DebugHandler);
+		for (const auto& [scriptPath, lines] : m_Breakpoints)
+			vm->SetBreakpoints(scriptPath, lines);
 		return vm;
+	}
+
+	void ForgeScriptRuntime::SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines)
+	{
+		if (lines.empty())
+			m_Breakpoints.erase(scriptPath);
+		else
+			m_Breakpoints[scriptPath] = lines;
+		if (m_VM)
+			m_VM->SetBreakpoints(scriptPath, lines);
+	}
+
+	void ForgeScriptRuntime::ClearBreakpoints()
+	{
+		m_Breakpoints.clear();
+		if (m_VM)
+			m_VM->ClearBreakpoints();
+	}
+
+	void ForgeScriptRuntime::SetDebugHandler(ForgeScript::DebugHandler handler)
+	{
+		m_DebugHandler = std::move(handler);
+		if (m_VM)
+			m_VM->SetDebugHandler(m_DebugHandler);
 	}
 
 	void ForgeScriptRuntime::InstallModuleLoader(ForgeScript::VM& vm)
@@ -382,7 +409,8 @@ namespace Bellows::Scripting {
 
 	void ForgeScriptRuntime::Update(Scene& scene, float timestep)
 	{
-		if (!m_VM)
+		// A script stopped in the debugger holds the whole game, like the editor's pause.
+		if (!m_VM || m_VM->IsStopped())
 			return;
 		EmitTimed(scene, "update", timestep);
 		// Resume every task whose 'wait' has finished.
@@ -391,7 +419,7 @@ namespace Bellows::Scripting {
 
 	void ForgeScriptRuntime::FixedUpdate(Scene& scene, float timestep)
 	{
-		if (m_VM)
+		if (m_VM && !m_VM->IsStopped())
 			EmitTimed(scene, "physics update", timestep);
 	}
 

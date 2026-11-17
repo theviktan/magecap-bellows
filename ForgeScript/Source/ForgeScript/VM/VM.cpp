@@ -521,9 +521,11 @@ namespace ForgeScript {
 		// Create every task before running any, so all of them hold the values safely.
 		std::vector<Closure*> handlers = it->second;
 		std::vector<Task*> tasks;
+		const size_t depth = m_RunningTasks.empty() ? 0 : m_RunningTasks.back()->EventDepth + 1;
 		for (Closure* handler : handlers)
 		{
 			Task* task = NewTask(module);
+			task->EventDepth = depth;
 			task->Stack.push_back(Value::FromObject(handler));
 			int arity = handler->Fn->Arity;
 			for (int i = 0; i < arity; i++)
@@ -604,6 +606,9 @@ namespace ForgeScript {
 
 	void VM::Update(double deltaSeconds)
 	{
+		// The debugger holds a task: everything waits with it, and time stands still.
+		if (m_StoppedTask)
+			return;
 		if (deltaSeconds > 0)
 			m_Time += deltaSeconds;
 		m_Frame++;
@@ -630,16 +635,334 @@ namespace ForgeScript {
 
 	void VM::CancelTasks(Module* module)
 	{
+		auto cancel = [this](Task* task)
+		{
+			task->State = TaskState::Cancelled;
+			CloseUpvalues(task, 0);
+			ReleaseStep(task);
+		};
 		for (Task* task : m_Tasks)
 		{
 			if (!module || task->Owner == module)
-			{
-				task->State = TaskState::Cancelled;
-				CloseUpvalues(task, 0);
-			}
+				cancel(task);
 		}
 		m_Tasks.erase(std::remove_if(m_Tasks.begin(), m_Tasks.end(),
 			[](Task* task) { return task->State == TaskState::Cancelled; }), m_Tasks.end());
+
+		// Stopped tasks of the module go too; the next waiting stop, if any, takes the place of the current one.
+		for (auto& [task, stop] : m_QueuedStops)
+		{
+			if (!module || task->Owner == module)
+				cancel(task);
+		}
+		m_QueuedStops.erase(std::remove_if(m_QueuedStops.begin(), m_QueuedStops.end(),
+			[](const std::pair<Task*, DebugStop>& queued) { return queued.first->State == TaskState::Cancelled; }), m_QueuedStops.end());
+		if (m_StoppedTask && (!module || m_StoppedTask->Owner == module))
+		{
+			cancel(m_StoppedTask);
+			m_StoppedTask = nullptr;
+			if (!m_QueuedStops.empty())
+			{
+				m_StoppedTask = m_QueuedStops.front().first;
+				m_Stop = m_QueuedStops.front().second;
+				m_QueuedStops.erase(m_QueuedStops.begin());
+				if (!m_RunningStops)
+					RunStops();
+			}
+		}
+	}
+
+	// ======================================================================= Debugger
+
+	static std::string FunctionLabel(Function* fn)
+	{
+		return fn->Name ? fn->Name->Text : std::string("function");
+	}
+
+
+	void VM::SetBreakpoints(const std::string& file, const std::vector<int>& lines)
+	{
+		std::vector<int> sorted;
+		for (int line : lines)
+		{
+			if (line > 0)
+				sorted.push_back(line);
+		}
+		std::sort(sorted.begin(), sorted.end());
+		sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+		if (sorted.empty())
+			m_Breakpoints.erase(file);
+		else
+			m_Breakpoints[file] = std::move(sorted);
+		RefreshDebugActive();
+	}
+
+	void VM::ClearBreakpoints()
+	{
+		m_Breakpoints.clear();
+		RefreshDebugActive();
+	}
+
+	void VM::Pause()
+	{
+		m_PauseRequested = true;
+		RefreshDebugActive();
+	}
+
+	bool VM::Continue() { return Resume(StepMode::None); }
+	bool VM::StepOver() { return Resume(StepMode::Over); }
+	bool VM::StepIn() { return Resume(StepMode::In); }
+	bool VM::StepOut() { return Resume(StepMode::Out); }
+
+	void VM::RefreshDebugActive()
+	{
+		m_DebugActive = !m_Breakpoints.empty() || m_PauseRequested || m_SteppingTasks > 0;
+	}
+
+	void VM::ReleaseStep(Task* task)
+	{
+		if (task->Step == StepMode::None)
+			return;
+		task->Step = StepMode::None;
+		m_SteppingTasks--;
+		RefreshDebugActive();
+	}
+
+	bool VM::DebugLineReached(Task* task, CallFrame* frame)
+	{
+		// A line is reached when a frame moves to a new line, so a line that calls a function is not
+		// reached again when the call returns.
+		Function* fn = frame->Function->Fn;
+		if (frame->Ip < fn->BodyIp)
+			return false;
+		const int line = fn->Chunk.GetLine(frame->Ip);
+		if (line <= 0 || line == frame->DebugLine)
+			return false;
+		frame->DebugLine = line;
+		// Code that must finish right away (called back by native code or by VM::Call) cannot be held.
+		if (!task->CanYield || task->IsNested || m_InDebugHandler)
+			return false;
+
+		const size_t depth = task->Frames.size();
+		bool stop = false;
+		DebugStopReason reason = DebugStopReason::Step;
+		switch (task->Step)
+		{
+			case StepMode::None: break;
+			case StepMode::In:   stop = true; break;
+			case StepMode::Over: stop = depth <= task->StepDepth; break;
+			case StepMode::Out:  stop = depth < task->StepDepth; break;
+		}
+		if (!stop && m_PauseRequested)
+		{
+			stop = true;
+			reason = DebugStopReason::Pause;
+		}
+		const std::string& file = fn->Owner ? fn->Owner->Name : std::string();
+		auto breakpoints = m_Breakpoints.find(file);
+		if (breakpoints != m_Breakpoints.end() && std::binary_search(breakpoints->second.begin(), breakpoints->second.end(), line))
+		{
+			stop = true;
+			reason = DebugStopReason::Breakpoint;
+		}
+		if (!stop)
+			return false;
+
+		m_PauseRequested = false;
+		ReleaseStep(task);
+		m_PendingStop.Reason = reason;
+		m_PendingStop.File = file;
+		m_PendingStop.Line = line;
+		return true;
+	}
+
+	void VM::TaskStopped(Task* task)
+	{
+		if (m_StoppedTask)
+		{
+			m_QueuedStops.push_back({ task, m_PendingStop });
+			return;
+		}
+		m_StoppedTask = task;
+		m_Stop = m_PendingStop;
+		if (!m_RunningStops)
+			RunStops();
+	}
+
+	bool VM::Resume(StepMode step)
+	{
+		if (!m_StoppedTask)
+			return false;
+		m_ResumeRequested = true;
+		m_ResumeStep = step;
+		// Inside the handler (or while a resumed task runs) the loop below picks the request up.
+		if (!m_RunningStops)
+			RunStops();
+		return true;
+	}
+
+	void VM::RunStops()
+	{
+		// One loop tells the handler about each stop and runs each resumed task, so a handler that
+		// keeps stepping does not grow the C++ stack.
+		struct Running
+		{
+			bool& Flag;
+			explicit Running(bool& flag) : Flag(flag) { Flag = true; }
+			~Running() { Flag = false; }
+		} running(m_RunningStops);
+
+		while (m_StoppedTask)
+		{
+			if (!m_ResumeRequested)
+			{
+				if (m_DebugHandler)
+				{
+					Running inHandler(m_InDebugHandler);
+					m_DebugHandler(m_Stop);
+				}
+				if (!m_ResumeRequested)
+					return;
+			}
+
+			Task* task = m_StoppedTask;
+			m_StoppedTask = nullptr;
+			const StepMode step = m_ResumeStep;
+			m_ResumeRequested = false;
+			m_ResumeStep = StepMode::None;
+			if (step != StepMode::None)
+			{
+				task->Step = step;
+				task->StepDepth = task->Frames.size();
+				m_SteppingTasks++;
+				RefreshDebugActive();
+			}
+			RunTask(task);
+
+			if (!m_StoppedTask && !m_QueuedStops.empty())
+			{
+				m_StoppedTask = m_QueuedStops.front().first;
+				m_Stop = m_QueuedStops.front().second;
+				m_QueuedStops.erase(m_QueuedStops.begin());
+			}
+		}
+	}
+
+	std::vector<DebugFrame> VM::GetCallStack() const
+	{
+		std::vector<DebugFrame> frames;
+		if (!m_StoppedTask)
+			return frames;
+		const std::vector<CallFrame>& calls = m_StoppedTask->Frames;
+		for (size_t i = calls.size(); i-- > 0;)
+		{
+			const CallFrame& call = calls[i];
+			Function* fn = call.Function->Fn;
+			DebugFrame frame;
+			// The innermost frame is about to run its instruction; the others are inside a call.
+			const bool innermost = i + 1 == calls.size();
+			frame.Line = fn->Chunk.GetLine(innermost || call.Ip == 0 ? call.Ip : call.Ip - 1);
+			frame.File = fn->Owner ? fn->Owner->Name : std::string("script");
+			frame.Owner = fn->Owner;
+			const bool topLevel = i == 0 && fn->Arity == 0 && fn->Name && fn->Owner && fn->Name->Text == fn->Owner->Name;
+			if (!topLevel)
+				frame.Function = FunctionLabel(fn);
+			frames.push_back(std::move(frame));
+		}
+		return frames;
+	}
+
+	DebugVariable VM::DescribeForDebugger(const std::string& name, const Value& value)
+	{
+		DebugVariable variable;
+		variable.Name = name;
+		variable.Type = TypeOf(value);
+		struct PlainText
+		{
+			bool& Flag;
+			explicit PlainText(bool& flag) : Flag(flag) { Flag = true; }
+			~PlainText() { Flag = false; }
+		} plain(m_PlainText);
+		try
+		{
+			variable.Text = Describe(value, true);
+		}
+		catch (const std::exception&)
+		{
+			// A host type's text function failed; the debugger still shows the rest.
+			variable.Text = "<" + variable.Type + ">";
+		}
+		constexpr size_t c_MaxText = 500;
+		if (variable.Text.size() > c_MaxText)
+		{
+			size_t cut = c_MaxText;
+			while (cut > 0 && (static_cast<unsigned char>(variable.Text[cut]) & 0xC0) == 0x80)
+				cut--;
+			variable.Text = variable.Text.substr(0, cut) + "...";
+		}
+		return variable;
+	}
+
+	std::vector<DebugVariable> VM::GetVariables(size_t frameIndex)
+	{
+		std::vector<DebugVariable> variables;
+		if (!m_StoppedTask || frameIndex >= m_StoppedTask->Frames.size())
+			return variables;
+		GCPause pause(*this);
+		const CallFrame& frame = m_StoppedTask->Frames[m_StoppedTask->Frames.size() - 1 - frameIndex];
+		const std::vector<Value>& stack = m_StoppedTask->Stack;
+		Function* fn = frame.Function->Fn;
+
+		// The names in use at this point; an inner variable with the same name as an outer one wins.
+		std::vector<const LocalName*> visible;
+		for (const LocalName& local : fn->LocalNames)
+		{
+			if (local.StartIp <= frame.Ip && frame.Ip < local.EndIp && frame.Base + local.Slot < stack.size())
+				visible.push_back(&local);
+		}
+		std::sort(visible.begin(), visible.end(), [](const LocalName* a, const LocalName* b) { return a->Slot < b->Slot; });
+		std::vector<std::string> names;
+		for (size_t i = 0; i < visible.size(); i++)
+		{
+			bool shadowed = false;
+			for (size_t j = i + 1; j < visible.size(); j++)
+				shadowed = shadowed || visible[j]->Name == visible[i]->Name;
+			if (shadowed)
+				continue;
+			variables.push_back(DescribeForDebugger(visible[i]->Name, stack[frame.Base + visible[i]->Slot]));
+			names.push_back(visible[i]->Name);
+		}
+		for (size_t i = 0; i < fn->UpvalueNames.size() && i < frame.Function->Upvalues.size(); i++)
+		{
+			Upvalue* upvalue = frame.Function->Upvalues[i];
+			const std::string& name = fn->UpvalueNames[i];
+			if (!upvalue || std::find(names.begin(), names.end(), name) != names.end())
+				continue;
+			variables.push_back(DescribeForDebugger(name, upvalue->Get()));
+			names.push_back(name);
+		}
+		return variables;
+	}
+
+	std::vector<DebugVariable> VM::GetGlobals(Module* module)
+	{
+		std::vector<DebugVariable> variables;
+		if (!module)
+			return variables;
+		GCPause pause(*this);
+		for (String* name : module->GlobalOrder)
+		{
+			auto it = module->Globals.find(name);
+			if (it == module->Globals.end())
+				continue;
+			const Value& value = it->second;
+			if (IsObjectType(value, ObjectType::Closure) || IsObjectType(value, ObjectType::NativeFunction) ||
+				IsObjectType(value, ObjectType::BoundMethod) || IsObjectType(value, ObjectType::Kind) ||
+				IsObjectType(value, ObjectType::Module) || IsObjectType(value, ObjectType::Function))
+				continue;
+			variables.push_back(DescribeForDebugger(name->Text, value));
+		}
+		return variables;
 	}
 
 	// ======================================================================= Tasks
@@ -694,6 +1017,14 @@ namespace ForgeScript {
 			if (std::find(m_Tasks.begin(), m_Tasks.end(), task) == m_Tasks.end())
 				m_Tasks.push_back(task);
 		}
+		else if (task->State == TaskState::Stopped)
+		{
+			TaskStopped(task);
+		}
+		else if (task->State == TaskState::Done || task->State == TaskState::Failed)
+		{
+			ReleaseStep(task);
+		}
 	}
 
 	// ======================================================================= Calls
@@ -702,11 +1033,6 @@ namespace ForgeScript {
 	{
 		m_ErrorMessage = message;
 		return false;
-	}
-
-	static std::string FunctionLabel(Function* fn)
-	{
-		return fn->Name ? fn->Name->Text : std::string("function");
 	}
 
 	static std::string ValueCount(int count)
@@ -1717,6 +2043,11 @@ namespace ForgeScript {
 				instructions = 0;
 				FORGESCRIPT_FAIL("This script ran too long without waiting. Add a 'wait' inside long loops.");
 			}
+			if (m_DebugActive && DebugLineReached(task, frame))
+			{
+				task->State = TaskState::Stopped;
+				return;
+			}
 
 			OpCode op = static_cast<OpCode>(FORGESCRIPT_READ_BYTE());
 			switch (op)
@@ -2343,6 +2674,7 @@ namespace ForgeScript {
 					else
 						task->WakeFrame = m_Frame + static_cast<uint64_t>(std::max(1.0, std::floor(amount.AsNumber())));
 					task->State = TaskState::Waiting;
+					task->EventDepth = 0;
 					return;
 				}
 				case OpCode::OnEvent:
@@ -2360,7 +2692,9 @@ namespace ForgeScript {
 					uint8_t count = FORGESCRIPT_READ_BYTE();
 					// Handlers run inside this call, so a handler that triggers its own event (or two that
 					// trigger each other) would use up the C++ stack: stop with an error the script can catch.
-					if (m_RunningTasks.size() >= m_Config.MaxNestedCalls)
+					// The task's own count matters too: a handler the debugger held and let go runs outside
+					// the call it is still part of.
+					if (m_RunningTasks.size() >= m_Config.MaxNestedCalls || task->EventDepth + 1 >= m_Config.MaxNestedCalls)
 					{
 						FORGESCRIPT_FAIL("The event '" + name->Text + "' was triggered from inside " + std::to_string(m_Config.MaxNestedCalls) +
 							" other events; when handlers that trigger each other need a way to stop.");
@@ -2470,6 +2804,10 @@ namespace ForgeScript {
 		for (Task* task : m_RunningTasks)
 			MarkObject(task);
 		for (Task* task : m_PendingTasks)
+			MarkObject(task);
+		if (m_StoppedTask)
+			MarkObject(m_StoppedTask);
+		for (auto& [task, stop] : m_QueuedStops)
 			MarkObject(task);
 		for (auto& [object, count] : m_Pinned)
 			MarkObject(object);

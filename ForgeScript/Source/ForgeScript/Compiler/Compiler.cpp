@@ -42,6 +42,7 @@ namespace ForgeScript {
 			std::string Name;
 			int Depth = 0;
 			bool IsCaptured = false;
+			size_t NameIndex = static_cast<size_t>(-1); // Its entry in Function::LocalNames, if named.
 		};
 
 		struct UpvalueInfo
@@ -192,6 +193,7 @@ namespace ForgeScript {
 					if (nextHoisted < hoisted.size() && m_Pos == hoisted[nextHoisted].first)
 					{
 						m_Pos = hoisted[nextHoisted].second;
+						m_ClosingPos = 0;
 						nextHoisted++;
 						EndOfStatement();
 						SkipNewlines();
@@ -620,8 +622,27 @@ namespace ForgeScript {
 
 		Chunk& CurrentChunk() { return m_State->Fn->Chunk; }
 
-		void EmitByte(uint8_t byte) { CurrentChunk().Write(byte, Previous().Line); }
-		void EmitOp(OpCode op) { CurrentChunk().Write(op, Previous().Line); }
+		void EmitByte(uint8_t byte) { CurrentChunk().Write(byte, CodeLine()); }
+		void EmitOp(OpCode op) { CurrentChunk().Write(op, CodeLine()); }
+
+		// The line code being emitted belongs to. Code emitted right after an 'end' closes its block (a
+		// loop's jump back, a definition's closure) and belongs to the line that opened the block, so
+		// the debugger never stops on an 'end' line.
+		int CodeLine() const
+		{
+			if (m_ClosingPos != 0 && m_Pos == m_ClosingPos)
+				return m_ClosingLine;
+			return Previous().Line;
+		}
+
+		// The line of the last token before the 'end' just consumed.
+		int LineBeforeEnd() const
+		{
+			size_t i = m_Pos - 1;
+			while (i > 0 && (m_Tokens[i].Type == TokenType::End || m_Tokens[i].Type == TokenType::Newline))
+				i--;
+			return m_Tokens[i].Line;
+		}
 		void EmitU16(uint16_t value)
 		{
 			EmitByte(static_cast<uint8_t>((value >> 8) & 0xff));
@@ -690,6 +711,8 @@ namespace ForgeScript {
 			std::vector<Local>& locals = m_State->Locals;
 			while (!locals.empty() && locals.back().Depth > m_State->ScopeDepth)
 			{
+				if (locals.back().NameIndex < m_State->Fn->LocalNames.size())
+					m_State->Fn->LocalNames[locals.back().NameIndex].EndIp = CurrentChunk().Size();
 				EmitOp(locals.back().IsCaptured ? OpCode::CloseUpvalue : OpCode::Pop);
 				locals.pop_back();
 			}
@@ -701,7 +724,18 @@ namespace ForgeScript {
 			if (m_State->Locals.size() >= 256)
 				Error("Too many variables in one function (the limit is 255). Split it into smaller functions.");
 			m_State->Locals.push_back({ name, m_State->ScopeDepth, false });
+			NameLocal(m_State->Locals.size() - 1);
 			return static_cast<int>(m_State->Locals.size()) - 1;
+		}
+
+		// Records where a named local lives, for the debugger. It is visible from here on.
+		void NameLocal(size_t slot)
+		{
+			Local& local = m_State->Locals[slot];
+			if (local.Name.empty())
+				return;
+			local.NameIndex = m_State->Fn->LocalNames.size();
+			m_State->Fn->LocalNames.push_back({ local.Name, static_cast<uint8_t>(slot), CurrentChunk().Size() });
 		}
 
 		static int ResolveLocal(FunctionState* state, const std::string& name)
@@ -714,7 +748,7 @@ namespace ForgeScript {
 			return -1;
 		}
 
-		int AddUpvalue(FunctionState* state, uint8_t index, bool isLocal)
+		int AddUpvalue(FunctionState* state, uint8_t index, bool isLocal, const std::string& name)
 		{
 			for (size_t i = 0; i < state->Upvalues.size(); i++)
 			{
@@ -724,6 +758,7 @@ namespace ForgeScript {
 			if (state->Upvalues.size() >= 256)
 				Error("Too many outside variables used by one function (the limit is 255).");
 			state->Upvalues.push_back({ index, isLocal });
+			state->Fn->UpvalueNames.push_back(name);
 			state->Fn->UpvalueCount = static_cast<int>(state->Upvalues.size());
 			return static_cast<int>(state->Upvalues.size()) - 1;
 		}
@@ -737,12 +772,12 @@ namespace ForgeScript {
 			if (local != -1)
 			{
 				state->Enclosing->Locals[static_cast<size_t>(local)].IsCaptured = true;
-				return AddUpvalue(state, static_cast<uint8_t>(local), true);
+				return AddUpvalue(state, static_cast<uint8_t>(local), true, name);
 			}
 
 			int upvalue = ResolveUpvalue(state->Enclosing, name);
 			if (upvalue != -1)
-				return AddUpvalue(state, static_cast<uint8_t>(upvalue), false);
+				return AddUpvalue(state, static_cast<uint8_t>(upvalue), false, name);
 			return -1;
 		}
 
@@ -1043,6 +1078,8 @@ namespace ForgeScript {
 			if (Check(TokenType::End))
 			{
 				Advance();
+				m_ClosingPos = m_Pos;
+				m_ClosingLine = opener.Line;
 				return;
 			}
 			ErrorAt(opener, std::string("This ") + what + " is missing its 'end'.");
@@ -1374,6 +1411,7 @@ namespace ForgeScript {
 
 			BeginScope();
 			state.Locals.push_back({ fn->IsMethod ? "self" : "", state.ScopeDepth, false });
+			NameLocal(0);
 			for (const std::string& param : params)
 			{
 				if (ResolveLocal(m_State, param) != -1)
@@ -1395,10 +1433,15 @@ namespace ForgeScript {
 				AddLocal(local);
 			}
 
+			fn->BodyIp = CurrentChunk().Size();
 			Block();
 			ConsumeEnd(opener, what);
+			// Returning at the end belongs to the body's last line; the closure made from it, and what
+			// the definition does with it, to the line that opened it.
+			m_ClosingLine = LineBeforeEnd();
 			EmitOp(OpCode::Nothing);
 			EmitOp(OpCode::Return);
+			m_ClosingLine = opener.Line;
 
 			m_State = state.Enclosing;
 			EmitOp(OpCode::Closure);
@@ -1595,6 +1638,7 @@ namespace ForgeScript {
 			m_State = &state;
 			BeginScope();
 			state.Locals.push_back({ "self", state.ScopeDepth, false });
+			NameLocal(0);
 
 			for (size_t line : fieldLines)
 			{
@@ -2469,6 +2513,9 @@ namespace ForgeScript {
 		FunctionState* m_State = nullptr;
 		std::vector<const std::set<std::string>*> m_StopWords;
 		bool m_NoInvoke = false;
+		// Right after an 'end' (at token m_ClosingPos), code belongs to m_ClosingLine; see CodeLine.
+		size_t m_ClosingPos = 0;
+		int m_ClosingLine = 0;
 		size_t m_LastCallPos = static_cast<size_t>(-1);
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;

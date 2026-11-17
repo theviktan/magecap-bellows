@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace Bellows::Scripting {
 
@@ -66,6 +67,18 @@ namespace Bellows::Scripting {
 		// top level); every problem has been reported then. Paths that are not .forge change nothing.
 		bool Reload(const std::string& changedPath);
 
+		// Debugger (the ForgeScript VM's debugger API, see ForgeScript/VM/VM.h). Breakpoints are set by
+		// script path (the asset path, as in error messages) and, like the handler, stay set across play
+		// sessions: each new machine gets them. While a script is stopped, Update and FixedUpdate send no
+		// events, so nothing else runs until the editor continues or steps through GetMachine().
+		void SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines);
+		void ClearBreakpoints();
+		void SetDebugHandler(ForgeScript::DebugHandler handler);
+		// The play session's machine, for Continue, the steps, GetCallStack, GetVariables and GetGlobals.
+		// Null when not playing.
+		ForgeScript::VM* GetMachine() const { return m_VM.get(); }
+		bool IsStopped() const { return m_VM && m_VM->IsStopped(); }
+
 		// The Inspector fields of a script: its top-level "set name to <value>" lines.
 		// Returns false with 'outError' set when the script cannot be read or has a mistake.
 		bool GetScriptInfo(const std::string& scriptPath, ScriptClassInfo& outInfo, std::string& outError);
@@ -97,6 +110,8 @@ namespace Bellows::Scripting {
 		// Checks scripts for the Inspector outside play mode; never runs them.
 		Scope<ForgeScript::VM> m_CheckVM;
 		std::unordered_map<UUID, Instance> m_Instances;
+		std::unordered_map<std::string, std::vector<int>> m_Breakpoints;
+		ForgeScript::DebugHandler m_DebugHandler;
 		ScriptEventListenerID m_EventListener = 0;
 		std::unordered_set<std::string> m_WarnedEvents;
 	};
