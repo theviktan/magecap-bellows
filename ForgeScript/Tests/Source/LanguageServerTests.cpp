@@ -172,6 +172,8 @@ TEST_CASE("LanguageServerFollowsTheLifecycle")
 	const Json& capabilities = init[0].Get("result").Get("capabilities");
 	CHECK_EQ(capabilities.Get("textDocumentSync").Get("change").AsNumber(), 1.0);
 	CHECK(capabilities.Get("hoverProvider").AsBool());
+	CHECK(capabilities.Get("documentSymbolProvider").AsBool());
+	CHECK_EQ(capabilities.Get("signatureHelpProvider").Get("triggerCharacters").AsArray().size(), static_cast<size_t>(2));
 	CHECK(capabilities.Get("definitionProvider").AsBool());
 	CHECK_EQ(capabilities.Get("completionProvider").Get("triggerCharacters").AsArray()[0].AsString(), std::string("."));
 	CHECK_EQ(init[0].Get("result").Get("serverInfo").GetString("name"), std::string("forgescript"));
@@ -682,4 +684,192 @@ TEST_CASE("FindScriptSymbolsListsDefinitions")
 	CHECK_EQ(described, std::vector<std::string> {
 		"use \"helpers\" as h @h", "constant MAX is 5", "kind Door extends Thing", "set open to false @Door",
 		"function Door.toggle() @Door", "door", "phrase open (door) slowly", "item", "problem", "set broken to (" });
+}
+
+TEST_CASE("FindOutlineListsAScriptsDefinitions")
+{
+	const std::vector<OutlineItem> outline = FindOutline(
+		"constant LIMIT is 3\n"                  // 1
+		"set speed to 2.5\n"                     // 2
+		"function grade(score)\n"                // 3
+		"\tset label to \"F\"\n"                 // 4  (inside a function: not listed)
+		"\tif score is above 90 then\n"          // 5
+		"\t\tset label to \"A\"\n"               // 6
+		"\telse if score is above 80 then\n"     // 7
+		"\t\tset label to \"B\"\n"               // 8
+		"\tend\n"                                // 9
+		"\treturn label\n"                       // 10
+		"end\n"                                  // 11
+		"phrase deal (amount) damage\n"          // 12
+		"\tsay amount\n"                         // 13
+		"end\n"                                  // 14
+		"kind Door extends Thing\n"              // 15
+		"\tset open to no\n"                     // 16
+		"\tfunction toggle()\n"                  // 17
+		"\t\tset my open to not my open\n"       // 18
+		"\tend\n"                                // 19
+		"end\n"                                  // 20
+		"when hit with damage\n"                 // 21
+		"\tsay damage\n"                         // 22
+		"end\n"                                  // 23
+		"set speed to 3\n"                       // 24 (already defined)
+		"function unfinished()\n"                // 25
+		"\tsay 1\n");                            // 26 (no 'end')
+
+	using Kind = OutlineItem::Kind;
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(7));
+	CHECK(outline[0].ItemKind == Kind::Constant);
+	CHECK_EQ(outline[0].Name, std::string("LIMIT"));
+	CHECK(outline[1].ItemKind == Kind::Variable);
+	CHECK_EQ(outline[1].Detail, std::string("set speed to 2.5"));
+
+	const OutlineItem& grade = outline[2];
+	CHECK(grade.ItemKind == Kind::Function);
+	CHECK_EQ(grade.Detail, std::string("function grade(score)"));
+	CHECK_EQ(grade.StartLine, 3);
+	CHECK_EQ(grade.EndLine, 11); // 'else if' shares its 'if's end
+	CHECK_EQ(grade.NameLine, 3);
+	CHECK_EQ(grade.NameColumn, 10);
+	CHECK_EQ(grade.NameLength, 5);
+	CHECK(grade.Children.empty());
+
+	CHECK(outline[3].ItemKind == Kind::Phrase);
+	CHECK_EQ(outline[3].Name, std::string("deal (amount) damage"));
+	CHECK_EQ(outline[3].EndLine, 14);
+
+	const OutlineItem& door = outline[4];
+	CHECK(door.ItemKind == Kind::KindType);
+	CHECK_EQ(door.Detail, std::string("kind Door extends Thing"));
+	CHECK_EQ(door.StartLine, 15);
+	CHECK_EQ(door.EndLine, 20);
+	REQUIRE_EQ(door.Children.size(), static_cast<size_t>(2));
+	CHECK(door.Children[0].ItemKind == Kind::Variable);
+	CHECK_EQ(door.Children[0].Name, std::string("open"));
+	CHECK(door.Children[1].ItemKind == Kind::Function);
+	CHECK_EQ(door.Children[1].Name, std::string("toggle"));
+	CHECK_EQ(door.Children[1].EndLine, 19);
+
+	const OutlineItem& hit = outline[5];
+	CHECK(hit.ItemKind == Kind::Handler);
+	CHECK_EQ(hit.Name, std::string("when hit with damage"));
+	CHECK_EQ(hit.NameColumn, 1);
+	CHECK_EQ(hit.NameLength, 20);
+	CHECK_EQ(hit.EndLine, 23);
+
+	// A block left open runs to the end of the script.
+	CHECK_EQ(outline[6].Name, std::string("unfinished"));
+	CHECK_EQ(outline[6].EndLine, 26);
+
+	CHECK(FindOutline("").empty());
+	CHECK(FindOutline("end\nend\nfunction (\n").empty());
+}
+
+TEST_CASE("LanguageServerGivesAnOutline")
+{
+	Session session;
+	const std::string uri = "file:///tmp/outline.forge";
+	session.Open(uri, "set name to \"caf\xC3\xA9\"\nkind Door\n\tset open to no\n\tfunction toggle()\n\tend\nend\nwhen hit\n\tsay 1\nend\n");
+	Json params;
+	Json document;
+	document.Set("uri", uri);
+	params.Set("textDocument", document);
+	const Json symbols = session.Request("textDocument/documentSymbol", params);
+	REQUIRE_EQ(symbols.AsArray().size(), static_cast<size_t>(3));
+
+	const Json& name = symbols.AsArray()[0];
+	CHECK_EQ(name.GetString("name"), std::string("name"));
+	CHECK_EQ(name.Get("kind").AsNumber(), 13.0);
+	CHECK_EQ(name.Get("selectionRange").Get("start").Get("character").AsNumber(), 4.0);
+	CHECK_EQ(name.Get("selectionRange").Get("end").Get("character").AsNumber(), 8.0);
+	// The line 'set name to "café"' is 19 bytes but 18 UTF-16 units.
+	CHECK_EQ(name.Get("range").Get("end").Get("character").AsNumber(), 18.0);
+
+	const Json& door = symbols.AsArray()[1];
+	CHECK_EQ(door.Get("kind").AsNumber(), 5.0);
+	CHECK_EQ(door.Get("range").Get("start").Get("line").AsNumber(), 1.0);
+	CHECK_EQ(door.Get("range").Get("end").Get("line").AsNumber(), 5.0);
+	CHECK_EQ(door.GetString("detail"), std::string("kind Door"));
+	const Json::Array& children = door.Get("children").AsArray();
+	REQUIRE_EQ(children.size(), static_cast<size_t>(2));
+	CHECK_EQ(children[0].Get("kind").AsNumber(), 8.0);  // a field
+	CHECK_EQ(children[1].Get("kind").AsNumber(), 6.0);  // a method
+	CHECK_EQ(symbols.AsArray()[2].Get("kind").AsNumber(), 24.0); // an event handler
+
+	Json missing;
+	Json other;
+	other.Set("uri", "file:///tmp/not-open.forge");
+	missing.Set("textDocument", other);
+	CHECK(session.Request("textDocument/documentSymbol", missing).IsNull());
+}
+
+TEST_CASE("LanguageServerHelpsWithSignatures")
+{
+	Session session;
+	const std::string uri = "file:///tmp/signatures.forge";
+	session.Open(uri,
+		"function walk(steps, speed)\n"                           // 0
+		"end\n"                                                   // 1
+		"kind Door\n\tfunction open(force)\n\tend\nend\n"         // 2-5
+		"walk(3, \n"                                              // 6
+		"save_screenshot(\"a.png\", \n"                          // 7
+		"set hero to find_entity(\"Hero\")\n"                     // 8
+		"hero.translate(\n"                                       // 9
+		"say round(walk(1, 2), \n"                                // 10
+		"set d to new Door()\n"                                   // 11
+		"d.open(\n"                                               // 12
+		"say \"walk(\"\n"                                         // 13
+		"walk(1, 2)\n"                                            // 14
+		"set name to \"Rex\"\n"                                   // 15
+		"say name.split(\n"                                       // 16
+		"say [walk(1, [2, 3], \n");                               // 17
+
+	auto at = [&](int line, int character) { return session.At("textDocument/signatureHelp", uri, line, character); };
+	auto label = [](const Json& help) { return help.Get("signatures").AsArray().at(0).GetString("label"); };
+
+	// The script's own function, on its second parameter.
+	Json help = at(6, 8);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(label(help), std::string("walk(steps, speed)"));
+	CHECK_EQ(help.Get("activeParameter").AsNumber(), 1.0);
+	const Json::Array& ranges = help.Get("signatures").AsArray()[0].Get("parameters").AsArray();
+	REQUIRE_EQ(ranges.size(), static_cast<size_t>(2));
+	CHECK_EQ(ranges[1].Get("label").AsArray()[0].AsNumber(), 12.0);
+	CHECK_EQ(ranges[1].Get("label").AsArray()[1].AsNumber(), 17.0);
+
+	// An engine function, with ForgeScript type names, on its second parameter.
+	help = at(7, 25);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(label(help), std::string("save_screenshot(path: text = \"\", max_width: number = 1920) -> text"));
+	CHECK_EQ(help.Get("activeParameter").AsNumber(), 1.0);
+	CHECK_EQ(help.Get("signatures").AsArray()[0].Get("parameters").AsArray().size(), static_cast<size_t>(2));
+	CHECK_EQ(help.Get("signatures").AsArray()[0].Get("documentation").GetString("value"), std::string("Saves what the player sees."));
+
+	// A method of an engine type the script shows.
+	help = at(9, 15);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(label(help), std::string("Entity.translate(offset: vector) -> nothing"));
+
+	// A built-in function around a call that is already closed.
+	help = at(10, 22);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(label(help), std::string("round(x, digits)"));
+	CHECK_EQ(help.Get("activeParameter").AsNumber(), 1.0);
+	// Inside the inner call, the inner function.
+	CHECK_EQ(label(at(10, 16)), std::string("walk(steps, speed)"));
+
+	// A kind's function, and a text method.
+	CHECK_EQ(label(at(12, 7)), std::string("open(force)"));
+	CHECK_EQ(label(at(16, 15)), std::string("text.split(separator)"));
+
+	// Commas inside a list don't count, and the list's call is still found.
+	help = at(17, 21);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(label(help), std::string("walk(steps, speed)"));
+	CHECK_EQ(help.Get("activeParameter").AsNumber(), 2.0);
+
+	// No help inside text, after a call is closed, or for something unknown.
+	CHECK(at(13, 10).IsNull());
+	CHECK(at(14, 10).IsNull());
+	CHECK(at(1, 2).IsNull());
+	CHECK(at(99, 0).IsNull());
 }

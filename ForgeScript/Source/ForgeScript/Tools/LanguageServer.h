@@ -111,6 +111,8 @@ namespace ForgeScript {
 		Json Completion(const Json& params);
 		Json Hover(const Json& params);
 		Json Definition(const Json& params);
+		Json DocumentSymbols(const Json& params);
+		Json SignatureHelp(const Json& params);
 		Json PublishDiagnostics(const std::string& uri);
 
 		void LoadApi(const std::filesystem::path& file);
@@ -144,5 +146,34 @@ namespace ForgeScript {
 	// The definitions in a script (functions, phrases, kinds, constants, variables, parameters and
 	// 'use' lines), in order. Works on scripts with mistakes too.
 	std::vector<LanguageServer::Symbol> FindScriptSymbols(const std::string& source);
+
+	// One entry of a script's outline: what an editor lists to jump around a script. Lines are 1-based,
+	// columns 1-based bytes, as the lexer counts them.
+	struct OutlineItem
+	{
+		enum class Kind
+		{
+			Function,
+			Phrase,
+			KindType,
+			Handler,
+			Variable,
+			Constant
+		};
+		Kind ItemKind = Kind::Function;
+		std::string Name;   // "jump", "deal (amount) damage", "Door", "when hit with damage", "speed".
+		std::string Detail; // Its signature or first value, as hover shows it.
+		int StartLine = 0;
+		int EndLine = 0;    // The line of its 'end' (or StartLine for a variable).
+		int NameLine = 0;
+		int NameColumn = 0;
+		int NameLength = 0;
+		std::vector<OutlineItem> Children; // A kind's fields, functions and handlers.
+	};
+
+	// The functions, phrases, kinds (with their fields, functions and handlers), 'when' handlers,
+	// script variables and constants of a script, in order, from its tokens, without compiling it, so
+	// a script with mistakes still has an outline. Code inside functions and handlers is not listed.
+	std::vector<OutlineItem> FindOutline(const std::string& source);
 
 }

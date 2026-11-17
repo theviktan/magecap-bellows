@@ -5,6 +5,18 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.2.0 (2026-11-17)
+
+Tools for editors:
+- The language server gives an outline (`textDocument/documentSymbol`): functions, phrases, kinds
+  with their fields, functions and handlers, `when` handlers, script variables and constants, with
+  the lines each covers, also for a script with mistakes.
+- Signature help (`textDocument/signatureHelp`, shown after `(` and `,`): the function being called
+  with the parameter you are typing marked, for the script's functions and kinds' functions, the
+  engine's functions and methods (narrowed to what the value is when the script shows it) and the
+  built-in functions and methods.
+- `FindOutline` gives the outline to hosts without the language server.
+
 ## 1.1.0 (2026-11-17)
 
 Tools for editors:
