@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 
 // 'forgescript --lsp', driven the way an editor drives it.
@@ -15,15 +16,16 @@ namespace {
 
 	const std::filesystem::path c_TestApi = std::filesystem::path(FORGESCRIPT_TEST_SCRIPTS_DIR).parent_path() / "LSP" / "test-api.json";
 
-	// A folder of files for one test, removed again afterwards.
+	// A folder of files for one test, removed again afterwards. Each run gets a new name, so a folder
+	// left behind by an earlier run (on Windows, possibly still held open by another program) never
+	// has to be deleted first.
 	struct TempFolder
 	{
 		std::filesystem::path Path;
 
 		explicit TempFolder(const std::string& name)
-			: Path(std::filesystem::temp_directory_path() / ("forgescript-lsp-" + name))
+			: Path(std::filesystem::temp_directory_path() / ("forgescript-lsp-" + name + "-" + std::to_string(std::random_device()())))
 		{
-			std::filesystem::remove_all(Path);
 			std::filesystem::create_directories(Path);
 		}
 
