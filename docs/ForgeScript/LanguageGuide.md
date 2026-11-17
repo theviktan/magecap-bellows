@@ -720,6 +720,15 @@ Error: Position 5 is outside the list, which has 2 items.
     in loot.forge line 30
 ```
 
+When a name is misspelled, the error names the one you most likely meant:
+
+```
+Error: 'helth' has not been given a value yet. Did you mean 'health'?
+    in game.forge line 8
+```
+
+This works for your variables and functions, built-in functions, the functions and values of lists, text and maps, a kind's fields and functions, and the names in a script you `use`. A value read with brackets, like `items.length()`, gets told to drop them.
+
 Catch errors you expect with `try ... catch`:
 
 ```forge

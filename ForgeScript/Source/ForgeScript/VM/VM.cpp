@@ -1,6 +1,7 @@
 #include "ForgeScript/VM/VM.h"
 
 #include "ForgeScript/Compiler/Lexer.h"
+#include "ForgeScript/Core/Suggest.h"
 #include "ForgeScript/Core/Utf8.h"
 
 #include <algorithm>
@@ -21,6 +22,24 @@ namespace ForgeScript {
 	}
 
 	namespace {
+
+		// The names in a table, as candidates for a "Did you mean ...?" hint (see Core/Suggest.h).
+		std::string_view NameText(const String* name) { return name->Text; }
+		std::string_view NameText(const std::string& name) { return name; }
+
+		template<typename Table>
+		void AddNames(std::vector<std::string_view>& names, const Table& table)
+		{
+			for (const auto& entry : table)
+				names.push_back(NameText(entry.first));
+		}
+
+		// A kind's own functions and those it inherits.
+		void AddKindMethods(std::vector<std::string_view>& names, const Kind* kind)
+		{
+			for (; kind; kind = kind->Parent)
+				AddNames(names, kind->Methods);
+		}
 
 		// Converts a 1 based ForgeScript position (negative counts from the end) into a 0 based index.
 		bool ResolvePosition(const Value& position, size_t size, size_t& outIndex, std::string& outError)
@@ -1194,11 +1213,21 @@ namespace ForgeScript {
 				(receiver.IsNothing() ? ". The value has not been set yet." : "."));
 		}
 
-		auto callBuiltin = [&](std::unordered_map<String*, NativeFunction*>& table, const char* typeName) -> bool
+		// 'properties' are the type's values read without brackets, like a list's length.
+		auto callBuiltin = [&](std::unordered_map<String*, NativeFunction*>& table, const char* typeName,
+			std::vector<std::string_view> properties) -> bool
 		{
 			auto it = table.find(name);
 			if (it == table.end())
-				return Fail(std::string("A ") + typeName + " has no function called '" + name->Text + "'.");
+			{
+				if (std::find(properties.begin(), properties.end(), name->Text) != properties.end())
+				{
+					return Fail("'" + name->Text + "' of a " + typeName + " is a value, not a function. Write it without brackets: ." +
+						name->Text);
+				}
+				AddNames(properties, table);
+				return Fail(std::string("A ") + typeName + " has no function called '" + name->Text + "'." + DidYouMean(name->Text, properties));
+			}
 			return CallNative(task, it->second, argCount, receiver);
 		};
 
@@ -1215,7 +1244,12 @@ namespace ForgeScript {
 				}
 				Closure* method = instance->Class->FindMethod(name);
 				if (!method)
-					return Fail("'" + instance->Class->Name->Text + "' has no function called '" + name->Text + "'.");
+				{
+					std::vector<std::string_view> names;
+					AddNames(names, instance->Fields);
+					AddKindMethods(names, instance->Class);
+					return Fail("'" + instance->Class->Name->Text + "' has no function called '" + name->Text + "'." + DidYouMean(name->Text, names));
+				}
 				return CallClosure(task, method, argCount, FrameNone);
 			}
 			case ObjectType::NativeObject:
@@ -1232,7 +1266,9 @@ namespace ForgeScript {
 					task->Stack[receiverSlot] = property;
 					return CallValue(task, property, argCount);
 				}
-				return Fail("A " + object->Type->Name + " has no function called '" + name->Text + "'.");
+				std::vector<std::string_view> names;
+				AddNames(names, object->Type->Methods);
+				return Fail("A " + object->Type->Name + " has no function called '" + name->Text + "'." + DidYouMean(name->Text, names));
 			}
 			case ObjectType::Map:
 			{
@@ -1243,17 +1279,21 @@ namespace ForgeScript {
 					task->Stack[receiverSlot] = stored;
 					return CallValue(task, stored, argCount);
 				}
-				return callBuiltin(MapMethods, "map");
+				return callBuiltin(MapMethods, "map", { "length", "size", "count" });
 			}
-			case ObjectType::List:   return callBuiltin(ListMethods, "list");
-			case ObjectType::String: return callBuiltin(TextMethods, "text");
-			case ObjectType::Vector: return callBuiltin(VectorMethods, "vector");
+			case ObjectType::List:   return callBuiltin(ListMethods, "list", { "length", "size", "count", "first", "last" });
+			case ObjectType::String: return callBuiltin(TextMethods, "text", { "length", "size", "count" });
+			case ObjectType::Vector: return callBuiltin(VectorMethods, "vector", { "x", "y", "z", "length" });
 			case ObjectType::Module:
 			{
 				Module* module = As<Module>(receiver);
 				auto global = module->Globals.find(name);
 				if (global == module->Globals.end())
-					return Fail("The script '" + module->Name + "' has nothing called '" + name->Text + "'.");
+				{
+					std::vector<std::string_view> names;
+					AddNames(names, module->Globals);
+					return Fail("The script '" + module->Name + "' has nothing called '" + name->Text + "'." + DidYouMean(name->Text, names));
+				}
 				task->Stack[receiverSlot] = global->second;
 				return CallValue(task, global->second, argCount);
 			}
@@ -1262,7 +1302,11 @@ namespace ForgeScript {
 				NativeFunction* function = As<NativeFunction>(receiver);
 				auto member = function->Members.find(name->Text);
 				if (member == function->Members.end())
-					return Fail("'" + function->Name + "' has nothing called '" + name->Text + "'.");
+				{
+					std::vector<std::string_view> names;
+					AddNames(names, function->Members);
+					return Fail("'" + function->Name + "' has nothing called '" + name->Text + "'." + DidYouMean(name->Text, names));
+				}
 				task->Stack[receiverSlot] = member->second;
 				return CallValue(task, member->second, argCount);
 			}
@@ -1367,6 +1411,19 @@ namespace ForgeScript {
 		return false;
 	}
 
+	std::vector<std::string_view> VM::GlobalNameCandidates(const Function* fn) const
+	{
+		std::vector<std::string_view> names;
+		for (const LocalName& local : fn->LocalNames)
+			names.push_back(local.Name);
+		for (const std::string& upvalue : fn->UpvalueNames)
+			names.push_back(upvalue);
+		if (fn->Owner)
+			AddNames(names, fn->Owner->Globals);
+		AddNames(names, m_SharedGlobals);
+		return names;
+	}
+
 	bool VM::GetProperty(Task* task, const Value& object, String* name, Value& outValue)
 	{
 		const std::string& key = name->Text;
@@ -1390,7 +1447,10 @@ namespace ForgeScript {
 				}
 				if (BindMethod(task, object, name, outValue))
 					return true;
-				return Fail("'" + instance->Class->Name->Text + "' has no field or function called '" + key + "'.");
+				std::vector<std::string_view> names;
+				AddNames(names, instance->Fields);
+				AddKindMethods(names, instance->Class);
+				return Fail("'" + instance->Class->Name->Text + "' has no field or function called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::NativeObject:
 			{
@@ -1412,7 +1472,10 @@ namespace ForgeScript {
 				}
 				if (BindMethod(task, object, name, outValue))
 					return true;
-				return Fail("A " + native->Type->Name + " has no property called '" + key + "'.");
+				std::vector<std::string_view> names;
+				AddNames(names, native->Type->Getters);
+				AddNames(names, native->Type->Methods);
+				return Fail("A " + native->Type->Name + " has no property called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::Map:
 			{
@@ -1444,7 +1507,9 @@ namespace ForgeScript {
 				}
 				if (BindMethod(task, object, name, outValue))
 					return true;
-				return Fail("A list has no property called '" + key + "'.");
+				std::vector<std::string_view> names = { "length", "size", "count", "first", "last" };
+				AddNames(names, ListMethods);
+				return Fail("A list has no property called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::String:
 			{
@@ -1456,7 +1521,9 @@ namespace ForgeScript {
 				}
 				if (BindMethod(task, object, name, outValue))
 					return true;
-				return Fail("Text has no property called '" + key + "'.");
+				std::vector<std::string_view> names = { "length", "size", "count" };
+				AddNames(names, TextMethods);
+				return Fail("Text has no property called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::Vector:
 			{
@@ -1478,7 +1545,11 @@ namespace ForgeScript {
 				Module* module = As<Module>(object);
 				auto global = module->Globals.find(name);
 				if (global == module->Globals.end())
-					return Fail("The script '" + module->Name + "' has nothing called '" + key + "'.");
+				{
+					std::vector<std::string_view> names;
+					AddNames(names, module->Globals);
+					return Fail("The script '" + module->Name + "' has nothing called '" + key + "'." + DidYouMean(key, names));
+				}
 				outValue = global->second;
 				return true;
 			}
@@ -1487,7 +1558,11 @@ namespace ForgeScript {
 				NativeFunction* function = As<NativeFunction>(object);
 				auto member = function->Members.find(key);
 				if (member == function->Members.end())
-					return Fail("'" + function->Name + "' has nothing called '" + key + "'.");
+				{
+					std::vector<std::string_view> names;
+					AddNames(names, function->Members);
+					return Fail("'" + function->Name + "' has nothing called '" + key + "'." + DidYouMean(key, names));
+				}
 				outValue = member->second;
 				return true;
 			}
@@ -1536,7 +1611,9 @@ namespace ForgeScript {
 				{
 					if (native->Type->Getters.count(key))
 						return Fail("'" + key + "' of a " + native->Type->Name + " can be read but not changed.");
-					return Fail("A " + native->Type->Name + " has no property called '" + key + "'.");
+					std::vector<std::string_view> names;
+					AddNames(names, native->Type->Setters);
+					return Fail("A " + native->Type->Name + " has no property called '" + key + "'." + DidYouMean(key, names));
 				}
 				try
 				{
@@ -2115,7 +2192,10 @@ namespace ForgeScript {
 					Value value;
 					if (!LookupGlobal(frame->Function->Fn->Owner, name, value))
 					{
-						FORGESCRIPT_FAIL("'" + name->Text + "' has not been given a value yet. Use: set " + name->Text + " to ...");
+						// A typo of a known name is far more likely than a forgotten 'set', so name the match.
+						const std::string hint = DidYouMean(name->Text, GlobalNameCandidates(frame->Function->Fn));
+						FORGESCRIPT_FAIL("'" + name->Text + "' has not been given a value yet." +
+							(hint.empty() ? " Use: set " + name->Text + " to ..." : hint));
 					}
 					stack.push_back(value);
 					break;
@@ -2503,7 +2583,12 @@ namespace ForgeScript {
 						FORGESCRIPT_FAIL("'parent' was used, but this kind does not extend another kind.");
 					Closure* method = owner->Parent->FindMethod(name);
 					if (!method)
-						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function called '" + name->Text + "'.");
+					{
+						std::vector<std::string_view> names;
+						AddKindMethods(names, owner->Parent);
+						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function called '" + name->Text + "'." +
+							DidYouMean(name->Text, names));
+					}
 					FORGESCRIPT_CHECK(CallClosure(task, method, count, FrameNone));
 					FORGESCRIPT_REFRESH();
 					break;
@@ -2516,7 +2601,12 @@ namespace ForgeScript {
 						FORGESCRIPT_FAIL("'parent' was used, but this kind does not extend another kind.");
 					Closure* method = owner->Parent->FindMethod(name);
 					if (!method)
-						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function called '" + name->Text + "'.");
+					{
+						std::vector<std::string_view> names;
+						AddKindMethods(names, owner->Parent);
+						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function called '" + name->Text + "'." +
+							DidYouMean(name->Text, names));
+					}
 					stack.back() = Value::FromObject(Allocate<BoundMethod>(0, stack.back(), method));
 					break;
 				}

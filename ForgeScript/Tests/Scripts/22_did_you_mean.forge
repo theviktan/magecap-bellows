@@ -1,0 +1,114 @@
+# A misspelled name gets a hint naming the close match ("Did you mean ...?").
+use "helpers" as h
+
+set health to 10
+
+function greet(name)
+	return "hi " + name
+end
+
+kind Creature
+	set health to 5
+
+	function hurt(amount)
+		take amount from my health
+	end
+end
+
+kind Dragon extends Creature
+	function hurt(amount)
+		parent.hrt(amount)
+	end
+end
+
+try
+	say helth
+catch problem
+	say problem                             # expect: 'helth' has not been given a value yet. Did you mean 'health'?
+end
+
+try
+	gret("Ann")
+catch problem
+	say problem                             # expect: 'gret' has not been given a value yet. Did you mean 'greet'?
+end
+
+try
+	say Health
+catch problem
+	say problem                             # expect: 'Health' has not been given a value yet. Did you mean 'health'?
+end
+
+# A name nothing is close to keeps the old advice.
+try
+	say gold_coins
+catch problem
+	say problem                             # expect: 'gold_coins' has not been given a value yet. Use: set gold_coins to ...
+end
+
+# Built-in functions are names too.
+try
+	say lenght of [1, 2]
+catch problem
+	say problem                             # expect: 'lenght' has not been given a value yet. Did you mean 'length'?
+end
+
+# A function's own variables.
+function total(price, amount)
+	return prise * amount
+end
+try
+	say total(2, 3)
+catch problem
+	say problem                             # expect: 'prise' has not been given a value yet. Did you mean 'price'?
+end
+
+set items to [1, 2]
+try
+	items.ad(3)
+catch problem
+	say problem                             # expect: A list has no function called 'ad'. Did you mean 'add'?
+end
+
+try
+	say items.lenght
+catch problem
+	say problem                             # expect: A list has no property called 'lenght'. Did you mean 'length'?
+end
+
+try
+	say items.length()
+catch problem
+	say problem                             # expect: 'length' of a list is a value, not a function. Write it without brackets: .length
+end
+
+try
+	say "hi".uper()
+catch problem
+	say problem                             # expect: A text has no function called 'uper'. Did you mean 'upper'?
+end
+
+set beast to new Creature()
+try
+	say beast.helth
+catch problem
+	say problem                             # expect: 'Creature' has no field or function called 'helth'. Did you mean 'health'?
+end
+
+try
+	beast.hrut(1)
+catch problem
+	say problem                             # expect: 'Creature' has no function called 'hrut'. Did you mean 'hurt'?
+end
+
+try
+	new Dragon().hurt(1)
+catch problem
+	say problem                             # expect: The parent kind 'Creature' has no function called 'hrt'. Did you mean 'hurt'?
+end
+
+try
+	say h.dubble(2)
+catch problem
+	say problem                             # expect: The script 'helpers.forge' has nothing called 'dubble'. Did you mean 'double'?
+end
