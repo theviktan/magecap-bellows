@@ -185,12 +185,12 @@ namespace Bellows {
 			if (state.searchTerm.size() < 2 && !afterDot)
 				return;
 
-			constexpr size_t c_MaxSuggestions = 80;
+			constexpr size_t c_MaxForgeScriptSuggestions = 80;
 			const std::vector<ForgeScriptAssist::Suggestion> suggestions = assist.Complete(path, editor.GetText(),
 				state.searchTermEnd.line, state.searchTermEnd.index, state.searchTerm);
 			for (const ForgeScriptAssist::Suggestion& suggestion : suggestions)
 			{
-				if (state.suggestions.size() == c_MaxSuggestions)
+				if (state.suggestions.size() == c_MaxForgeScriptSuggestions)
 					break;
 				state.suggestions.push_back(suggestion.Insert);
 				// "play_sound   (path: str, ...) -> bool": the signature without repeating the name.
