@@ -42,6 +42,8 @@ int main(int argc, char** argv)
 	specification.Name = config.Name;
 	specification.CommandLineArgs = args;
 	specification.Window.Title = config.Name;
+	// Next to the engine's programs; an exported game has no Resources folder and keeps the program's icon.
+	specification.Window.IconPath = (Platform::GetExecutableDirectory() / "Resources" / "Icons" / "Bellows.png").string();
 	specification.Window.Width = static_cast<uint32_t>(std::stoul(args.GetValue("--width", std::to_string(config.WindowWidth))));
 	specification.Window.Height = static_cast<uint32_t>(std::stoul(args.GetValue("--height", std::to_string(config.WindowHeight))));
 	specification.Window.Fullscreen = config.Fullscreen && !args.Has("--windowed");

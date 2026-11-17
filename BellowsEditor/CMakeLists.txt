@@ -3,6 +3,7 @@
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
 
 add_executable(BellowsEditor ${EDITOR_SOURCES})
+bellows_add_app_icon(BellowsEditor)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/Source" FILES ${EDITOR_SOURCES})
 target_include_directories(BellowsEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Source")
 target_link_libraries(BellowsEditor PRIVATE Bellows BellowsFileDialogs BellowsTextEditor ForgeScript)

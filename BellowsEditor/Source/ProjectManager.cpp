@@ -241,10 +241,19 @@ namespace Bellows {
 		drawList->AddLine(ImVec2(position.x, position.y + height), ImVec2(position.x + width, position.y + height), Theme::Border);
 
 		const ImVec2 markCenter(position.x + 42.0f * scale, position.y + height * 0.5f);
-		drawList->AddCircleFilled(markCenter, 17.0f * scale, Theme::AccentSubtle, 40);
-		drawList->AddCircle(markCenter, 17.0f * scale, Theme::Accent, 40, 1.5f * scale);
-		const ImVec2 iconSize = ImGui::CalcTextSize(ICON_FLAME);
-		drawList->AddText(ImVec2(markCenter.x - iconSize.x * 0.5f, markCenter.y - iconSize.y * 0.5f), Theme::Accent, ICON_FLAME);
+		if (const Ref<Texture2D>& logo = m_Editor.GetLogo())
+		{
+			const float half = 20.0f * scale;
+			drawList->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(logo->GetHandle())),
+				ImVec2(markCenter.x - half, markCenter.y - half), ImVec2(markCenter.x + half, markCenter.y + half));
+		}
+		else
+		{
+			drawList->AddCircleFilled(markCenter, 17.0f * scale, Theme::AccentSubtle, 40);
+			drawList->AddCircle(markCenter, 17.0f * scale, Theme::Accent, 40, 1.5f * scale);
+			const ImVec2 iconSize = ImGui::CalcTextSize(ICON_FLAME);
+			drawList->AddText(ImVec2(markCenter.x - iconSize.x * 0.5f, markCenter.y - iconSize.y * 0.5f), Theme::Accent, ICON_FLAME);
+		}
 
 		ImFont* bold = Theme::GetFonts().Bold;
 		const float titleSize = Theme::BaseFontSize * scale * 1.35f;
