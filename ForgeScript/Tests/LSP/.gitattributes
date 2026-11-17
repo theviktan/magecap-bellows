@@ -1,0 +1,2 @@
+# Recorded Language Server Protocol sessions: their Content-Length headers count exact bytes.
+*.lsp -text

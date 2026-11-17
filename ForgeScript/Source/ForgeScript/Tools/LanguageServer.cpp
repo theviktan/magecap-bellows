@@ -1,0 +1,1210 @@
+#include "ForgeScript/Tools/LanguageServer.h"
+
+#include "ForgeScript/Compiler/Lexer.h"
+#include "ForgeScript/Compiler/ScriptVariables.h"
+#include "ForgeScript/ForgeScript.h"
+#include "ForgeScript/Tools/Help.h"
+#include "ForgeScript/Tools/ProjectPaths.h"
+
+#include <algorithm>
+#include <cctype>
+#include <istream>
+#include <ostream>
+#include <set>
+
+namespace ForgeScript {
+
+	namespace {
+
+		// JSON-RPC and LSP error codes.
+		constexpr int c_ParseError = -32700;
+		constexpr int c_InvalidRequest = -32600;
+		constexpr int c_MethodNotFound = -32601;
+		constexpr int c_ServerNotInitialized = -32002;
+
+		// LSP enumerations.
+		constexpr int c_SeverityError = 1;
+		constexpr int c_CompletionMethod = 2;
+		constexpr int c_CompletionFunction = 3;
+		constexpr int c_CompletionField = 5;
+		constexpr int c_CompletionVariable = 6;
+		constexpr int c_CompletionClass = 7;
+		constexpr int c_CompletionModule = 9;
+		constexpr int c_CompletionProperty = 10;
+		constexpr int c_CompletionKeyword = 14;
+		constexpr int c_CompletionConstant = 21;
+
+		// A message larger than this is refused: it is almost certainly not an editor talking.
+		constexpr size_t c_MaxMessageBytes = 64 * 1024 * 1024;
+
+		Json Response(const Json& id, Json result)
+		{
+			Json message;
+			message.Set("jsonrpc", "2.0").Set("id", id).Set("result", std::move(result));
+			return message;
+		}
+
+		Json ErrorResponse(const Json& id, int code, const std::string& text)
+		{
+			Json error;
+			error.Set("code", code).Set("message", text);
+			Json message;
+			message.Set("jsonrpc", "2.0").Set("id", id).Set("error", std::move(error));
+			return message;
+		}
+
+		Json Notification(const std::string& method, Json params)
+		{
+			Json message;
+			message.Set("jsonrpc", "2.0").Set("method", method).Set("params", std::move(params));
+			return message;
+		}
+
+		// ---------------------------------------------------------------- Positions
+
+		std::vector<std::string_view> SplitLines(std::string_view text)
+		{
+			std::vector<std::string_view> lines;
+			size_t start = 0;
+			while (true)
+			{
+				const size_t end = text.find('\n', start);
+				std::string_view line = text.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
+				if (!line.empty() && line.back() == '\r')
+					line.remove_suffix(1);
+				lines.push_back(line);
+				if (end == std::string_view::npos)
+					break;
+				start = end + 1;
+			}
+			return lines;
+		}
+
+		// How many bytes a UTF-8 sequence starting with this byte takes (1 for broken bytes).
+		size_t Utf8Length(unsigned char lead)
+		{
+			if (lead >= 0xF0 && lead < 0xF8) return 4;
+			if (lead >= 0xE0) return lead < 0xF0 ? 3 : 1;
+			if (lead >= 0xC0) return 2;
+			return 1;
+		}
+
+		// UTF-16 code units in the first 'bytes' bytes of a line.
+		int ToUtf16(std::string_view line, size_t bytes)
+		{
+			int units = 0;
+			size_t i = 0;
+			bytes = std::min(bytes, line.size());
+			while (i < bytes)
+			{
+				const size_t length = Utf8Length(static_cast<unsigned char>(line[i]));
+				units += length == 4 ? 2 : 1;
+				i += length;
+			}
+			return units;
+		}
+
+		// The byte offset in a line of a UTF-16 position (clamped to the line).
+		size_t FromUtf16(std::string_view line, int units)
+		{
+			size_t i = 0;
+			int counted = 0;
+			while (i < line.size() && counted < units)
+			{
+				const size_t length = Utf8Length(static_cast<unsigned char>(line[i]));
+				counted += length == 4 ? 2 : 1;
+				i += length;
+			}
+			return std::min(i, line.size());
+		}
+
+		Json Position(int line, int character)
+		{
+			Json position;
+			position.Set("line", line).Set("character", character);
+			return position;
+		}
+
+		// A range from 1-based lexer line and byte column, 'length' bytes long, inside 'text'.
+		Json RangeOf(std::string_view text, int line, int column, int length)
+		{
+			const std::vector<std::string_view> lines = SplitLines(text);
+			const int index = std::clamp(line - 1, 0, static_cast<int>(lines.size()) - 1);
+			const std::string_view lineText = lines[static_cast<size_t>(index)];
+			const size_t start = static_cast<size_t>(std::max(column - 1, 0));
+			Json range;
+			range.Set("start", Position(index, ToUtf16(lineText, start)));
+			range.Set("end", Position(index, ToUtf16(lineText, start + static_cast<size_t>(std::max(length, 0)))));
+			return range;
+		}
+
+		bool IsWordChar(char c)
+		{
+			return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+		}
+
+		// The word around a byte offset in a line, and where it starts.
+		std::string WordAt(std::string_view line, size_t offset, size_t& outStart, size_t& outEnd)
+		{
+			size_t start = std::min(offset, line.size());
+			while (start > 0 && IsWordChar(line[start - 1]))
+				start--;
+			size_t end = std::min(offset, line.size());
+			while (end < line.size() && IsWordChar(line[end]))
+				end++;
+			outStart = start;
+			outEnd = end;
+			return std::string(line.substr(start, end - start));
+		}
+
+		// What comes just before a word: the word before a '.', or 'my'.
+		std::string ReceiverBefore(std::string_view line, size_t wordStart, bool& outIsMember)
+		{
+			outIsMember = false;
+			size_t i = wordStart;
+			if (i > 0 && line[i - 1] == '.')
+			{
+				outIsMember = true;
+				size_t start = i - 1;
+				while (start > 0 && IsWordChar(line[start - 1]))
+					start--;
+				return std::string(line.substr(start, i - 1 - start));
+			}
+			while (i > 0 && line[i - 1] == ' ')
+				i--;
+			if (i >= 2 && line.substr(i - 2, 2) == "my" && (i == 2 || !IsWordChar(line[i - 3])))
+			{
+				outIsMember = true;
+				return "my";
+			}
+			return "";
+		}
+
+		// ---------------------------------------------------------------- Help text
+
+		std::string CodeBlock(const std::string& code)
+		{
+			return "```forge\n" + code + "\n```";
+		}
+
+		std::string HelpMarkdown(const std::string& signature, const std::string& doc)
+		{
+			return doc.empty() ? CodeBlock(signature) : CodeBlock(signature) + "\n\n" + doc;
+		}
+
+		std::string PhraseFirstWord(const std::string& pattern)
+		{
+			const size_t space = pattern.find(' ');
+			return pattern.substr(0, space);
+		}
+
+		// True when 'word' is one of a phrase's own words and the line also has the phrase's first word, so
+		// hovering "screenshot" in "save screenshot to x" explains the phrase.
+		bool LineUsesPhrase(const std::string& pattern, const std::string& word, std::string_view line)
+		{
+			std::vector<std::string> words;
+			size_t start = 0;
+			while (start < pattern.size())
+			{
+				size_t end = pattern.find(' ', start);
+				if (end == std::string::npos)
+					end = pattern.size();
+				const std::string part = pattern.substr(start, end - start);
+				if (!part.empty() && part.front() != '(')
+					words.push_back(part);
+				start = end + 1;
+			}
+			if (words.empty() || std::find(words.begin(), words.end(), word) == words.end())
+				return false;
+			for (size_t at = line.find(words.front()); at != std::string_view::npos; at = line.find(words.front(), at + 1))
+			{
+				const size_t after = at + words.front().size();
+				if ((at == 0 || !IsWordChar(line[at - 1])) && (after >= line.size() || !IsWordChar(line[after])))
+					return true;
+			}
+			return false;
+		}
+
+		// What to type for a phrase: its words up to the first value, "random item from ".
+		std::string PhraseInsertText(const std::string& pattern)
+		{
+			const size_t slot = pattern.find('(');
+			return slot == std::string::npos ? pattern : pattern.substr(0, slot);
+		}
+
+		std::string ParamsSignature(const Json& params)
+		{
+			std::string text;
+			for (const Json& param : params.AsArray())
+			{
+				if (!text.empty())
+					text += ", ";
+				text += param.GetString("name");
+				if (const Json* type = param.Find("type"); type && type->IsString())
+					text += ": " + type->AsString();
+				if (const Json* value = param.Find("default"))
+					text += " = " + (value->IsString() ? "\"" + value->AsString() + "\"" : value->Dump());
+			}
+			return text;
+		}
+
+		// ---------------------------------------------------------------- URIs
+
+		std::string PercentDecode(std::string_view text)
+		{
+			std::string out;
+			for (size_t i = 0; i < text.size(); i++)
+			{
+				if (text[i] == '%' && i + 2 < text.size() && std::isxdigit(static_cast<unsigned char>(text[i + 1])) &&
+					std::isxdigit(static_cast<unsigned char>(text[i + 2])))
+				{
+					out += static_cast<char>(std::stoi(std::string(text.substr(i + 1, 2)), nullptr, 16));
+					i += 2;
+				}
+				else
+				{
+					out += text[i];
+				}
+			}
+			return out;
+		}
+
+	}
+
+	// =================================================================== Symbols
+
+	std::vector<LanguageServer::Symbol> FindScriptSymbols(const std::string& source)
+	{
+		using Kind = LanguageServer::Symbol::Kind;
+		Lexer lexer(source);
+		const std::vector<Token> tokens = lexer.Tokenize();
+		const std::vector<std::string_view> lines = SplitLines(source);
+
+		// The '#' comment lines right above a line, as documentation.
+		auto docAbove = [&lines](int line)
+		{
+			std::vector<std::string> comments;
+			for (int i = line - 2; i >= 0; i--)
+			{
+				std::string_view text = lines[static_cast<size_t>(i)];
+				const size_t first = text.find_first_not_of(" \t");
+				if (first == std::string_view::npos || text[first] != '#')
+					break;
+				text.remove_prefix(first + 1);
+				if (!text.empty() && text.front() == ' ')
+					text.remove_prefix(1);
+				comments.emplace_back(text);
+			}
+			std::string doc;
+			for (auto it = comments.rbegin(); it != comments.rend(); ++it)
+				doc += (doc.empty() ? "" : "\n") + *it;
+			return doc;
+		};
+
+		std::vector<LanguageServer::Symbol> symbols;
+		std::set<std::string> variables;
+		auto add = [&symbols](Kind kind, const Token& token, std::string name, std::string signature, std::string doc, std::string owner)
+		{
+			LanguageServer::Symbol symbol;
+			symbol.SymbolKind = kind;
+			symbol.Name = std::move(name);
+			symbol.Signature = std::move(signature);
+			symbol.Doc = std::move(doc);
+			symbol.Owner = std::move(owner);
+			symbol.Line = token.Line;
+			symbol.Column = token.Column;
+			symbol.Length = static_cast<int>(token.Lexeme.size());
+			symbols.push_back(std::move(symbol));
+		};
+
+		// Kinds currently open, with the block depth they started at, so functions get their owner.
+		std::vector<std::pair<std::string, int>> kinds;
+		int depth = 0;
+		for (size_t i = 0; i < tokens.size() && tokens[i].Type != TokenType::Eof; i++)
+		{
+			const Token& token = tokens[i];
+			const bool opens = TokenOpensBlock(tokens, i);
+			const std::string owner = kinds.empty() ? std::string() : kinds.back().first;
+
+			if (token.Type == TokenType::Function && opens && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier)
+			{
+				const Token& name = tokens[i + 1];
+				std::string params;
+				size_t j = i + 2;
+				if (j < tokens.size() && tokens[j].Type == TokenType::LeftParen)
+				{
+					for (j++; j < tokens.size() && tokens[j].Type != TokenType::RightParen && tokens[j].Type != TokenType::Newline &&
+						tokens[j].Type != TokenType::Eof; j++)
+					{
+						if (tokens[j].Type == TokenType::Identifier)
+						{
+							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
+							add(Kind::Parameter, tokens[j], std::string(tokens[j].Lexeme), std::string(tokens[j].Lexeme), "", std::string(name.Lexeme));
+						}
+					}
+				}
+				const std::string label = std::string(name.Lexeme);
+				add(Kind::Function, name, label, "function " + (owner.empty() ? "" : owner + ".") + label + "(" + params + ")", docAbove(token.Line), owner);
+			}
+			else if (token.Type == TokenType::Phrase && opens)
+			{
+				std::string pattern;
+				size_t j = i + 1;
+				for (; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				{
+					if (tokens[j].Type == TokenType::LeftParen && j + 2 < tokens.size() && tokens[j + 2].Type == TokenType::RightParen)
+					{
+						pattern += (pattern.empty() ? "(" : " (") + std::string(tokens[j + 1].Lexeme) + ")";
+						add(Kind::Parameter, tokens[j + 1], std::string(tokens[j + 1].Lexeme), std::string(tokens[j + 1].Lexeme), "", "");
+						j += 2;
+					}
+					else if (tokens[j].IsWord())
+					{
+						pattern += (pattern.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+					}
+				}
+				if (!pattern.empty() && i + 1 < tokens.size())
+					add(Kind::Phrase, tokens[i + 1], pattern, "phrase " + pattern, docAbove(token.Line), "");
+			}
+			else if (token.Type == TokenType::Kind && opens && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier)
+			{
+				const Token& name = tokens[i + 1];
+				std::string signature = "kind " + std::string(name.Lexeme);
+				if (i + 3 < tokens.size() && tokens[i + 2].Type == TokenType::Extends)
+					signature += " extends " + std::string(tokens[i + 3].Lexeme);
+				add(Kind::KindType, name, std::string(name.Lexeme), signature, docAbove(token.Line), "");
+				kinds.emplace_back(std::string(name.Lexeme), depth);
+			}
+			else if (token.Type == TokenType::Constant && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier)
+			{
+				const Token& name = tokens[i + 1];
+				std::string value;
+				for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+					value += (value.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+				add(Kind::Constant, name, std::string(name.Lexeme), "constant " + std::string(name.Lexeme) + " is " + value, docAbove(token.Line), "");
+			}
+			else if (token.Type == TokenType::Set && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::To)
+			{
+				// The first 'set' of a name defines it; 'set my x' inside a kind defines a field.
+				const Token& name = tokens[i + 1];
+				const std::string key = owner + "." + std::string(name.Lexeme);
+				if (variables.insert(key).second)
+				{
+					std::string value;
+					for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof && value.size() < 60; j++)
+						value += (value.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+					add(Kind::Variable, name, std::string(name.Lexeme), "set " + std::string(name.Lexeme) + " to " + value, docAbove(token.Line), owner);
+				}
+			}
+			else if (token.Type == TokenType::Set && i + 3 < tokens.size() && tokens[i + 1].Type == TokenType::My && tokens[i + 2].Type == TokenType::Identifier && !owner.empty())
+			{
+				const Token& name = tokens[i + 2];
+				if (variables.insert(owner + "." + std::string(name.Lexeme)).second)
+					add(Kind::Variable, name, std::string(name.Lexeme), "set my " + std::string(name.Lexeme), docAbove(token.Line), owner);
+			}
+			else if ((token.Type == TokenType::Each || token.Type == TokenType::Catch) && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier)
+			{
+				add(Kind::Parameter, tokens[i + 1], std::string(tokens[i + 1].Lexeme), std::string(tokens[i + 1].Lexeme), "", "");
+			}
+			else if (token.Type == TokenType::For && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::From)
+			{
+				add(Kind::Parameter, tokens[i + 1], std::string(tokens[i + 1].Lexeme), std::string(tokens[i + 1].Lexeme), "", "");
+			}
+			else if (token.Type == TokenType::When && opens)
+			{
+				// Names after 'with' or 'by' receive the event's values.
+				bool values = false;
+				for (size_t j = i + 1; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				{
+					if (tokens[j].Type == TokenType::With || tokens[j].Type == TokenType::By)
+						values = true;
+					else if (values && tokens[j].Type == TokenType::Identifier)
+						add(Kind::Parameter, tokens[j], std::string(tokens[j].Lexeme), std::string(tokens[j].Lexeme), "", "");
+				}
+			}
+			else if (token.Type == TokenType::Use && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::String)
+			{
+				const Token& path = tokens[i + 1];
+				std::string alias;
+				if (i + 3 < tokens.size() && tokens[i + 2].Type == TokenType::Identifier && tokens[i + 2].Lexeme == "as" && tokens[i + 3].Type == TokenType::Identifier)
+					alias = std::string(tokens[i + 3].Lexeme);
+				LanguageServer::Symbol symbol;
+				symbol.SymbolKind = Kind::Module;
+				symbol.Name = alias.empty() ? path.Text : alias;
+				symbol.Signature = "use \"" + path.Text + "\"" + (alias.empty() ? "" : " as " + alias);
+				symbol.Owner = alias;
+				symbol.File = path.Text;
+				symbol.Line = path.Line;
+				symbol.Column = path.Column;
+				symbol.Length = static_cast<int>(path.Lexeme.size());
+				symbols.push_back(std::move(symbol));
+			}
+
+			if (opens)
+				depth++;
+			else if (token.Type == TokenType::End && depth > 0)
+			{
+				depth--;
+				if (!kinds.empty() && kinds.back().second == depth)
+					kinds.pop_back();
+			}
+		}
+		return symbols;
+	}
+
+	// =================================================================== Framing and URIs
+
+	bool LanguageServer::ReadMessage(std::istream& in, std::string& outBody)
+	{
+		size_t length = 0;
+		bool haveLength = false;
+		std::string line;
+		while (std::getline(in, line))
+		{
+			if (!line.empty() && line.back() == '\r')
+				line.pop_back();
+			if (line.empty())
+			{
+				if (!haveLength)
+					continue;
+				break;
+			}
+			const size_t colon = line.find(':');
+			if (colon == std::string::npos)
+				return false;
+			std::string name = line.substr(0, colon);
+			std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (name == "content-length")
+			{
+				try
+				{
+					length = std::stoull(line.substr(colon + 1));
+				}
+				catch (const std::exception&)
+				{
+					return false;
+				}
+				haveLength = true;
+			}
+		}
+		if (!haveLength || length > c_MaxMessageBytes)
+			return false;
+		outBody.assign(length, '\0');
+		in.read(outBody.data(), static_cast<std::streamsize>(length));
+		return static_cast<size_t>(in.gcount()) == length;
+	}
+
+	void LanguageServer::WriteMessage(std::ostream& out, const std::string& body)
+	{
+		out << "Content-Length: " << body.size() << "\r\n\r\n" << body;
+		out.flush();
+	}
+
+	bool LanguageServer::UriToPath(const std::string& uri, std::filesystem::path& outPath)
+	{
+		const std::string prefix = "file://";
+		if (uri.rfind(prefix, 0) != 0)
+			return false;
+		std::string rest = uri.substr(prefix.size());
+		// file://host/share/x is a network path; file:///x has an empty host.
+		std::string path;
+		if (!rest.empty() && rest.front() != '/')
+		{
+			path = "//" + PercentDecode(rest);
+		}
+		else
+		{
+			path = PercentDecode(rest);
+			// file:///C:/Games → C:/Games
+			if (path.size() >= 3 && path[0] == '/' && std::isalpha(static_cast<unsigned char>(path[1])) && path[2] == ':')
+				path.erase(0, 1);
+		}
+		outPath = PathFromUtf8(path).lexically_normal();
+		return true;
+	}
+
+	std::string LanguageServer::PathToUri(const std::filesystem::path& path)
+	{
+		std::string text = GenericPathToUtf8(path);
+		if (text.size() >= 2 && std::isalpha(static_cast<unsigned char>(text[0])) && text[1] == ':')
+			text = "/" + text;
+		std::string uri = "file://";
+		const char* hex = "0123456789ABCDEF";
+		for (size_t i = 0; i < text.size(); i++)
+		{
+			const unsigned char c = static_cast<unsigned char>(text[i]);
+			const bool driveColon = c == ':' && i == 2 && text[0] == '/';
+			if (std::isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~' || driveColon)
+			{
+				uri += static_cast<char>(c);
+			}
+			else
+			{
+				uri += '%';
+				uri += hex[c >> 4];
+				uri += hex[c & 0xF];
+			}
+		}
+		return uri;
+	}
+
+	// =================================================================== Server
+
+	LanguageServer::LanguageServer(Options options)
+		: m_Options(std::move(options))
+	{
+		if (!m_Options.ApiFile.empty())
+			LoadApi(m_Options.ApiFile);
+	}
+
+	void LanguageServer::LoadApi(const std::filesystem::path& file)
+	{
+		std::string text;
+		Json api;
+		std::string error;
+		if (!ReadTextFile(file, text))
+		{
+			m_ApiError = "Could not read the engine API description '" + PathToUtf8(file) + "'";
+			return;
+		}
+		if (!Json::Parse(text, api, error))
+		{
+			m_ApiError = "The engine API description '" + PathToUtf8(file) + "' is not valid JSON: " + error;
+			return;
+		}
+
+		for (const Json& function : api.Get("functions").AsArray())
+		{
+			ApiFunction entry;
+			entry.Name = function.GetString("name");
+			entry.Returns = function.GetString("returns");
+			entry.Doc = function.GetString("doc");
+			entry.Signature = entry.Name + "(" + ParamsSignature(function.Get("params")) + ")" + (entry.Returns.empty() ? "" : " -> " + entry.Returns);
+			if (!entry.Name.empty())
+				m_ApiFunctions.push_back(std::move(entry));
+		}
+		for (const Json& type : api.Get("types").AsArray())
+		{
+			ApiType entry;
+			entry.Name = type.GetString("name");
+			entry.Doc = type.GetString("doc");
+			for (const Json& member : type.Get("members").AsArray())
+			{
+				ApiMember item;
+				item.Name = member.GetString("name");
+				item.Doc = member.GetString("doc");
+				const std::string& kind = member.GetString("kind");
+				item.IsProperty = kind == "property";
+				item.Type = item.IsProperty ? member.GetString("type") : member.GetString("returns");
+				if (item.IsProperty)
+				{
+					item.Signature = entry.Name + "." + item.Name + (item.Type.empty() ? "" : ": " + item.Type) + (member.Get("readonly").AsBool() ? " (read-only)" : "");
+				}
+				else
+				{
+					item.Signature = entry.Name + "." + item.Name + "(" + ParamsSignature(member.Get("params")) + ")" + (item.Type.empty() ? "" : " -> " + item.Type);
+				}
+				entry.Members.push_back(std::move(item));
+			}
+			if (!entry.Name.empty())
+				m_ApiTypes.push_back(std::move(entry));
+		}
+		for (const Json& phrase : api.Get("phrases").AsArray())
+		{
+			ApiPhrase entry;
+			entry.Pattern = phrase.GetString("pattern");
+			entry.Returns = phrase.GetString("returns");
+			entry.Doc = phrase.GetString("doc");
+			if (!entry.Pattern.empty())
+				m_ApiPhrases.push_back(std::move(entry));
+		}
+	}
+
+	int LanguageServer::Run(std::istream& in, std::ostream& out)
+	{
+		std::string body;
+		while (!m_ExitRequested && ReadMessage(in, body))
+		{
+			Json message;
+			std::string error;
+			if (!Json::Parse(body, message, error))
+			{
+				WriteMessage(out, ErrorResponse(Json(), c_ParseError, "The message is not valid JSON: " + error).Dump());
+				continue;
+			}
+			for (const Json& reply : Handle(message))
+				WriteMessage(out, reply.Dump());
+		}
+		return ExitCode();
+	}
+
+	const LanguageServer::Document* LanguageServer::FindDocument(const std::string& uri) const
+	{
+		auto it = m_Documents.find(uri);
+		return it == m_Documents.end() ? nullptr : &it->second;
+	}
+
+	std::vector<Json> LanguageServer::Handle(const Json& message)
+	{
+		const std::string& method = message.GetString("method");
+		const Json* id = message.Find("id");
+		const Json& params = message.Get("params");
+		std::vector<Json> replies;
+
+		// Requests have an id; notifications do not and never get a reply.
+		if (id && method.empty())
+			return replies;
+
+		if (method == "exit")
+		{
+			m_ExitRequested = true;
+			return replies;
+		}
+		if (!m_Initialized && method != "initialize")
+		{
+			if (id)
+				replies.push_back(ErrorResponse(*id, c_ServerNotInitialized, "The server has not been initialized yet."));
+			return replies;
+		}
+		if (m_ShutdownRequested)
+		{
+			if (id)
+				replies.push_back(ErrorResponse(*id, c_InvalidRequest, "The server is shutting down."));
+			return replies;
+		}
+
+		if (method == "initialize")
+		{
+			if (!id)
+				return replies;
+			replies.push_back(Response(*id, Initialize(params)));
+			if (!m_ApiError.empty())
+			{
+				Json log;
+				log.Set("type", 2).Set("message", m_ApiError + "; engine functions and phrases are unknown.");
+				replies.push_back(Notification("window/logMessage", std::move(log)));
+			}
+			return replies;
+		}
+		if (method == "shutdown")
+		{
+			m_ShutdownRequested = true;
+			if (id)
+				replies.push_back(Response(*id, Json()));
+			return replies;
+		}
+		if (method == "textDocument/didOpen" || method == "textDocument/didChange")
+		{
+			const Json& document = params.Get("textDocument");
+			const std::string& uri = document.GetString("uri");
+			if (uri.empty())
+				return replies;
+			Document& stored = m_Documents[uri];
+			if (method == "textDocument/didOpen")
+			{
+				stored.Text = document.GetString("text");
+			}
+			else
+			{
+				// Full sync: the last change holds the whole text.
+				const Json::Array& changes = params.Get("contentChanges").AsArray();
+				if (!changes.empty())
+					stored.Text = changes.back().GetString("text");
+			}
+			stored.Version = document.Get("version").AsNumber(stored.Version);
+			if (!UriToPath(uri, stored.Path))
+				stored.Path = PathFromUtf8(uri).filename();
+			replies.push_back(PublishDiagnostics(uri));
+			return replies;
+		}
+		if (method == "textDocument/didClose")
+		{
+			const std::string& uri = params.Get("textDocument").GetString("uri");
+			m_Documents.erase(uri);
+			Json cleared;
+			cleared.Set("uri", uri).Set("diagnostics", Json(Json::Array()));
+			replies.push_back(Notification("textDocument/publishDiagnostics", std::move(cleared)));
+			return replies;
+		}
+		if (!id)
+			return replies;
+
+		if (method == "textDocument/completion")
+			replies.push_back(Response(*id, Completion(params)));
+		else if (method == "textDocument/hover")
+			replies.push_back(Response(*id, Hover(params)));
+		else if (method == "textDocument/definition")
+			replies.push_back(Response(*id, Definition(params)));
+		else
+			replies.push_back(ErrorResponse(*id, c_MethodNotFound, "'" + method + "' is not something this server does."));
+		return replies;
+	}
+
+	Json LanguageServer::Initialize(const Json&)
+	{
+		m_Initialized = true;
+		Json sync;
+		sync.Set("openClose", true).Set("change", 1);
+		Json completion;
+		completion.Set("triggerCharacters", Json(Json::Array { Json(".") }));
+		Json capabilities;
+		capabilities.Set("positionEncoding", "utf-16");
+		capabilities.Set("textDocumentSync", std::move(sync));
+		capabilities.Set("completionProvider", std::move(completion));
+		capabilities.Set("hoverProvider", true);
+		capabilities.Set("definitionProvider", true);
+		Json info;
+		info.Set("name", "forgescript").Set("version", FORGESCRIPT_VERSION);
+		Json result;
+		result.Set("capabilities", std::move(capabilities)).Set("serverInfo", std::move(info));
+		return result;
+	}
+
+	bool LanguageServer::ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const
+	{
+		// An open document's unsaved text is what the user sees, so it wins over the file on disk.
+		const std::filesystem::path wanted = path.lexically_normal();
+		for (const auto& [uri, document] : m_Documents)
+		{
+			if (document.Path == wanted)
+			{
+				outSource = document.Text;
+				return true;
+			}
+		}
+		return ReadTextFile(wanted, outSource);
+	}
+
+	std::vector<CompileError> LanguageServer::FindMistakesIn(const std::filesystem::path& path, const std::string& text) const
+	{
+		VM vm;
+		// Engine phrases must be known, or every line that uses one would be a mistake. Their code never
+		// runs here: FindMistakes only compiles.
+		for (const ApiPhrase& phrase : m_ApiPhrases)
+			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); });
+		const std::filesystem::path useFolder = FindUseFolder(path);
+		vm.SetModuleLoader([this, useFolder](const std::string& name, std::string& outName, std::string& outSource)
+		{
+			const std::filesystem::path file = ResolveUsePath(useFolder, name);
+			outName = PathToUtf8(file.filename());
+			return ReadScriptForUse(file, outSource);
+		});
+		return vm.FindMistakes(text, PathToUtf8(path.filename()));
+	}
+
+	Json LanguageServer::PublishDiagnostics(const std::string& uri)
+	{
+		const Document& document = m_Documents[uri];
+		const std::vector<std::string_view> lines = SplitLines(document.Text);
+		Json diagnostics = Json(Json::Array());
+		auto add = [&diagnostics](Json range, const std::string& message)
+		{
+			Json diagnostic;
+			diagnostic.Set("range", std::move(range)).Set("severity", c_SeverityError).Set("source", "forgescript").Set("message", message);
+			diagnostics.Add(std::move(diagnostic));
+		};
+
+		for (const CompileError& mistake : FindMistakesIn(document.Path, document.Text))
+		{
+			// The checker reports where a mistake starts; mark from there to the end of the line, the same
+			// span as the JSON check output's endColumn.
+			Json range = RangeOf(document.Text, mistake.Line, mistake.Column, 0);
+			const size_t index = static_cast<size_t>(std::clamp(mistake.Line - 1, 0, static_cast<int>(lines.size()) - 1));
+			const int start = static_cast<int>(range.Get("start").Get("character").AsNumber());
+			const int end = ToUtf16(lines[index], lines[index].size());
+			range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
+			add(std::move(range), mistake.Message);
+		}
+
+		// A script this one uses that has mistakes of its own: shown on the 'use' line, because the script
+		// stops there when it runs. One level deep; a script that cannot be found is already reported above.
+		const std::filesystem::path useFolder = FindUseFolder(document.Path);
+		for (const Symbol& symbol : FindScriptSymbols(document.Text))
+		{
+			if (symbol.SymbolKind != Symbol::Kind::Module)
+				continue;
+			const std::filesystem::path file = ResolveUsePath(useFolder, symbol.File).lexically_normal();
+			std::string text;
+			if (file == document.Path || !ReadScriptForUse(file, text))
+				continue;
+			const std::vector<CompileError> mistakes = FindMistakesIn(file, text);
+			if (mistakes.empty())
+				continue;
+			const CompileError& first = mistakes.front();
+			std::string message = PathToUtf8(file.filename()) + " line " + std::to_string(first.Line) + ": " + first.Message;
+			if (mistakes.size() > 1)
+				message += " (and " + std::to_string(mistakes.size() - 1) + (mistakes.size() == 2 ? " more mistake)" : " more mistakes)");
+			add(RangeOf(document.Text, symbol.Line, symbol.Column, symbol.Length), message);
+		}
+
+		Json params;
+		params.Set("uri", uri).Set("diagnostics", std::move(diagnostics));
+		if (document.Version != 0)
+			params.Set("version", document.Version);
+		return Notification("textDocument/publishDiagnostics", std::move(params));
+	}
+
+	std::vector<LanguageServer::Symbol> LanguageServer::UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const
+	{
+		// One level deep: the definitions of the scripts this one uses, tagged with their alias.
+		std::vector<Symbol> used;
+		const std::filesystem::path useFolder = FindUseFolder(scriptPath);
+		for (const Symbol& module : FindScriptSymbols(source))
+		{
+			if (module.SymbolKind != Symbol::Kind::Module)
+				continue;
+			const std::filesystem::path file = ResolveUsePath(useFolder, module.File);
+			std::string moduleSource;
+			if (!ReadScriptForUse(file, moduleSource))
+				continue;
+			for (Symbol symbol : FindScriptSymbols(moduleSource))
+			{
+				const bool exported = symbol.SymbolKind == Symbol::Kind::Function || symbol.SymbolKind == Symbol::Kind::Phrase ||
+					symbol.SymbolKind == Symbol::Kind::KindType || symbol.SymbolKind == Symbol::Kind::Constant ||
+					(symbol.SymbolKind == Symbol::Kind::Variable && symbol.Owner.empty());
+				if (!exported || !symbol.Owner.empty())
+					continue;
+				symbol.Owner = module.Owner;
+				symbol.File = PathToUtf8(file.lexically_normal());
+				used.push_back(std::move(symbol));
+			}
+		}
+		return used;
+	}
+
+	Json LanguageServer::Completion(const Json& params)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		Json items = Json(Json::Array());
+		if (!document)
+			return items;
+
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const int lineIndex = static_cast<int>(params.Get("position").Get("line").AsNumber());
+		if (lineIndex < 0 || lineIndex >= static_cast<int>(lines.size()))
+			return items;
+		const std::string_view line = lines[static_cast<size_t>(lineIndex)];
+		const size_t offset = FromUtf16(line, static_cast<int>(params.Get("position").Get("character").AsNumber()));
+		size_t wordStart = 0;
+		size_t wordEnd = 0;
+		WordAt(line, offset, wordStart, wordEnd);
+		bool member = false;
+		const std::string receiver = ReceiverBefore(line, wordStart, member);
+
+		std::set<std::string> seen;
+		auto item = [&items, &seen](const std::string& label, int kind, const std::string& detail, const std::string& doc, const std::string& insert = "")
+		{
+			if (!seen.insert(label + "\n" + detail).second)
+				return;
+			Json entry;
+			entry.Set("label", label).Set("kind", kind);
+			if (!detail.empty())
+				entry.Set("detail", detail);
+			if (!doc.empty())
+			{
+				Json markup;
+				markup.Set("kind", "markdown").Set("value", doc);
+				entry.Set("documentation", std::move(markup));
+			}
+			if (!insert.empty() && insert != label)
+				entry.Set("insertText", insert);
+			items.Add(std::move(entry));
+		};
+
+		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
+		const std::vector<Symbol> used = UsedSymbols(document->Path, document->Text);
+
+		if (member)
+		{
+			// Members of a 'use ... as alias' script.
+			bool alias = false;
+			for (const Symbol& symbol : used)
+			{
+				if (!receiver.empty() && symbol.Owner == receiver)
+				{
+					alias = true;
+					item(symbol.Name, symbol.SymbolKind == Symbol::Kind::Function ? c_CompletionFunction : c_CompletionVariable, symbol.Signature, symbol.Doc);
+				}
+			}
+			if (alias)
+				return items;
+
+			// The type is not known before the script runs, so offer what any value could have: the
+			// engine's members (Entity first for 'my' and 'self'), built-in methods and kinds' fields.
+			const bool entity = receiver == "my" || receiver == "self";
+			for (int pass = 0; pass < 2; pass++)
+			{
+				for (const ApiType& type : m_ApiTypes)
+				{
+					if ((type.Name == "Entity") != (pass == 0))
+						continue;
+					if (pass == 1 && entity)
+						break;
+					for (const ApiMember& memberEntry : type.Members)
+						item(memberEntry.Name, memberEntry.IsProperty ? c_CompletionProperty : c_CompletionMethod, memberEntry.Signature, memberEntry.Doc);
+				}
+			}
+			if (receiver == "my")
+				return items;
+			for (const HelpEntry& help : GetLanguageHelp())
+			{
+				if (help.EntryKind == HelpEntry::Kind::Method)
+					item(help.Name, help.IsProperty ? c_CompletionProperty : c_CompletionMethod, help.Signature, help.Doc);
+			}
+			for (const Symbol& symbol : symbols)
+			{
+				if (!symbol.Owner.empty() && (symbol.SymbolKind == Symbol::Kind::Function || symbol.SymbolKind == Symbol::Kind::Variable))
+					item(symbol.Name, symbol.SymbolKind == Symbol::Kind::Function ? c_CompletionMethod : c_CompletionField, symbol.Signature, symbol.Doc);
+			}
+			return items;
+		}
+
+		// The script's own names first, then what it uses, the engine, and the language.
+		for (const Symbol& symbol : symbols)
+		{
+			// A kind's functions and fields are offered after a '.', not here.
+			if (!symbol.Owner.empty() && symbol.SymbolKind != Symbol::Kind::Parameter && symbol.SymbolKind != Symbol::Kind::Module)
+				continue;
+			switch (symbol.SymbolKind)
+			{
+				case Symbol::Kind::Function: item(symbol.Name, c_CompletionFunction, symbol.Signature, symbol.Doc); break;
+				case Symbol::Kind::Phrase: item(symbol.Name, c_CompletionFunction, symbol.Signature, symbol.Doc, PhraseInsertText(symbol.Name)); break;
+				case Symbol::Kind::KindType: item(symbol.Name, c_CompletionClass, symbol.Signature, symbol.Doc); break;
+				case Symbol::Kind::Constant: item(symbol.Name, c_CompletionConstant, symbol.Signature, symbol.Doc); break;
+				case Symbol::Kind::Variable:
+				case Symbol::Kind::Parameter: item(symbol.Name, c_CompletionVariable, symbol.Signature, symbol.Doc); break;
+				case Symbol::Kind::Module:
+					if (!symbol.Owner.empty())
+						item(symbol.Owner, c_CompletionModule, symbol.Signature, "");
+					break;
+			}
+		}
+		for (const Symbol& symbol : used)
+		{
+			if (!symbol.Owner.empty())
+				continue;
+			const bool phrase = symbol.SymbolKind == Symbol::Kind::Phrase;
+			item(symbol.Name, symbol.SymbolKind == Symbol::Kind::KindType ? c_CompletionClass : c_CompletionFunction, symbol.Signature, symbol.Doc,
+				phrase ? PhraseInsertText(symbol.Name) : "");
+		}
+		for (const ApiFunction& function : m_ApiFunctions)
+			item(function.Name, c_CompletionFunction, function.Signature, function.Doc);
+		for (const ApiType& type : m_ApiTypes)
+			item(type.Name, c_CompletionClass, "engine type " + type.Name, type.Doc);
+		for (const ApiPhrase& phrase : m_ApiPhrases)
+			item(phrase.Pattern, c_CompletionFunction, phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + phrase.Returns), phrase.Doc, PhraseInsertText(phrase.Pattern));
+		for (const HelpEntry& help : GetLanguageHelp())
+		{
+			if (help.EntryKind == HelpEntry::Kind::Keyword)
+				item(help.Name, c_CompletionKeyword, help.Signature, help.Doc);
+			else if (help.EntryKind == HelpEntry::Kind::Function)
+				item(help.Name, c_CompletionFunction, help.Signature, help.Doc);
+			else if (help.EntryKind == HelpEntry::Kind::Phrase)
+				item(help.Name, c_CompletionFunction, help.Signature, help.Doc, PhraseInsertText(help.Name));
+		}
+		return items;
+	}
+
+	Json LanguageServer::Hover(const Json& params)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		if (!document)
+			return Json();
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const int lineIndex = static_cast<int>(params.Get("position").Get("line").AsNumber());
+		if (lineIndex < 0 || lineIndex >= static_cast<int>(lines.size()))
+			return Json();
+		const std::string_view line = lines[static_cast<size_t>(lineIndex)];
+		const size_t offset = FromUtf16(line, static_cast<int>(params.Get("position").Get("character").AsNumber()));
+		size_t wordStart = 0;
+		size_t wordEnd = 0;
+		const std::string word = WordAt(line, offset, wordStart, wordEnd);
+		if (word.empty())
+			return Json();
+		bool member = false;
+		const std::string receiver = ReceiverBefore(line, wordStart, member);
+
+		std::vector<std::string> parts;
+		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
+		const std::vector<Symbol> used = UsedSymbols(document->Path, document->Text);
+		if (member)
+		{
+			for (const Symbol& symbol : used)
+			{
+				if (symbol.Owner == receiver && symbol.Name == word)
+					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
+			}
+			for (const Symbol& symbol : symbols)
+			{
+				if (!symbol.Owner.empty() && symbol.Name == word && symbol.SymbolKind != Symbol::Kind::Parameter)
+					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
+			}
+			for (const ApiType& type : m_ApiTypes)
+			{
+				for (const ApiMember& entry : type.Members)
+				{
+					if (entry.Name == word)
+						parts.push_back(HelpMarkdown(entry.Signature, entry.Doc));
+				}
+			}
+			for (const HelpEntry& help : GetLanguageHelp())
+			{
+				if (help.EntryKind == HelpEntry::Kind::Method && help.Name == word)
+					parts.push_back(HelpMarkdown(help.Signature, help.Doc));
+			}
+		}
+		else
+		{
+			bool found = false;
+			for (const Symbol& symbol : symbols)
+			{
+				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && LineUsesPhrase(symbol.Name, word, line);
+				if ((symbol.Name == word || phraseWord) && symbol.Owner.empty() && symbol.SymbolKind != Symbol::Kind::Module)
+				{
+					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
+					found = true;
+					break;
+				}
+			}
+			for (const Symbol& symbol : used)
+			{
+				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && LineUsesPhrase(symbol.Name, word, line);
+				if (!found && (symbol.Name == word || phraseWord) && symbol.Owner.empty())
+				{
+					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
+					found = true;
+				}
+			}
+			if (!found)
+			{
+				if (const HelpEntry* keyword = FindKeywordHelp(word))
+					parts.push_back(HelpMarkdown(keyword->Signature, keyword->Doc));
+				for (const ApiFunction& function : m_ApiFunctions)
+				{
+					if (function.Name == word)
+						parts.push_back(HelpMarkdown(function.Signature, function.Doc));
+				}
+				for (const ApiType& type : m_ApiTypes)
+				{
+					if (type.Name == word)
+						parts.push_back(HelpMarkdown("engine type " + type.Name, type.Doc));
+				}
+				for (const ApiPhrase& phrase : m_ApiPhrases)
+				{
+					if (LineUsesPhrase(phrase.Pattern, word, line))
+						parts.push_back(HelpMarkdown(phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + phrase.Returns), phrase.Doc));
+				}
+				for (const HelpEntry& help : GetLanguageHelp())
+				{
+					const bool phraseWord = help.EntryKind == HelpEntry::Kind::Phrase && LineUsesPhrase(help.Name, word, line);
+					if ((help.EntryKind == HelpEntry::Kind::Function && help.Name == word) || phraseWord)
+						parts.push_back(HelpMarkdown(help.Signature, help.Doc));
+				}
+			}
+		}
+		if (parts.empty())
+			return Json();
+
+		std::string value;
+		for (const std::string& part : parts)
+			value += (value.empty() ? "" : "\n\n---\n\n") + part;
+		Json contents;
+		contents.Set("kind", "markdown").Set("value", value);
+		Json range;
+		range.Set("start", Position(lineIndex, ToUtf16(line, wordStart)));
+		range.Set("end", Position(lineIndex, ToUtf16(line, wordEnd)));
+		Json result;
+		result.Set("contents", std::move(contents)).Set("range", std::move(range));
+		return result;
+	}
+
+	Json LanguageServer::Definition(const Json& params)
+	{
+		const std::string& uri = params.Get("textDocument").GetString("uri");
+		const Document* document = FindDocument(uri);
+		if (!document)
+			return Json();
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const int lineIndex = static_cast<int>(params.Get("position").Get("line").AsNumber());
+		if (lineIndex < 0 || lineIndex >= static_cast<int>(lines.size()))
+			return Json();
+		const std::string_view line = lines[static_cast<size_t>(lineIndex)];
+		const size_t offset = FromUtf16(line, static_cast<int>(params.Get("position").Get("character").AsNumber()));
+		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
+
+		// On the quoted path of a 'use' line: the start of the script it names.
+		for (const Symbol& symbol : symbols)
+		{
+			const size_t pathStart = static_cast<size_t>(symbol.Column - 1);
+			if (symbol.SymbolKind != Symbol::Kind::Module || symbol.Line != lineIndex + 1 ||
+				offset < pathStart || offset >= pathStart + static_cast<size_t>(symbol.Length))
+				continue;
+			const std::filesystem::path file = ResolveUsePath(FindUseFolder(document->Path), symbol.File).lexically_normal();
+			std::string text;
+			if (!ReadScriptForUse(file, text))
+				return Json();
+			Json range;
+			range.Set("start", Position(0, 0)).Set("end", Position(0, 0));
+			Json result;
+			result.Set("uri", PathToUri(file)).Set("range", std::move(range));
+			return result;
+		}
+
+		size_t wordStart = 0;
+		size_t wordEnd = 0;
+		const std::string word = WordAt(line, offset, wordStart, wordEnd);
+		if (word.empty())
+			return Json();
+		bool member = false;
+		const std::string receiver = ReceiverBefore(line, wordStart, member);
+
+		auto location = [](const std::string& targetUri, const std::string& text, const Symbol& symbol)
+		{
+			Json result;
+			result.Set("uri", targetUri).Set("range", RangeOf(text, symbol.Line, symbol.Column, symbol.Length));
+			return result;
+		};
+		auto matches = [&word](const Symbol& symbol)
+		{
+			return symbol.SymbolKind != Symbol::Kind::Module &&
+				(symbol.Name == word || (symbol.SymbolKind == Symbol::Kind::Phrase && PhraseFirstWord(symbol.Name) == word));
+		};
+
+		// In this script: definitions before parameters, so a name means the function, not an argument.
+		if (!member || receiver == "my" || receiver == "self")
+		{
+			for (int pass = 0; pass < 2; pass++)
+			{
+				for (const Symbol& symbol : symbols)
+				{
+					if ((symbol.SymbolKind == Symbol::Kind::Parameter) == (pass == 0))
+						continue;
+					if (matches(symbol) && (member ? !symbol.Owner.empty() : true))
+						return location(uri, document->Text, symbol);
+				}
+			}
+		}
+		else
+		{
+			for (const Symbol& symbol : symbols)
+			{
+				if (!symbol.Owner.empty() && matches(symbol))
+					return location(uri, document->Text, symbol);
+			}
+		}
+
+		// In a script it uses; 'helpers.greet' looks in the script used 'as helpers'.
+		for (const Symbol& symbol : UsedSymbols(document->Path, document->Text))
+		{
+			if (matches(symbol) && (member ? symbol.Owner == receiver : symbol.Owner.empty()))
+			{
+				const std::filesystem::path file = PathFromUtf8(symbol.File);
+				std::string text;
+				ReadScriptForUse(file, text);
+				return location(PathToUri(file), text, symbol);
+			}
+		}
+		return Json();
+	}
+
+}

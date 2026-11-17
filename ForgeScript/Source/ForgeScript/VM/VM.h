@@ -108,6 +108,9 @@ namespace ForgeScript {
 		// Shares a value with every script, like "player" or "gravity".
 		void SetSharedGlobal(const std::string& name, Value value);
 		Value GetSharedGlobal(const std::string& name);
+		// Every name shared by all scripts (built-in functions, values like pi, host functions), sorted.
+		// For tools such as the language server.
+		std::vector<std::string> GetSharedGlobalNames() const;
 
 		// ---------------------------------------------------------- Making values
 
