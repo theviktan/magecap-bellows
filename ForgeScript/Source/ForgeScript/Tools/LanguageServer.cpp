@@ -232,6 +232,74 @@ namespace ForgeScript {
 			return slot == std::string::npos ? pattern : pattern.substr(0, slot);
 		}
 
+		std::string_view Trim(std::string_view text)
+		{
+			while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+				text.remove_prefix(1);
+			while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r'))
+				text.remove_suffix(1);
+			return text;
+		}
+
+		// The alternatives of a type text, split at the '|'s outside brackets: "Vec4 | list[float]".
+		std::vector<std::string_view> TypeAlternatives(std::string_view type)
+		{
+			std::vector<std::string_view> parts;
+			int depth = 0;
+			size_t start = 0;
+			for (size_t i = 0; i <= type.size(); i++)
+			{
+				const char c = i < type.size() ? type[i] : '|';
+				if (c == '[')
+					depth++;
+				else if (c == ']')
+					depth--;
+				else if (c == '|' && depth == 0)
+				{
+					const std::string_view part = Trim(type.substr(start, i - start));
+					if (!part.empty())
+						parts.push_back(part);
+					start = i + 1;
+				}
+			}
+			return parts;
+		}
+
+		// forgescript-api.json names types the way Python does (it shares _bellows.pyi's names); people
+		// reading ForgeScript help see ForgeScript's names, as the engine's binder converts the values.
+		std::string ForgeTypeName(std::string_view type)
+		{
+			std::vector<std::string> names;
+			for (std::string_view part : TypeAlternatives(type))
+			{
+				std::string name;
+				if (part == "str" || part == "Key" || part == "MouseButton")
+					name = "text";
+				else if (part == "float" || part == "int")
+					name = "number";
+				else if (part == "bool")
+					name = "yes/no";
+				else if (part == "None")
+					name = "nothing";
+				else if (part == "Vec2" || part == "Vec3")
+					name = "vector";
+				else if (part == "Vec4")
+					name = "color";
+				else if (part == "Quat" || part.starts_with("tuple["))
+					name = "list";
+				else if (part.starts_with("list[") && part.ends_with("]"))
+					name = "list of " + ForgeTypeName(part.substr(5, part.size() - 6));
+				else
+					name = std::string(part);
+				if (std::find(names.begin(), names.end(), name) == names.end())
+					names.push_back(name);
+			}
+			std::string text;
+			for (const std::string& name : names)
+				text += (text.empty() ? "" : " or ") + name;
+			return text;
+		}
+
 		std::string ParamsSignature(const Json& params)
 		{
 			std::string text;
@@ -241,9 +309,16 @@ namespace ForgeScript {
 					text += ", ";
 				text += param.GetString("name");
 				if (const Json* type = param.Find("type"); type && type->IsString())
-					text += ": " + type->AsString();
+					text += ": " + ForgeTypeName(type->AsString());
 				if (const Json* value = param.Find("default"))
-					text += " = " + (value->IsString() ? "\"" + value->AsString() + "\"" : value->Dump());
+				{
+					if (value->IsString())
+						text += " = \"" + value->AsString() + "\"";
+					else if (value->IsNull())
+						text += " = nothing";
+					else
+						text += " = " + value->Dump();
+				}
 			}
 			return text;
 		}
@@ -579,7 +654,7 @@ namespace ForgeScript {
 			entry.Name = function.GetString("name");
 			entry.Returns = function.GetString("returns");
 			entry.Doc = function.GetString("doc");
-			entry.Signature = entry.Name + "(" + ParamsSignature(function.Get("params")) + ")" + (entry.Returns.empty() ? "" : " -> " + entry.Returns);
+			entry.Signature = entry.Name + "(" + ParamsSignature(function.Get("params")) + ")" + (entry.Returns.empty() ? "" : " -> " + ForgeTypeName(entry.Returns));
 			if (!entry.Name.empty())
 				m_ApiFunctions.push_back(std::move(entry));
 		}
@@ -598,11 +673,11 @@ namespace ForgeScript {
 				item.Type = item.IsProperty ? member.GetString("type") : member.GetString("returns");
 				if (item.IsProperty)
 				{
-					item.Signature = entry.Name + "." + item.Name + (item.Type.empty() ? "" : ": " + item.Type) + (member.Get("readonly").AsBool() ? " (read-only)" : "");
+					item.Signature = entry.Name + "." + item.Name + (item.Type.empty() ? "" : ": " + ForgeTypeName(item.Type)) + (member.Get("readonly").AsBool() ? " (read-only)" : "");
 				}
 				else
 				{
-					item.Signature = entry.Name + "." + item.Name + "(" + ParamsSignature(member.Get("params")) + ")" + (item.Type.empty() ? "" : " -> " + item.Type);
+					item.Signature = entry.Name + "." + item.Name + "(" + ParamsSignature(member.Get("params")) + ")" + (item.Type.empty() ? "" : " -> " + ForgeTypeName(item.Type));
 				}
 				entry.Members.push_back(std::move(item));
 			}
@@ -715,15 +790,22 @@ namespace ForgeScript {
 			if (!UriToPath(uri, stored.Path))
 				stored.Path = PathFromUtf8(uri).filename();
 			replies.push_back(PublishDiagnostics(uri));
+			PublishDependents(stored.Path, uri, replies);
 			return replies;
 		}
 		if (method == "textDocument/didClose")
 		{
 			const std::string& uri = params.Get("textDocument").GetString("uri");
+			std::filesystem::path closed;
+			if (auto it = m_Documents.find(uri); it != m_Documents.end())
+				closed = it->second.Path;
 			m_Documents.erase(uri);
 			Json cleared;
 			cleared.Set("uri", uri).Set("diagnostics", Json(Json::Array()));
 			replies.push_back(Notification("textDocument/publishDiagnostics", std::move(cleared)));
+			// Scripts that use it read the file on disk from now on, which may differ from the unsaved text.
+			if (!closed.empty())
+				PublishDependents(closed, uri, replies);
 			return replies;
 		}
 		if (!id)
@@ -844,6 +926,153 @@ namespace ForgeScript {
 		return Notification("textDocument/publishDiagnostics", std::move(params));
 	}
 
+	void LanguageServer::PublishDependents(const std::filesystem::path& changed, const std::string& skipUri, std::vector<Json>& replies)
+	{
+		const std::filesystem::path wanted = changed.lexically_normal();
+		std::vector<std::string> dependents;
+		for (const auto& [uri, document] : m_Documents)
+		{
+			if (uri == skipUri)
+				continue;
+			const std::filesystem::path useFolder = FindUseFolder(document.Path);
+			for (const Symbol& symbol : FindScriptSymbols(document.Text))
+			{
+				if (symbol.SymbolKind == Symbol::Kind::Module && ResolveUsePath(useFolder, symbol.File).lexically_normal() == wanted)
+				{
+					dependents.push_back(uri);
+					break;
+				}
+			}
+		}
+		for (const std::string& uri : dependents)
+			replies.push_back(PublishDiagnostics(uri));
+	}
+
+	const LanguageServer::ApiType* LanguageServer::FindApiType(std::string_view name) const
+	{
+		for (const ApiType& type : m_ApiTypes)
+		{
+			if (type.Name == name)
+				return &type;
+		}
+		return nullptr;
+	}
+
+	std::string LanguageServer::TypeFromApi(std::string_view type) const
+	{
+		for (std::string_view part : TypeAlternatives(type))
+		{
+			if (FindApiType(part))
+				return std::string(part);
+			if (part == "str" || part == "Key" || part == "MouseButton")
+				return "text";
+			if (part == "float" || part == "int")
+				return "number";
+			if (part == "Vec2" || part == "Vec3")
+				return "vector";
+			if (part.starts_with("list[") || part.starts_with("tuple[") || part == "Quat")
+				return "list";
+		}
+		return "";
+	}
+
+	std::string LanguageServer::GuessType(const std::vector<std::string_view>& lines, const std::vector<Symbol>& symbols, const std::string& name, int lineIndex, int depth) const
+	{
+		if (name == "my" || name == "self")
+			return FindApiType("Entity") ? "Entity" : "";
+		if (name.empty() || depth > 4)
+			return "";
+		// The nearest assignment above wins; a script that assigns it in a branch may still be wrong,
+		// which only means the list is narrower than it could be.
+		const std::string prefix = "set " + name + " to ";
+		for (int i = std::min(lineIndex, static_cast<int>(lines.size())) - 1; i >= 0; i--)
+		{
+			const std::string_view line = Trim(lines[static_cast<size_t>(i)]);
+			if (line.starts_with(prefix))
+				return ExpressionType(Trim(line.substr(prefix.size())), lines, symbols, i, depth + 1);
+		}
+		return "";
+	}
+
+	std::string LanguageServer::ExpressionType(std::string_view expression, const std::vector<std::string_view>& lines, const std::vector<Symbol>& symbols, int lineIndex, int depth) const
+	{
+		if (expression.empty())
+			return "";
+		const char first = expression.front();
+		if (first == '"')
+			return "text";
+		if (first == '[')
+			return "list";
+		if (first == '{')
+			return "map";
+		if (std::isdigit(static_cast<unsigned char>(first)) || (first == '-' && expression.size() > 1 && std::isdigit(static_cast<unsigned char>(expression[1]))))
+			return "number";
+
+		// A name, perhaps followed by a call or a member: "find_entity(...)", "new Door()", "my transform", "e.transform".
+		size_t end = 0;
+		while (end < expression.size() && IsWordChar(expression[end]))
+			end++;
+		const std::string word(expression.substr(0, end));
+		std::string_view rest = Trim(expression.substr(end));
+		if (word.empty())
+			return "";
+		if (word == "new")
+		{
+			size_t kindEnd = 0;
+			while (kindEnd < rest.size() && IsWordChar(rest[kindEnd]))
+				kindEnd++;
+			const std::string kind(rest.substr(0, kindEnd));
+			for (const Symbol& symbol : symbols)
+			{
+				if (symbol.SymbolKind == Symbol::Kind::KindType && symbol.Name == kind)
+					return "kind:" + kind;
+			}
+			return "";
+		}
+		if (word == "vector" && rest.starts_with("("))
+			return "vector";
+
+		std::string type;
+		if (rest.starts_with("("))
+		{
+			for (const ApiFunction& function : m_ApiFunctions)
+			{
+				if (function.Name == word)
+					return TypeFromApi(function.Returns);
+			}
+			return "";
+		}
+		if (word == "my")
+		{
+			type = "Entity";
+		}
+		else
+		{
+			type = GuessType(lines, symbols, word, lineIndex, depth);
+			if (!rest.starts_with("."))
+				return rest.empty() ? type : "";
+			rest = Trim(rest.substr(1));
+		}
+
+		// One member of an engine type: "my transform", "e.transform".
+		size_t memberEnd = 0;
+		while (memberEnd < rest.size() && IsWordChar(rest[memberEnd]))
+			memberEnd++;
+		const std::string_view member = rest.substr(0, memberEnd);
+		const std::string_view after = Trim(rest.substr(memberEnd));
+		if (member.empty() || (!after.empty() && !after.starts_with("(")))
+			return "";
+		if (const ApiType* apiType = FindApiType(type))
+		{
+			for (const ApiMember& entry : apiType->Members)
+			{
+				if (entry.Name == member)
+					return TypeFromApi(entry.Type);
+			}
+		}
+		return "";
+	}
+
 	std::vector<LanguageServer::Symbol> LanguageServer::UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const
 	{
 		// One level deep: the definitions of the scripts this one uses, tagged with their alias.
@@ -929,8 +1158,45 @@ namespace ForgeScript {
 			if (alias)
 				return items;
 
-			// The type is not known before the script runs, so offer what any value could have: the
-			// engine's members (Entity first for 'my' and 'self'), built-in methods and kinds' fields.
+			// When the script shows what the value is, offer only what that kind of value has.
+			const std::string known = GuessType(lines, symbols, receiver, lineIndex, 0);
+			if (const ApiType* apiType = FindApiType(known))
+			{
+				for (const ApiMember& memberEntry : apiType->Members)
+					item(memberEntry.Name, memberEntry.IsProperty ? c_CompletionProperty : c_CompletionMethod, memberEntry.Signature, memberEntry.Doc);
+				return items;
+			}
+			if (known == "text" || known == "list" || known == "map" || known == "vector" || known == "number")
+			{
+				for (const HelpEntry& help : GetLanguageHelp())
+				{
+					if (help.EntryKind == HelpEntry::Kind::Method && help.Owner == known)
+						item(help.Name, help.IsProperty ? c_CompletionProperty : c_CompletionMethod, help.Signature, help.Doc);
+				}
+				return items;
+			}
+			if (known.starts_with("kind:"))
+			{
+				// The kind's own fields and functions, then those of the kinds it extends.
+				std::string kind = known.substr(5);
+				for (int level = 0; level < 16 && !kind.empty(); level++)
+				{
+					std::string parent;
+					for (const Symbol& symbol : symbols)
+					{
+						if (symbol.Owner == kind && (symbol.SymbolKind == Symbol::Kind::Function || symbol.SymbolKind == Symbol::Kind::Variable))
+							item(symbol.Name, symbol.SymbolKind == Symbol::Kind::Function ? c_CompletionMethod : c_CompletionField, symbol.Signature, symbol.Doc);
+						const std::string extends = " extends ";
+						if (symbol.SymbolKind == Symbol::Kind::KindType && symbol.Name == kind && symbol.Signature.find(extends) != std::string::npos)
+							parent = symbol.Signature.substr(symbol.Signature.find(extends) + extends.size());
+					}
+					kind = parent;
+				}
+				return items;
+			}
+
+			// Otherwise the type is not known before the script runs, so offer what any value could have:
+			// the engine's members (Entity first for 'my' and 'self'), built-in methods and kinds' fields.
 			const bool entity = receiver == "my" || receiver == "self";
 			for (int pass = 0; pass < 2; pass++)
 			{
@@ -992,7 +1258,7 @@ namespace ForgeScript {
 		for (const ApiType& type : m_ApiTypes)
 			item(type.Name, c_CompletionClass, "engine type " + type.Name, type.Doc);
 		for (const ApiPhrase& phrase : m_ApiPhrases)
-			item(phrase.Pattern, c_CompletionFunction, phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + phrase.Returns), phrase.Doc, PhraseInsertText(phrase.Pattern));
+			item(phrase.Pattern, c_CompletionFunction, phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + ForgeTypeName(phrase.Returns)), phrase.Doc, PhraseInsertText(phrase.Pattern));
 		for (const HelpEntry& help : GetLanguageHelp())
 		{
 			if (help.EntryKind == HelpEntry::Kind::Keyword)
@@ -1092,7 +1358,7 @@ namespace ForgeScript {
 				for (const ApiPhrase& phrase : m_ApiPhrases)
 				{
 					if (LineUsesPhrase(phrase.Pattern, word, line))
-						parts.push_back(HelpMarkdown(phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + phrase.Returns), phrase.Doc));
+						parts.push_back(HelpMarkdown(phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + ForgeTypeName(phrase.Returns)), phrase.Doc));
 				}
 				for (const HelpEntry& help : GetLanguageHelp())
 				{

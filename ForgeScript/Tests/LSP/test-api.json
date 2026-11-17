@@ -2,13 +2,20 @@
 	"version": 1,
 	"functions": [
 		{ "name": "find_entity", "params": [ { "name": "name", "type": "str" } ], "returns": "Entity | None", "doc": "Finds an entity by name." },
-		{ "name": "save_screenshot", "params": [ { "name": "path", "type": "str", "default": "" }, { "name": "max_width", "type": "int", "default": 1920 } ], "returns": "str", "doc": "Saves what the player sees." }
+		{ "name": "save_screenshot", "params": [ { "name": "path", "type": "str", "default": "" }, { "name": "max_width", "type": "int", "default": 1920 } ], "returns": "str", "doc": "Saves what the player sees." },
+		{ "name": "find_entities", "params": [ { "name": "tag", "type": "str | None", "default": null } ], "returns": "list[Entity]", "doc": "Finds every entity with a tag." }
 	],
 	"types": [
 		{ "name": "Entity", "doc": "Something in the scene.", "members": [
 			{ "name": "position", "kind": "property", "type": "Vec3", "doc": "Where the entity is." },
 			{ "name": "id", "kind": "property", "type": "str", "readonly": true, "doc": "The entity's id." },
-			{ "name": "translate", "kind": "method", "params": [ { "name": "offset", "type": "Vec3" } ], "returns": "None", "doc": "Moves the entity." }
+			{ "name": "translate", "kind": "method", "params": [ { "name": "offset", "type": "Vec3" } ], "returns": "None", "doc": "Moves the entity." },
+			{ "name": "transform", "kind": "property", "type": "Transform", "doc": "Where, how turned and how big." },
+			{ "name": "tint", "kind": "property", "type": "Vec4 | list[float]", "doc": "The color it is drawn with." }
+		] },
+		{ "name": "Transform", "doc": "Position, rotation and scale.", "members": [
+			{ "name": "scale", "kind": "property", "type": "Vec3", "doc": "How big." },
+			{ "name": "rotation", "kind": "property", "type": "Quat", "doc": "How it is turned." }
 		] },
 		{ "name": "Material", "doc": "How a surface looks.", "constructor": { "params": [ { "name": "name" } ] }, "members": [
 			{ "name": "load", "kind": "static", "params": [ { "name": "path", "type": "str" } ], "returns": "Material", "doc": "Loads a material." }

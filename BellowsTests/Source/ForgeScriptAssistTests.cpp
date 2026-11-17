@@ -56,7 +56,8 @@ TEST_CASE("ForgeScript help completes engine functions, phrases and the script's
 	// Hover: typed signatures and docs for engine functions and the script's own functions.
 	text = "use \"Scripts/Helpers\"\nplay_sound(\"x.wav\")\nsay double(2)\n";
 	const std::string sound = assist.Hover(script, text, 1, 3);
-	CHECK(sound.find("play_sound(path: str") != std::string::npos);
+	// Engine types show their ForgeScript names (the API file uses Python's).
+	CHECK(sound.find("play_sound(path: text, volume: number = 1, bus: text = \"Effects\") -> yes/no") != std::string::npos);
 	CHECK(sound.find("```") == std::string::npos);
 	CHECK(assist.Hover(script, text, 2, 6).find("Doubles a number.") != std::string::npos);
 	CHECK(assist.Hover(script, text, 3, 0).empty());		// The empty last line

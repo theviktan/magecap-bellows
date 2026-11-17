@@ -85,11 +85,23 @@ namespace {
 			document.Set("uri", uri).Set("languageId", "forgescript").Set("version", 1).Set("text", text);
 			Json params;
 			params.Set("textDocument", document);
-			const std::vector<Json> replies = Notify("textDocument/didOpen", params);
-			REQUIRE_EQ(replies.size(), static_cast<size_t>(1));
+			return DiagnosticsFor(uri, Notify("textDocument/didOpen", params));
+		}
+
+		// Every edit publishes the edited document's diagnostics first, then those of open documents that
+		// use it (kept in Dependents).
+		Json DiagnosticsFor(const std::string& uri, const std::vector<Json>& replies)
+		{
+			REQUIRE_FALSE(replies.empty());
+			Dependents.clear();
+			for (size_t i = 1; i < replies.size(); i++)
+				Dependents.push_back(replies[i]);
 			CHECK_EQ(replies[0].GetString("method"), std::string("textDocument/publishDiagnostics"));
+			CHECK_EQ(replies[0].Get("params").GetString("uri"), uri);
 			return replies[0].Get("params").Get("diagnostics");
 		}
+
+		std::vector<Json> Dependents;
 
 		Json Change(const std::string& uri, const std::string& text, int version)
 		{
@@ -99,9 +111,7 @@ namespace {
 			change.Set("text", text);
 			Json params;
 			params.Set("textDocument", document).Set("contentChanges", Json(Json::Array { change }));
-			const std::vector<Json> replies = Notify("textDocument/didChange", params);
-			REQUIRE_EQ(replies.size(), static_cast<size_t>(1));
-			return replies[0].Get("params").Get("diagnostics");
+			return DiagnosticsFor(uri, Notify("textDocument/didChange", params));
 		}
 
 		Json At(const std::string& method, const std::string& uri, int line, int character)
@@ -415,12 +425,13 @@ TEST_CASE("LanguageServerCompletesNames")
 			CHECK(item.Get("documentation").GetString("value").find("How fast the hero runs.") != std::string::npos);
 	}
 
+	// 'self' is the entity, so only the Entity's members.
 	const std::vector<std::string> self = Labels(session.At("textDocument/completion", uri, 14, 6));
 	REQUIRE_FALSE(self.empty());
-	CHECK_EQ(self[0], std::string("position"));   // the Entity's members come first
+	CHECK_EQ(self[0], std::string("position"));
 	CHECK(Has(self, "translate"));
-	CHECK(Has(self, "upper"));
-	CHECK(Has(self, "hurt"));
+	CHECK_FALSE(Has(self, "upper"));
+	CHECK_FALSE(Has(self, "hurt"));
 
 	const std::vector<std::string> my = Labels(session.At("textDocument/completion", uri, 15, 8));
 	CHECK(Has(my, "position"));
@@ -430,6 +441,130 @@ TEST_CASE("LanguageServerCompletesNames")
 	CHECK_EQ(alias, std::vector<std::string>{ "double", "LIMIT" });
 
 	CHECK(Has(Labels(session.At("textDocument/completion", uri, 17, 13)), "upper"));
+}
+
+TEST_CASE("LanguageServerNarrowsCompletionToWhatAValueIs")
+{
+	Session session;
+	const std::string uri = "file:///tmp/narrow.forge";
+	session.Open(uri,
+		"kind Creature\n\tset health to 10\n\tfunction hurt(amount)\n\t\ttake amount from my health\n\tend\nend\n" // 1-6
+		"kind Dragon extends Creature\n\tset fire to 5\n\tfunction roar()\n\t\tsay \"roar\"\n\tend\nend\n"           // 7-12
+		"function check(thing)\n"                    // 13
+		"\tset hero to find_entity(\"Hero\")\n"       // 14
+		"\tset same to hero\n"                        // 15
+		"\tset moved to my transform\n"               // 16
+		"\tset turned to hero.transform\n"            // 17
+		"\tset name to \"Rex\"\n"                     // 18
+		"\tset bag to []\n"                           // 19
+		"\tset found to find_entities()\n"            // 20
+		"\tset beast to new Dragon()\n"               // 21
+		"\tset count to 3\n"                          // 22
+		"\tsay hero.\n"                               // 23
+		"\tsay same.\n"                               // 24
+		"\tsay moved.\n"                              // 25
+		"\tsay turned.\n"                             // 26
+		"\tsay name.\n"                               // 27
+		"\tsay bag.\n"                                // 28
+		"\tsay found.\n"                              // 29
+		"\tsay beast.\n"                              // 30
+		"\tsay count.\n"                              // 31
+		"\tsay thing.\n"                              // 32
+		"end\n");
+
+	auto at = [&](int line, int character) { return Labels(session.At("textDocument/completion", uri, line - 1, character)); };
+	const std::vector<std::string> entity { "position", "id", "translate", "transform", "tint" };
+	// Set straight from an engine function that returns an Entity (or nothing).
+	CHECK_EQ(at(23, 10), entity);
+	// Set from another variable.
+	CHECK_EQ(at(24, 10), entity);
+	// Set from an engine property: 'my transform' and 'hero.transform'.
+	CHECK_EQ(at(25, 11), (std::vector<std::string> { "scale", "rotation" }));
+	CHECK_EQ(at(26, 12), (std::vector<std::string> { "scale", "rotation" }));
+	// Built-in kinds of value get their own methods only.
+	const std::vector<std::string> text = at(27, 10);
+	CHECK(Has(text, "upper"));
+	CHECK_FALSE(Has(text, "add"));
+	CHECK_FALSE(Has(text, "position"));
+	const std::vector<std::string> list = at(28, 9);
+	CHECK(Has(list, "add"));
+	CHECK_FALSE(Has(list, "upper"));
+	CHECK(Has(at(29, 11), "add")); // list[Entity] is a list
+	// A kind's fields and functions, and those of the kind it extends.
+	const std::vector<std::string> beast = at(30, 11);
+	CHECK(Has(beast, "fire"));
+	CHECK(Has(beast, "roar"));
+	CHECK(Has(beast, "health"));
+	CHECK(Has(beast, "hurt"));
+	CHECK_FALSE(Has(beast, "upper"));
+	// Numbers have nothing after a '.'.
+	CHECK(at(31, 11).empty());
+	// A parameter could be anything, so everything is offered.
+	const std::vector<std::string> thing = at(32, 11);
+	CHECK(Has(thing, "position"));
+	CHECK(Has(thing, "upper"));
+	CHECK(Has(thing, "scale"));
+}
+
+TEST_CASE("LanguageServerShowsForgeScriptTypeNames")
+{
+	Session session;
+	const std::string uri = "file:///tmp/types.forge";
+	session.Open(uri, "say find_entities()\nset e to find_entity(\"a\")\nsay e.tint\nsay e.transform.rotation\n");
+	CHECK_NE(HoverText(session.At("textDocument/hover", uri, 0, 6)).find("find_entities(tag: text or nothing = nothing) -> list of Entity"), std::string::npos);
+	CHECK_NE(HoverText(session.At("textDocument/hover", uri, 2, 8)).find("Entity.tint: color or list of number"), std::string::npos);
+	const Json items = session.At("textDocument/completion", uri, 3, 6);
+	bool sawTranslate = false;
+	for (const Json& item : items.AsArray())
+	{
+		if (item.GetString("label") == "translate")
+		{
+			sawTranslate = true;
+			CHECK_EQ(item.GetString("detail"), std::string("Entity.translate(offset: vector) -> nothing"));
+		}
+		if (item.GetString("label") == "id")
+			CHECK_EQ(item.GetString("detail"), std::string("Entity.id: text (read-only)"));
+	}
+	CHECK(sawTranslate);
+}
+
+TEST_CASE("LanguageServerUpdatesScriptsThatUseAChangedScript")
+{
+	TempFolder project("dependents");
+	project.Write("Game.bproject", "{ \"Name\": \"Game\" }");
+	project.Write("Assets/Scripts/Helpers.forge", "function f()\n\tadd 1 to\nend\n");
+	Session session;
+	const std::string mainUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Main.forge");
+	const std::string otherUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Other.forge");
+	const std::string helpersUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Helpers.forge");
+	REQUIRE_EQ(session.Open(mainUri, "use \"Scripts/Helpers\"\nsay 1\n").AsArray().size(), static_cast<size_t>(1));
+	session.Open(otherUri, "say 2\n");
+
+	// Fixing Helpers in its tab, unsaved, clears Main's use line right away; Other is left alone.
+	CHECK(session.Open(helpersUri, "function f()\n\treturn 1\nend\n").AsArray().empty());
+	REQUIRE_EQ(session.Dependents.size(), static_cast<size_t>(1));
+	CHECK_EQ(session.Dependents[0].Get("params").GetString("uri"), mainUri);
+	CHECK(session.Dependents[0].Get("params").Get("diagnostics").AsArray().empty());
+
+	// Breaking it again marks Main again.
+	session.Change(helpersUri, "say 1 + * 2\n", 2);
+	REQUIRE_EQ(session.Dependents.size(), static_cast<size_t>(1));
+	CHECK_EQ(session.Dependents[0].Get("params").Get("diagnostics").AsArray().size(), static_cast<size_t>(1));
+
+	// Closing Helpers without saving: Main goes back to the file on disk, which still has its mistake.
+	Json document;
+	document.Set("uri", helpersUri);
+	Json params;
+	params.Set("textDocument", document);
+	const std::vector<Json> closed = session.Notify("textDocument/didClose", params);
+	REQUIRE_EQ(closed.size(), static_cast<size_t>(2));
+	CHECK_EQ(closed[0].Get("params").GetString("uri"), helpersUri);
+	CHECK_EQ(closed[1].Get("params").GetString("uri"), mainUri);
+	CHECK_EQ(closed[1].Get("params").Get("diagnostics").AsArray().size(), static_cast<size_t>(1));
+
+	// Editing Main itself publishes only Main.
+	session.Change(mainUri, "use \"Scripts/Helpers\"\nsay 3\n", 2);
+	CHECK(session.Dependents.empty());
 }
 
 TEST_CASE("LanguageServerShowsHoverHelp")
@@ -454,14 +589,14 @@ TEST_CASE("LanguageServerShowsHoverHelp")
 
 	CHECK(HoverText(session.At("textDocument/hover", uri, 6, 2)).find("Runs a block a number of times") != std::string::npos);
 	CHECK(HoverText(session.At("textDocument/hover", uri, 7, 6)).find("sqrt(x)") != std::string::npos);
-	CHECK(HoverText(session.At("textDocument/hover", uri, 9, 13)).find("find_entity(name: str) -> Entity | None") != std::string::npos);
-	CHECK(HoverText(session.At("textDocument/hover", uri, 10, 10)).find("Entity.position: Vec3") != std::string::npos);
+	CHECK(HoverText(session.At("textDocument/hover", uri, 9, 13)).find("find_entity(name: text) -> Entity or nothing") != std::string::npos);
+	CHECK(HoverText(session.At("textDocument/hover", uri, 10, 10)).find("Entity.position: vector") != std::string::npos);
 	CHECK(HoverText(session.At("textDocument/hover", uri, 11, 9)).find("text.upper()") != std::string::npos);
 	CHECK(HoverText(session.At("textDocument/hover", uri, 12, 5)).find("random item from (items)") != std::string::npos);
-	CHECK(HoverText(session.At("textDocument/hover", uri, 13, 13)).find("save screenshot to (path) -> str") != std::string::npos);
+	CHECK(HoverText(session.At("textDocument/hover", uri, 13, 13)).find("save screenshot to (path) -> text") != std::string::npos);
 	// Any of a phrase's own words explains it: "item" and "screenshot" here.
 	CHECK(HoverText(session.At("textDocument/hover", uri, 12, 12)).find("random item from (items)") != std::string::npos);
-	CHECK(HoverText(session.At("textDocument/hover", uri, 13, 18)).find("save screenshot to (path) -> str") != std::string::npos);
+	CHECK(HoverText(session.At("textDocument/hover", uri, 13, 18)).find("save screenshot to (path) -> text") != std::string::npos);
 
 	const Json hover = session.At("textDocument/hover", uri, 5, 2);
 	CHECK_EQ(hover.Get("range").Get("start").Get("character").AsNumber(), 0.0);
