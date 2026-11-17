@@ -89,8 +89,9 @@ jobs:
           if (-not $redist) { Write-Output "::error::Visual C++ runtime DLLs not found"; exit 1 }
           # Builds between releases carry their commit in the name (MageCap-Bellows-0.3.0-3f8b735-Windows);
           # a version tag makes the release package (MageCap-Bellows-0.3.0-Windows).
-          $naming = if ($env:GITHUB_REF -like 'refs/tags/v*') { @() } else { @('--name-with-commit') }
-          python Tools/PackageRelease.py --build-dir build/windows --output dist --msvc-redist $redist.FullName --no-zip @naming
+          $naming = @()
+          if ($env:GITHUB_REF -notlike 'refs/tags/v*') { $naming += '--name-with-commit' }
+          python Tools/PackageRelease.py --build-dir build/windows --output dist --msvc-redist $redist.FullName --no-zip $naming
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       # The unit tests run from inside the package, so its bundled Python is the one in use.
