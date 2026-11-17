@@ -362,6 +362,15 @@ namespace ForgeScript {
 		m_SharedGlobals[Intern(name)] = value;
 	}
 
+	std::vector<std::string> VM::GetSharedGlobalNames() const
+	{
+		std::vector<std::string> names;
+		for (const auto& [name, value] : m_SharedGlobals)
+			names.push_back(name->Text);
+		std::sort(names.begin(), names.end());
+		return names;
+	}
+
 	Value VM::GetSharedGlobal(const std::string& name)
 	{
 		auto it = m_SharedGlobals.find(Intern(name));

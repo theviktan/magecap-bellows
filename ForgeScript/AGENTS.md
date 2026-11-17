@@ -35,7 +35,8 @@ A change is done only when it builds with warnings as errors, every test passes 
 3. **VM** (`VM/VM.cpp`) runs bytecode in **tasks** (coroutines, `VM/Task.h`). Every `when` handler and `start` is a task. `wait` suspends a task; `VM::Update` resumes it.
 4. **Library** (`VM/Library.cpp`) holds built-in functions, phrases and methods for text, lists, maps and vectors.
 5. **Garbage collector** (mark and sweep, in `VM.cpp`) runs only at instruction boundaries.
-6. **Script variables** (`Compiler/ScriptVariables.cpp`) reads a script's top-level `set name to <plain value>` lines from the tokens, without compiling or running it, for host settings such as the Bellows Inspector. If the compiler learns a new block-opening word, update `OpensBlock` there too.
+6. **Script variables** (`Compiler/ScriptVariables.cpp`) reads a script's top-level `set name to <plain value>` lines from the tokens, without compiling or running it, for host settings such as the Bellows Inspector. If the compiler learns a new block-opening word, update `TokenOpensBlock` there too (the language server uses it as well).
+7. **Tools** (`Tools/`) are for editors: `LanguageServer` (`forgescript --lsp`), `Help` (the hover and completion text for every keyword, built-in function, phrase and method), `Json` (the reader and writer they use, since the language takes no third-party code) and `ProjectPaths` (where `use` looks, the engine's rule, and `PathFromUtf8`/`PathToUtf8`). Turn paths into text and back only through those two: `path(std::string)` and `path::string()` use the ANSI code page on Windows, but scripts, URIs and JSON are UTF-8.
 
 ## Code style
 
@@ -65,13 +66,13 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 
 ## Adding things (checklists)
 
-**A built-in function or phrase:** add it in `VM::RegisterLibrary`, validate arguments with `CallContext` helpers, add a test in `Tests/Scripts`, list it in `docs/ForgeScript/Reference.md`, and explain it in `docs/ForgeScript/LanguageGuide.md` if beginners will use it.
+**A built-in function or phrase:** add it in `VM::RegisterLibrary`, validate arguments with `CallContext` helpers, add a test in `Tests/Scripts`, give it an entry in `Tools/Help.cpp` (a test fails without one), list it in `docs/ForgeScript/Reference.md`, and explain it in `docs/ForgeScript/LanguageGuide.md` if beginners will use it.
 
-**A method on a built-in type:** use `RegisterMethod` with the right table (`ListMethods`, `TextMethods`, `MapMethods`, `VectorMethods`). Same test and doc steps.
+**A method on a built-in type:** use `RegisterMethod` with the right table (`ListMethods`, `TextMethods`, `MapMethods`, `VectorMethods`). Same test, help and doc steps. A new reserved word needs a `Tools/Help.cpp` entry too.
 
 **A statement or expression form:**
 1. Lexer: new keyword only if unavoidable (see Names).
-2. Compiler: a `...Statement()` function; if it opens a block, update `IsBlockOpener` in the compiler, `IsBlockOpenerWord` in the lexer **and** `OpensBlock` in `ScriptVariables.cpp`.
+2. Compiler: a `...Statement()` function; if it opens a block, update `IsBlockOpener` in the compiler, `IsBlockOpenerWord` in the lexer **and** `TokenOpensBlock` in `ScriptVariables.cpp`.
 3. Opcode (if needed): add it to `OpCode` with its operand comment, then handle it in `VM::Execute`.
 4. Tests: an expectation script, plus compile-error tests in `Tests/Source/LanguageTests.cpp` for its mistakes.
 5. Docs: guide, reference, and the VS Code grammar in `Editor/vscode-forgescript`.
@@ -82,6 +83,7 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 - Scripts used with `use` live in `Tests/Scripts/modules/`.
 - C++ tests are doctest `TEST_CASE`s; `Tests/Source/TestFramework.h` adds `RunScript` and `CHECK_CONTAINS`.
 - `Examples/EngineIntegration` runs as a test too; keep it working, since it is the reference for engine integration.
+- `Tests/LSP/LspCommand.cmake` runs `forgescript --lsp` on a recorded session (`session.lsp`, kept byte for byte by its `.gitattributes`); `LanguageServerTests.cpp` covers each request in detail.
 - `Tests/CLI/CheckCommand.cmake` pins the exact `forgescript --check` output and exit codes (text and JSON). Editors and MageCap Forge parse them, so change them only on purpose, together with `BellowsEditor --check-script`.
 
 ## Commits

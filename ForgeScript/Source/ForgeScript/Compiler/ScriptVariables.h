@@ -1,10 +1,16 @@
 #pragma once
 
+#include "ForgeScript/Compiler/Lexer.h"
+
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace ForgeScript {
+
+	// True when tokens[index] starts a block that an 'end' closes (if, while, function, kind ...),
+	// following the compiler's rule. For tools that read scripts from their tokens.
+	bool TokenOpensBlock(const std::vector<Token>& tokens, size_t index);
 
 	// A script variable set to a plain value at the top of a script, like
 	//     set speed to 2.5
