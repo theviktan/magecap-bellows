@@ -75,7 +75,8 @@ namespace Bellows {
 			return;
 		}
 
-		if (!specification.IconPath.empty())
+		// Wayland has no window icons (the desktop file names one), and GLFW reports trying as an error.
+		if (!specification.IconPath.empty() && glfwGetPlatform() != GLFW_PLATFORM_WAYLAND)
 		{
 			GLFWimage icon;
 			int channels = 0;

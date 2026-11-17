@@ -117,6 +117,7 @@ int main(int argc, char** argv)
 	specification.Name = "MageCap Bellows Editor";
 	specification.CommandLineArgs = args;
 	specification.Window.Title = "MageCap Bellows";
+	specification.Window.IconPath = (Platform::GetExecutableDirectory() / "Resources" / "Icons" / "Bellows.png").string();
 	specification.Window.Width = ParseUnsigned(args, "--width", 1600);
 	specification.Window.Height = ParseUnsigned(args, "--height", 900);
 	specification.Window.StartMaximized = !args.Has("--width") && !args.Has("--height");

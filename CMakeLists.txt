@@ -43,6 +43,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(BellowsCompileOptions)
 include(BellowsShaders)
 include(BellowsBuildInfo)
+include(BellowsAppIcon)
 
 # -----------------------------------------------------------------------------
 # Third-party libraries

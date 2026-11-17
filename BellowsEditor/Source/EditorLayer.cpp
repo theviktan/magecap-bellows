@@ -108,6 +108,10 @@ namespace Bellows {
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
 		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
 		m_DebuggerPanel = CreateScope<DebuggerPanel>(*this);
+		const std::filesystem::path logoPath = Platform::GetExecutableDirectory() / "Resources" / "Icons" / "Bellows.png";
+		// Linear: the UI draws texture values as they are, so decoding sRGB here would darken the logo.
+		if (FileSystem::Exists(logoPath))
+			m_Logo = Texture2D::LoadFromFile(logoPath, TextureColorSpace::Linear);
 		m_ProjectManager = CreateScope<ProjectManager>(*this);
 
 		// A script stops inside the game's update; the game pauses once that update has finished.
@@ -168,6 +172,7 @@ namespace Bellows {
 		m_SettingsPanel.reset();
 		m_StatisticsPanel.reset();
 		m_DebuggerPanel.reset();
+		m_Logo.reset();
 		m_RuntimeScene.reset();
 		m_EditorScene.reset();
 		m_ScreenshotRenderer.reset();
@@ -515,6 +520,18 @@ namespace Bellows {
 		// While a script is stopped no ForgeScript runs, so stepping frames would only move physics.
 		if (m_SceneState == SceneState::Pause && m_RuntimeScene && !m_ScriptDebugger.IsStopped())
 			m_RuntimeScene->Step(frames);
+	}
+
+	void EditorLayer::DrawLogo(float size) const
+	{
+		if (m_Logo)
+		{
+			ImGui::Image(ImTextureRef(reinterpret_cast<ImTextureID>(m_Logo->GetHandle())), ImVec2(size, size));
+			return;
+		}
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
+		ImGui::TextUnformatted(ICON_FLAME);
+		ImGui::PopStyleColor();
 	}
 
 	// -------------------------------------------------------------------------
@@ -1435,10 +1452,12 @@ namespace Bellows {
 			return;
 		}
 
-		// Brand mark
-		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
-		ImGui::TextUnformatted(ICON_FLAME);
-		ImGui::PopStyleColor();
+		// Brand mark, centered in the bar
+		const ImGuiWindow* barWindow = ImGui::GetCurrentWindow();
+		const float barHeight = barWindow->MenuBarHeight;
+		const float logoSize = std::round(barHeight * 0.86f);
+		ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, barWindow->Pos.y + barWindow->TitleBarHeight + (barHeight - logoSize) * 0.5f));
+		DrawLogo(logoSize);
 		ImGui::PushFont(Theme::GetFonts().Bold, 0.0f);
 		ImGui::TextUnformatted("Bellows");
 		ImGui::PopFont();
@@ -2145,14 +2164,14 @@ namespace Bellows {
 
 		if (beginModal("About MageCap Bellows", m_ShowAboutDialog, 480.0f))
 		{
-			ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 1.4f);
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
-			ImGui::TextUnformatted(ICON_FLAME);
-			ImGui::PopStyleColor();
+			DrawLogo(56.0f * scale);
 			ImGui::SameLine();
+			ImGui::BeginGroup();
+			ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 1.4f);
 			ImGui::TextUnformatted("MageCap Bellows");
 			ImGui::PopFont();
 			UI::TextMuted(("Version " + BuildInfo::GetVersionText() + "  -  (c) MageCap Games").c_str());
+			ImGui::EndGroup();
 			ImGui::Spacing();
 			ImGui::TextWrapped("Renderer: %s (Vulkan via NVRHI)", Application::Get().GetRenderDevice().GetAdapterName().c_str());
 			ImGui::Spacing();
