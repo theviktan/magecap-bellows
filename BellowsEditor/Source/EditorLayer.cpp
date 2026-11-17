@@ -108,10 +108,12 @@ namespace Bellows {
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
 		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
 		m_DebuggerPanel = CreateScope<DebuggerPanel>(*this);
-		const std::filesystem::path logoPath = Platform::GetExecutableDirectory() / "Resources" / "Icons" / "Bellows.png";
-		// Linear: the UI draws texture values as they are, so decoding sRGB here would darken the logo.
-		if (FileSystem::Exists(logoPath))
-			m_Logo = Texture2D::LoadFromFile(logoPath, TextureColorSpace::Linear);
+		// Linear: the UI draws texture values as they are, so decoding sRGB here would darken the icons.
+		const std::filesystem::path iconFolder = Platform::GetExecutableDirectory() / "Resources" / "Icons";
+		if (FileSystem::Exists(iconFolder / "Bellows.png"))
+			m_Logo = Texture2D::LoadFromFile(iconFolder / "Bellows.png", TextureColorSpace::Linear);
+		if (FileSystem::Exists(iconFolder / "ForgeScript.png"))
+			m_ForgeScriptIcon = Texture2D::LoadFromFile(iconFolder / "ForgeScript.png", TextureColorSpace::Linear);
 		m_ProjectManager = CreateScope<ProjectManager>(*this);
 
 		// A script stops inside the game's update; the game pauses once that update has finished.
@@ -173,6 +175,7 @@ namespace Bellows {
 		m_StatisticsPanel.reset();
 		m_DebuggerPanel.reset();
 		m_Logo.reset();
+		m_ForgeScriptIcon.reset();
 		m_RuntimeScene.reset();
 		m_EditorScene.reset();
 		m_ScreenshotRenderer.reset();

@@ -410,6 +410,15 @@ namespace Bellows {
 				drewThumbnail = true;
 			}
 		}
+		// ForgeScript files carry the language's own icon, which brings its own tile.
+		const Ref<Texture2D>& forgeScriptIcon = m_Editor.GetForgeScriptIcon();
+		if (!drewThumbnail && forgeScriptIcon && type == AssetType::Script && GetScriptLanguage(item.Path) == ScriptLanguage::ForgeScript)
+		{
+			const float inset = (tileMax.x - tileMin.x) * 0.1f;
+			drawList->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(forgeScriptIcon->GetHandle())),
+				ImVec2(tileMin.x + inset, tileMin.y + inset), ImVec2(tileMax.x - inset, tileMax.y - inset));
+			drewThumbnail = true;
+		}
 		if (!drewThumbnail)
 		{
 			const ImU32 color = item.IsDirectory ? IM_COL32(214, 170, 90, 255) : UI::AssetColor(type);

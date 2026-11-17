@@ -47,6 +47,17 @@ set_tests_properties(BellowsFeatureTest PROPERTIES
 	FAIL_REGULAR_EXPRESSION "FEATURE TEST FAILED;Traceback;script error"
 	TIMEOUT 900)
 
+# A release package holds everything its programs load: package the build, then run the package.
+if(TARGET BellowsEditor AND TARGET ForgeScriptCLI)
+	add_test(NAME BellowsPackageTest
+		COMMAND "${Python_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/Scripts/PackageTest.py" --build-dir "${CMAKE_BINARY_DIR}"
+		WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+	set_tests_properties(BellowsPackageTest PROPERTIES
+		PASS_REGULAR_EXPRESSION "PACKAGE TEST PASSED"
+		FAIL_REGULAR_EXPRESSION "PACKAGE TEST FAILED;FAIL:"
+		TIMEOUT 1200)
+endif()
+
 if(TARGET BellowsEditor)
 	add_test(NAME BellowsEditorFeatureTest
 		COMMAND BellowsEditor --headless --no-agent-server --width 960 --height 540 --project "${PROJECT_SOURCE_DIR}/Projects/FeatureTest"
