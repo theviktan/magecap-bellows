@@ -512,6 +512,25 @@ TEST_CASE("LanguageServerGoesToDefinitions")
 	CHECK(session.At("textDocument/definition", uri, 0, 8).IsNull());
 }
 
+TEST_CASE("FindScriptSymbolsSeesPastElseIf")
+{
+	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols(
+		"kind Light\n"
+		"\tfunction next(n)\n\t\tif n then\n\t\t\treturn 1\n\t\telse if n then\n\t\t\treturn 2\n\t\tend\n\tend\n"
+		"end\n"
+		"function after()\nend\n");
+	bool found = false;
+	for (const LanguageServer::Symbol& symbol : symbols)
+	{
+		if (symbol.Name == "after")
+		{
+			found = true;
+			CHECK(symbol.Owner.empty());
+		}
+	}
+	CHECK(found);
+}
+
 TEST_CASE("FindScriptSymbolsListsDefinitions")
 {
 	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols(
