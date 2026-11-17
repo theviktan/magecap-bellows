@@ -11,6 +11,7 @@
 //   entity ids (64-bit)       -> text, because numbers cannot hold every 64-bit id exactly
 //   keys and mouse buttons    -> names: "W", "space", "left"
 //   None / optional values    -> nothing
+//   float                     -> the number its shortest text means (0.1f is 0.1, see ForgeScriptNumber)
 
 #include "Bellows/Scripting/ScriptApi.h"
 
@@ -35,6 +36,11 @@ namespace Bellows::Scripting {
 
 	// Adds every engine function, class and phrase to a ForgeScript virtual machine. Call once per VM.
 	void RegisterForgeScriptApi(ForgeScript::VM& vm);
+
+	// An engine float as a ForgeScript number: the number its shortest decimal text means, so a float
+	// that holds 0.1 reads as 0.1 in scripts ('say', comparisons, the debugger) and not as its exact
+	// value 0.100000001490116. The float a script gets back from it is the same float.
+	double ForgeScriptNumber(float value);
 
 	// The ForgeScript value for an entity (what an entity script gets as 'self').
 	ForgeScript::Value MakeForgeScriptEntity(ForgeScript::VM& vm, const ScriptEntity& entity);

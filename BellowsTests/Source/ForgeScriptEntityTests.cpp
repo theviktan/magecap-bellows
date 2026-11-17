@@ -6,7 +6,11 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
+#include "Bellows/Scripting/ForgeScriptBindings.h"
 #include "Bellows/Scripting/ScriptEngine.h"
+
+#include <cmath>
+#include <limits>
 
 using namespace Bellows;
 
@@ -275,6 +279,37 @@ TEST_CASE("Script field overrides of another number type are shown and applied a
 	scene->OnRuntimeStart();
 	CHECK_EQ(walker.GetName(), std::string("10 45"));
 	scene->OnRuntimeStop();
+	CHECK_EQ(ScriptEngine::GetErrorCount(), 0u);
+	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("ForgeScript reads engine floats as the numbers they were written as")
+{
+	// The float 0.1 is 0.100000001490116 exactly; scripts see the number its shortest text means.
+	CHECK_EQ(Scripting::ForgeScriptNumber(0.1f), 0.1);
+	CHECK_EQ(Scripting::ForgeScriptNumber(1.0f / 60.0f), 0.016666668);
+	CHECK_EQ(Scripting::ForgeScriptNumber(-2.5f), -2.5);
+	CHECK_EQ(Scripting::ForgeScriptNumber(16777216.0f), 16777216.0);
+	CHECK(std::isinf(Scripting::ForgeScriptNumber(std::numeric_limits<float>::infinity())));
+	CHECK(std::isnan(Scripting::ForgeScriptNumber(std::numeric_limits<float>::quiet_NaN())));
+	// Turned back into a float, it is the same float, for every kind of float.
+	for (float value : { 0.1f, 1.0f / 3.0f, 3.14159265f, 1e-38f, 1e-45f, 3.4e38f, -123.456f, 0.0f, -0.0f })
+		CHECK_EQ(static_cast<float>(Scripting::ForgeScriptNumber(value)), value);
+
+	ScriptEngine::ResetErrorCount();
+	MakeForgeProject("ForgeFloats", { { "Scripts/Floats.forge",
+		"when created\n"
+		"\tset my position to vector(0.1, 0.2, 0.3)\n"
+		"end\n"
+		"when update with delta\n"
+		"\tset my name to \"{my position} {delta} {my position.x is 0.1}\"\n"
+		"end\n" } });
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity floats = AddScripted(*scene, "Floats", "Scripts/Floats.forge");
+	scene->OnRuntimeStart();
+	RunFrames(*scene, 1);
+	scene->OnRuntimeStop();
+	CHECK_EQ(floats.GetName(), std::string("(0.1, 0.2, 0.3) 0.016666668 true"));
 	CHECK_EQ(ScriptEngine::GetErrorCount(), 0u);
 	AssetManager::SetAssetDirectory({});
 }
