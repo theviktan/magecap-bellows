@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ForgeScript/Compiler/Compiler.h"
 #include "ForgeScript/Tools/Json.h"
 
 #include <filesystem>
@@ -114,6 +115,7 @@ namespace ForgeScript {
 
 		void LoadApi(const std::filesystem::path& file);
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
+		std::vector<CompileError> FindMistakesIn(const std::filesystem::path& path, const std::string& text) const;
 		std::vector<Symbol> UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const;
 		const Document* FindDocument(const std::string& uri) const;
 

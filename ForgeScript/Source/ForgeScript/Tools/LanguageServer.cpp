@@ -519,13 +519,13 @@ namespace ForgeScript {
 			if (path.size() >= 3 && path[0] == '/' && std::isalpha(static_cast<unsigned char>(path[1])) && path[2] == ':')
 				path.erase(0, 1);
 		}
-		outPath = std::filesystem::path(path).lexically_normal();
+		outPath = PathFromUtf8(path).lexically_normal();
 		return true;
 	}
 
 	std::string LanguageServer::PathToUri(const std::filesystem::path& path)
 	{
-		std::string text = path.generic_string();
+		std::string text = GenericPathToUtf8(path);
 		if (text.size() >= 2 && std::isalpha(static_cast<unsigned char>(text[0])) && text[1] == ':')
 			text = "/" + text;
 		std::string uri = "file://";
@@ -564,12 +564,12 @@ namespace ForgeScript {
 		std::string error;
 		if (!ReadTextFile(file, text))
 		{
-			m_ApiError = "Could not read the engine API description '" + file.string() + "'";
+			m_ApiError = "Could not read the engine API description '" + PathToUtf8(file) + "'";
 			return;
 		}
 		if (!Json::Parse(text, api, error))
 		{
-			m_ApiError = "The engine API description '" + file.string() + "' is not valid JSON: " + error;
+			m_ApiError = "The engine API description '" + PathToUtf8(file) + "' is not valid JSON: " + error;
 			return;
 		}
 
@@ -713,7 +713,7 @@ namespace ForgeScript {
 			}
 			stored.Version = document.Get("version").AsNumber(stored.Version);
 			if (!UriToPath(uri, stored.Path))
-				stored.Path = std::filesystem::path(uri).filename();
+				stored.Path = PathFromUtf8(uri).filename();
 			replies.push_back(PublishDiagnostics(uri));
 			return replies;
 		}
@@ -775,68 +775,66 @@ namespace ForgeScript {
 		return ReadTextFile(wanted, outSource);
 	}
 
-	Json LanguageServer::PublishDiagnostics(const std::string& uri)
+	std::vector<CompileError> LanguageServer::FindMistakesIn(const std::filesystem::path& path, const std::string& text) const
 	{
-		const Document& document = m_Documents[uri];
 		VM vm;
 		// Engine phrases must be known, or every line that uses one would be a mistake. Their code never
 		// runs here: FindMistakes only compiles.
 		for (const ApiPhrase& phrase : m_ApiPhrases)
 			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); });
-		const std::filesystem::path useFolder = FindUseFolder(document.Path);
+		const std::filesystem::path useFolder = FindUseFolder(path);
 		vm.SetModuleLoader([this, useFolder](const std::string& name, std::string& outName, std::string& outSource)
 		{
 			const std::filesystem::path file = ResolveUsePath(useFolder, name);
-			outName = file.filename().string();
+			outName = PathToUtf8(file.filename());
 			return ReadScriptForUse(file, outSource);
 		});
+		return vm.FindMistakes(text, PathToUtf8(path.filename()));
+	}
 
-		const std::string fileName = document.Path.filename().string();
-		const std::vector<CompileError> mistakes = vm.FindMistakes(document.Text, fileName);
-		const std::vector<Symbol> symbols = FindScriptSymbols(document.Text);
-
+	Json LanguageServer::PublishDiagnostics(const std::string& uri)
+	{
+		const Document& document = m_Documents[uri];
+		const std::vector<std::string_view> lines = SplitLines(document.Text);
 		Json diagnostics = Json(Json::Array());
-		for (const CompileError& mistake : mistakes)
+		auto add = [&diagnostics](Json range, const std::string& message)
 		{
 			Json diagnostic;
-			std::string text = mistake.Message;
-			int line = mistake.Line;
-			int column = mistake.Column;
-			int length = 0;
-			if (!mistake.File.empty() && mistake.File != fileName)
-			{
-				// A mistake inside a script this one uses: show it on that 'use' line.
-				text = mistake.File + " line " + std::to_string(mistake.Line) + ": " + mistake.Message;
-				line = 1;
-				column = 1;
-				for (const Symbol& symbol : symbols)
-				{
-					if (symbol.SymbolKind == Symbol::Kind::Module && std::filesystem::path(ResolveUsePath("", symbol.File)).filename() == mistake.File)
-					{
-						line = symbol.Line;
-						column = symbol.Column;
-						length = symbol.Length;
-						break;
-					}
-				}
-			}
-			Json range = RangeOf(document.Text, line, column, 0);
-			if (length > 0)
-			{
-				range = RangeOf(document.Text, line, column, length);
-			}
-			else
-			{
-				// The checker reports where a mistake starts; mark from there to the end of the line, the
-				// same span as the JSON check output's endColumn.
-				const std::vector<std::string_view> lines = SplitLines(document.Text);
-				const size_t index = static_cast<size_t>(std::clamp(line - 1, 0, static_cast<int>(lines.size()) - 1));
-				const int start = static_cast<int>(range.Get("start").Get("character").AsNumber());
-				const int end = ToUtf16(lines[index], lines[index].size());
-				range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
-			}
-			diagnostic.Set("range", std::move(range)).Set("severity", c_SeverityError).Set("source", "forgescript").Set("message", text);
+			diagnostic.Set("range", std::move(range)).Set("severity", c_SeverityError).Set("source", "forgescript").Set("message", message);
 			diagnostics.Add(std::move(diagnostic));
+		};
+
+		for (const CompileError& mistake : FindMistakesIn(document.Path, document.Text))
+		{
+			// The checker reports where a mistake starts; mark from there to the end of the line, the same
+			// span as the JSON check output's endColumn.
+			Json range = RangeOf(document.Text, mistake.Line, mistake.Column, 0);
+			const size_t index = static_cast<size_t>(std::clamp(mistake.Line - 1, 0, static_cast<int>(lines.size()) - 1));
+			const int start = static_cast<int>(range.Get("start").Get("character").AsNumber());
+			const int end = ToUtf16(lines[index], lines[index].size());
+			range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
+			add(std::move(range), mistake.Message);
+		}
+
+		// A script this one uses that has mistakes of its own: shown on the 'use' line, because the script
+		// stops there when it runs. One level deep; a script that cannot be found is already reported above.
+		const std::filesystem::path useFolder = FindUseFolder(document.Path);
+		for (const Symbol& symbol : FindScriptSymbols(document.Text))
+		{
+			if (symbol.SymbolKind != Symbol::Kind::Module)
+				continue;
+			const std::filesystem::path file = ResolveUsePath(useFolder, symbol.File).lexically_normal();
+			std::string text;
+			if (file == document.Path || !ReadScriptForUse(file, text))
+				continue;
+			const std::vector<CompileError> mistakes = FindMistakesIn(file, text);
+			if (mistakes.empty())
+				continue;
+			const CompileError& first = mistakes.front();
+			std::string message = PathToUtf8(file.filename()) + " line " + std::to_string(first.Line) + ": " + first.Message;
+			if (mistakes.size() > 1)
+				message += " (and " + std::to_string(mistakes.size() - 1) + (mistakes.size() == 2 ? " more mistake)" : " more mistakes)");
+			add(RangeOf(document.Text, symbol.Line, symbol.Column, symbol.Length), message);
 		}
 
 		Json params;
@@ -867,7 +865,7 @@ namespace ForgeScript {
 				if (!exported || !symbol.Owner.empty())
 					continue;
 				symbol.Owner = module.Owner;
-				symbol.File = file.lexically_normal().string();
+				symbol.File = PathToUtf8(file.lexically_normal());
 				used.push_back(std::move(symbol));
 			}
 		}
@@ -1132,6 +1130,26 @@ namespace ForgeScript {
 			return Json();
 		const std::string_view line = lines[static_cast<size_t>(lineIndex)];
 		const size_t offset = FromUtf16(line, static_cast<int>(params.Get("position").Get("character").AsNumber()));
+		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
+
+		// On the quoted path of a 'use' line: the start of the script it names.
+		for (const Symbol& symbol : symbols)
+		{
+			const size_t pathStart = static_cast<size_t>(symbol.Column - 1);
+			if (symbol.SymbolKind != Symbol::Kind::Module || symbol.Line != lineIndex + 1 ||
+				offset < pathStart || offset >= pathStart + static_cast<size_t>(symbol.Length))
+				continue;
+			const std::filesystem::path file = ResolveUsePath(FindUseFolder(document->Path), symbol.File).lexically_normal();
+			std::string text;
+			if (!ReadScriptForUse(file, text))
+				return Json();
+			Json range;
+			range.Set("start", Position(0, 0)).Set("end", Position(0, 0));
+			Json result;
+			result.Set("uri", PathToUri(file)).Set("range", std::move(range));
+			return result;
+		}
+
 		size_t wordStart = 0;
 		size_t wordEnd = 0;
 		const std::string word = WordAt(line, offset, wordStart, wordEnd);
@@ -1153,7 +1171,6 @@ namespace ForgeScript {
 		};
 
 		// In this script: definitions before parameters, so a name means the function, not an argument.
-		const std::vector<Symbol> symbols = FindScriptSymbols(document->Text);
 		if (!member || receiver == "my" || receiver == "self")
 		{
 			for (int pass = 0; pass < 2; pass++)
@@ -1181,9 +1198,10 @@ namespace ForgeScript {
 		{
 			if (matches(symbol) && (member ? symbol.Owner == receiver : symbol.Owner.empty()))
 			{
+				const std::filesystem::path file = PathFromUtf8(symbol.File);
 				std::string text;
-				ReadScriptForUse(symbol.File, text);
-				return location(PathToUri(symbol.File), text, symbol);
+				ReadScriptForUse(file, text);
+				return location(PathToUri(file), text, symbol);
 			}
 		}
 		return Json();

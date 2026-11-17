@@ -62,10 +62,10 @@ Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be ope
 
 `forgescript --lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) 3.17 server over standard input and output. An editor starts it and gets, for `.forge` files:
 
-- **Mistakes as you type** (pushed `textDocument/publishDiagnostics`, the same mistakes as `--check`).
+- **Mistakes as you type** (pushed `textDocument/publishDiagnostics`, the same mistakes as `--check`). A script it uses that has mistakes of its own is also marked on its `use` line, as `Helpers.forge line 3: ...`, since running stops there.
 - **Completion**: keywords, built-in functions and phrases, the engine's functions, types and phrases, the script's own functions, phrases, kinds, variables and event values, and the scripts it uses (`helpers.` after `use "helpers" as helpers`). After a `.` it offers members; after `my` and `self.` the engine entity's members come first.
 - **Hover**: the signature and help of whatever is under the cursor. A script's own functions show the `#` comment lines written right above them.
-- **Go to definition**: functions, phrases, kinds, variables and parameters, in the file and in scripts it uses.
+- **Go to definition**: functions, phrases, kinds, variables and parameters, in the file and in scripts it uses; on the path of a `use` line, the script it names.
 
 The engine's API comes from `forgescript-api.json`, which MageCap Bellows generates and installs next to `forgescript`; `--api <file>` points somewhere else. Without it the server knows only the language, so engine phrases show as mistakes. `use` resolves by the same rule as `--check`, and unsaved text of scripts open in the editor wins over the files on disk. The server syncs whole documents, counts positions in UTF-16 as LSP requires, and exits with `0` after `shutdown` then `exit`.
 

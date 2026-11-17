@@ -32,7 +32,7 @@ namespace ForgeScript {
 			for (const auto& entry : std::filesystem::directory_iterator(folder, error))
 			{
 				if (entry.path().extension() == ".bproject")
-					return folder / ReadAssetDirectory(entry.path());
+					return folder / PathFromUtf8(ReadAssetDirectory(entry.path()));
 			}
 			if (folder == folder.parent_path())
 				break;
@@ -42,7 +42,7 @@ namespace ForgeScript {
 
 	std::filesystem::path ResolveUsePath(const std::filesystem::path& useFolder, const std::string& name)
 	{
-		std::filesystem::path candidate = useFolder / name;
+		std::filesystem::path candidate = useFolder / PathFromUtf8(name);
 		if (!candidate.has_extension())
 			candidate += ".forge";
 		return candidate;
@@ -57,6 +57,23 @@ namespace ForgeScript {
 		buffer << file.rdbuf();
 		outText = buffer.str();
 		return true;
+	}
+
+	std::filesystem::path PathFromUtf8(const std::string& text)
+	{
+		return std::filesystem::path(std::u8string(text.begin(), text.end()));
+	}
+
+	std::string PathToUtf8(const std::filesystem::path& path)
+	{
+		const std::u8string text = path.u8string();
+		return std::string(text.begin(), text.end());
+	}
+
+	std::string GenericPathToUtf8(const std::filesystem::path& path)
+	{
+		const std::u8string text = path.generic_u8string();
+		return std::string(text.begin(), text.end());
 	}
 
 }
