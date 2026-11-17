@@ -182,6 +182,8 @@ namespace Bellows {
 		void SubmitEditorOverlays(SceneRenderer& renderer);
 		void HandleShortcuts();
 		void HandleViewportDrop(const std::string& assetPath);
+		// Makes the image the scene's sky (adding a Sky entity when there is none).
+		void SetSkyEnvironment(const std::string& assetPath);
 		void PickEntity(const glm::vec2& viewportPosition);
 		void ResetEditorStateForScene();
 		std::string SerializeEditorScene() const;

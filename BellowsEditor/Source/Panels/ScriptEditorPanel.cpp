@@ -3,6 +3,7 @@
 #include "EditorLayer.h"
 #include "EditorTheme.h"
 #include "EditorUI.h"
+#include "ForgeScriptAssist.h"
 #include "IconsLucide.h"
 
 #include "Bellows/Asset/AssetManager.h"
@@ -168,6 +169,39 @@ namespace Bellows {
 				case ScriptLanguage::None:			break;
 			}
 			return Theme::TextMuted;
+		}
+
+		// ForgeScript suggestions from the language server, with each one's signature beside it.
+		void SuggestForgeScript(ForgeScriptAssist& assist, const std::filesystem::path& path, const TextEditor& editor, TextEditor::AutoCompleteState& state)
+		{
+			// The editor keeps the last list between calls; start from an empty one.
+			state.suggestions.clear();
+			if (state.inComment || state.inString)
+				return;
+			// Right after a "." members are wanted; elsewhere wait for two letters, as for other words.
+			const auto codePoints = editor.GetLineCodePoints(state.searchTermStart.line);
+			const size_t start = state.searchTermStart.index;
+			const bool afterDot = start > 0 && start <= codePoints.size() && codePoints[start - 1] == '.';
+			if (state.searchTerm.size() < 2 && !afterDot)
+				return;
+
+			constexpr size_t c_MaxSuggestions = 80;
+			const std::vector<ForgeScriptAssist::Suggestion> suggestions = assist.Complete(path, editor.GetText(),
+				state.searchTermEnd.line, state.searchTermEnd.index, state.searchTerm);
+			for (const ForgeScriptAssist::Suggestion& suggestion : suggestions)
+			{
+				if (state.suggestions.size() == c_MaxSuggestions)
+					break;
+				state.suggestions.push_back(suggestion.Insert);
+				// "play_sound   (path: str, ...) -> bool": the signature without repeating the name.
+				std::string detail = suggestion.Detail;
+				if (detail.rfind(suggestion.Label, 0) == 0)
+					detail.erase(0, suggestion.Label.size());
+				std::string label = suggestion.Label;
+				if (!detail.empty())
+					label += "   " + detail;
+				state.labels.push_back(std::move(label));
+			}
 		}
 
 		// Suggests language words and names already used in the script.
@@ -356,6 +390,8 @@ namespace Bellows {
 	{
 		if (index >= m_Documents.size())
 			return;
+		if (m_ForgeScriptAssist && m_Documents[index]->Language == ScriptLanguage::ForgeScript)
+			m_ForgeScriptAssist->Close(m_Documents[index]->Path);
 		m_Documents.erase(m_Documents.begin() + static_cast<std::ptrdiff_t>(index));
 		if (m_ActiveDocument > index || m_ActiveDocument >= m_Documents.size())
 			m_ActiveDocument = m_ActiveDocument > 0 ? m_ActiveDocument - 1 : 0;
@@ -404,13 +440,75 @@ namespace Bellows {
 		Document* target = &document;
 		editor.SetChangeCallback([target] { target->NeedsAnalysis = true; }, c_AnalysisDelay);
 
-		if (document.Language != ScriptLanguage::None)
+		if (document.Language == ScriptLanguage::ForgeScript)
+		{
+			TextEditor::AutoCompleteConfig autoComplete;
+			autoComplete.triggerCharacters = ".";
+			autoComplete.suggestionWidth = 48;
+			autoComplete.callback = [this, target](TextEditor::AutoCompleteState& state)
+			{
+				SuggestForgeScript(GetForgeScriptAssist(), target->Path, *target->Editor, state);
+			};
+			editor.SetAutoCompleteConfig(&autoComplete);
+			editor.SetTextHoverCallback([this, target](TextEditor::PopupData& data) { DrawForgeScriptHover(*target, data.pos.line, data.pos.index); });
+		}
+		else if (document.Language == ScriptLanguage::Python)
 		{
 			TextEditor::AutoCompleteConfig autoComplete;
 			autoComplete.callback = SuggestWords;
 			autoComplete.userData = document.Editor.get();
 			editor.SetAutoCompleteConfig(&autoComplete);
 		}
+	}
+
+	ForgeScriptAssist& ScriptEditorPanel::GetForgeScriptAssist()
+	{
+		// The engine API description sits next to the editor (copied there by the build and the package).
+		if (!m_ForgeScriptAssist)
+			m_ForgeScriptAssist = CreateScope<ForgeScriptAssist>(Platform::GetExecutableDirectory() / "forgescript-api.json");
+		return *m_ForgeScriptAssist;
+	}
+
+	void ScriptEditorPanel::DrawForgeScriptHover(Document& document, size_t line, size_t column)
+	{
+		const std::string text = document.Editor->GetText();
+		if (line != document.HoverLine || column != document.HoverColumn || text != document.HoverSource)
+		{
+			document.HoverLine = line;
+			document.HoverColumn = column;
+			document.HoverSource = text;
+			document.HoverText = GetForgeScriptAssist().Hover(document.Path, text, line, column);
+		}
+		if (document.HoverText.empty())
+		{
+			ImGui::CloseCurrentPopup();
+			return;
+		}
+
+		// The signature (up to the first blank line) in the code font's colors, then the documentation.
+		ImGui::PushTextWrapPos(ImGui::GetFontSize() * 36.0f);
+		bool signature = true;
+		size_t start = 0;
+		while (start <= document.HoverText.size())
+		{
+			size_t end = document.HoverText.find('\n', start);
+			if (end == std::string::npos)
+				end = document.HoverText.size();
+			const std::string_view part(document.HoverText.data() + start, end - start);
+			if (part.empty())
+			{
+				signature = false;
+				ImGui::Spacing();
+			}
+			else
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, signature ? Theme::Accent : Theme::Text);
+				ImGui::TextUnformatted(part.data(), part.data() + part.size());
+				ImGui::PopStyleColor();
+			}
+			start = end + 1;
+		}
+		ImGui::PopTextWrapPos();
 	}
 
 	void ScriptEditorPanel::Analyze(Document& document)

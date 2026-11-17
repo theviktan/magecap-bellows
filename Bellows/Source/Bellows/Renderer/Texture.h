@@ -19,9 +19,13 @@ namespace Bellows {
 	class Texture2D
 	{
 	public:
-		// Loads PNG/JPG/TGA/BMP (8-bit) or HDR (.hdr, 32-bit float) images.
-		static Ref<Texture2D> LoadFromFile(const std::filesystem::path& path, TextureColorSpace colorSpace);
-		static Ref<Texture2D> LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName);
+		// Loads PNG/JPG/TGA/BMP (8-bit) or high dynamic range images (.hdr, OpenEXR .exr).
+		// High dynamic range images become 32-bit float textures (no mips) when 'keepHighDynamicRange'
+		// is set (sky environments); otherwise they are clamped to 0-1 and stored as 8-bit with mips,
+		// like any material map, which keeps big downloaded maps small and free of shimmer.
+		static Ref<Texture2D> LoadFromFile(const std::filesystem::path& path, TextureColorSpace colorSpace, bool keepHighDynamicRange = false);
+		static Ref<Texture2D> LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName,
+			bool keepHighDynamicRange = false);
 		// Creates a texture from tightly packed RGBA8 pixels.
 		static Ref<Texture2D> CreateFromRGBA8(uint32_t width, uint32_t height, const void* pixels, TextureColorSpace colorSpace,
 			const std::string& debugName, bool generateMips = true);

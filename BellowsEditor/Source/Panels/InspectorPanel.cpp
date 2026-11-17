@@ -464,6 +464,8 @@ namespace Bellows {
 			};
 			textureField("Albedo Map", material->AlbedoMapPath, TextureColorSpace::SRGB, &Material::SetAlbedoMap);
 			textureField("Normal Map", material->NormalMapPath, TextureColorSpace::Linear, &Material::SetNormalMap);
+			textureField("Roughness Map", material->RoughnessMapPath, TextureColorSpace::Linear, &Material::SetRoughnessMap);
+			textureField("Metallic Map", material->MetallicMapPath, TextureColorSpace::Linear, &Material::SetMetallicMap);
 			textureField("Metal/Rough Map", material->MetallicRoughnessMapPath, TextureColorSpace::Linear, &Material::SetMetallicRoughnessMap);
 			textureField("Occlusion Map", material->OcclusionMapPath, TextureColorSpace::Linear, &Material::SetOcclusionMap);
 			textureField("Emissive Map", material->EmissiveMapPath, TextureColorSpace::SRGB, &Material::SetEmissiveMap);
