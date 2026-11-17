@@ -342,7 +342,10 @@ namespace ForgeScript {
 
 			switch (token.Type)
 			{
-				case TokenType::If: case TokenType::While: case TokenType::Repeat: case TokenType::For:
+				// The 'if' of 'else if' continues the open 'if' and shares its 'end'.
+				case TokenType::If:
+					return !(i > 0 && (tokens[i - 1].Type == TokenType::Else || tokens[i - 1].Type == TokenType::Otherwise));
+				case TokenType::While: case TokenType::Repeat: case TokenType::For:
 				case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 					return true;
 				case TokenType::Until:
