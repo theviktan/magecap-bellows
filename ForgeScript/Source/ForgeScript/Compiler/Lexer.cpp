@@ -1,5 +1,6 @@
 #include "ForgeScript/Compiler/Lexer.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <unordered_map>
@@ -127,6 +128,15 @@ namespace ForgeScript {
 				break;
 		}
 		return tokens;
+	}
+
+	std::vector<std::string> Lexer::GetKeywords()
+	{
+		std::vector<std::string> words;
+		for (const auto& [word, type] : Keywords())
+			words.emplace_back(word);
+		std::sort(words.begin(), words.end());
+		return words;
 	}
 
 	char Lexer::Advance()

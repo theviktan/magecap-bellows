@@ -28,7 +28,7 @@ ForgeScript runs on its own virtual machine, the way GDScript runs inside Godot.
 
 ForgeScript builds with the rest of Bellows (see the repository [README](../README.md)). After a build:
 
-- the tests run as part of `ctest` (`ForgeScriptTests`, `ForgeScriptEngineExample` and `ForgeScriptCheckCommand`),
+- the tests run as part of `ctest` (`ForgeScriptTests`, `ForgeScriptEngineExample`, `ForgeScriptCheckCommand` and `ForgeScriptLspCommand`),
 - the command line tool is `build/<preset>/bin/forgescript` (`forgescript.exe` on Windows).
 
 ```
@@ -57,6 +57,17 @@ After a mistake it skips the rest of that statement (or the block the statement 
 | `--name <path>` | The script's path, used in messages and to find `use` scripts (from its project's asset folder, or next to it). Needed with `--stdin` so `use` and phrases from other scripts work. |
 
 Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be opened, `64` wrong usage. When running a script, `70` means it failed. Tools depend on the text format and exit codes, so they stay stable.
+
+### Language server for editors
+
+`forgescript --lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) 3.17 server over standard input and output. An editor starts it and gets, for `.forge` files:
+
+- **Mistakes as you type** (pushed `textDocument/publishDiagnostics`, the same mistakes as `--check`).
+- **Completion**: keywords, built-in functions and phrases, the engine's functions, types and phrases, the script's own functions, phrases, kinds, variables and event values, and the scripts it uses (`helpers.` after `use "helpers" as helpers`). After a `.` it offers members; after `my` and `self.` the engine entity's members come first.
+- **Hover**: the signature and help of whatever is under the cursor. A script's own functions show the `#` comment lines written right above them.
+- **Go to definition**: functions, phrases, kinds, variables and parameters, in the file and in scripts it uses.
+
+The engine's API comes from `forgescript-api.json`, which MageCap Bellows generates and installs next to `forgescript`; `--api <file>` points somewhere else. Without it the server knows only the language, so engine phrases show as mistakes. `use` resolves by the same rule as `--check`, and unsaved text of scripts open in the editor wins over the files on disk. The server syncs whole documents, counts positions in UTF-16 as LSP requires, and exits with `0` after `shutdown` then `exit`.
 
 **Where `use` looks.** Inside a MageCap Bellows project (a folder with a `.bproject` file, found by walking up from the script), `use` paths start at the project's asset folder, the same as in the engine: `use "Scripts/Helpers"` in `Assets/Scripts/Main.forge` means `Assets/Scripts/Helpers.forge`. Anywhere else they start next to the script.
 

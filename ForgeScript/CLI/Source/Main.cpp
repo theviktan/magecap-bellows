@@ -1,4 +1,6 @@
 #include "ForgeScript/ForgeScript.h"
+#include "ForgeScript/Tools/LanguageServer.h"
+#include "ForgeScript/Tools/ProjectPaths.h"
 
 #include <algorithm>
 #include <chrono>
@@ -12,6 +14,14 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#ifdef _WIN32
+	#define NOMINMAX
+	#define WIN32_LEAN_AND_MEAN
+	#include <fcntl.h>
+	#include <io.h>
+	#include <windows.h>
+#endif
 
 // The forgescript command line tool.
 //
@@ -29,13 +39,7 @@ namespace {
 
 	bool ReadFile(const std::filesystem::path& path, std::string& outText)
 	{
-		std::ifstream file(path, std::ios::binary);
-		if (!file)
-			return false;
-		std::stringstream buffer;
-		buffer << file.rdbuf();
-		outText = buffer.str();
-		return true;
+		return ForgeScript::ReadTextFile(path, outText);
 	}
 
 	// "use "helpers"" looks for helpers.forge in 'baseFolder' (see FindUseFolder).
@@ -43,9 +47,7 @@ namespace {
 	{
 		vm.SetModuleLoader([baseFolder](const std::string& path, std::string& outName, std::string& outSource)
 		{
-			std::filesystem::path candidate = baseFolder / path;
-			if (!candidate.has_extension())
-				candidate += ".forge";
+			const std::filesystem::path candidate = ForgeScript::ResolveUsePath(baseFolder, path);
 			if (!ReadFile(candidate, outSource))
 				return false;
 			outName = candidate.filename().string();
@@ -53,51 +55,34 @@ namespace {
 		});
 	}
 
-	// Reads the "AssetDirectory" text setting from a MageCap Bellows .bproject file (JSON). Only this
-	// one value is needed, so a small scan keeps the tool free of a JSON library.
-	std::string ReadAssetDirectorySetting(const std::string& json)
-	{
-		const std::string key = "\"AssetDirectory\"";
-		size_t i = json.find(key);
-		if (i == std::string::npos)
-			return "Assets";
-		i += key.size();
-		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n' || json[i] == ':'))
-			i++;
-		if (i >= json.size() || json[i] != '"')
-			return "Assets";
-		std::string value;
-		for (i++; i < json.size() && json[i] != '"'; i++)
-		{
-			if (json[i] == '\\' && i + 1 < json.size())
-				i++;
-			value += json[i];
-		}
-		return value.empty() ? std::string("Assets") : value;
-	}
-
-	// Where 'use' looks for scripts. Inside a MageCap Bellows project (a folder with a .bproject file,
-	// found by walking up from the script) paths start at the project's asset folder, like the engine:
-	// use "Scripts/Helpers" means Assets/Scripts/Helpers.forge. Anywhere else, next to the script.
-	std::filesystem::path FindUseFolder(const std::string& fileName)
+	// The folder this program is in, where the engine's forgescript-api.json is installed.
+	std::filesystem::path ProgramFolder(const char* argv0)
 	{
 		std::error_code error;
-		const std::filesystem::path script = std::filesystem::absolute(fileName, error).lexically_normal();
-		const std::filesystem::path scriptFolder = script.parent_path();
-		for (std::filesystem::path folder = scriptFolder; !folder.empty(); folder = folder.parent_path())
-		{
-			for (const auto& entry : std::filesystem::directory_iterator(folder, error))
-			{
-				if (entry.path().extension() != ".bproject")
-					continue;
-				std::string json;
-				ReadFile(entry.path(), json);
-				return folder / ReadAssetDirectorySetting(json);
-			}
-			if (folder == folder.parent_path())
-				break;
-		}
-		return scriptFolder.empty() ? std::filesystem::path(".") : scriptFolder;
+#ifdef _WIN32
+		wchar_t buffer[32768];
+		const DWORD length = GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
+		if (length > 0 && length < std::size(buffer))
+			return std::filesystem::path(std::wstring(buffer, length)).parent_path();
+#else
+		const std::filesystem::path self = std::filesystem::read_symlink("/proc/self/exe", error);
+		if (!error)
+			return self.parent_path();
+#endif
+		return std::filesystem::absolute(argv0, error).parent_path();
+	}
+
+	int RunLanguageServer(const std::filesystem::path& apiFile)
+	{
+#ifdef _WIN32
+		// LSP counts bytes, so Windows must not turn \n into \r\n on the way in or out.
+		_setmode(_fileno(stdin), _O_BINARY);
+		_setmode(_fileno(stdout), _O_BINARY);
+#endif
+		ForgeScript::LanguageServer::Options options;
+		options.ApiFile = apiFile;
+		ForgeScript::LanguageServer server(options);
+		return server.Run(std::cin, std::cout);
 	}
 
 	void PrintUsage()
@@ -112,6 +97,9 @@ namespace {
 			"      --json                          print the mistakes as JSON\n"
 			"      --stdin                         read the script from standard input\n"
 			"      --name <path>                   the script's path, for messages and 'use' (with --stdin)\n"
+			"  forgescript --lsp                   run as a language server for editors (LSP over stdin/stdout)\n"
+			"      --api <file>                    the engine API description (default: forgescript-api.json\n"
+			"                                      next to this program)\n"
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --version               show the version\n";
 	}
@@ -127,7 +115,7 @@ namespace {
 
 		ForgeScript::VM vm;
 		std::filesystem::path path(fileName);
-		InstallFileLoader(vm, FindUseFolder(fileName));
+		InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
 
 		bool hadError = false;
 		vm.SetErrorHandler([&hadError](const ForgeScript::ScriptError& error)
@@ -250,7 +238,7 @@ namespace {
 		ForgeScript::VM vm;
 		std::filesystem::path path(fileName);
 		// "use" is resolved from the checked file's place, even when its text came from standard input.
-		InstallFileLoader(vm, FindUseFolder(fileName));
+		InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
 		const std::vector<ForgeScript::CompileError> mistakes = vm.FindMistakes(source, path.filename().string());
 
 		if (options.Json)
@@ -319,6 +307,9 @@ int main(int argc, char** argv)
 
 	bool realtime = false;
 	bool check = false;
+	bool lsp = false;
+	std::filesystem::path apiFile;
+	bool apiGiven = false;
 	CheckOptions checkOptions;
 	std::string file;
 	for (int i = 1; i < argc; i++)
@@ -337,6 +328,18 @@ int main(int argc, char** argv)
 			realtime = true;
 		else if (std::strcmp(argv[i], "--check") == 0)
 			check = true;
+		else if (std::strcmp(argv[i], "--lsp") == 0)
+			lsp = true;
+		else if (std::strcmp(argv[i], "--api") == 0)
+		{
+			if (i + 1 >= argc)
+			{
+				std::cerr << "--api needs the path of forgescript-api.json after it." << std::endl;
+				return 64;
+			}
+			apiFile = argv[++i];
+			apiGiven = true;
+		}
 		else if (std::strcmp(argv[i], "--json") == 0)
 			checkOptions.Json = true;
 		else if (std::strcmp(argv[i], "--stdin") == 0)
@@ -360,6 +363,27 @@ int main(int argc, char** argv)
 			file = argv[i];
 	}
 
+	if (lsp)
+	{
+		if (check || !file.empty())
+		{
+			std::cerr << "--lsp takes its scripts from the editor; use it without --check or a file name." << std::endl;
+			return 64;
+		}
+		if (!apiGiven)
+		{
+			const std::filesystem::path installed = ProgramFolder(argv[0]) / "forgescript-api.json";
+			std::error_code error;
+			if (std::filesystem::exists(installed, error))
+				apiFile = installed;
+		}
+		return RunLanguageServer(apiFile);
+	}
+	if (apiGiven)
+	{
+		std::cerr << "--api works together with --lsp." << std::endl;
+		return 64;
+	}
 	if ((checkOptions.Json || checkOptions.FromStdin) && !check)
 	{
 		std::cerr << "--json and --stdin work together with --check." << std::endl;
