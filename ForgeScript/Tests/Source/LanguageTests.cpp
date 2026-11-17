@@ -186,6 +186,22 @@ TEST_CASE("FindScriptVariablesListsTopLevelPlainValues")
 	CHECK_EQ(variables[9].Name, std::string("after"));
 }
 
+TEST_CASE("FindScriptVariablesSeesPastElseIf")
+{
+	const std::string source =
+		"function grade(score)\n"
+		"\tif score is above 90 then\n\t\treturn \"A\"\n"
+		"\telse if score is above 80 then\n\t\treturn \"B\"\n"
+		"\totherwise if score is above 70 then\n\t\treturn \"C\"\n"
+		"\tend\n"
+		"end\n"
+		"set speed to 4\n";
+	std::vector<ScriptVariable> variables = FindScriptVariables(source);
+	REQUIRE_EQ(variables.size(), static_cast<size_t>(1));
+	CHECK_EQ(variables[0].Name, std::string("speed"));
+	CHECK_EQ(variables[0].Line, 10);
+}
+
 TEST_CASE("FindScriptVariablesIgnoresBrokenAndEmptyScripts")
 {
 	CHECK(FindScriptVariables("").empty());
