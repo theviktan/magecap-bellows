@@ -30,7 +30,8 @@ This guide teaches the whole language step by step. Every example is real ForgeS
 15. [Vectors](#15-vectors)
 16. [Using other scripts](#16-using-other-scripts)
 17. [Scripts attached to entities: `self` and `my`](#17-scripts-attached-to-entities-self-and-my)
-18. [Rules worth remembering](#18-rules-worth-remembering)
+18. [Finding bugs with the debugger](#18-finding-bugs-with-the-debugger)
+19. [Rules worth remembering](#19-rules-worth-remembering)
 
 For a one-page list of everything, see [Reference.md](Reference.md).
 
@@ -852,7 +853,66 @@ The script's top level runs again in the new version, so a line there that creat
 
 ---
 
-## 18. Rules worth remembering
+## 18. Finding bugs with the debugger
+
+When a script does something you did not expect, the MageCap Bellows debugger lets you stop it at a line, look at every variable, and run it one line at a time while the game waits.
+
+Take this script on a player entity, which should give the player a bonus every third coin but never does:
+
+```forge
+set coins to 0
+set bonus to 0
+
+when collided with other
+	if other.name is "Coin" then
+		add 1 to coins
+		if coins is 3 then
+			add 10 to bonus
+			set coins to 0
+		end
+		other.destroy()
+	end
+end
+```
+
+**1. Set a breakpoint.** Open the script in the Script Editor and click just left of line 5 (`if other.name is "Coin" then`), or put the cursor on the line and press **F9**. A red dot shows the breakpoint. Click it again (or press F9 again) to remove it. Breakpoints move with their lines while you edit, and they stay set until you close the editor.
+
+**2. Play.** Press Play and touch a coin. When a script reaches a line with a breakpoint, the game pauses before that line runs. The Script Editor shows the line with an arrow, and the **Debugger** panel (next to the Console; **View > Panels > Debugger** opens it) shows:
+
+- **Stopped at** the script, the line and why it stopped (a breakpoint, a step, or a pause).
+- **Call stack**: the function or `when` handler that is running, and the ones that called it, innermost first. Click a call to see its variables.
+- **Variables**: the call's own values, such as `other` here, a function's values and its loop variables, and `self` in a kind's functions.
+- **Script variables**: the script's own variables, such as `coins` and `bonus`.
+- **Breakpoints**: every breakpoint, with buttons to remove them.
+
+Here **Variables** shows `other` as `Entity('Gold Coin')`: the coins in this level are named "Gold Coin", so `other.name is "Coin"` is never true. Writing `other.name.ends_with("Coin")` fixes it.
+
+**3. Step through the code.** While a script is stopped, these buttons in the Debugger panel move it on. The keys work in any panel:
+
+| Button | Key | What it does |
+|--------|-----|--------------|
+| Continue | F5 | Runs on until the next breakpoint. The game plays again. |
+| Step over | F10 | Runs this line, including any functions it calls, and stops at the next line. |
+| Step in | F11 | Like step over, but stops inside a function this line calls. |
+| Step out | Shift+F11 | Runs to the end of this function and stops in the code that called it. |
+| Stop at the next line | | Stops the next ForgeScript line that runs, wherever it is. Use it while the game plays to find out what is running. |
+
+After a `for` or `while` round, stepping goes back to the loop's own line, so you can watch each round. Stepping never stops on an `end` line.
+
+Things worth knowing:
+
+- **A `wait` lets the game go on.** Stepping over `wait 2 seconds` plays the game for two seconds, then stops at the line after it.
+- **Each `when` handler runs on its own.** Stepping over a `trigger` line runs its handlers without stopping in them. To look inside one, put a breakpoint in it.
+- **Some functions can't stop.** A function given to `map`, `filter`, `sort_by` or a kind's `to_text` runs straight through, because built-in functions need its answer right away. Its breakpoints are passed over.
+- **Values are shown as they are.** The debugger never runs your code to show a value, so a kind with a `to_text` function shows its fields instead. Very long values are shortened.
+- **Saving while stopped:** changes to scripts reload when the script goes on.
+- **Stopping play** while a script is stopped ends it there. `when destroyed` still runs, and it does not stop at breakpoints.
+
+The debugger works in play mode in the MageCap Bellows editor. For checking a script without playing it, the editor (and `forgescript --check` outside it) underlines every mistake as you type. For a quick look at a value, `say` still works: it prints to the Console.
+
+---
+
+## 19. Rules worth remembering
 
 1. **Positions start at 1.** `list[1]` is the first item, `list[-1]` the last.
 2. **`set ... to` changes values. `is` compares them.** There is no `=`.
