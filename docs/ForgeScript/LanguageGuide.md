@@ -875,7 +875,7 @@ when collided with other
 end
 ```
 
-**1. Set a breakpoint.** Open the script in the Script Editor and click just left of line 5 (`if other.name is "Coin" then`), or put the cursor on the line and press **F9**. A red dot shows the breakpoint. Click it again (or press F9 again) to remove it. Breakpoints move with their lines while you edit, and they stay set until you close the editor.
+**1. Set a breakpoint.** Open the script in the Script Editor and click just left of line 5 (`if other.name is "Coin" then`), or put the cursor on the line and press **F9**. A red dot shows the breakpoint. Click it again (or press F9 again) to remove it. Breakpoints move with their lines while you edit, and they stay set until you close the project or the editor.
 
 **2. Play.** Press Play and touch a coin. When a script reaches a line with a breakpoint, the game pauses before that line runs. The Script Editor shows the line with an arrow, and the **Debugger** panel (next to the Console; **View > Panels > Debugger** opens it) shows:
 
