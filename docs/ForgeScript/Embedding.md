@@ -313,6 +313,30 @@ for (const ForgeScript::ScriptVariable& variable : ForgeScript::FindScriptVariab
 ```
 
 - **Hot reload** while the game runs: check the new text first (`FindMistakes`) and keep the old module if it has mistakes. Otherwise call `m_VM.ClearModuleCache()`, run the new source in a fresh module for the entity, then `m_VM.CarryOverVariables(oldModule, newModule, {"self"})` so script variables keep their values (constants, functions, phrases, kinds and values whose type changed take the new version), and unload the old module, which stops its waiting tasks. `m_VM.GetGlobalNames(module)` lists a module's names. Bellows' `ForgeScriptRuntime::Reload` does exactly this and then sends `reloaded`.
+- **Debugger** (breakpoints, stepping, call stack and variables). A stop holds one task where it is, like a `wait` with no end, and then `Update` runs nothing and time does not move until you go on:
+
+```cpp
+m_VM.SetDebugHandler([this](const ForgeScript::DebugStop& stop)
+{
+	// Called at the moment of the stop. Do not wait for the user here: note it, pause the game, return.
+	m_Paused = true;
+	ShowStop(stop.File, stop.Line); // stop.Reason: Breakpoint, Step or Pause
+});
+m_VM.SetBreakpoints("Scripts/Enemy.forge", { 12, 30 }); // the name the script was loaded with; {} removes them
+m_VM.Pause();                                            // stop the next line any task runs
+
+// Later, from the editor's buttons (only while m_VM.IsStopped()):
+for (const ForgeScript::DebugFrame& frame : m_VM.GetCallStack())          // innermost first
+	AddCallRow(frame.Function.empty() ? frame.File : frame.Function, frame.Line);
+for (const ForgeScript::DebugVariable& variable : m_VM.GetVariables(0))   // frame 0 = innermost
+	AddVariableRow(variable.Name, variable.Type, variable.Text);
+for (const ForgeScript::DebugVariable& variable : m_VM.GetGlobals(m_VM.GetCallStack()[0].Owner))
+	AddScriptVariableRow(variable.Name, variable.Type, variable.Text);
+m_VM.StepOver();   // or StepIn, StepOut, Continue
+m_Paused = m_VM.IsStopped();
+```
+
+  A step that reaches a `wait` or the end of its handler returns with nothing stopped; the task stops on its next line when it runs again. Only code that may wait can stop: functions that built-in functions call back (`sort_by`, `map`, `filter`, a kind's `to_text`) and `VM::Call` pass over their breakpoints. Event handlers run as their own tasks, so step into one with a breakpoint in it. A task that reaches a breakpoint while another is stopped waits its turn; the handler is called for it when the first goes on. `UnloadModule` and `CancelTasks` end the stops of the tasks they cancel. Variables are shown without running script code (a kind's `to_text` is not called), and long values are shortened. Lines are checked only while there are breakpoints, a pause request or a step, so a game without them runs at full speed. In Bellows, `ForgeScriptRuntime::SetBreakpoints` and `SetDebugHandler` keep both across play sessions, and `GetMachine()` gives the session's VM for the buttons above.
 - **Interactive console:** run typed lines in one module with `CompileOptions::Repl = true`, which prints the value of a line that is only an expression (see `ForgeScript/CLI/Source/Main.cpp`).
 - **Repeatable random numbers** for replays and tests: `m_VM.SetRandomSeed(1234);`
 

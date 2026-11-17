@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 
 // Runs every .forge file in Tests/scripts. Each script lists what it should print:
@@ -11,8 +12,9 @@
 //     say "hello"        # expect: hello
 //     fail "boom"        # expect error: boom
 //
-// Every script runs twice: once normally and once with the garbage collector running on
-// every single instruction, which flushes out objects that are not kept alive correctly.
+// Every script runs three times: normally, with the garbage collector running on every single
+// instruction (which flushes out objects that are not kept alive correctly), and in the debugger
+// with a breakpoint on every line and random steps, which must not change what the script does.
 
 namespace {
 
@@ -69,7 +71,14 @@ namespace {
 		return true;
 	}
 
-	void CheckScript(const std::filesystem::path& path, bool stressGC)
+	enum class RunMode
+	{
+		Normal,
+		StressGC,
+		Debugged
+	};
+
+	void CheckScript(const std::filesystem::path& path, RunMode mode)
 	{
 		std::string source;
 		if (!ReadFile(path, source))
@@ -80,11 +89,38 @@ namespace {
 		Expectations expected = ReadExpectations(source);
 
 		ForgeTest::RunOptions options;
-		options.StressGC = stressGC;
+		options.StressGC = mode == RunMode::StressGC;
 		std::filesystem::path folder = path.parent_path() / "modules";
-		options.Setup = [folder](ForgeScript::VM& vm)
+		std::mt19937 steps(7);
+		options.Setup = [folder, mode, &steps](ForgeScript::VM& vm)
 		{
 			vm.SetRandomSeed(42);
+			if (mode == RunMode::Debugged)
+			{
+				std::vector<int> every;
+				for (int line = 1; line <= 2000; line++)
+					every.push_back(line);
+				vm.SetBreakpoints("test.forge", every);
+				for (const auto& entry : std::filesystem::directory_iterator(folder))
+					vm.SetBreakpoints(entry.path().filename().string(), every);
+				// Look at everything an editor would show, then go on in a random way.
+				vm.SetDebugHandler([&vm, &steps](const ForgeScript::DebugStop&)
+				{
+					const std::vector<ForgeScript::DebugFrame> stack = vm.GetCallStack();
+					for (size_t frame = 0; frame < stack.size(); frame++)
+					{
+						vm.GetVariables(frame);
+						vm.GetGlobals(stack[frame].Owner);
+					}
+					switch (steps() % 4)
+					{
+						case 0: vm.Continue(); break;
+						case 1: vm.StepIn(); break;
+						case 2: vm.StepOver(); break;
+						default: vm.StepOut(); break;
+					}
+				});
+			}
 			vm.SetModuleLoader([folder](const std::string& name, std::string& outName, std::string& outSource)
 			{
 				std::filesystem::path file = folder / (name + ".forge");
@@ -94,7 +130,7 @@ namespace {
 		};
 		ForgeTest::ScriptRun run = ForgeTest::RunScript(source, options);
 
-		std::string label = path.filename().string() + (stressGC ? " (GC stress)" : "");
+		std::string label = path.filename().string() + (mode == RunMode::StressGC ? " (GC stress)" : mode == RunMode::Debugged ? " (debugged)" : "");
 		std::vector<std::string> actual = SplitLines(run.Output);
 		if (actual != expected.Lines)
 		{
@@ -145,12 +181,18 @@ TEST_CASE("ScriptExpectations")
 	CHECK(!files.empty());
 	for (const std::filesystem::path& file : files)
 	{
-		CheckScript(file, false);
+		CheckScript(file, RunMode::Normal);
 	}
 }
 
 TEST_CASE("ScriptExpectationsUnderGCStress")
 {
 	for (const std::filesystem::path& file : ScriptFiles())
-		CheckScript(file, true);
+		CheckScript(file, RunMode::StressGC);
+}
+
+TEST_CASE("ScriptExpectationsWhileDebugging")
+{
+	for (const std::filesystem::path& file : ScriptFiles())
+		CheckScript(file, RunMode::Debugged);
 }

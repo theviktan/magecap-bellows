@@ -99,7 +99,7 @@ namespace ForgeScript {
 				Instance* instance = static_cast<Instance*>(object);
 				// A kind can describe itself with a "to_text" function.
 				Closure* custom = instance->Class->FindMethod(Intern("to_text"));
-				if (custom && custom->Fn->Arity == 0)
+				if (custom && custom->Fn->Arity == 0 && !m_PlainText)
 				{
 					if (m_TextDepth > 8)
 						throw RuntimeError("'to_text' of " + instance->Class->Name->Text + " keeps turning itself into text forever.");

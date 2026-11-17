@@ -94,6 +94,16 @@ namespace ForgeScript {
 
 	struct Module;
 
+	// A named variable of a function, for the debugger: it lives in stack slot 'Slot' while the code
+	// between StartIp and EndIp runs.
+	struct LocalName
+	{
+		std::string Name;
+		uint8_t Slot = 0;
+		size_t StartIp = 0;
+		size_t EndIp = static_cast<size_t>(-1);
+	};
+
 	struct Function : public Object
 	{
 		ForgeScript::Chunk Chunk;
@@ -102,6 +112,9 @@ namespace ForgeScript {
 		String* Name = nullptr;
 		Module* Owner = nullptr;
 		bool IsMethod = false;
+		size_t BodyIp = 0; // Where the code written in the body starts, after the set-up of its variables.
+		std::vector<LocalName> LocalNames;
+		std::vector<std::string> UpvalueNames; // One per upvalue, in order.
 
 		Function() : Object(ObjectType::Function) {}
 	};

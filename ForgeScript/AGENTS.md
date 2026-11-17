@@ -32,7 +32,7 @@ A change is done only when it builds with warnings as errors, every test passes 
 
 1. **Lexer** (`Compiler/Lexer.cpp`) turns text into tokens. New lines end statements, except inside `( ) [ ] { }`, but they matter again inside a `function ... end` written within brackets.
 2. **Compiler** (`Compiler/Compiler.cpp`) is a single-pass compiler that emits bytecode (`Core/Chunk.h`). It pre-scans for phrases, script-level names and hoisted `function`/`phrase` definitions, and stops at the first error with a friendly message. For checkers (`VM::FindMistakes`, `forgescript --check`) it can instead record a mistake, restore its state (`RecoverableUnit`) and continue after the statement (`EndOfUnit`); any new compiler state that a statement changes must be restored there too.
-3. **VM** (`VM/VM.cpp`) runs bytecode in **tasks** (coroutines, `VM/Task.h`). Every `when` handler and `start` is a task. `wait` suspends a task; `VM::Update` resumes it.
+3. **VM** (`VM/VM.cpp`) runs bytecode in **tasks** (coroutines, `VM/Task.h`). Every `when` handler and `start` is a task. `wait` suspends a task; `VM::Update` resumes it. The debugger (`VM::SetBreakpoints`, the steps, `GetCallStack`, `GetVariables`) holds a task the same way, in the `Stopped` state, and checks lines only while it is in use (`m_DebugActive`). It names variables from `Function::LocalNames` and `UpvalueNames`, which the compiler records in `AddLocal`/`NameLocal`, `EndScope` and `AddUpvalue`: a new way of making a local must name it there too. Code emitted right after an `end` belongs to the block's opening line (`CodeLine`), so stepping never stops on an `end`.
 4. **Library** (`VM/Library.cpp`) holds built-in functions, phrases and methods for text, lists, maps and vectors.
 5. **Garbage collector** (mark and sweep, in `VM.cpp`) runs only at instruction boundaries.
 6. **Script variables** (`Compiler/ScriptVariables.cpp`) reads a script's top-level `set name to <plain value>` lines from the tokens, without compiling or running it, for host settings such as the Bellows Inspector. If the compiler learns a new block-opening word, update `TokenOpensBlock` there too (the language server uses it as well).
@@ -83,6 +83,7 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 - Scripts used with `use` live in `Tests/Scripts/modules/`.
 - C++ tests are doctest `TEST_CASE`s; `Tests/Source/TestFramework.h` adds `RunScript` and `CHECK_CONTAINS`.
 - `Examples/EngineIntegration` runs as a test too; keep it working, since it is the reference for engine integration.
+- `DebuggerTests.cpp` drives the debugger the way an editor does (stops, steps, variables, queued stops, unloading); `BellowsTests/Source/ForgeScriptDebuggerTests.cpp` does the same through `ForgeScriptRuntime`.
 - `Tests/LSP/LspCommand.cmake` runs `forgescript --lsp` on a recorded session (`session.lsp`, kept byte for byte by its `.gitattributes`); `LanguageServerTests.cpp` covers each request in detail.
 - `Tests/CLI/CheckCommand.cmake` pins the exact `forgescript --check` output and exit codes (text and JSON). Editors and MageCap Forge parse them, so change them only on purpose, together with `BellowsEditor --check-script`.
 
