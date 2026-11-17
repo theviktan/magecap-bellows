@@ -23,6 +23,9 @@ TEST_CASE("ForgeScript debugger stops entity scripts and holds the game until it
 		"when update with delta\n"           // 2
 		"\tadd 1 to ticks\n"                 // 3 breakpoint
 		"\tset my name to \"ticks {ticks}\"\n" // 4
+		"end\n"                             // 5
+		"when destroyed\n"                  // 6
+		"\tset my name to \"destroyed at {ticks}\"\n" // 7
 		"end\n"));
 
 	Ref<Scene> scene = CreateRef<Scene>();
@@ -94,12 +97,25 @@ TEST_CASE("ForgeScript debugger stops entity scripts and holds the game until it
 	runtime.GetMachine()->Continue();
 	CHECK_FALSE(runtime.IsStopped());
 
-	// Stopping play while a script is held ends the stop with the machine.
-	runtime.SetBreakpoints("Scripts/Counter.forge", { 3 });
+	// A change to a script while one is held is refused, and the stop stays as it is.
+	runtime.SetBreakpoints("Scripts/Counter.forge", { 3, 7 });
 	runtime.Update(*scene, 1.0f / 60.0f);
+	REQUIRE(runtime.IsStopped());
+	const size_t stopsBefore = stops.size();
+	CHECK_FALSE(runtime.Reload("Scripts/Counter.forge"));
+	REQUIRE_EQ(errors.size(), static_cast<size_t>(1));
+	CHECK_EQ(errors[0], std::string("Can't reload 'Scripts/Counter.forge' while a script is stopped at a breakpoint; continue first."));
 	CHECK(runtime.IsStopped());
+	CHECK(runtime.Reload("Scripts/Other.py"));
+	errors.clear();
+
+	// Stopping play while a script is held ends the stop without running the rest of it, and
+	// 'when destroyed' (line 7, which has a breakpoint) runs without stopping.
 	runtime.Stop();
 	CHECK_FALSE(runtime.IsStopped());
+	CHECK_EQ(stops.size(), stopsBefore);
+	// This session counted one update; the held one never added its tick.
+	CHECK_EQ(counter.GetName(), std::string("destroyed at 1"));
 	CHECK(errors.empty());
 
 	Scripting::SetContextScene(nullptr);

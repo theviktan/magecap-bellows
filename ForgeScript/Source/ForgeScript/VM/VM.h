@@ -228,6 +228,11 @@ namespace ForgeScript {
 		void ClearBreakpoints();
 		// Stops the next task that runs a line.
 		void Pause();
+		// Turns the debugger off for what this VM runs from now on, for example while a game shuts down:
+		// removes every breakpoint, the pause request and every step, and cancels the stopped tasks
+		// (the current stop and those waiting their turn) without calling the handler. The handler
+		// stays set.
+		void StopDebugging();
 		bool IsStopped() const { return m_StoppedTask != nullptr; }
 		const DebugStop& GetStop() const { return m_Stop; }
 		// Lets the stopped task go on. Each returns false when no task is stopped.

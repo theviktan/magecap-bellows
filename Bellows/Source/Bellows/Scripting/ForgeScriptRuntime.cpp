@@ -210,6 +210,10 @@ namespace Bellows::Scripting {
 		if (!m_VM)
 			return;
 
+		// Play is ending: a script held by the debugger does not go on, and 'when destroyed' runs without
+		// stopping. The runtime keeps its breakpoints for the next session.
+		m_VM->StopDebugging();
+
 		std::vector<UUID> entities;
 		for (const auto& [uuid, instance] : m_Instances)
 		{
@@ -288,6 +292,13 @@ namespace Bellows::Scripting {
 	{
 		if (!m_VM || !IsForgeScript(changedPath))
 			return true;
+		// Reloading unloads the modules the stopped task runs in, which would end the stop under the
+		// debugger's feet; the editor applies the change after Continue instead.
+		if (m_VM->IsStopped())
+		{
+			m_Reporter("ForgeScript", "Can't reload '" + changedPath + "' while a script is stopped at a breakpoint; continue first.");
+			return false;
+		}
 
 		// Scripts loaded with 'use' are shared, so any change can affect every script: read them again.
 		m_VM->ClearModuleCache();
