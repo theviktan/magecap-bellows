@@ -709,6 +709,31 @@ namespace ForgeScript {
 		RefreshDebugActive();
 	}
 
+	void VM::StopDebugging()
+	{
+		m_Breakpoints.clear();
+		m_PauseRequested = false;
+		for (Task* task : m_Tasks)
+			ReleaseStep(task);
+		auto cancel = [this](Task* task)
+		{
+			task->State = TaskState::Cancelled;
+			CloseUpvalues(task, 0);
+			ReleaseStep(task);
+		};
+		for (auto& [task, stop] : m_QueuedStops)
+			cancel(task);
+		m_QueuedStops.clear();
+		if (m_StoppedTask)
+		{
+			cancel(m_StoppedTask);
+			m_StoppedTask = nullptr;
+		}
+		m_ResumeRequested = false;
+		m_ResumeStep = StepMode::None;
+		RefreshDebugActive();
+	}
+
 	bool VM::Continue() { return Resume(StepMode::None); }
 	bool VM::StepOver() { return Resume(StepMode::Over); }
 	bool VM::StepIn() { return Resume(StepMode::In); }

@@ -473,3 +473,48 @@ TEST_CASE("DebuggerBreakpointsCanChangeWhileStopped")
 	CHECK_EQ(debug.Printed.size(), static_cast<size_t>(4));
 	CHECK_EQ(debug.Stops.size(), static_cast<size_t>(2));
 }
+
+TEST_CASE("DebuggerCanBeTurnedOff")
+{
+	Debugged debug;
+	debug.Machine.SetBreakpoints("a.forge", { 2 });
+	debug.Machine.SetBreakpoints("b.forge", { 2 });
+	Module* a = debug.Load("when go\n\tsay \"a\"\nend\n", "a.forge");
+	Module* b = debug.Load("when go\n\tsay \"b\"\nend\n", "b.forge");
+	// A held stop, and another waiting its turn.
+	debug.Machine.Emit(a, "go");
+	debug.Machine.Emit(b, "go");
+	REQUIRE(debug.Machine.IsStopped());
+	const size_t stopsBefore = debug.Stops.size();
+
+	debug.Machine.Pause();
+	debug.Machine.StopDebugging();
+	// The held tasks are gone without running the rest of their code or calling the handler.
+	CHECK_FALSE(debug.Machine.IsStopped());
+	CHECK_EQ(debug.Stops.size(), stopsBefore);
+	CHECK(debug.Printed.empty());
+	CHECK_FALSE(debug.Machine.Continue());
+
+	// No breakpoint or pause is left: everything runs straight through.
+	debug.Machine.Emit(a, "go");
+	debug.Machine.Emit(b, "go");
+	CHECK_EQ(debug.Printed, (std::vector<std::string> { "a", "b" }));
+	CHECK_EQ(debug.Stops.size(), stopsBefore);
+}
+
+TEST_CASE("DebuggerTurnedOffForgetsAStepAcrossAWait")
+{
+	Debugged debug;
+	debug.Machine.SetBreakpoints("game.forge", { 2 });
+	debug.Load("function slow()\n\twait 1 second\n\tsay \"after\"\nend\nstart slow()\n");
+	REQUIRE_EQ(debug.StoppedLine(), 2);
+	// The step goes on waiting with the task...
+	debug.Machine.StepOver();
+	CHECK_FALSE(debug.Machine.IsStopped());
+	// ...until the debugger is turned off: then the task finishes without stopping.
+	debug.Machine.StopDebugging();
+	debug.Machine.Update(1.0);
+	CHECK_FALSE(debug.Machine.IsStopped());
+	CHECK_EQ(debug.Printed, std::vector<std::string> { "after" });
+	CHECK_EQ(debug.Stops.size(), static_cast<size_t>(1));
+}

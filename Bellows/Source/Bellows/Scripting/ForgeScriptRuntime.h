@@ -65,12 +65,15 @@ namespace Bellows::Scripting {
 		// (VM::CarryOverVariables), waiting tasks of the old version stop, and 'when reloaded' runs.
 		// Returns false when any script kept its old version (mistakes, a missing file, an error in its
 		// top level); every problem has been reported then. Paths that are not .forge change nothing.
+		// While a script is stopped in the debugger nothing reloads: it reports "Can't reload '<path>'
+		// while a script is stopped at a breakpoint; continue first." and returns false.
 		bool Reload(const std::string& changedPath);
 
 		// Debugger (the ForgeScript VM's debugger API, see ForgeScript/VM/VM.h). Breakpoints are set by
 		// script path (the asset path, as in error messages) and, like the handler, stay set across play
 		// sessions: each new machine gets them. While a script is stopped, Update and FixedUpdate send no
-		// events, so nothing else runs until the editor continues or steps through GetMachine().
+		// events, so nothing else runs until the editor continues or steps through GetMachine(). Stop()
+		// ends a stop without running the rest of the held code, and 'when destroyed' does not stop.
 		void SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines);
 		void ClearBreakpoints();
 		void SetDebugHandler(ForgeScript::DebugHandler handler);
