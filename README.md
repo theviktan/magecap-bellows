@@ -34,7 +34,9 @@ can drive end to end.
   the Content panel has a folder tree.
 * **Script Editor** built in, like Godot's: a **Scene / Script** switch in the toolbar, tabs for
   open scripts, ForgeScript and Python highlighting, an outline of functions and events, find and
-  replace, completion, live error checking (the line turns red as you type), and the ForgeScript
+  replace, completion, live error checking (the line turns red as you type), ForgeScript
+  completion and hover help from the ForgeScript language server (engine functions, phrases and
+  your own names, with signatures and docs; Ctrl+Space or "." to ask), and the ForgeScript
   guides one click away in **Help**. Attach scripts with right-click → **Attach Script...** in the
   Hierarchy or by dragging a script onto an entity.
 * **Automation**: everything in the editor is scriptable (`bellows.editor`), from the Console,
