@@ -85,7 +85,11 @@ The root `AGENTS.md` Hazel-style rules apply, with one difference: the language 
 - `Examples/EngineIntegration` runs as a test too; keep it working, since it is the reference for engine integration.
 - `DebuggerTests.cpp` drives the debugger the way an editor does (stops, steps, variables, queued stops, unloading); `BellowsTests/Source/ForgeScriptDebuggerTests.cpp` does the same through `ForgeScriptRuntime`.
 - `Tests/LSP/LspCommand.cmake` runs `forgescript --lsp` on a recorded session (`session.lsp`, kept byte for byte by its `.gitattributes`); `LanguageServerTests.cpp` covers each request in detail.
-- `Tests/CLI/CheckCommand.cmake` pins the exact `forgescript --check` output and exit codes (text and JSON). Editors and MageCap Forge parse them, so change them only on purpose, together with `BellowsEditor --check-script`.
+- `Tests/CLI/CheckCommand.cmake` pins the exact `forgescript --check` output and exit codes (text and JSON), and that `--version` matches the newest `CHANGELOG.md` entry. Editors and MageCap Forge parse them, so change them only on purpose, together with `BellowsEditor --check-script`.
+
+## Versions
+
+The version is set in one place, `FORGESCRIPT_VERSION` in `Source/ForgeScript/ForgeScript.h` (CMake reads it from there), and every version has an entry at the top of `CHANGELOG.md`. Raise the minor number with a pull request that adds language or tool features and the patch number with one that only fixes things, in the same pull request, with its changelog entry. Hosts and MageCap Forge show the version and use it to tell an old `forgescript` from a new one, so a release must never keep the number of an older build. `ForgeScriptCheckCommand` fails when `--version` and the newest changelog entry disagree.
 
 ## Commits
 
