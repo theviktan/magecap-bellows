@@ -27,6 +27,10 @@ Language:
 - `trigger` events reach other languages through the host (MageCap Bellows' script event hub). An
   event triggered from inside 64 other events stops with an error the script can catch.
 
+In MageCap Bellows 0.3.0 (the engine binding):
+- Engine floats reach scripts as the number their shortest text means: a position of 0.1 is 0.1.
+- A script stopped by the debugger holds the rest of the frame.
+
 Fixes:
 - A function, phrase, kind or `when` handler containing `else if` or `otherwise if` no longer hides
   every line after it (the script stopped there without an error, and checkers missed later
