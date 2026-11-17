@@ -66,3 +66,7 @@
 	path = vendor/ImGuiColorTextEdit
 	url = https://github.com/goossens/ImGuiColorTextEdit.git
 	shallow = true
+[submodule "vendor/tinyexr"]
+	path = vendor/tinyexr
+	url = https://github.com/syoyo/tinyexr
+	shallow = true

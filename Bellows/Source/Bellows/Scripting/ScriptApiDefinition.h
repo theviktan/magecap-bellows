@@ -181,6 +181,12 @@ namespace Bellows::Scripting {
 		material.Property("normal_map", [](const ScriptMaterial& m) { return m.Instance->NormalMapPath; },
 			[](const ScriptMaterial& m, const std::optional<std::string>& v) { Detail::SetMaterialTexture(*m.Instance, v, m.Instance->NormalMapPath, TextureColorSpace::Linear, &Material::SetNormalMap); },
 			"Tangent-space normal map path, or None");
+		material.Property("roughness_map", [](const ScriptMaterial& m) { return m.Instance->RoughnessMapPath; },
+			[](const ScriptMaterial& m, const std::optional<std::string>& v) { Detail::SetMaterialTexture(*m.Instance, v, m.Instance->RoughnessMapPath, TextureColorSpace::Linear, &Material::SetRoughnessMap); },
+			"Grayscale roughness texture path (as downloaded texture sets have it), or None");
+		material.Property("metallic_map", [](const ScriptMaterial& m) { return m.Instance->MetallicMapPath; },
+			[](const ScriptMaterial& m, const std::optional<std::string>& v) { Detail::SetMaterialTexture(*m.Instance, v, m.Instance->MetallicMapPath, TextureColorSpace::Linear, &Material::SetMetallicMap); },
+			"Grayscale metallic texture path, or None");
 		material.Property("metallic_roughness_map", [](const ScriptMaterial& m) { return m.Instance->MetallicRoughnessMapPath; },
 			[](const ScriptMaterial& m, const std::optional<std::string>& v) { Detail::SetMaterialTexture(*m.Instance, v, m.Instance->MetallicRoughnessMapPath, TextureColorSpace::Linear, &Material::SetMetallicRoughnessMap); },
 			"glTF metallic (B) / roughness (G) texture path, or None");

@@ -69,6 +69,10 @@ void main()
 		roughness *= metalRough.g;
 		metallic *= metalRough.b;
 	}
+	if ((u_Material.Flags.y & TEXTURE_ROUGHNESS) != 0u)
+		roughness *= texture(sampler2D(u_RoughnessMap, s_Material), uv).r;
+	if ((u_Material.Flags.y & TEXTURE_METALLIC) != 0u)
+		metallic *= texture(sampler2D(u_MetallicMap, s_Material), uv).r;
 	roughness = clamp(roughness, 0.045, 1.0);
 	metallic = clamp(metallic, 0.0, 1.0);
 
