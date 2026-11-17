@@ -83,7 +83,7 @@ namespace Bellows {
 
 	Ref<Environment> Environment::LoadFromFile(const std::filesystem::path& path, const EnvironmentQuality& quality)
 	{
-		Ref<Texture2D> equirect = Texture2D::LoadFromFile(path, TextureColorSpace::Linear);
+		Ref<Texture2D> equirect = Texture2D::LoadFromFile(path, TextureColorSpace::Linear, true);
 		if (!equirect)
 			return nullptr;
 		return CreateFromEquirectangular(equirect, quality);

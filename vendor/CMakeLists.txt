@@ -115,7 +115,8 @@ target_include_directories(BellowsHeaderLibs SYSTEM INTERFACE
 	"${CMAKE_CURRENT_SOURCE_DIR}/stb"
 	"${CMAKE_CURRENT_SOURCE_DIR}/cgltf"
 	"${CMAKE_CURRENT_SOURCE_DIR}/json/single_include"
-	"${CMAKE_CURRENT_SOURCE_DIR}/miniaudio")
+	"${CMAKE_CURRENT_SOURCE_DIR}/miniaudio"
+	"${CMAKE_CURRENT_SOURCE_DIR}/tinyexr")
 
 add_library(BellowsFileDialogs INTERFACE)
 target_include_directories(BellowsFileDialogs SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/portable-file-dialogs")

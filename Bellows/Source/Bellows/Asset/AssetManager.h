@@ -40,6 +40,9 @@ namespace Bellows {
 		static std::string GetAssetPath(const std::filesystem::path& absolutePath);
 		static bool Exists(const std::string& assetPath);
 		static AssetType GetAssetType(const std::filesystem::path& path);
+		// True when the file can fill a slot of the given type. Besides its own type, an OpenEXR image
+		// (a Texture) can be a sky Environment, and a .hdr image (an Environment) can be a material map.
+		static bool CanUseAs(const std::filesystem::path& path, AssetType type);
 
 		static bool IsBuiltinPath(std::string_view assetPath);
 		static const std::vector<std::string>& GetBuiltinMeshPaths();

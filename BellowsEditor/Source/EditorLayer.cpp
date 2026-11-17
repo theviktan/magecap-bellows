@@ -1765,6 +1765,23 @@ namespace Bellows {
 		}
 	}
 
+	void EditorLayer::SetSkyEnvironment(const std::string& assetPath)
+	{
+		Entity sky;
+		for (Entity entity : GetActiveScene()->GetAllEntities())
+		{
+			if (entity.HasComponent<SkyLightComponent>())
+			{
+				sky = entity;
+				break;
+			}
+		}
+		if (!sky)
+			sky = GetActiveScene()->CreateEntity("Sky");
+		sky.AddOrReplaceComponent<SkyLightComponent>().EnvironmentPath = assetPath;
+		CommitChange("Set environment");
+	}
+
 	void EditorLayer::HandleViewportDrop(const std::string& assetPath)
 	{
 		const AssetType type = AssetManager::GetAssetType(assetPath);
@@ -1795,22 +1812,13 @@ namespace Bellows {
 				Application::Get().SubmitToMainThread([this, assetPath] { OpenScene(assetPath); });
 				break;
 			case AssetType::Environment:
-			{
-				Entity sky;
-				for (Entity entity : GetActiveScene()->GetAllEntities())
-				{
-					if (entity.HasComponent<SkyLightComponent>())
-					{
-						sky = entity;
-						break;
-					}
-				}
-				if (!sky)
-					sky = GetActiveScene()->CreateEntity("Sky");
-				sky.AddOrReplaceComponent<SkyLightComponent>().EnvironmentPath = assetPath;
-				CommitChange("Set environment");
+				SetSkyEnvironment(assetPath);
 				break;
-			}
+			case AssetType::Texture:
+				// An OpenEXR image dropped on the scene is a sky (HDRIs); as a material map it goes on a material.
+				if (AssetManager::CanUseAs(assetPath, AssetType::Environment))
+					SetSkyEnvironment(assetPath);
+				break;
 			case AssetType::Material:
 			{
 				// Materials apply to whatever is under the cursor.

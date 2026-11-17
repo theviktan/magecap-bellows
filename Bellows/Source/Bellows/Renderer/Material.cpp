@@ -61,6 +61,8 @@ namespace Bellows {
 			if (m_MetallicRoughnessMap) textureBits |= ShaderInterop::TextureMetallicRoughness;
 			if (m_OcclusionMap) textureBits |= ShaderInterop::TextureOcclusion;
 			if (m_EmissiveMap) textureBits |= ShaderInterop::TextureEmissive;
+			if (m_RoughnessMap) textureBits |= ShaderInterop::TextureRoughness;
+			if (m_MetallicMap) textureBits |= ShaderInterop::TextureMetallic;
 			data.Flags = glm::uvec4(static_cast<uint32_t>(m_Properties.Mode), textureBits, 0u, 0u);
 
 			commandList->writeBuffer(m_ConstantBuffer, &data, sizeof(data));
@@ -85,6 +87,8 @@ namespace Bellows {
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textureOr(m_OcclusionMap, white)));
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, textureOr(m_EmissiveMap, white)));
 			desc.addItem(nvrhi::BindingSetItem::Sampler(6, Renderer::GetMaterialSampler()));
+			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, textureOr(m_RoughnessMap, white)));
+			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, textureOr(m_MetallicMap, white)));
 
 			m_BindingSet = device->createBindingSet(desc, Renderer::GetMaterialBindingLayout());
 			m_BindingSetDirty = false;
@@ -102,11 +106,15 @@ namespace Bellows {
 		clone->m_MetallicRoughnessMap = m_MetallicRoughnessMap;
 		clone->m_OcclusionMap = m_OcclusionMap;
 		clone->m_EmissiveMap = m_EmissiveMap;
+		clone->m_RoughnessMap = m_RoughnessMap;
+		clone->m_MetallicMap = m_MetallicMap;
 		clone->AlbedoMapPath = AlbedoMapPath;
 		clone->NormalMapPath = NormalMapPath;
 		clone->MetallicRoughnessMapPath = MetallicRoughnessMapPath;
 		clone->OcclusionMapPath = OcclusionMapPath;
 		clone->EmissiveMapPath = EmissiveMapPath;
+		clone->RoughnessMapPath = RoughnessMapPath;
+		clone->MetallicMapPath = MetallicMapPath;
 		return clone;
 	}
 

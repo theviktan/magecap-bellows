@@ -11,6 +11,8 @@
 
 class TextEditor;
 
+namespace Bellows { class ForgeScriptAssist; }
+
 namespace Bellows {
 
 	class EditorLayer;
@@ -66,6 +68,12 @@ namespace Bellows {
 			bool NeedsAnalysis = true;
 			std::vector<ScriptOutlineItem> Outline;
 			std::vector<ScriptDiagnostic> Diagnostics;
+
+			// The last hover help asked for (the hover popup draws every frame).
+			size_t HoverLine = SIZE_MAX;
+			size_t HoverColumn = SIZE_MAX;
+			std::string HoverSource;
+			std::string HoverText;
 		};
 
 		Document* FindDocument(const std::filesystem::path& path);
@@ -88,6 +96,9 @@ namespace Bellows {
 		void DrawCreateDialog();
 		void HandleShortcuts();
 		void ConfigureEditor(Document& document);
+		// ForgeScript completion and hover help come from the language server (ForgeScriptAssist).
+		ForgeScriptAssist& GetForgeScriptAssist();
+		void DrawForgeScriptHover(Document& document, size_t line, size_t column);
 		std::filesystem::path FindDocumentation(const std::string& relativePath) const;
 	private:
 		EditorLayer& m_Editor;
@@ -99,6 +110,7 @@ namespace Bellows {
 		bool m_FocusRequested = false;
 		bool m_FocusEditor = false;
 		double m_LastDiskCheck = 0.0;
+		Scope<ForgeScriptAssist> m_ForgeScriptAssist;
 
 		// Closing a tab with unsaved changes asks first.
 		size_t m_PendingClose = SIZE_MAX;

@@ -5,6 +5,7 @@
 #include "Bellows/Renderer/Renderer.h"
 
 #include <stb_image.h>
+#include <tinyexr.h>
 
 namespace Bellows {
 
@@ -79,6 +80,38 @@ namespace Bellows {
 
 	}
 
+	namespace {
+
+		bool IsOpenEXR(const void* data, size_t size)
+		{
+			static constexpr uint8_t c_Magic[4] = { 0x76, 0x2F, 0x31, 0x01 };
+			return size >= 4 && std::memcmp(data, c_Magic, 4) == 0;
+		}
+
+		// Float RGBA pixels as a texture: kept as float, or clamped to 8 bits (with mips) for material maps.
+		Ref<Texture2D> CreateFromFloatPixels(uint32_t width, uint32_t height, const float* pixels, TextureColorSpace colorSpace,
+			const std::string& debugName, bool keepHighDynamicRange)
+		{
+			if (keepHighDynamicRange)
+				return Texture2D::CreateFromRGBA32F(width, height, pixels, debugName);
+
+			const bool srgb = colorSpace == TextureColorSpace::SRGB;
+			const size_t count = static_cast<size_t>(width) * height;
+			std::vector<uint8_t> rgba8(count * 4);
+			for (size_t i = 0; i < count; i++)
+			{
+				for (int c = 0; c < 3; c++)
+				{
+					const float value = pixels[i * 4 + c];
+					rgba8[i * 4 + c] = srgb ? LinearToSRGB8(value) : static_cast<uint8_t>(std::lround(std::clamp(value, 0.0f, 1.0f) * 255.0f));
+				}
+				rgba8[i * 4 + 3] = static_cast<uint8_t>(std::lround(std::clamp(pixels[i * 4 + 3], 0.0f, 1.0f) * 255.0f));
+			}
+			return Texture2D::CreateFromRGBA8(width, height, rgba8.data(), colorSpace, debugName);
+		}
+
+	}
+
 	uint32_t Texture2D::CalculateMipCount(uint32_t width, uint32_t height)
 	{
 		uint32_t levels = 1;
@@ -91,7 +124,7 @@ namespace Bellows {
 		return levels;
 	}
 
-	Ref<Texture2D> Texture2D::LoadFromFile(const std::filesystem::path& path, TextureColorSpace colorSpace)
+	Ref<Texture2D> Texture2D::LoadFromFile(const std::filesystem::path& path, TextureColorSpace colorSpace, bool keepHighDynamicRange)
 	{
 		Buffer data = FileSystem::ReadBinaryFile(path);
 		if (!data)
@@ -99,13 +132,31 @@ namespace Bellows {
 			BW_CORE_ERROR("Failed to read texture '{}'", path.string());
 			return nullptr;
 		}
-		return LoadFromMemory(data.Data(), data.Size(), colorSpace, path.filename().string());
+		return LoadFromMemory(data.Data(), data.Size(), colorSpace, path.filename().string(), keepHighDynamicRange);
 	}
 
-	Ref<Texture2D> Texture2D::LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName)
+	Ref<Texture2D> Texture2D::LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName,
+		bool keepHighDynamicRange)
 	{
 		const auto* bytes = static_cast<const stbi_uc*>(data);
 		int width = 0, height = 0, channels = 0;
+
+		if (IsOpenEXR(data, size))
+		{
+			float* pixels = nullptr;
+			const char* error = nullptr;
+			if (LoadEXRFromMemory(&pixels, &width, &height, static_cast<const unsigned char*>(data), size, &error) != TINYEXR_SUCCESS)
+			{
+				BW_CORE_ERROR("Failed to decode EXR image '{}': {}", debugName, error ? error : "unknown error");
+				if (error)
+					FreeEXRErrorMessage(error);
+				return nullptr;
+			}
+			Ref<Texture2D> texture = CreateFromFloatPixels(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, colorSpace,
+				debugName, keepHighDynamicRange);
+			std::free(pixels);
+			return texture;
+		}
 
 		if (stbi_is_hdr_from_memory(bytes, static_cast<int>(size)))
 		{
@@ -115,7 +166,8 @@ namespace Bellows {
 				BW_CORE_ERROR("Failed to decode HDR image '{}': {}", debugName, stbi_failure_reason());
 				return nullptr;
 			}
-			Ref<Texture2D> texture = CreateFromRGBA32F(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, debugName);
+			Ref<Texture2D> texture = CreateFromFloatPixels(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, colorSpace,
+				debugName, keepHighDynamicRange);
 			stbi_image_free(pixels);
 			return texture;
 		}

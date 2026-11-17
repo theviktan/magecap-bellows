@@ -106,11 +106,25 @@ namespace Bellows {
 		if (extension == ".bprefab") return AssetType::Prefab;
 		if (extension == ".gltf" || extension == ".glb") return AssetType::Mesh;
 		if (extension == ".bmat") return AssetType::Material;
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".bmp") return AssetType::Texture;
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".bmp" || extension == ".exr")
+			return AssetType::Texture;
 		if (extension == ".hdr") return AssetType::Environment;
 		if (extension == ".wav" || extension == ".mp3" || extension == ".flac" || extension == ".ogg") return AssetType::Audio;
 		if (extension == ".forge" || extension == ".py") return AssetType::Script;
 		return AssetType::None;
+	}
+
+	bool AssetManager::CanUseAs(const std::filesystem::path& path, AssetType type)
+	{
+		const AssetType own = GetAssetType(path);
+		if (own == type)
+			return true;
+		const std::string extension = ToLower(path.extension().string());
+		if (type == AssetType::Environment)
+			return extension == ".exr";
+		if (type == AssetType::Texture)
+			return extension == ".hdr";
+		return false;
 	}
 
 	bool AssetManager::IsBuiltinPath(std::string_view assetPath)
@@ -255,6 +269,8 @@ namespace Bellows {
 		json["NormalMap"] = material->NormalMapPath;
 		json["MetallicRoughnessMap"] = material->MetallicRoughnessMapPath;
 		json["OcclusionMap"] = material->OcclusionMapPath;
+		json["RoughnessMap"] = material->RoughnessMapPath;
+		json["MetallicMap"] = material->MetallicMapPath;
 		json["EmissiveMap"] = material->EmissiveMapPath;
 
 		if (!FileSystem::WriteTextFile(GetAbsolutePath(assetPath), json.dump(1, '\t')))
@@ -306,12 +322,16 @@ namespace Bellows {
 		JsonRead(json, "MetallicRoughnessMap", material->MetallicRoughnessMapPath);
 		JsonRead(json, "OcclusionMap", material->OcclusionMapPath);
 		JsonRead(json, "EmissiveMap", material->EmissiveMapPath);
+		JsonRead(json, "RoughnessMap", material->RoughnessMapPath);
+		JsonRead(json, "MetallicMap", material->MetallicMapPath);
 
 		material->SetAlbedoMap(GetTexture(material->AlbedoMapPath, TextureColorSpace::SRGB));
 		material->SetNormalMap(GetTexture(material->NormalMapPath, TextureColorSpace::Linear));
 		material->SetMetallicRoughnessMap(GetTexture(material->MetallicRoughnessMapPath, TextureColorSpace::Linear));
 		material->SetOcclusionMap(GetTexture(material->OcclusionMapPath, TextureColorSpace::Linear));
 		material->SetEmissiveMap(GetTexture(material->EmissiveMapPath, TextureColorSpace::SRGB));
+		material->SetRoughnessMap(GetTexture(material->RoughnessMapPath, TextureColorSpace::Linear));
+		material->SetMetallicMap(GetTexture(material->MetallicMapPath, TextureColorSpace::Linear));
 		return material;
 	}
 

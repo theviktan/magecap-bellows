@@ -448,6 +448,16 @@ class Material:
     @normal_map.setter
     def normal_map(self, value: str | None) -> None: ...
     @property
+    def roughness_map(self) -> str:
+        """Grayscale roughness texture path (as downloaded texture sets have it), or None"""
+    @roughness_map.setter
+    def roughness_map(self, value: str | None) -> None: ...
+    @property
+    def metallic_map(self) -> str:
+        """Grayscale metallic texture path, or None"""
+    @metallic_map.setter
+    def metallic_map(self, value: str | None) -> None: ...
+    @property
     def metallic_roughness_map(self) -> str:
         """glTF metallic (B) / roughness (G) texture path, or None"""
     @metallic_roughness_map.setter

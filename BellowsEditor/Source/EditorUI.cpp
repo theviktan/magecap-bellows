@@ -246,7 +246,7 @@ namespace Bellows::UI {
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(AssetPayload))
 			{
 				const std::string dropped(static_cast<const char*>(payload->Data));
-				if (AssetManager::GetAssetType(dropped) == type)
+				if (AssetManager::CanUseAs(dropped, type))
 				{
 					path = dropped;
 					changed = true;
@@ -313,7 +313,7 @@ namespace Bellows::UI {
 			{
 				for (const auto& entry : std::filesystem::recursive_directory_iterator(assets, std::filesystem::directory_options::skip_permission_denied, error))
 				{
-					if (!entry.is_regular_file(error) || AssetManager::GetAssetType(entry.path()) != type)
+					if (!entry.is_regular_file(error) || !AssetManager::CanUseAs(entry.path(), type))
 						continue;
 					const std::string assetPath = AssetManager::GetAssetPath(entry.path());
 					if (assetPath.empty() || assetPath.rfind(".bellows", 0) == 0 || !matches(assetPath))
