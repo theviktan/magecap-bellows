@@ -36,7 +36,7 @@ forgescript                          start the interactive prompt
 forgescript game.forge               run a script
 forgescript --check game.forge       check a script for mistakes without running it
 forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
-forgescript --version                show the version
+forgescript --version                show the version (see CHANGELOG.md)
 ```
 
 ### Checking scripts from editors and tools

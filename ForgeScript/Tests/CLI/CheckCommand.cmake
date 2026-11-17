@@ -55,3 +55,17 @@ expect_run("project use" 0 "${project}/Content/Scripts/Main.forge: no mistakes f
 expect_run("project stdin" 0 "{\"file\":\"${project}/Content/Scripts/Unsaved.forge\",\"diagnostics\":[]}"
 	ARGS --check --json --stdin --name "${project}/Content/Scripts/Unsaved.forge" INPUT "${project}/Content/Scripts/Main.forge")
 expect_run("project run" 0 "42" ARGS "${project}/Content/Scripts/Main.forge")
+
+# The version: tools and MageCap Forge read it from --version, and CHANGELOG.md's newest entry must
+# describe it, so a version bump without its changelog entry (or the other way round) fails here.
+execute_process(COMMAND "${FORGESCRIPT}" --version RESULT_VARIABLE code OUTPUT_VARIABLE out)
+string(STRIP "${out}" out)
+if(NOT code EQUAL 0 OR NOT out MATCHES "^ForgeScript ([0-9]+\\.[0-9]+\\.[0-9]+)$")
+	message(FATAL_ERROR "forgescript --version printed '${out}' (exit ${code}), expected 'ForgeScript <major>.<minor>.<patch>'")
+endif()
+set(version "${CMAKE_MATCH_1}")
+file(STRINGS "${FOLDER}/../../CHANGELOG.md" headings REGEX "^## [0-9]+\\.[0-9]+\\.[0-9]+")
+list(GET headings 0 newest)
+if(NOT newest MATCHES "^## ${version} ")
+	message(FATAL_ERROR "CHANGELOG.md's newest entry is '${newest}', but forgescript is version ${version}")
+endif()

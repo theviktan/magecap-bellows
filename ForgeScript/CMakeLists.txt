@@ -9,7 +9,14 @@ file(GLOB_RECURSE FORGESCRIPT_SOURCES CONFIGURE_DEPENDS
 
 add_library(ForgeScript STATIC ${FORGESCRIPT_SOURCES})
 target_include_directories(ForgeScript PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Source")
-target_compile_definitions(ForgeScript PUBLIC FORGESCRIPT_VERSION="1.0.0")
+# The version is set in ForgeScript.h; every target that uses the library sees the same one.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Source/ForgeScript/ForgeScript.h" FORGESCRIPT_VERSION_LINE
+	REGEX "#define FORGESCRIPT_VERSION \"[0-9]+\\.[0-9]+\\.[0-9]+\"")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" FORGESCRIPT_VERSION "${FORGESCRIPT_VERSION_LINE}")
+if(NOT FORGESCRIPT_VERSION)
+	message(FATAL_ERROR "Could not read FORGESCRIPT_VERSION from ForgeScript.h")
+endif()
+target_compile_definitions(ForgeScript PUBLIC FORGESCRIPT_VERSION="${FORGESCRIPT_VERSION}")
 bellows_set_compile_options(ForgeScript)
 set_target_properties(ForgeScript PROPERTIES FOLDER "ForgeScript")
 
