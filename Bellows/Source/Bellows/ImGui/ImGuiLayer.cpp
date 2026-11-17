@@ -26,6 +26,11 @@ namespace Bellows {
 		ImGuiIO& io = ImGui::GetIO();
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
 		io.IniFilename = nullptr;	// Applications choose where (and whether) layouts are saved.
+#ifdef NDEBUG
+		// Two widgets sharing an ID are a programmer error: Debug builds (and CI) show ImGui's red warning box,
+		// release builds never show it to the people using the editor or playing a game.
+		io.ConfigDebugHighlightIdConflicts = false;
+#endif
 
 		Application& application = Application::Get();
 		if (Window* window = application.GetWindow())

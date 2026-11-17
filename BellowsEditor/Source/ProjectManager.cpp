@@ -438,7 +438,8 @@ namespace Bellows {
 		ImGui::PopTextWrapPos();
 		ImGui::Spacing();
 		ImGui::Spacing();
-		if (PrimaryButton(ICON_FOLDER_PLUS "  New Project", ImVec2(0.0f, ImGui::GetFrameHeight() + 6.0f * scale)))
+		// Same text as the toolbar's button in the same window, so it needs its own ID.
+		if (PrimaryButton(ICON_FOLDER_PLUS "  New Project##EmptyState", ImVec2(0.0f, ImGui::GetFrameHeight() + 6.0f * scale)))
 			ShowNewProjectDialog();
 		if (!m_SampleProject.empty())
 		{

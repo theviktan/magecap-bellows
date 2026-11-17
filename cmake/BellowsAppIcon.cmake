@@ -2,7 +2,7 @@
 # which Explorer, the taskbar and shortcuts show. Elsewhere the window icon is set at run time.
 #
 #   bellows_add_app_icon(BellowsEditor)
-#   bellows_add_app_icon(forgescript "${PROJECT_SOURCE_DIR}/ForgeScript/Icons/ForgeScript.ico")
+#   bellows_add_app_icon(ForgeScriptCLI "${PROJECT_SOURCE_DIR}/ForgeScript/Icons/ForgeScript.ico")
 function(bellows_add_app_icon target)
 	if(NOT WIN32)
 		return()
