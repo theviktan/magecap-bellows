@@ -1159,26 +1159,26 @@ namespace ForgeScript {
 				return items;
 
 			// When the script shows what the value is, offer only what that kind of value has.
-			const std::string type = GuessType(lines, symbols, receiver, lineIndex, 0);
-			if (const ApiType* apiType = FindApiType(type))
+			const std::string known = GuessType(lines, symbols, receiver, lineIndex, 0);
+			if (const ApiType* apiType = FindApiType(known))
 			{
 				for (const ApiMember& memberEntry : apiType->Members)
 					item(memberEntry.Name, memberEntry.IsProperty ? c_CompletionProperty : c_CompletionMethod, memberEntry.Signature, memberEntry.Doc);
 				return items;
 			}
-			if (type == "text" || type == "list" || type == "map" || type == "vector" || type == "number")
+			if (known == "text" || known == "list" || known == "map" || known == "vector" || known == "number")
 			{
 				for (const HelpEntry& help : GetLanguageHelp())
 				{
-					if (help.EntryKind == HelpEntry::Kind::Method && help.Owner == type)
+					if (help.EntryKind == HelpEntry::Kind::Method && help.Owner == known)
 						item(help.Name, help.IsProperty ? c_CompletionProperty : c_CompletionMethod, help.Signature, help.Doc);
 				}
 				return items;
 			}
-			if (type.starts_with("kind:"))
+			if (known.starts_with("kind:"))
 			{
 				// The kind's own fields and functions, then those of the kinds it extends.
-				std::string kind = type.substr(5);
+				std::string kind = known.substr(5);
 				for (int level = 0; level < 16 && !kind.empty(); level++)
 				{
 					std::string parent;
