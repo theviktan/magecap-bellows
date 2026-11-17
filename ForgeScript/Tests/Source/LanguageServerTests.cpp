@@ -242,6 +242,18 @@ TEST_CASE("LanguageServerConvertsFileUris")
 	CHECK_EQ(path.generic_string(), std::string("/tmp/a b/%c.forge"));
 }
 
+TEST_CASE("LanguageServerKeepsPathsInUtf8")
+{
+	// Text in URIs and scripts is UTF-8 on every system, also where paths are not (Windows).
+	const std::string name = "C:/Users/Jos\xC3\xA9/Games/main.forge";
+	CHECK_EQ(GenericPathToUtf8(PathFromUtf8(name)), name);
+	std::filesystem::path path;
+	REQUIRE(LanguageServer::UriToPath("file:///C:/Users/Jos%C3%A9/Games/main.forge", path));
+	CHECK_EQ(GenericPathToUtf8(path), name);
+	CHECK_EQ(LanguageServer::PathToUri(PathFromUtf8(name)), std::string("file:///C:/Users/Jos%C3%A9/Games/main.forge"));
+	CHECK_EQ(PathToUtf8(ResolveUsePath(PathFromUtf8("/games"), "Scripts/Caf\xC3\xA9").filename()), std::string("Caf\xC3\xA9.forge"));
+}
+
 TEST_CASE("LanguageServerPublishesDiagnosticsInUtf16")
 {
 	TempFolder folder("diagnostics");
@@ -319,6 +331,42 @@ TEST_CASE("LanguageServerResolvesUseLikeTheEngine")
 	session.Open(LanguageServer::PathToUri(project.Path / "Content/Scripts/Helpers.forge"),
 		"function double(n)\n\treturn n * 2\nend\nphrase cheer (who)\n\tsay who\nend\n");
 	CHECK(session.Change(mainUri, "use \"Scripts/Helpers\"\ncheer \"team\"\n", 3).AsArray().empty());
+}
+
+TEST_CASE("LanguageServerShowsMistakesOfUsedScriptsOnTheUseLine")
+{
+	// The folder name is not ASCII, so this also checks that paths stay UTF-8 from URI to file.
+	TempFolder project("used-mistakes-Jos\xC3\xA9");
+	project.Write("Game.bproject", "{ \"Name\": \"Game\" }");
+	project.Write("Assets/Scripts/Broken.forge", "function f()\n\tadd 1 to\nend\nsay 1 + * 2\n");
+	project.Write("Assets/Scripts/Fine.forge", "function g()\n\treturn 1\nend\n");
+	Session session;
+	const std::string uri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Main.forge");
+
+	const Json diagnostics = session.Open(uri, "use \"Scripts/Fine\"\nuse \"Scripts/Broken\"\nsay 1\n");
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
+	const Json& used = diagnostics.AsArray()[0];
+	CHECK_EQ(RangeValue(used, "start", "line"), 1);
+	CHECK_EQ(RangeValue(used, "start", "character"), 4);
+	CHECK_EQ(RangeValue(used, "end", "character"), 20);
+	const std::string message = used.GetString("message");
+	CHECK_EQ(message.rfind("Broken.forge line 2: ", 0), static_cast<size_t>(0));
+	CHECK(message.ends_with(" (and 1 more mistake)"));
+
+	// Fixing the used script in the editor, before saving, clears the mistake in Main.
+	const std::string brokenUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Broken.forge");
+	CHECK(session.Open(brokenUri, "function f()\n\treturn 1\nend\n").AsArray().empty());
+	CHECK(session.Change(uri, "use \"Scripts/Fine\"\nuse \"Scripts/Broken\"\nsay 1\n", 2).AsArray().empty());
+
+	// Breaking it again, unsaved, shows one mistake without the count.
+	session.Change(brokenUri, "say 1 + * 2\n", 2);
+	const Json again = session.Change(uri, "use \"Scripts/Broken\" as b\n", 3);
+	REQUIRE_EQ(again.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(again.AsArray()[0].GetString("message").rfind("Broken.forge line 1: ", 0), static_cast<size_t>(0));
+	CHECK_EQ(again.AsArray()[0].GetString("message").find("more mistake"), std::string::npos);
+
+	// A script that uses itself is not checked twice.
+	CHECK(session.Change(brokenUri, "use \"Scripts/Broken\"\nsay 1\n", 3).AsArray().empty());
 }
 
 TEST_CASE("LanguageServerCompletesNames")
@@ -451,6 +499,17 @@ TEST_CASE("LanguageServerGoesToDefinitions")
 	CHECK_EQ(used.Get("range").Get("start").Get("line").AsNumber(), 1.0);
 	CHECK_EQ(session.At("textDocument/definition", uri, 6, 7).GetString("uri"), helpersUri);
 	CHECK(session.At("textDocument/definition", uri, 6, 1).IsNull());
+
+	// On the path of a 'use' line: the start of that script, inside or after the quotes' first word.
+	for (int character : { 5, 12, 15 })
+	{
+		const Json script = session.At("textDocument/definition", uri, 0, character);
+		CHECK_EQ(script.GetString("uri"), helpersUri);
+		CHECK_EQ(script.Get("range").Get("start").Get("line").AsNumber(), 0.0);
+	}
+	CHECK(session.At("textDocument/definition", uri, 0, 1).Get("uri").IsNull());
+	session.Change(uri, "use \"Scripts/Nowhere\"\n", 2);
+	CHECK(session.At("textDocument/definition", uri, 0, 8).IsNull());
 }
 
 TEST_CASE("FindScriptSymbolsListsDefinitions")

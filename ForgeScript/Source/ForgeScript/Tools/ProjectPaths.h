@@ -16,4 +16,10 @@ namespace ForgeScript {
 
 	bool ReadTextFile(const std::filesystem::path& path, std::string& outText);
 
+	// Paths and UTF-8 text. ForgeScript's text (scripts, URIs, JSON) is UTF-8, but path(std::string) and
+	// path::string() use the ANSI code page on Windows, which breaks names such as C:\Users\José.
+	std::filesystem::path PathFromUtf8(const std::string& text);
+	std::string PathToUtf8(const std::filesystem::path& path);
+	std::string GenericPathToUtf8(const std::filesystem::path& path);
+
 }

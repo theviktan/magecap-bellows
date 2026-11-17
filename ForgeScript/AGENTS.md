@@ -36,7 +36,7 @@ A change is done only when it builds with warnings as errors, every test passes 
 4. **Library** (`VM/Library.cpp`) holds built-in functions, phrases and methods for text, lists, maps and vectors.
 5. **Garbage collector** (mark and sweep, in `VM.cpp`) runs only at instruction boundaries.
 6. **Script variables** (`Compiler/ScriptVariables.cpp`) reads a script's top-level `set name to <plain value>` lines from the tokens, without compiling or running it, for host settings such as the Bellows Inspector. If the compiler learns a new block-opening word, update `TokenOpensBlock` there too (the language server uses it as well).
-7. **Tools** (`Tools/`) are for editors: `LanguageServer` (`forgescript --lsp`), `Help` (the hover and completion text for every keyword, built-in function, phrase and method), `Json` (the reader and writer they use, since the language takes no third-party code) and `ProjectPaths` (where `use` looks, the engine's rule).
+7. **Tools** (`Tools/`) are for editors: `LanguageServer` (`forgescript --lsp`), `Help` (the hover and completion text for every keyword, built-in function, phrase and method), `Json` (the reader and writer they use, since the language takes no third-party code) and `ProjectPaths` (where `use` looks, the engine's rule, and `PathFromUtf8`/`PathToUtf8`). Turn paths into text and back only through those two: `path(std::string)` and `path::string()` use the ANSI code page on Windows, but scripts, URIs and JSON are UTF-8.
 
 ## Code style
 
