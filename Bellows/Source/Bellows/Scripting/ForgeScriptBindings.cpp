@@ -4,6 +4,7 @@
 #include "Bellows/Scripting/ScriptApiDefinition.h"
 
 
+#include <charconv>
 #include <cmath>
 #include <concepts>
 #include <memory>
@@ -15,6 +16,18 @@
 namespace FS = ForgeScript;
 
 namespace Bellows::Scripting {
+
+	double ForgeScriptNumber(float value)
+	{
+		if (!std::isfinite(value))
+			return static_cast<double>(value);
+		char text[32];
+		const std::to_chars_result written = std::to_chars(text, text + sizeof(text), value);
+		double number = static_cast<double>(value);
+		if (written.ec == std::errc())
+			std::from_chars(text, written.ptr, number);
+		return number;
+	}
 
 	namespace {
 
@@ -132,7 +145,13 @@ namespace Bellows::Scripting {
 			requires std::is_arithmetic_v<T> && (!std::is_same_v<T, bool>) && (!std::is_same_v<T, uint64_t>)
 		struct Convert<T>
 		{
-			static FS::Value To(FS::VM&, T value) { return FS::Value::FromNumber(static_cast<double>(value)); }
+			static FS::Value To(FS::VM&, T value)
+			{
+				if constexpr (std::is_same_v<T, float>)
+					return FS::Value::FromNumber(ForgeScriptNumber(value));
+				else
+					return FS::Value::FromNumber(static_cast<double>(value));
+			}
 			static T From(FS::VM& vm, const FS::Value& value, const std::string& what)
 			{
 				if (!value.IsNumber())
@@ -184,7 +203,7 @@ namespace Bellows::Scripting {
 		template<>
 		struct Convert<glm::vec3>
 		{
-			static FS::Value To(FS::VM& vm, const glm::vec3& value) { return vm.MakeVector(value.x, value.y, value.z); }
+			static FS::Value To(FS::VM& vm, const glm::vec3& value) { return vm.MakeVector(ForgeScriptNumber(value.x), ForgeScriptNumber(value.y), ForgeScriptNumber(value.z)); }
 			static glm::vec3 From(FS::VM& vm, const FS::Value& value, const std::string& what)
 			{
 				if (FS::IsObjectType(value, FS::ObjectType::Vector))
@@ -204,7 +223,7 @@ namespace Bellows::Scripting {
 		template<>
 		struct Convert<glm::vec2>
 		{
-			static FS::Value To(FS::VM& vm, const glm::vec2& value) { return vm.MakeVector(value.x, value.y, 0.0); }
+			static FS::Value To(FS::VM& vm, const glm::vec2& value) { return vm.MakeVector(ForgeScriptNumber(value.x), ForgeScriptNumber(value.y), 0.0); }
 			static glm::vec2 From(FS::VM& vm, const FS::Value& value, const std::string& what)
 			{
 				if (FS::IsObjectType(value, FS::ObjectType::Vector))
@@ -224,7 +243,10 @@ namespace Bellows::Scripting {
 		template<>
 		struct Convert<glm::quat>
 		{
-			static FS::Value To(FS::VM& vm, const glm::quat& q) { return MakeNumberList(vm, { q.w, q.x, q.y, q.z }); }
+			static FS::Value To(FS::VM& vm, const glm::quat& q)
+			{
+				return MakeNumberList(vm, { ForgeScriptNumber(q.w), ForgeScriptNumber(q.x), ForgeScriptNumber(q.y), ForgeScriptNumber(q.z) });
+			}
 			static glm::quat From(FS::VM& vm, const FS::Value& value, const std::string& what)
 			{
 				std::vector<double> n = NumberList(vm, value, what, 4, 4);
@@ -235,7 +257,11 @@ namespace Bellows::Scripting {
 		template<>
 		struct Convert<ColorValue>
 		{
-			static FS::Value To(FS::VM& vm, const ColorValue& color) { return MakeNumberList(vm, { color.Value.r, color.Value.g, color.Value.b, color.Value.a }); }
+			static FS::Value To(FS::VM& vm, const ColorValue& color)
+			{
+				const glm::vec4& c = color.Value;
+				return MakeNumberList(vm, { ForgeScriptNumber(c.r), ForgeScriptNumber(c.g), ForgeScriptNumber(c.b), ForgeScriptNumber(c.a) });
+			}
 			static ColorValue From(FS::VM& vm, const FS::Value& value, const std::string& what)
 			{
 				if (FS::IsObjectType(value, FS::ObjectType::Vector))

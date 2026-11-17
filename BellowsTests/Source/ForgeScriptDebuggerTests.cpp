@@ -121,3 +121,52 @@ TEST_CASE("ForgeScript debugger stops entity scripts and holds the game until it
 	Scripting::SetContextScene(nullptr);
 	AssetManager::SetAssetDirectory({});
 }
+
+TEST_CASE("ForgeScript debugger holds the rest of the frame when a script stops")
+{
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "ForgeDebuggerFrame";
+	AssetManager::SetAssetDirectory(folder);
+	REQUIRE(FileSystem::WriteTextFile(folder / "Scripts/Ticker.forge",
+		"set ticks to 0\n"
+		"when update with delta\n"
+		"\tadd 1 to ticks\n"
+		"\tset my name to \"ticks {ticks}\"\n"
+		"end\n"));
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Scripting::SetContextScene(scene.get());
+	Scripting::ForgeScriptRuntime runtime([](const std::string&, const std::string&) {});
+	runtime.SetDebugHandler([](const ForgeScript::DebugStop&) {});
+	std::vector<Entity> tickers;
+	for (int i = 0; i < 3; i++)
+	{
+		Entity ticker = scene->CreateEntity("Ticker");
+		ticker.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Ticker.forge";
+		tickers.push_back(ticker);
+	}
+	runtime.Start();
+	for (Entity ticker : tickers)
+	{
+		REQUIRE(runtime.CreateInstance(ticker));
+		runtime.CallCreated(ticker.GetUUID());
+	}
+
+	// A pause stops whichever script runs its update first; the others, which have no reason to stop,
+	// still wait for the next frame instead of running theirs in this one.
+	runtime.GetMachine()->Pause();
+	runtime.Update(*scene, 1.0f / 60.0f);
+	REQUIRE(runtime.IsStopped());
+	int ticked = 0;
+	for (Entity ticker : tickers)
+		ticked += ticker.GetName() != "Ticker";
+	CHECK_EQ(ticked, 0);
+
+	runtime.GetMachine()->Continue();
+	CHECK_FALSE(runtime.IsStopped());
+	runtime.Update(*scene, 1.0f / 60.0f);
+	for (Entity ticker : tickers)
+		CHECK(ticker.GetName().starts_with("ticks "));
+	runtime.Stop();
+	Scripting::SetContextScene(nullptr);
+	AssetManager::SetAssetDirectory({});
+}

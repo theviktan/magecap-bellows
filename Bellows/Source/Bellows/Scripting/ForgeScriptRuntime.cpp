@@ -412,9 +412,13 @@ namespace Bellows::Scripting {
 		}
 		for (UUID uuid : entities)
 		{
+			// A script stopped by the debugger holds the rest of the frame too, as the editor pauses
+			// the game right after it.
+			if (m_VM->IsStopped())
+				return;
 			Entity entity = scene.TryGetEntityByUUID(uuid);
 			if (entity && !scene.IsPendingDestroy(entity))
-				Emit(uuid, event, { ForgeScript::Value::FromNumber(timestep) });
+				Emit(uuid, event, { ForgeScript::Value::FromNumber(ForgeScriptNumber(timestep)) });
 		}
 	}
 
