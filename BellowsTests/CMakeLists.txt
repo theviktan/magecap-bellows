@@ -8,6 +8,8 @@ set(EDITOR_LOGIC_SOURCES
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/EditorSettings.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ForgeScriptAssist.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ForgeScriptAssist.h"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDebugger.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDebugger.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ProjectList.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ProjectList.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDocument.cpp"

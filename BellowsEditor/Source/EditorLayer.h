@@ -3,6 +3,7 @@
 #include "AgentServer.h"
 #include "EditorCamera.h"
 #include "EditorSettings.h"
+#include "ScriptDebugger.h"
 #include "UndoHistory.h"
 
 #include "Bellows/Core/FileWatcher.h"
@@ -29,6 +30,7 @@ namespace Bellows {
 	class SettingsPanel;
 	class StatisticsPanel;
 	class ScriptEditorPanel;
+	class DebuggerPanel;
 	class ProjectManager;
 
 	enum class SceneState : uint8_t
@@ -152,6 +154,16 @@ namespace Bellows {
 		Workspace GetWorkspace() const;
 		ScriptEditorPanel& GetScriptEditor() { return *m_ScriptEditorPanel; }
 
+		// ForgeScript debugger -----------------------------------------------
+		// Breakpoints and the current stop. A stop pauses the game until the script goes on.
+		ScriptDebugger& GetScriptDebugger() { return m_ScriptDebugger; }
+		enum class DebugAction : uint8_t { Continue, StepOver, StepIn, StepOut };
+		// Lets the stopped script go on; the game runs again unless a script stopped again.
+		// Returns false when no script is stopped.
+		bool ResumeScripts(DebugAction action);
+		// Stops at the next ForgeScript line that runs (the game must be running).
+		bool PauseScripts();
+
 		// Build and settings -------------------------------------------------
 		ExportResult ExportGame(const std::filesystem::path& outputDirectory);
 		EditorSettings& GetSettings() { return m_Settings; }
@@ -194,6 +206,10 @@ namespace Bellows {
 		void RunStartupScript();
 		void SaveLayout();
 		bool IsViewportInputActive() const;
+		// After a script stopped: pause the game and show the stop in the Script Editor.
+		void HandleDebugStop();
+		// After a script went on: let the game run again if the debugger paused it.
+		void ResumeAfterDebugStop();
 	private:
 		static EditorLayer* s_Instance;
 
@@ -230,6 +246,10 @@ namespace Bellows {
 		static constexpr float c_ScriptWatchInterval = 0.5f;
 		FileWatcher m_ScriptWatcher;
 		float m_ScriptWatchElapsed = 0.0f;
+		// Declared before the panels, which use it, so it outlives them.
+		ScriptDebugger m_ScriptDebugger;
+		bool m_DebugStopPending = false;	// A script stopped; the game pauses at the end of the update
+		bool m_PausedByDebugger = false;	// The game was running when the script stopped
 		bool m_FreeCameraInPlay = false;
 		bool m_ShowColliders = true;
 		GizmoMode m_GizmoMode = GizmoMode::Translate;
@@ -246,6 +266,7 @@ namespace Bellows {
 		Scope<SettingsPanel> m_SettingsPanel;
 		Scope<StatisticsPanel> m_StatisticsPanel;
 		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
+		Scope<DebuggerPanel> m_DebuggerPanel;
 		Scope<ProjectManager> m_ProjectManager;
 		bool m_ViewportVisible = false;
 		bool m_FocusViewport = false;

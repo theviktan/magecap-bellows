@@ -5,6 +5,7 @@
 #include "IconsLucide.h"
 #include "Panels/ConsolePanel.h"
 #include "Panels/ContentBrowserPanel.h"
+#include "Panels/DebuggerPanel.h"
 #include "Panels/InspectorPanel.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/ScriptEditorPanel.h"
@@ -105,7 +106,12 @@ namespace Bellows {
 		m_SettingsPanel = CreateScope<SettingsPanel>(*this);
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
 		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
+		m_DebuggerPanel = CreateScope<DebuggerPanel>(*this);
 		m_ProjectManager = CreateScope<ProjectManager>(*this);
+
+		// A script stops inside the game's update; the game pauses once that update has finished.
+		m_ScriptDebugger.SetStopCallback([this](const ForgeScript::DebugStop&) { m_DebugStopPending = true; });
+		m_ScriptDebugger.Connect(ScriptEngine::GetForgeScriptRuntime());
 
 		ScriptEngine::SetQuitHandler([this](int exitCode)
 		{
@@ -151,6 +157,8 @@ namespace Bellows {
 		ScriptEngine::SetLoadSceneHandler(nullptr);
 		ScriptEngine::SetScreenshotHandler(nullptr);
 		ScriptEngine::SetContextScene(nullptr);
+		m_ScriptDebugger.Connect(nullptr);
+		m_ScriptDebugger.SetStopCallback(nullptr);
 
 		m_HierarchyPanel.reset();
 		m_InspectorPanel.reset();
@@ -158,6 +166,7 @@ namespace Bellows {
 		m_ConsolePanel.reset();
 		m_SettingsPanel.reset();
 		m_StatisticsPanel.reset();
+		m_DebuggerPanel.reset();
 		m_RuntimeScene.reset();
 		m_EditorScene.reset();
 		m_ScreenshotRenderer.reset();
@@ -203,6 +212,8 @@ namespace Bellows {
 			Stop();
 		m_ScriptEditorPanel->SaveAll();
 		m_ScriptEditorPanel->CloseAll();
+		// Breakpoints name the project's scripts.
+		m_ScriptDebugger.ClearBreakpoints();
 		SaveLayout();
 
 		m_Selection.clear();
@@ -466,6 +477,9 @@ namespace Bellows {
 		if (m_SceneState == SceneState::Edit)
 			return;
 		m_ScriptWatcher.Stop();
+		// The runtime ends a stop when play stops (the held code does not go on).
+		m_DebugStopPending = false;
+		m_PausedByDebugger = false;
 		if (m_RuntimeScene)
 			m_RuntimeScene->OnRuntimeStop();
 		m_RuntimeScene.reset();
@@ -482,14 +496,86 @@ namespace Bellows {
 	{
 		if (m_SceneState == SceneState::Edit || !m_RuntimeScene)
 			return;
+		if (!paused && m_ScriptDebugger.IsStopped())
+		{
+			// A held script would keep every ForgeScript still; resuming the game resumes it.
+			m_PausedByDebugger = true;
+			ResumeScripts(DebugAction::Continue);
+			return;
+		}
 		m_RuntimeScene->SetPaused(paused);
 		m_SceneState = paused ? SceneState::Pause : SceneState::Play;
+		if (!paused)
+			m_PausedByDebugger = false;
 	}
 
 	void EditorLayer::Step(uint32_t frames)
 	{
-		if (m_SceneState == SceneState::Pause && m_RuntimeScene)
+		// While a script is stopped no ForgeScript runs, so stepping frames would only move physics.
+		if (m_SceneState == SceneState::Pause && m_RuntimeScene && !m_ScriptDebugger.IsStopped())
 			m_RuntimeScene->Step(frames);
+	}
+
+	// -------------------------------------------------------------------------
+	// ForgeScript debugger
+	// -------------------------------------------------------------------------
+
+	bool EditorLayer::ResumeScripts(DebugAction action)
+	{
+		bool resumed = false;
+		switch (action)
+		{
+			case DebugAction::Continue: resumed = m_ScriptDebugger.Continue(); break;
+			case DebugAction::StepOver: resumed = m_ScriptDebugger.StepOver(); break;
+			case DebugAction::StepIn:   resumed = m_ScriptDebugger.StepIn(); break;
+			case DebugAction::StepOut:  resumed = m_ScriptDebugger.StepOut(); break;
+		}
+		if (!resumed)
+			return false;
+		// The script runs right away and may stop again before Continue or the step returns.
+		if (m_DebugStopPending)
+			HandleDebugStop();
+		else
+			ResumeAfterDebugStop();
+		return true;
+	}
+
+	bool EditorLayer::PauseScripts()
+	{
+		if (m_SceneState == SceneState::Edit)
+			return false;
+		return m_ScriptDebugger.Pause();
+	}
+
+	void EditorLayer::HandleDebugStop()
+	{
+		m_DebugStopPending = false;
+		if (!m_ScriptDebugger.IsStopped() || !m_RuntimeScene)
+			return;
+		if (m_SceneState == SceneState::Play)
+		{
+			m_RuntimeScene->SetPaused(true);
+			m_SceneState = SceneState::Pause;
+			m_PausedByDebugger = true;
+		}
+		const ForgeScript::DebugStop& stop = m_ScriptDebugger.GetStop();
+		BW_INFO("Stopped at {} line {}", stop.File, stop.Line);
+		if (!stop.File.empty() && AssetManager::Exists(stop.File))
+			m_ScriptEditorPanel->OpenScript(stop.File, static_cast<size_t>(stop.Line));
+		m_Settings.Panels.Debugger = true;
+		m_DebuggerPanel->Focus();
+	}
+
+	void EditorLayer::ResumeAfterDebugStop()
+	{
+		if (m_ScriptDebugger.IsStopped() || !m_PausedByDebugger)
+			return;
+		m_PausedByDebugger = false;
+		if (m_SceneState == SceneState::Pause && m_RuntimeScene)
+		{
+			m_RuntimeScene->SetPaused(false);
+			m_SceneState = SceneState::Play;
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -751,6 +837,8 @@ namespace Bellows {
 		{
 			m_RuntimeScene->OnUpdateRuntime(timestep);
 		}
+		if (m_DebugStopPending)
+			HandleDebugStop();
 
 		const bool cameraAllowed = m_SceneState == SceneState::Edit || m_FreeCameraInPlay || !IsUsingGameCamera();
 		m_CameraControlActive = cameraAllowed && m_Camera.OnUpdate(timestep, m_ViewportHovered && !ImGuizmo::IsUsing(), m_ViewportMouseWheel);
@@ -761,6 +849,9 @@ namespace Bellows {
 
 	void EditorLayer::ReloadChangedScripts()
 	{
+		// Scripts saved while one is stopped reload once it goes on (the watcher keeps the changes).
+		if (m_ScriptDebugger.IsStopped())
+			return;
 		for (const std::string& path : m_ScriptWatcher.Poll())
 		{
 			if (ScriptEngine::ReloadScripts(path))
@@ -1143,11 +1234,24 @@ namespace Bellows {
 	void EditorLayer::HandleShortcuts()
 	{
 		const ImGuiIO& io = ImGui::GetIO();
-		if (io.WantTextInput || !m_Project)
+		if (!m_Project)
 			return;
 
 		const bool ctrl = io.KeyCtrl;
 		const bool shift = io.KeyShift;
+
+		// Debugger keys type nothing, so they work wherever the focus is, the Script Editor included.
+		if (m_SceneState != SceneState::Edit && !ctrl)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_F5, false))
+				ResumeScripts(DebugAction::Continue);
+			if (ImGui::IsKeyPressed(ImGuiKey_F10, false))
+				ResumeScripts(DebugAction::StepOver);
+			if (ImGui::IsKeyPressed(ImGuiKey_F11, false))
+				ResumeScripts(shift ? DebugAction::StepOut : DebugAction::StepIn);
+		}
+		if (io.WantTextInput)
+			return;
 
 		// The Script Editor handles its own editing keys (save, undo, ...); only play mode passes through.
 		if (m_ScriptEditorPanel->IsFocused())
@@ -1257,6 +1361,8 @@ namespace Bellows {
 			m_ContentBrowserPanel->OnImGuiRender(&panels.Content);
 		if (panels.Console)
 			m_ConsolePanel->OnImGuiRender(&panels.Console);
+		if (panels.Debugger)
+			m_DebuggerPanel->OnImGuiRender(&panels.Debugger);
 		if (panels.Settings)
 			m_SettingsPanel->OnImGuiRender(&panels.Settings);
 		if (m_ShowStatistics)
@@ -1308,6 +1414,7 @@ namespace Bellows {
 		ImGui::DockBuilderDockWindow("Settings", right);
 		ImGui::DockBuilderDockWindow("Content", bottom);
 		ImGui::DockBuilderDockWindow("Console", bottom);
+		ImGui::DockBuilderDockWindow(DebuggerPanel::WindowName, bottom);
 		ImGui::DockBuilderDockWindow("Viewport", center);
 		ImGui::DockBuilderDockWindow(ScriptEditorPanel::WindowName, center);
 		ImGui::DockBuilderFinish(dockspaceID);
@@ -1422,6 +1529,7 @@ namespace Bellows {
 				ImGui::MenuItem(ICON_SLIDERS_HORIZONTAL "  Inspector", nullptr, &panels.Inspector);
 				ImGui::MenuItem(ICON_FOLDER "  Content", nullptr, &panels.Content);
 				ImGui::MenuItem(ICON_TERMINAL "  Console", nullptr, &panels.Console);
+				ImGui::MenuItem(ICON_BUG "  Debugger", nullptr, &panels.Debugger);
 				ImGui::MenuItem(ICON_SETTINGS "  Settings", nullptr, &panels.Settings);
 				ImGui::EndMenu();
 			}
@@ -1527,7 +1635,7 @@ namespace Bellows {
 		if (UI::IconButton(ICON_PAUSE, "Pause", m_SceneState == SceneState::Pause, ImVec2(buttonSize, buttonSize)))
 			SetPaused(m_SceneState != SceneState::Pause);
 		ImGui::SameLine(0.0f, spacing);
-		ImGui::BeginDisabled(m_SceneState != SceneState::Pause);
+		ImGui::BeginDisabled(m_SceneState != SceneState::Pause || m_ScriptDebugger.IsStopped());
 		if (UI::IconButton(ICON_STEP_FORWARD, "Advance one frame", false, ImVec2(buttonSize, buttonSize)))
 			Step(1);
 		ImGui::EndDisabled();
@@ -1554,7 +1662,8 @@ namespace Bellows {
 		ImGui::PopStyleColor();
 
 		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-		const char* stateText = m_SceneState == SceneState::Edit ? "Editing" : (m_SceneState == SceneState::Play ? "Playing" : "Paused");
+		const char* stateText = m_SceneState == SceneState::Edit ? "Editing" : (m_SceneState == SceneState::Play ? "Playing"
+			: (m_ScriptDebugger.IsStopped() ? "Stopped in a script" : "Paused"));
 		const ImU32 stateColor = m_SceneState == SceneState::Edit ? Theme::TextMuted : (m_SceneState == SceneState::Play ? Theme::Accent : Theme::Warning);
 		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(stateColor));
 		ImGui::Text(ICON_CIRCLE " %s", stateText);

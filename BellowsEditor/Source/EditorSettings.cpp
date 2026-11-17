@@ -172,6 +172,7 @@ namespace Bellows {
 			JsonRead(*panels, "Inspector", settings.Panels.Inspector);
 			JsonRead(*panels, "Content", settings.Panels.Content);
 			JsonRead(*panels, "Console", settings.Panels.Console);
+			JsonRead(*panels, "Debugger", settings.Panels.Debugger);
 			JsonRead(*panels, "Settings", settings.Panels.Settings);
 		}
 		return settings;
@@ -196,6 +197,7 @@ namespace Bellows {
 			{ "Inspector", Panels.Inspector },
 			{ "Content", Panels.Content },
 			{ "Console", Panels.Console },
+			{ "Debugger", Panels.Debugger },
 			{ "Settings", Panels.Settings },
 		};
 		return FileSystem::WriteTextFile(GetConfigDirectory() / "EditorSettings.json", json.dump(1, '\t'));

@@ -96,6 +96,17 @@ namespace Bellows {
 		void DrawCreateDialog();
 		void HandleShortcuts();
 		void ConfigureEditor(Document& document);
+		// The current marks of a document: its mistakes and, while a script is stopped, the stop line.
+		void UpdateMarkers(Document& document);
+
+		// Breakpoints live in the editor's ScriptDebugger; open documents mirror them in their lines,
+		// so a breakpoint moves with its line while the script is edited.
+		bool CanHaveBreakpoints(const Document& document) const;
+		void ToggleBreakpoint(Document& document, size_t line);
+		void ShowBreakpoints(Document& document);
+		void SaveBreakpoints(Document& document);
+		void DrawBreakpointGutter(Document& document, size_t line, float width, float height);
+		bool IsStoppedAt(const Document& document, size_t line) const;
 		// ForgeScript completion and hover help come from the language server (ForgeScriptAssist).
 		ForgeScriptAssist& GetForgeScriptAssist();
 		void DrawForgeScriptHover(Document& document, size_t line, size_t column);
@@ -111,6 +122,10 @@ namespace Bellows {
 		bool m_FocusEditor = false;
 		double m_LastDiskCheck = 0.0;
 		Scope<ForgeScriptAssist> m_ForgeScriptAssist;
+		// The debugger state the documents show, to redraw them only when it changes.
+		uint64_t m_ShownBreakpoints = 0;
+		uint64_t m_ShownStop = 0;
+		bool m_ShownStopped = false;
 
 		// Closing a tab with unsaved changes asks first.
 		size_t m_PendingClose = SIZE_MAX;

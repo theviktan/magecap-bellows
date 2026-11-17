@@ -107,6 +107,28 @@ Errors in the request itself (bad token, unknown method) return `{"ok": false, "
 
 While playing, `bellows.*` functions act on the running copy of the scene.
 
+### ForgeScript debugger
+| Function | Description |
+|----------|-------------|
+| `set_breakpoints(script, lines)`, `breakpoints(script)`, `clear_breakpoints()` | Breakpoint lines (1-based) of a ForgeScript asset such as `"Scripts/Player.forge"`; `[]` removes them. They last for the editor session. |
+| `debug_state()` | `{"stopped", "file", "line", "reason", "stack", "variables", "script_variables"}`: where a stopped script is (`reason` is `"breakpoint"`, `"step"` or `"pause"`), its calls innermost first (`function`, `file`, `line`), and the variables (`name`, `type`, `value`) of the innermost call and of its script. |
+| `debug_continue()`, `debug_step_over()`, `debug_step_in()`, `debug_step_out()` | Let the stopped script go on; the game runs again unless the script stops again. `False` when nothing is stopped. |
+| `debug_pause()` | Stops at the next ForgeScript line that runs (play mode). |
+
+A stop pauses the game (`state()` is `"pause"`) until the script goes on; `pause(False)` continues it,
+and `stop()` ends play even while a script is held. Run frames after `play()` for a script to reach a
+breakpoint:
+
+```python
+editor.set_breakpoints("Scripts/Player.forge", [12])
+editor.play()
+editor.run_frames(2)
+state = editor.debug_state()
+if state["stopped"]:
+    print(state["line"], state["variables"])
+    editor.debug_step_over()
+```
+
 ### Editing helpers
 | Function | Description |
 |----------|-------------|

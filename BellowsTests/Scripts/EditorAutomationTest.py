@@ -123,6 +123,47 @@ check(abs(bellows.find_entity("Player").transform.position.x - 1.0) < 1e-5, "sto
 check(len(bellows.get_entities()) == edit_count, "entities spawned in play mode are discarded")
 check(editor.script_error_count() == 0, "no script errors")
 
+# ForgeScript debugger: a breakpoint pauses the game, then step, look and go on ----------
+(scripts / "Counter.forge").write_text(
+    "set ticks to 0\n"
+    "when update with delta\n"
+    "\tadd 1 to ticks\n"
+    "\tset my name to \"Counter {ticks}\"\n"
+    "end\n",
+    encoding="utf-8")
+counter = bellows.create_entity("Counter")
+counter.add_component(bellows.ScriptComponent).path = "Scripts/Counter.forge"
+editor.commit("Add counter")
+editor.set_breakpoints("Scripts/Counter.forge", [3, 0, 3])
+check(editor.breakpoints("Scripts/Counter.forge") == [3], "breakpoint lines are cleaned up")
+editor.play()
+editor.run_frames(2)
+debug = editor.debug_state()
+check(debug["stopped"] and debug["file"] == "Scripts/Counter.forge" and debug["line"] == 3, f"stops at the breakpoint ({debug})")
+check(debug["reason"] == "breakpoint", "the stop says why")
+check(editor.state() == "pause", "a stop pauses the game")
+check(debug["stack"][0]["function"] == "when update", "the call stack names the handler")
+check(any(v["name"] == "delta" for v in debug["variables"]), "the handler's variables are shown")
+check(any(v["name"] == "ticks" and v["value"] == "0" for v in debug["script_variables"]), "the script's variables are shown")
+editor.run_frames(3)
+check(editor.debug_state()["line"] == 3, "the game stays still while a script is stopped")
+check(editor.debug_step_over(), "step over")
+check(editor.debug_state()["line"] == 4, "step over goes to the next line")
+editor.set_breakpoints("Scripts/Counter.forge", [])
+check(editor.debug_continue(), "continue")
+check(editor.state() == "play" and not editor.debug_state()["stopped"], "continuing lets the game run again")
+editor.run_frames(3)
+check(bellows.find_entity("Counter") is None, "the script runs freely after the breakpoint is removed")
+check(editor.debug_pause(), "pause at the next line")
+editor.run_frames(1)
+debug = editor.debug_state()
+check(debug["stopped"] and debug["reason"] == "pause", f"pause stops the next line ({debug})")
+editor.stop()
+check(editor.state() == "edit" and not editor.debug_state()["stopped"], "play stops even while a script is held")
+check(not editor.debug_continue(), "nothing to continue after play stops")
+editor.clear_breakpoints()
+check(editor.script_error_count() == 0, "no script errors while debugging")
+
 # Screenshots --------------------------------------------------------------------------
 editor.set_camera((4.0, 3.0, 6.0), (0.0, 0.5, 0.0))
 shot = output / "viewport.png"

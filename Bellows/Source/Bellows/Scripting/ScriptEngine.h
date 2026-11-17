@@ -18,6 +18,8 @@ namespace Bellows {
 	class Scene;
 	class Entity;
 
+	namespace Scripting { class ForgeScriptRuntime; }
+
 	// Describes one field a script class exposes to the editor.
 	struct ScriptFieldInfo
 	{
@@ -45,6 +47,8 @@ namespace Bellows {
 		static bool Init(const std::filesystem::path& pythonHome = {});
 		static void Shutdown();
 		static bool IsInitialized();
+		// The ForgeScript runtime, for the editor's debugger (breakpoints, stepping). Null before Init.
+		static Scripting::ForgeScriptRuntime* GetForgeScriptRuntime();
 
 		// Folder that holds the 'bellows' Python package (engine Resources/Python).
 		static void SetEngineModuleDirectory(const std::filesystem::path& directory);

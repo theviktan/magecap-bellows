@@ -25,7 +25,7 @@ ICONS = [
     "sparkles", "pencil", "rocket", "bot", "folder-input", "external-link", "scroll-text", "aperture", "focus",
     "crosshair", "flashlight", "cone", "cylinder", "panel-left", "layout-grid", "activity", "gauge", "arrow-left",
     "moon", "circle-dot", "clapperboard", "square-function", "book-open", "paperclip", "unlink", "file-text",
-    "save-all", "star",
+    "save-all", "star", "bug", "redo-dot", "arrow-down-to-dot", "arrow-up-from-dot", "list-x",
 ]
 
 def main():

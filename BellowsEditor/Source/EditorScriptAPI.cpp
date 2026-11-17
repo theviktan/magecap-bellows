@@ -100,6 +100,66 @@ namespace Bellows {
 			}, py::arg("frames") = 1,
 				"Runs the editor for whole frames (rendering, play-mode updates, UI). Use it to let time pass in automation.");
 
+			// ForgeScript debugger --------------------------------------------------------------
+			m.def("set_breakpoints", [](const std::string& script, const std::vector<int>& lines)
+			{
+				Editor().GetScriptDebugger().SetBreakpoints(script, lines);
+			}, py::arg("script"), py::arg("lines"),
+				"Sets the breakpoint lines (1-based) of a ForgeScript asset, e.g. 'Scripts/Player.forge'; [] removes them");
+			m.def("breakpoints", [](const std::string& script) { return Editor().GetScriptDebugger().GetBreakpoints(script); },
+				py::arg("script"), "The breakpoint lines of a ForgeScript asset, sorted");
+			m.def("clear_breakpoints", [] { Editor().GetScriptDebugger().ClearBreakpoints(); }, "Removes every breakpoint");
+			m.def("debug_state", []
+			{
+				const ScriptDebugger& debugger = Editor().GetScriptDebugger();
+				const auto describe = [](const std::vector<ForgeScript::DebugVariable>& variables)
+				{
+					py::list result;
+					for (const ForgeScript::DebugVariable& variable : variables)
+					{
+						py::dict entry;
+						entry["name"] = variable.Name;
+						entry["type"] = variable.Type;
+						entry["value"] = variable.Text;
+						result.append(entry);
+					}
+					return result;
+				};
+				py::dict state;
+				const bool stopped = debugger.IsStopped();
+				state["stopped"] = stopped;
+				py::list stack;
+				if (stopped)
+				{
+					const ForgeScript::DebugStop& stop = debugger.GetStop();
+					state["file"] = stop.File;
+					state["line"] = stop.Line;
+					state["reason"] = stop.Reason == ForgeScript::DebugStopReason::Breakpoint ? "breakpoint"
+						: (stop.Reason == ForgeScript::DebugStopReason::Step ? "step" : "pause");
+					for (const ForgeScript::DebugFrame& frame : debugger.GetCallStack())
+					{
+						py::dict entry;
+						entry["function"] = frame.Function;
+						entry["file"] = frame.File;
+						entry["line"] = frame.Line;
+						stack.append(entry);
+					}
+				}
+				state["stack"] = stack;
+				state["variables"] = describe(debugger.GetVariables(0));
+				state["script_variables"] = describe(debugger.GetScriptVariables(0));
+				return state;
+			}, "Where a stopped ForgeScript is: {'stopped', 'file', 'line', 'reason', 'stack', 'variables', 'script_variables'}");
+			m.def("debug_continue", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::Continue); },
+				"Lets the stopped script go on (the game runs again); False when nothing is stopped");
+			m.def("debug_step_over", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::StepOver); },
+				"Runs the stopped script's line, including the functions it calls");
+			m.def("debug_step_in", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::StepIn); },
+				"Runs the stopped script to its next line, inside a function the line calls");
+			m.def("debug_step_out", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::StepOut); },
+				"Runs the stopped script to the end of its current function");
+			m.def("debug_pause", [] { return Editor().PauseScripts(); }, "Stops at the next ForgeScript line that runs (play mode)");
+
 			// Selection -------------------------------------------------------------------------
 			m.def("select", [](const std::optional<ScriptEntity>& entity, bool additive)
 			{

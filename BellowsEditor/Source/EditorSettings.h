@@ -22,6 +22,7 @@ namespace Bellows {
 		bool Inspector = true;
 		bool Content = true;
 		bool Console = true;
+		bool Debugger = true;
 		bool Settings = true;
 	};
 
