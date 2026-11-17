@@ -87,5 +87,7 @@ Source/ForgeScript/   the language library (namespace ForgeScript, no engine dep
 CLI/                  the forgescript command line tool and interactive prompt
 Tests/                doctest tests (Source/) and .forge expectation scripts (Scripts/)
 Examples/             example scripts and a small stand-alone host
-Editor/               Visual Studio Code extension (syntax highlighting)
+Editor/               Visual Studio Code extension (syntax highlighting, icon)
+Icons/                the ForgeScript icon: ForgeScript.svg and the PNG and ICO made from it
+                      (rebuild all of them with Icons/GenerateForgeScriptIcon.py)
 ```

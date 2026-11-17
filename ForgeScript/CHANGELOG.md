@@ -17,6 +17,12 @@ Tools for editors:
   built-in functions and methods.
 - `FindOutline` gives the outline to hosts without the language server.
 
+The ForgeScript icon:
+- A smith's hammer and a speech bubble, in the MageCap family's style (`Icons/ForgeScript.svg`, with
+  the PNG and ICO made from it by `Icons/GenerateForgeScriptIcon.py`).
+- `forgescript.exe` shows it on Windows, and the VS Code extension (1.1.0) uses it for itself and
+  for `.forge` files.
+
 ## 1.1.0 (2026-11-17)
 
 Tools for editors:
