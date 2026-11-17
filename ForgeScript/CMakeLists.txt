@@ -25,6 +25,8 @@ add_executable(ForgeScriptCLI CLI/Source/Main.cpp)
 set_target_properties(ForgeScriptCLI PROPERTIES OUTPUT_NAME forgescript FOLDER "ForgeScript")
 target_link_libraries(ForgeScriptCLI PRIVATE ForgeScript)
 bellows_set_compile_options(ForgeScriptCLI)
+# On Windows, forgescript.exe shows the ForgeScript icon (Icons/ForgeScript.ico) in Explorer and the taskbar.
+bellows_add_app_icon(ForgeScriptCLI "${CMAKE_CURRENT_SOURCE_DIR}/Icons/ForgeScript.ico")
 
 # A small stand-in engine that shows embedding without the rest of Bellows.
 add_executable(ForgeScriptEngineExample Examples/EngineIntegration/Main.cpp)

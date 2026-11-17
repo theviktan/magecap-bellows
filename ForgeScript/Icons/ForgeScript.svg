@@ -6,10 +6,10 @@
     </linearGradient>
   </defs>
   <rect x="22.25" y="22.25" width="467.5" height="467.5" rx="103.25" fill="url(#tile)" stroke="#4E5486" stroke-width="5.5"/>
-  <g fill="#1B1E34" stroke="#1B1E34" stroke-width="18" stroke-linejoin="round"><rect x="103" y="81" width="130" height="95" rx="34"/><polygon points="151.1,170 183.6,170 199.2,202"/></g>
-  <g fill="#43B2F5" stroke="#43B2F5" stroke-width="2" stroke-linejoin="round"><rect x="103" y="81" width="130" height="95" rx="34"/><polygon points="151.1,170 183.6,170 199.2,202"/></g>
-  <line x1="132" y1="112" x2="204" y2="112" stroke="#1B1E34" stroke-width="18" stroke-linecap="round"/>
-  <line x1="132" y1="145" x2="178" y2="145" stroke="#1B1E34" stroke-width="18" stroke-linecap="round"/>
+  <g fill="#1B1E34" stroke="#1B1E34" stroke-width="18" stroke-linejoin="round"><rect x="103" y="81" width="130" height="95" rx="34"/><polygon points="151.1,170.0 183.6,170.0 199.2,202.0"/></g>
+  <g fill="#43B2F5" stroke="#43B2F5" stroke-width="2" stroke-linejoin="round"><rect x="103" y="81" width="130" height="95" rx="34"/><polygon points="151.1,170.0 183.6,170.0 199.2,202.0"/></g>
+  <line x1="132" y1="112" x2="204" y2="112" stroke="#1B1E34" stroke-width="22" stroke-linecap="round"/>
+  <line x1="132" y1="145" x2="178" y2="145" stroke="#1B1E34" stroke-width="22" stroke-linecap="round"/>
   <polygon fill="#F0F2FA" points="295.4,229.1 325.9,259.6 222.5,367.4 187.6,332.5"/>
   <polygon fill="#F0F2FA" points="180.0,335.8 219.2,375.0 201.8,392.4 193.1,394.6 160.4,361.9 162.6,353.2"/>
   <polygon fill="#F0F2FA" points="273.6,144.2 292.2,143.1 300.9,151.8 302.5,169.7 318.8,186.1 333.5,171.4 383.6,221.5 368.9,236.2 385.3,252.5 403.2,254.1 411.9,262.8 410.8,281.4 380.4,311.8 361.8,312.9 353.1,304.2 351.5,286.3 335.2,269.9 320.5,284.6 270.4,234.5 285.1,219.8 268.7,203.5 250.8,201.9 242.1,193.2 243.2,174.6"/>
