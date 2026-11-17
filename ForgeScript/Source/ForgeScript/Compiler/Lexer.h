@@ -53,6 +53,9 @@ namespace ForgeScript {
 
 		std::vector<Token> Tokenize();
 
+		// Every reserved word, sorted (for tools such as the language server).
+		static std::vector<std::string> GetKeywords();
+
 	private:
 		Token NextToken();
 		Token MakeToken(TokenType type) const;

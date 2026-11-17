@@ -1,0 +1,20 @@
+{
+	"version": 1,
+	"functions": [
+		{ "name": "find_entity", "params": [ { "name": "name", "type": "str" } ], "returns": "Entity | None", "doc": "Finds an entity by name." },
+		{ "name": "save_screenshot", "params": [ { "name": "path", "type": "str", "default": "" }, { "name": "max_width", "type": "int", "default": 1920 } ], "returns": "str", "doc": "Saves what the player sees." }
+	],
+	"types": [
+		{ "name": "Entity", "doc": "Something in the scene.", "members": [
+			{ "name": "position", "kind": "property", "type": "Vec3", "doc": "Where the entity is." },
+			{ "name": "id", "kind": "property", "type": "str", "readonly": true, "doc": "The entity's id." },
+			{ "name": "translate", "kind": "method", "params": [ { "name": "offset", "type": "Vec3" } ], "returns": "None", "doc": "Moves the entity." }
+		] },
+		{ "name": "Material", "doc": "How a surface looks.", "constructor": { "params": [ { "name": "name" } ] }, "members": [
+			{ "name": "load", "kind": "static", "params": [ { "name": "path", "type": "str" } ], "returns": "Material", "doc": "Loads a material." }
+		] }
+	],
+	"phrases": [
+		{ "pattern": "save screenshot to (path)", "doc": "Saves what the player sees to path.", "returns": "str" }
+	]
+}

@@ -6,30 +6,30 @@
 
 namespace ForgeScript {
 
-	namespace {
+	// Mirrors the compiler's rule for words that open a block closed by 'end'.
+	bool TokenOpensBlock(const std::vector<Token>& tokens, size_t i)
+	{
+		const TokenType previous = i > 0 ? tokens[i - 1].Type : TokenType::Newline;
+		if (previous == TokenType::Dot || previous == TokenType::Possessive)
+			return false;
+		if (i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Colon)
+			return false;
 
-		// Mirrors the compiler's rule for words that open a block closed by 'end'.
-		bool OpensBlock(const std::vector<Token>& tokens, size_t i)
+		switch (tokens[i].Type)
 		{
-			const TokenType previous = i > 0 ? tokens[i - 1].Type : TokenType::Newline;
-			if (previous == TokenType::Dot || previous == TokenType::Possessive)
+			case TokenType::If: case TokenType::While: case TokenType::Repeat: case TokenType::For:
+			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
+				return true;
+			case TokenType::Until:
+				return previous != TokenType::Wait;
+			case TokenType::Kind:
+				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
+			default:
 				return false;
-			if (i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Colon)
-				return false;
-
-			switch (tokens[i].Type)
-			{
-				case TokenType::If: case TokenType::While: case TokenType::Repeat: case TokenType::For:
-				case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
-					return true;
-				case TokenType::Until:
-					return previous != TokenType::Wait;
-				case TokenType::Kind:
-					return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
-				default:
-					return false;
-			}
 		}
+	}
+
+	namespace {
 
 		// Reads an optionally negative number starting at 'i'; advances 'i' past it.
 		bool ReadNumber(const std::vector<Token>& tokens, size_t& i, double& outNumber, bool* outWhole = nullptr)
@@ -131,7 +131,7 @@ namespace ForgeScript {
 		int depth = 0;
 		for (size_t i = 0; i < tokens.size() && tokens[i].Type != TokenType::Eof; i++)
 		{
-			if (OpensBlock(tokens, i))
+			if (TokenOpensBlock(tokens, i))
 			{
 				depth++;
 				continue;
