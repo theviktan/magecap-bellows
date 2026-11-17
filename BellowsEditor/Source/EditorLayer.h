@@ -12,6 +12,7 @@
 #include "Bellows/Project/ProjectExporter.h"
 #include "Bellows/Renderer/Image.h"
 #include "Bellows/Renderer/SceneRenderer.h"
+#include "Bellows/Renderer/Texture.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 
@@ -153,6 +154,10 @@ namespace Bellows {
 		void SetWorkspace(Workspace workspace);
 		Workspace GetWorkspace() const;
 		ScriptEditorPanel& GetScriptEditor() { return *m_ScriptEditorPanel; }
+		// The app icon (Resources/Icons/Bellows.png) for logos; null when it could not be loaded.
+		const Ref<Texture2D>& GetLogo() const { return m_Logo; }
+		// Draws the logo as a square item of the given size (the flame glyph if the icon is missing).
+		void DrawLogo(float size) const;
 
 		// ForgeScript debugger -----------------------------------------------
 		// Breakpoints and the current stop. A stop pauses the game until the script goes on.
@@ -267,6 +272,7 @@ namespace Bellows {
 		Scope<StatisticsPanel> m_StatisticsPanel;
 		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
 		Scope<DebuggerPanel> m_DebuggerPanel;
+		Ref<Texture2D> m_Logo;
 		Scope<ProjectManager> m_ProjectManager;
 		bool m_ViewportVisible = false;
 		bool m_FocusViewport = false;

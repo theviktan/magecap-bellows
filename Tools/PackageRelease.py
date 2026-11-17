@@ -133,6 +133,8 @@ def main(argv=None) -> int:
     shutil.copytree(REPOSITORY / "Projects" / "FeatureTest", package / "Projects" / "FeatureTest",
                     ignore=ignore_names(EXCLUDED_PROJECT))
     shutil.copytree(REPOSITORY / "docs", package / "Docs", ignore=ignore_names(set(), ("Images",)))
+    # ForgeScript's version history lives with the language; the package keeps it with the other docs.
+    shutil.copy2(REPOSITORY / "ForgeScript" / "CHANGELOG.md", package / "Docs" / "ForgeScript" / "CHANGELOG.md")
     shutil.copy2(REPOSITORY / "README.md", package / "README.md")
 
     (package / "START HERE.txt").write_text(
@@ -143,7 +145,8 @@ def main(argv=None) -> int:
         "3. Press Play (Ctrl+P) to run the game inside the editor.\n\n"
         "Requirements: a graphics driver with Vulkan 1.3 (any recent Intel, AMD or NVIDIA driver).\n"
         f"Python {python_version} is included; nothing else needs to be installed.\n"
-        "Documentation: the Docs folder (ScriptingAPI.md, EditorAutomation.md, ForgeScript/).\n",
+        "Documentation: the Docs folder (ScriptingAPI.md, EditorAutomation.md, ForgeScript/).\n"
+        f"What's new: Docs/ReleaseNotes/{engine_version()}.md; ForgeScript's changes: Docs/ForgeScript/CHANGELOG.md.\n",
         encoding="utf-8")
 
     if not args.no_zip:

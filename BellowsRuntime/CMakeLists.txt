@@ -3,6 +3,8 @@
 file(GLOB_RECURSE RUNTIME_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
 
 add_executable(BellowsRuntime ${RUNTIME_SOURCES})
+# Exported games are this program renamed, so they show the Bellows icon too.
+bellows_add_app_icon(BellowsRuntime)
 target_link_libraries(BellowsRuntime PRIVATE Bellows)
 bellows_set_compile_options(BellowsRuntime)
 bellows_copy_python_runtime(BellowsRuntime)

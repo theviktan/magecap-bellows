@@ -1,3 +1,5 @@
+<img src="Resources/Icons/Bellows.png" alt="MageCap Bellows icon" width="96" align="right">
+
 # MageCap Bellows
 
 **A simple, modern 3D game engine for Windows and Linux** by MageCap Games. Physically based
