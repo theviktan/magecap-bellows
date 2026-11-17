@@ -257,7 +257,10 @@ gold.save("Materials/Gold.bmat")          # Optional: write it into the project
 `roughness`, `emissive` (`Vec3`), `emissive_intensity`, `alpha_mode` (`"Opaque"`, `"Mask"`,
 `"Blend"`), `alpha_cutoff`, `double_sided`, `normal_strength`, `uv_tiling`, `uv_offset`, and the
 texture slots `albedo_map`, `normal_map`, `metallic_roughness_map` (glTF layout: roughness in G,
-metallic in B), `occlusion_map`, `emissive_map` (asset paths; `None` clears). `save(path)` writes
+metallic in B), `roughness_map` and `metallic_map` (grayscale, as downloaded texture sets have them),
+`occlusion_map`, `emissive_map` (asset paths; `None` clears). Texture files can be PNG, JPG, TGA,
+BMP or OpenEXR (`.exr`); a `.hdr` image works too. As material maps, EXR and HDR images are stored
+at 8 bits per channel (values above 1 are clipped). Sky Light environments take `.hdr` or `.exr`. `save(path)` writes
 a `.bmat`.
 
 ## Editor automation (`bellows.editor`)

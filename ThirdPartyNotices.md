@@ -23,6 +23,7 @@ Exported games include the runtime libraries marked with *.
 | [spdlog](https://github.com/gabime/spdlog) * | 1.17.0 | Logging | MIT |
 | [cgltf](https://github.com/jkuhlmann/cgltf) * | 1.15 | glTF loading | MIT |
 | [stb](https://github.com/nothings/stb) * | master | Image loading and writing | MIT / Public domain |
+| [tinyexr](https://github.com/syoyo/tinyexr) * | 3.4.0 | OpenEXR image loading | BSD-3-Clause (includes OpenEXR code, BSD-3-Clause) |
 | [nlohmann/json](https://github.com/nlohmann/json) * | 3.12.0 | Scene, prefab and project files | MIT |
 | [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | master | Native file dialogs in the editor | WTFPL / public domain |
 | [doctest](https://github.com/doctest/doctest) | 2.5.3 | Unit tests (not shipped) | MIT |

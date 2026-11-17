@@ -90,6 +90,8 @@ namespace Bellows::ShaderInterop {
 		TextureMetallicRoughness = 1u << 2,
 		TextureOcclusion = 1u << 3,
 		TextureEmissive = 1u << 4,
+		TextureRoughness = 1u << 5,
+		TextureMetallic = 1u << 6,
 	};
 
 	static_assert(sizeof(FrameData) % 16 == 0, "FrameData must be 16-byte aligned for std140");

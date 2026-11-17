@@ -603,6 +603,18 @@
 					"doc": "Tangent-space normal map path, or None"
 				},
 				{
+					"name": "roughness_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Grayscale roughness texture path (as downloaded texture sets have it), or None"
+				},
+				{
+					"name": "metallic_map",
+					"kind": "property",
+					"type": "str",
+					"doc": "Grayscale metallic texture path, or None"
+				},
+				{
 					"name": "metallic_roughness_map",
 					"kind": "property",
 					"type": "str",

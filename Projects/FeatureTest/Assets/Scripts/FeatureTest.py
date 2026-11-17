@@ -378,7 +378,7 @@ class FeatureTest(bellows.Script):
         material.uv_offset = (0.5, 0.0)
         self.check(close(material.alpha_cutoff, 0.3) and close(material.normal_strength, 0.5), "Material cutoff and normal strength")
         self.check(close(material.uv_tiling, (4.0, 2.0)) and close(material.uv_offset, (0.5, 0.0)), "Material UV transform")
-        for slot in ("albedo_map", "normal_map", "metallic_roughness_map", "occlusion_map", "emissive_map"):
+        for slot in ("albedo_map", "normal_map", "metallic_roughness_map", "roughness_map", "metallic_map", "occlusion_map", "emissive_map"):
             setattr(material, slot, "Textures/GroundTiles.png")
             self.check(getattr(material, slot) == "Textures/GroundTiles.png", f"Material.{slot}")
             setattr(material, slot, None)

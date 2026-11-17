@@ -44,6 +44,8 @@ struct MaterialData
 #define TEXTURE_METAL_ROUGH	4u
 #define TEXTURE_OCCLUSION	8u
 #define TEXTURE_EMISSIVE	16u
+#define TEXTURE_ROUGHNESS	32u
+#define TEXTURE_METALLIC	64u
 
 layout(set = 1, binding = 0, std140) uniform MaterialBlock { MaterialData u_Material; };
 layout(set = 1, binding = 1) uniform texture2D u_AlbedoMap;
@@ -52,6 +54,8 @@ layout(set = 1, binding = 3) uniform texture2D u_MetallicRoughnessMap;
 layout(set = 1, binding = 4) uniform texture2D u_OcclusionMap;
 layout(set = 1, binding = 5) uniform texture2D u_EmissiveMap;
 layout(set = 1, binding = 6) uniform sampler s_Material;
+layout(set = 1, binding = 7) uniform texture2D u_RoughnessMap;	// Grayscale (red channel)
+layout(set = 1, binding = 8) uniform texture2D u_MetallicMap;	// Grayscale (red channel)
 
 vec2 MaterialUV(vec2 uv)
 {

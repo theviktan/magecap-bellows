@@ -85,6 +85,9 @@ namespace Bellows {
 				for (uint32_t slot = 1; slot <= 5; slot++)
 					desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(slot));
 				desc.addItem(nvrhi::BindingLayoutItem::Sampler(6));
+				// Separate roughness and metallic maps (downloaded texture sets) come after the sampler.
+				desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7));
+				desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(8));
 				s_Data->MaterialLayout = device->createBindingLayout(desc);
 			}
 			{
