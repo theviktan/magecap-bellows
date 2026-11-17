@@ -87,6 +87,29 @@ TEST_CASE("FindMistakesFindsNothingInGoodScripts")
 	CHECK(vm.FindMistakes("set x to 1\nwhen created\n\tsay x\nend\n", "good.forge").empty());
 }
 
+TEST_CASE("FindMistakesSeesPastElseIf")
+{
+	// The 'if' of 'else if' shares the open 'if's 'end', so the function ends where it says and the
+	// mistake after it is found.
+	VM vm;
+	const std::string source =
+		"function grade(score)\n"                   // 1
+		"\tif score is at least 90 then\n"           // 2
+		"\t\treturn \"A\"\n"                        // 3
+		"\telse if score is at least 80 then\n"      // 4
+		"\t\treturn \"B\"\n"                        // 5
+		"\totherwise if score is at least 70 then\n" // 6
+		"\t\treturn \"C\"\n"                        // 7
+		"\tend\n"                                    // 8
+		"\treturn \"F\"\n"                           // 9
+		"end\n"                                      // 10
+		"say 1 + * 2\n";                             // 11 mistake
+	std::vector<CompileError> mistakes = vm.FindMistakes(source, "grades.forge");
+	REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+	CHECK_EQ(mistakes[0].Line, 11);
+	CHECK(vm.FindMistakes("function f(n)\n\tif n then\n\t\treturn 1\n\telse if n then\n\t\treturn 2\n\tend\nend\nsay f(1)\n", "fine.forge").empty());
+}
+
 TEST_CASE("FindMistakesStopsAtUnreadableText")
 {
 	// After an unfinished string the rest of the file cannot be read reliably, so only that is reported.

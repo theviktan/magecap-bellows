@@ -1,0 +1,98 @@
+# 'else if' and 'otherwise if' continue the open 'if' and share its 'end'. Functions, phrases,
+# kinds and handlers that use them must not hide the lines after them.
+
+say "first"                                  # expect: first
+
+function grade(score)
+	if score is at least 90 then
+		return "A"
+	else if score is at least 80 then
+		return "B"
+	otherwise if score is at least 70 then
+		return "C"
+	end
+	return "F"
+end
+
+say grade(95)                                # expect: A
+say grade(85)                                # expect: B
+say grade(75)                                # expect: C
+say grade(10)                                # expect: F
+
+# Called before its definition, so it is hoisted past the function above.
+say size_of(3)                               # expect: small
+
+function size_of(n)
+	if n is above 100 then
+		return "huge"
+	else if n is above 10 then
+		return "big"
+	else
+		return "small"
+	end
+end
+
+phrase describe (n)
+	if n is below 0 then
+		return "negative"
+	else if n is 0 then
+		return "zero"
+	end
+	return "positive"
+end
+say describe 0                               # expect: zero
+say describe 4                               # expect: positive
+
+kind Light
+	set state to "off"
+
+	function next()
+		if my state is "off" then
+			set my state to "dim"
+		else if my state is "dim" then
+			set my state to "bright"
+		else
+			set my state to "off"
+		end
+		return my state
+	end
+end
+set lamp to new Light()
+lamp.next()
+say lamp.next()                              # expect: bright
+
+when ping with n
+	if n is 1 then
+		say "one"
+	else if n is 2 then
+		say "two"
+	end
+end
+trigger ping with 2                          # expect: two
+
+# Inside brackets too.
+set labels to [1, 2, 3].map(function(n)
+	if n is 1 then
+		return "a"
+	else if n is 2 then
+		return "b"
+	end
+	return "c"
+end)
+say labels                                   # expect: ["a", "b", "c"]
+
+# 'else' then a nested 'if' on the next line is a separate block with its own 'end'.
+function nested(n)
+	if n is 1 then
+		return "one"
+	else
+		if n is 2 then
+			return "two"
+		end
+	end
+	return "many"
+end
+say nested(2)                                # expect: two
+say nested(5)                                # expect: many
+
+say "last"                                   # expect: last
