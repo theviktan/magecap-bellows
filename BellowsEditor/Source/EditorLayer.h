@@ -3,6 +3,7 @@
 #include "AgentServer.h"
 #include "EditorCamera.h"
 #include "EditorSettings.h"
+#include "GameWindowSession.h"
 #include "ScriptDebugger.h"
 #include "UndoHistory.h"
 
@@ -104,8 +105,17 @@ namespace Bellows {
 		const Ref<Scene>& GetActiveScene() const { return m_RuntimeScene ? m_RuntimeScene : m_EditorScene; }
 
 		// Play mode ----------------------------------------------------------
+		// Play in the editor viewport, with a copy of the edited scene (the debugger and live Inspector work here).
 		void Play();
 		void Stop();
+		// Play the way the settings say: in a game window or in the viewport. The toolbar's Play and Ctrl+P.
+		void PlayInPreferredMode();
+		// Play in a game window: BellowsRuntime in its own window and process. startScene plays the project's
+		// start scene, otherwise the open scene; unsaved edits to the open scene play too.
+		bool PlayInGameWindow(bool startScene, bool headless = false, uint64_t frames = 0);
+		void StopGameWindow();
+		bool IsGameWindowRunning() { return m_GameWindow.IsRunning(); }
+		std::optional<int> GetGameWindowExitCode() const { return m_GameWindow.GetLastExitCode(); }
 		void SetPaused(bool paused);
 		void Step(uint32_t frames = 1);
 		SceneState GetSceneState() const { return m_SceneState; }
@@ -200,6 +210,9 @@ namespace Bellows {
 		void RenderViewport();
 		void SubmitEditorOverlays(SceneRenderer& renderer);
 		void HandleShortcuts();
+		// Ctrl+P: stop whatever plays, otherwise play in the preferred mode.
+		void TogglePlay();
+		void HandlePlayKeys(bool ctrl);
 		void HandleViewportDrop(const std::string& assetPath);
 		// Makes the image the scene's sky (adding a Sky entity when there is none).
 		void SetSkyEnvironment(const std::string& assetPath);
@@ -222,6 +235,7 @@ namespace Bellows {
 
 		EditorOptions m_Options;
 		EditorSettings m_Settings;
+		GameWindowSession m_GameWindow;
 		Ref<Project> m_Project;
 
 		Ref<Scene> m_EditorScene;

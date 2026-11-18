@@ -15,6 +15,8 @@ namespace Bellows {
 	struct RuntimeOptions
 	{
 		std::string SceneOverride;				// Asset path of a scene to start instead of the project's start scene
+		std::filesystem::path SceneFile;		// A scene file to start from (the editor's unsaved scene), anywhere on disk
+		bool StartedByEditor = false;			// Play in a game window: F8 stops the game, as in the editor
 		uint64_t ScreenshotFrame = 0;			// Saves a screenshot after this frame (0 = never)
 		std::filesystem::path ScreenshotPath;
 	};
@@ -33,6 +35,7 @@ namespace Bellows {
 		bool HasFailed() const { return m_Failed; }
 	private:
 		bool LoadScene(const std::string& assetPath);
+		bool LoadSceneFile(const std::filesystem::path& path, const std::string& displayName);
 	private:
 		Ref<Project> m_Project;
 		RuntimeOptions m_Options;

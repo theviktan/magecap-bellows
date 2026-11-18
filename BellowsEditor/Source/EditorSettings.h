@@ -39,6 +39,7 @@ namespace Bellows {
 		EditorPanelVisibility Panels;
 		bool ShowContentFolderTree = true;
 		std::string LastProjectLocation;			// Where the last new project was created
+		bool PlayInGameWindow = true;				// Play runs the game in its own window (false: in the viewport)
 
 		static constexpr size_t MaxProjects = 200;
 

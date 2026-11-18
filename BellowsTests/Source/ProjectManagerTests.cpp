@@ -219,6 +219,8 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		settings.Panels.Console = false;
 		settings.ShowContentFolderTree = false;
 		settings.LastProjectLocation = "/games";
+		CHECK(settings.PlayInGameWindow);	// Play opens a game window unless the user picks the viewport
+		settings.PlayInGameWindow = false;
 		REQUIRE(settings.Save());
 
 		const EditorSettings loaded = EditorSettings::Load();
@@ -230,6 +232,7 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		CHECK(loaded.Panels.Hierarchy);
 		CHECK_FALSE(loaded.ShowContentFolderTree);
 		CHECK(loaded.LastProjectLocation == "/games");
+		CHECK_FALSE(loaded.PlayInGameWindow);
 	}
 
 	SUBCASE("Settings from before the Project Manager keep their recent projects")
