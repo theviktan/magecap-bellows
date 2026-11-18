@@ -2,6 +2,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/Events.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Renderer/RenderDevice.h"
@@ -43,7 +44,8 @@ namespace Bellows {
 		});
 
 		const std::string startScene = m_Options.SceneOverride.empty() ? m_Project->GetConfig().StartScene : m_Options.SceneOverride;
-		if (!LoadScene(startScene))
+		const bool loaded = m_Options.SceneFile.empty() ? LoadScene(startScene) : LoadSceneFile(m_Options.SceneFile, m_Options.SceneFile.string());
+		if (!loaded)
 		{
 			m_Failed = true;
 			Application::Get().Close(1);
@@ -64,10 +66,15 @@ namespace Bellows {
 
 	bool RuntimeLayer::LoadScene(const std::string& assetPath)
 	{
+		return LoadSceneFile(AssetManager::GetAbsolutePath(assetPath), assetPath);
+	}
+
+	bool RuntimeLayer::LoadSceneFile(const std::filesystem::path& path, const std::string& displayName)
+	{
 		Ref<Scene> scene = CreateRef<Scene>();
-		if (!SceneSerializer::Deserialize(*scene, AssetManager::GetAbsolutePath(assetPath)))
+		if (!SceneSerializer::Deserialize(*scene, path))
 		{
-			BW_CORE_ERROR("Runtime: could not load scene '{}'", assetPath);
+			BW_CORE_ERROR("Runtime: could not load scene '{}'", displayName);
 			return false;
 		}
 
@@ -78,7 +85,7 @@ namespace Bellows {
 		RenderDevice& device = Application::Get().GetRenderDevice();
 		m_Scene->OnViewportResize(device.GetBackBufferWidth(), device.GetBackBufferHeight());
 		m_Scene->OnRuntimeStart();
-		BW_CORE_INFO("Runtime: playing '{}'", assetPath);
+		BW_CORE_INFO("Runtime: playing '{}'", displayName);
 		return true;
 	}
 
@@ -132,6 +139,18 @@ namespace Bellows {
 
 	void RuntimeLayer::OnEvent(Event& event)
 	{
+		// The game window takes the keyboard focus when it opens, so the editor's stop key has to work here too.
+		if (!m_Options.StartedByEditor)
+			return;
+		EventDispatcher dispatcher(event);
+		dispatcher.Dispatch<KeyPressedEvent>([](KeyPressedEvent& e)
+		{
+			if (e.GetKeyCode() != KeyCode::F8 || e.IsRepeat())
+				return false;
+			BW_CORE_INFO("Runtime: stopped with F8");
+			Application::Get().Close(0);
+			return true;
+		});
 	}
 
 }

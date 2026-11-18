@@ -99,7 +99,9 @@ Errors in the request itself (bad token, unknown method) return `{"ok": false, "
 ### Play mode
 | Function | Description |
 |----------|-------------|
-| `play()` / `stop()` | Enter play mode with a copy of the scene / return to the unchanged edited scene. |
+| `play()` / `stop()` | Enter play mode in the editor viewport with a copy of the scene / return to the unchanged edited scene. |
+| `play_in_window(scene="open", headless=False, frames=0)` | Play in a game window: runs the game as `BellowsRuntime` in its own window and process, like an exported game. `scene` is `"open"` (the open scene, unsaved changes included) or `"project"` (the project's start scene). `headless` runs without a window at a fixed time step; `frames` ends the game after that many frames. Returns whether it started. The game's log lines arrive in the Console (`logs`) marked `[Game]`; the editor stays in edit mode meanwhile. |
+| `is_game_running()`, `stop_game()`, `game_exit_code()` | Whether the game window still runs; end it; its exit code once it has ended (`None` before). |
 | `pause(paused=True)`, `step(frames=1)` | Pause the game; advance a paused game. |
 | `state()` | `"edit"`, `"play"` or `"pause"`. |
 | `run_frames(frames=1)` | Runs whole editor frames (rendering, game updates, UI). This is how automation lets time pass. |

@@ -145,7 +145,10 @@ tested version.
    click **Scene** in the top-left toolbar to go back to the 3D view. (You can also create scripts
    in the **Content** panel with right-click → **ForgeScript Script** / **Python Script**, and drag
    a script onto an entity in the Hierarchy to attach it.)
-4. Press **Play** (Ctrl+P) to run the game in the editor, Stop to return to the unchanged scene.
+4. Press **Play** (Ctrl+P) to run the game in its own window, the way it runs once exported; F5 plays
+   the project's start scene, F6 the open scene, and F8 (or closing the game window) stops it. The game's
+   messages appear in the Console. To play inside the editor viewport instead (with the ForgeScript
+   debugger and the live Inspector), pick **Editor viewport** in the small menu next to Play.
 5. **File → Save Scene** (Ctrl+S), then **File → Export Game...** to build a standalone game.
 
 `Projects/FeatureTest` is a complete sample: open it with **Open Project** and press Play.
