@@ -5,6 +5,19 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.4.0 (2026-11-18)
+
+Events raised by one entity (Phase 2's UI events):
+- `when "Start" is clicked ... end` runs only when the entity named Start raised the event, with
+  names compared ignoring letter case. With it, one script on a menu handles each of its buttons
+  without an `if` per button. The names after `with` get the event's values as usual. A text after
+  `when` that isn't followed by `is` is still an event name, so `when "door opened"` keeps its
+  meaning.
+- `VM::Emit` takes the name of the entity that raised the event; events without one (a script's
+  `trigger`, `EmitAll`) never run these handlers.
+- In MageCap Bellows, events raised by an entity reach its own script first, then each parent's,
+  whatever language each script is written in.
+
 ## 1.3.0 (2026-11-17)
 
 Error messages:

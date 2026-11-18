@@ -103,7 +103,8 @@ namespace Bellows::Scripting {
 		ForgeScript::Module* LoadModule(Entity entity, const std::string& scriptPath, const std::string& source);
 		// Inspector values for the script's settings, except the names in 'keep'.
 		void ApplyFields(ForgeScript::Module* module, Entity entity, const std::string& source, const std::vector<std::string>& keep);
-		void Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values);
+		// 'source' is the name of the entity that raised the event, for 'when "Start" is clicked'.
+		void Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values, const std::string& source = {});
 		// Sends an event with the timestep to every created script that handles it, skipping entities about to be destroyed.
 		void EmitTimed(Scene& scene, const std::string& event, float timestep);
 

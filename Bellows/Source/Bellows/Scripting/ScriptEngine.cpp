@@ -338,12 +338,14 @@ namespace Bellows {
 		// Script events (bellows.emit, ForgeScript's trigger) reach on_event(self, name, *values), in the
 		// order the scripts were created. As the event hub requires, this never throws: errors are
 		// reported as script errors.
-		void DispatchEvent(const std::string& name, const Scripting::ScriptValueList& values)
+		// A broadcast goes to every Python script with on_event, in the order they were created; an event
+		// for one entity (a UI widget's, on its way up the hierarchy) only to that entity's script.
+		void DispatchEvent(const std::string& name, const Scripting::ScriptValueList& values, const Scripting::ScriptEventDelivery& delivery)
 		{
 			std::vector<std::pair<uint64_t, UUID>> receivers;
 			for (const auto& [uuid, instance] : s_Data->Instances)
 			{
-				if (instance.HasEvent && instance.Created)
+				if (instance.HasEvent && instance.Created && (!delivery.Target || delivery.Target->ID == uuid))
 					receivers.emplace_back(instance.Order, uuid);
 			}
 			if (receivers.empty())
