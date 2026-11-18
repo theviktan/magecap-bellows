@@ -156,6 +156,8 @@ namespace Bellows {
 		ScriptEditorPanel& GetScriptEditor() { return *m_ScriptEditorPanel; }
 		// The app icon (Resources/Icons/Bellows.png) for logos; null when it could not be loaded.
 		const Ref<Texture2D>& GetLogo() const { return m_Logo; }
+		// ForgeScript's icon (Resources/Icons/ForgeScript.png) for .forge files; null when it could not be loaded.
+		const Ref<Texture2D>& GetForgeScriptIcon() const { return m_ForgeScriptIcon; }
 		// Draws the logo as a square item of the given size (the flame glyph if the icon is missing).
 		void DrawLogo(float size) const;
 
@@ -273,6 +275,7 @@ namespace Bellows {
 		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
 		Scope<DebuggerPanel> m_DebuggerPanel;
 		Ref<Texture2D> m_Logo;
+		Ref<Texture2D> m_ForgeScriptIcon;
 		Scope<ProjectManager> m_ProjectManager;
 		bool m_ViewportVisible = false;
 		bool m_FocusViewport = false;

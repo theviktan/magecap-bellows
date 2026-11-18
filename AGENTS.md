@@ -20,7 +20,7 @@ fully scriptable so agents can build games through it.
 | `ForgeScript/` | The ForgeScript language (compiler, VM, standard library, `forgescript` tool, tests). Engine-independent, `namespace ForgeScript`; read `ForgeScript/AGENTS.md` before changing it. |
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
-| `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
+| `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
 | `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
@@ -61,6 +61,7 @@ The tests:
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
 | `BellowsEditorFeatureTest` | The same, in editor play mode. |
+| `BellowsPackageTest` | `BellowsTests/Scripts/PackageTest.py`: packages the build with `Tools/PackageRelease.py`, checks that everything the programs load is in the package, then runs the packaged programs (check tools, FeatureTest, a game exported by the packaged editor). Add a file the programs load to its list. |
 
 Without a GPU, run on the Mesa software rasterizer:
 `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json ctest --test-dir build/linux-debug`.

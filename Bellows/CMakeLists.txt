@@ -77,6 +77,8 @@ add_custom_target(BellowsResources ALL
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/ThirdPartyNotices.md" "${BELLOWS_OUTPUT_DIR}/ThirdPartyNotices.md"
 	# forgescript --lsp looks for the engine API description next to the program.
 	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/Resources/forgescript-api.json" "${BELLOWS_OUTPUT_DIR}/forgescript-api.json"
+	# ForgeScript's icon lives with the language; the editor shows it on .forge files.
+	COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SOURCE_DIR}/ForgeScript/Icons/ForgeScript.png" "${BELLOWS_OUTPUT_DIR}/Resources/Icons/ForgeScript.png"
 	COMMENT "Copying engine resources")
 set_target_properties(BellowsResources PROPERTIES FOLDER "Shaders")
 add_dependencies(Bellows BellowsResources)
