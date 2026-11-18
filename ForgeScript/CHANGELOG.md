@@ -5,6 +5,20 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.3.0 (2026-11-17)
+
+Error messages:
+- A misspelled name gets a hint naming the one it most likely meant: "'helth' has not been given a
+  value yet. Did you mean 'health'?" (before, the hint was "Use: set helth to ..."). This covers the
+  script's variables and functions, a function's own variables, built-in functions, the functions
+  and values of lists, text, maps and vectors, a kind's fields and functions (also through
+  `parent`), the engine's objects, and the names in a script used with `use`. The match ignores
+  letter case and counts two swapped letters as one mistake; with nothing close, the message is
+  unchanged.
+- Calling a value with brackets, like `items.length()`, says it is a value and to write it without
+  them.
+- `ClosestName` and `DidYouMean` (`Core/Suggest.h`) give hosts the same matching.
+
 ## 1.2.0 (2026-11-17)
 
 Tools for editors:

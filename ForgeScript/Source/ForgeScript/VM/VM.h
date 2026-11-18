@@ -310,6 +310,9 @@ namespace ForgeScript {
 		bool GetIndex(Task* task, const Value& object, const Value& index, Value& outValue);
 		bool SetIndex(Task* task, const Value& object, const Value& index, const Value& value);
 		bool LookupGlobal(Module* module, String* name, Value& outValue);
+		// Every name code in this function can read, for a "Did you mean ...?" hint: its variables, its
+		// script's and the shared ones.
+		std::vector<std::string_view> GlobalNameCandidates(const Function* fn) const;
 
 		bool Arithmetic(Task* task, OpCode op, const Value& a, const Value& b, Value& outValue);
 		bool Compare(Task* task, OpCode op, const Value& a, const Value& b, bool& outResult);
