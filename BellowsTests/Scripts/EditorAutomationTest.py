@@ -9,6 +9,7 @@ import pathlib
 import runpy
 import shutil
 import tempfile
+import time
 
 import bellows
 from bellows import editor
@@ -163,6 +164,37 @@ check(editor.state() == "edit" and not editor.debug_state()["stopped"], "play st
 check(not editor.debug_continue(), "nothing to continue after play stops")
 editor.clear_breakpoints()
 check(editor.script_error_count() == 0, "no script errors while debugging")
+
+# Play in a game window: the runtime plays the open scene in its own process ------------
+def wait_for_game(seconds):
+    deadline = time.monotonic() + seconds
+    while editor.is_game_running() and time.monotonic() < deadline:
+        editor.run_frames(5)
+    editor.run_frames(1)
+
+
+try:
+    editor.play_in_window("somewhere")
+    check(False, "an unknown scene choice is refused")
+except ValueError:
+    pass
+first_log = editor.latest_log_sequence()
+check(editor.play_in_window(headless=True, frames=30), "the game window starts")
+check(editor.state() == "edit", "the editor keeps editing while the game window runs")
+wait_for_game(180)
+check(not editor.is_game_running(), "the game window ends after its frames")
+check(editor.game_exit_code() == 0, f"the game window ends cleanly ({editor.game_exit_code()})")
+game_lines = [entry["text"] for entry in editor.logs(first_log)]
+check(any("[Game]" in line and "PlayScene.bscene" in line for line in game_lines),
+      "the game's log reaches the Console, and it played the open scene")
+check(any("Game window closed" in line for line in game_lines), "the Console says the game window closed")
+
+check(editor.play_in_window(headless=True), "a game window without a frame limit starts")
+editor.run_frames(2)
+check(editor.is_game_running(), "it keeps running")
+editor.stop_game()
+check(not editor.is_game_running() and editor.game_exit_code() != 0, "stop_game ends it")
+check(any("Game window stopped" in entry["text"] for entry in editor.logs(first_log)), "the Console says it was stopped")
 
 # Screenshots --------------------------------------------------------------------------
 editor.set_camera((4.0, 3.0, 6.0), (0.0, 0.5, 0.0))

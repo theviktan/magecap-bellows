@@ -94,6 +94,20 @@ namespace Bellows {
 			m.def("pause", [](bool paused) { Editor().SetPaused(paused); }, py::arg("paused") = true);
 			m.def("step", [](uint32_t frames) { Editor().Step(frames); }, py::arg("frames") = 1, "Advances a paused game");
 			m.def("state", [] { return std::string(StateName(Editor().GetSceneState())); }, "'edit', 'play' or 'pause'");
+			m.def("play_in_window", [](const std::string& scene, bool headless, uint64_t frames)
+			{
+				if (scene != "open" && scene != "project")
+					throw py::value_error("scene must be 'open' (the open scene) or 'project' (the project's start scene)");
+				return Editor().PlayInGameWindow(scene == "project", headless, frames);
+			}, py::arg("scene") = "open", py::arg("headless") = false, py::arg("frames") = 0,
+				"Runs the game in its own window and process (Play in a game window); returns whether it started");
+			m.def("is_game_running", [] { return Editor().IsGameWindowRunning(); }, "True while a game window started by the editor runs");
+			m.def("stop_game", [] { Editor().StopGameWindow(); }, "Ends the game window");
+			m.def("game_exit_code", []() -> py::object
+			{
+				const std::optional<int> code = Editor().GetGameWindowExitCode();
+				return code ? py::object(py::int_(*code)) : py::object(py::none());
+			}, "The last game window's exit code once it has ended, else None");
 			m.def("run_frames", [](uint32_t frames)
 			{
 				Editor().RunFrames(frames);

@@ -154,6 +154,7 @@ namespace Bellows {
 	{
 		if (m_SceneState != SceneState::Edit)
 			Stop();
+		StopGameWindow();
 		m_ScriptEditorPanel->SaveAll();
 		m_AgentServer.Stop();
 		SaveLayout();
@@ -219,6 +220,7 @@ namespace Bellows {
 			return;
 		if (m_SceneState != SceneState::Edit)
 			Stop();
+		StopGameWindow();
 		m_ScriptEditorPanel->SaveAll();
 		m_ScriptEditorPanel->CloseAll();
 		// Breakpoints name the project's scripts.
@@ -479,6 +481,54 @@ namespace Bellows {
 		m_ScriptWatcher.Start(m_Project->GetAssetDirectory(), { ".py", ".forge" });
 		m_ScriptWatchElapsed = 0.0f;
 		BW_INFO("Play mode started");
+	}
+
+	void EditorLayer::PlayInPreferredMode()
+	{
+		if (m_Settings.PlayInGameWindow)
+			PlayInGameWindow(false);
+		else
+			Play();
+	}
+
+	bool EditorLayer::PlayInGameWindow(bool startScene, bool headless, uint64_t frames)
+	{
+		if (!m_Project || !m_EditorScene)
+			return false;
+		// One game at a time.
+		if (m_SceneState != SceneState::Edit)
+			Stop();
+		// The game loads scripts from disk, so it runs what is in the Script Editor.
+		m_ScriptEditorPanel->SaveAll();
+
+		const ProjectConfig& config = m_Project->GetConfig();
+		GameWindowSession::Options options;
+		options.RuntimeProgram = Platform::GetExecutableDirectory() / ("BellowsRuntime" + Platform::GetExecutableExtension());
+		options.ProjectFile = m_Project->GetProjectFilePath();
+		options.Title = config.Name + " (DEBUG)";
+		options.Headless = headless;
+		options.Frames = frames;
+		// The open scene plays as it is in the editor, unsaved changes included.
+		if (!startScene || m_ScenePath == config.StartScene)
+		{
+			const std::filesystem::path sceneFile = m_Project->GetEditorDataDirectory() / "PlayScene.bscene";
+			std::error_code error;
+			std::filesystem::create_directories(sceneFile.parent_path(), error);
+			if (!SceneSerializer::Serialize(*m_EditorScene, sceneFile))
+			{
+				BW_ERROR("Could not save the scene for the game window to '{}'", sceneFile.string());
+				return false;
+			}
+			options.SceneFile = sceneFile;
+		}
+		if (m_ScriptDebugger.GetBreakpointCount() > 0)
+			BW_WARN("Breakpoints stop the game only when it plays in the editor viewport (Game > Play in Editor Viewport)");
+		return m_GameWindow.Start(options);
+	}
+
+	void EditorLayer::StopGameWindow()
+	{
+		m_GameWindow.Stop();
 	}
 
 	void EditorLayer::Stop()
@@ -800,6 +850,8 @@ namespace Bellows {
 	void EditorLayer::OnUpdate(Timestep timestep)
 	{
 		m_LastFrameTime = timestep.GetSeconds();
+		// The game window's log lines reach the Console every frame.
+		m_GameWindow.Update();
 
 		// Agent requests run at the next frame boundary, once per frame, and never nested
 		// inside one another (a request calling run_frames must not run other requests meanwhile).
@@ -1253,6 +1305,34 @@ namespace Bellows {
 		});
 	}
 
+	void EditorLayer::TogglePlay()
+	{
+		if (m_SceneState != SceneState::Edit)
+			Stop();
+		else if (m_GameWindow.IsRunning())
+			StopGameWindow();
+		else
+			PlayInPreferredMode();
+	}
+
+	void EditorLayer::HandlePlayKeys(bool ctrl)
+	{
+		// Godot's keys: F5 plays the project, F6 the open scene, F8 stops. While playing in the viewport
+		// F5 belongs to the debugger (Continue), above.
+		if (ctrl)
+			return;
+		if (m_SceneState == SceneState::Edit && ImGui::IsKeyPressed(ImGuiKey_F5, false))
+			PlayInGameWindow(true);
+		if (m_SceneState == SceneState::Edit && ImGui::IsKeyPressed(ImGuiKey_F6, false))
+			PlayInGameWindow(false);
+		if (ImGui::IsKeyPressed(ImGuiKey_F8, false))
+		{
+			if (m_SceneState != SceneState::Edit)
+				Stop();
+			StopGameWindow();
+		}
+	}
+
 	void EditorLayer::HandleShortcuts()
 	{
 		const ImGuiIO& io = ImGui::GetIO();
@@ -1272,6 +1352,7 @@ namespace Bellows {
 			if (ImGui::IsKeyPressed(ImGuiKey_F11, false))
 				ResumeScripts(shift ? DebugAction::StepOut : DebugAction::StepIn);
 		}
+		HandlePlayKeys(ctrl);
 		if (io.WantTextInput)
 			return;
 
@@ -1279,7 +1360,7 @@ namespace Bellows {
 		if (m_ScriptEditorPanel->IsFocused())
 		{
 			if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P, false))
-				m_SceneState == SceneState::Edit ? Play() : Stop();
+				TogglePlay();
 			return;
 		}
 
@@ -1302,7 +1383,7 @@ namespace Bellows {
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false))
 			Redo();
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P, false))
-			m_SceneState == SceneState::Edit ? Play() : Stop();
+			TogglePlay();
 
 		// Viewport and hierarchy commands need one of those panels to be in focus.
 		const bool sceneFocus = m_ViewportHovered || m_ViewportFocused || m_HierarchyPanel->IsFocused();
@@ -1577,12 +1658,29 @@ namespace Bellows {
 
 		if (ImGui::BeginMenu("Game"))
 		{
-			if (ImGui::MenuItem(ICON_PLAY "  Play", "Ctrl+P", false, editing))
+			const bool gameWindowRunning = m_GameWindow.IsRunning();
+			if (ImGui::MenuItem(ICON_PLAY "  Play", "Ctrl+P", false, editing && !gameWindowRunning))
+				PlayInPreferredMode();
+			if (ImGui::MenuItem(ICON_MONITOR "  Play Project in Game Window", "F5", false, editing))
+				PlayInGameWindow(true);
+			if (ImGui::MenuItem(ICON_MONITOR "  Play Scene in Game Window", "F6", false, editing))
+				PlayInGameWindow(false);
+			if (ImGui::MenuItem(ICON_PLAY "  Play Scene in Editor Viewport", nullptr, false, editing && !gameWindowRunning))
 				Play();
 			if (ImGui::MenuItem(ICON_PAUSE "  Pause", nullptr, m_SceneState == SceneState::Pause, !editing))
 				SetPaused(m_SceneState != SceneState::Pause);
-			if (ImGui::MenuItem(ICON_SQUARE "  Stop", "Ctrl+P", false, !editing))
-				Stop();
+			if (ImGui::MenuItem(ICON_SQUARE "  Stop", "F8", false, !editing || gameWindowRunning))
+			{
+				if (!editing)
+					Stop();
+				StopGameWindow();
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Play Opens a Game Window", nullptr, m_Settings.PlayInGameWindow))
+			{
+				m_Settings.PlayInGameWindow = !m_Settings.PlayInGameWindow;
+				m_Settings.Save();
+			}
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_ROCKET "  Export Game..."))
 			{
@@ -1622,7 +1720,8 @@ namespace Bellows {
 
 		const float buttonSize = ImGui::GetFrameHeight();
 		const float spacing = 4.0f * scale;
-		const float totalWidth = buttonSize * 3.0f + spacing * 2.0f;
+		const float modeButtonWidth = buttonSize * 0.6f;
+		const float totalWidth = buttonSize * 3.0f + modeButtonWidth + spacing * 3.0f;
 
 		// Workspace switcher on the left.
 		const Workspace workspace = GetWorkspace();
@@ -1642,17 +1741,42 @@ namespace Bellows {
 		ImGui::SetCursorPos(ImVec2((ImGui::GetWindowWidth() - totalWidth) * 0.5f, 5.0f * scale));
 
 		const bool editing = m_SceneState == SceneState::Edit;
-		if (editing)
+		const bool gameWindowRunning = m_GameWindow.IsRunning();
+		if (editing && !gameWindowRunning)
 		{
 			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Success));
-			if (UI::IconButton(ICON_PLAY, "Play (Ctrl+P)", false, ImVec2(buttonSize, buttonSize)))
-				Play();
+			const char* tooltip = m_Settings.PlayInGameWindow ? "Play in a game window (Ctrl+P; F5 plays the project, F6 the scene)"
+				: "Play in the editor viewport (Ctrl+P)";
+			if (UI::IconButton(ICON_PLAY, tooltip, false, ImVec2(buttonSize, buttonSize)))
+				PlayInPreferredMode();
 			ImGui::PopStyleColor();
 		}
 		else
 		{
-			if (UI::IconButton(ICON_SQUARE, "Stop (Ctrl+P)", true, ImVec2(buttonSize, buttonSize)))
-				Stop();
+			if (UI::IconButton(ICON_SQUARE, "Stop (Ctrl+P or F8)", true, ImVec2(buttonSize, buttonSize)))
+				TogglePlay();
+		}
+		ImGui::SameLine(0.0f, 1.0f * scale);
+		// Where Play runs the game: its own window (like an exported game) or the editor viewport.
+		// A narrow button: no side padding, or the chevron would be clipped.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, ImGui::GetStyle().FramePadding.y));
+		const bool openModeMenu = UI::IconButton(ICON_CHEVRON_DOWN "##PlayMode", "Where Play runs the game", false, ImVec2(modeButtonWidth, buttonSize));
+		ImGui::PopStyleVar();
+		if (openModeMenu)
+			ImGui::OpenPopup("##PlayModeMenu");
+		if (ImGui::BeginPopup("##PlayModeMenu"))
+		{
+			if (ImGui::MenuItem(ICON_MONITOR "  Game window", nullptr, m_Settings.PlayInGameWindow))
+			{
+				m_Settings.PlayInGameWindow = true;
+				m_Settings.Save();
+			}
+			if (ImGui::MenuItem(ICON_PLAY "  Editor viewport (debugger, live Inspector)", nullptr, !m_Settings.PlayInGameWindow))
+			{
+				m_Settings.PlayInGameWindow = false;
+				m_Settings.Save();
+			}
+			ImGui::EndPopup();
 		}
 		ImGui::SameLine(0.0f, spacing);
 		ImGui::BeginDisabled(editing);
@@ -1666,7 +1790,7 @@ namespace Bellows {
 		ImGui::EndDisabled();
 
 		// A thin accent line across the toolbar while playing makes play mode impossible to miss.
-		if (!editing)
+		if (!editing || gameWindowRunning)
 		{
 			const ImVec2 min = ImGui::GetWindowPos();
 			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(min.x, min.y + height - 2.0f * scale), ImVec2(min.x + ImGui::GetWindowWidth(), min.y + height),
@@ -1686,9 +1810,11 @@ namespace Bellows {
 		ImGui::PopStyleColor();
 
 		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-		const char* stateText = m_SceneState == SceneState::Edit ? "Editing" : (m_SceneState == SceneState::Play ? "Playing"
-			: (m_ScriptDebugger.IsStopped() ? "Stopped in a script" : "Paused"));
-		const ImU32 stateColor = m_SceneState == SceneState::Edit ? Theme::TextMuted : (m_SceneState == SceneState::Play ? Theme::Accent : Theme::Warning);
+		const bool gameWindowRunning = m_GameWindow.IsRunning();
+		const char* stateText = m_SceneState == SceneState::Edit ? (gameWindowRunning ? "Running in a game window" : "Editing")
+			: (m_SceneState == SceneState::Play ? "Playing" : (m_ScriptDebugger.IsStopped() ? "Stopped in a script" : "Paused"));
+		const ImU32 stateColor = m_SceneState == SceneState::Edit ? (gameWindowRunning ? Theme::Accent : Theme::TextMuted)
+			: (m_SceneState == SceneState::Play ? Theme::Accent : Theme::Warning);
 		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(stateColor));
 		ImGui::Text(ICON_CIRCLE " %s", stateText);
 		ImGui::PopStyleColor();

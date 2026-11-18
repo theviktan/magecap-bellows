@@ -45,6 +45,8 @@ namespace Bellows {
 		{
 			std::string LogFilePath;	// Empty disables file logging
 			bool EnableConsole = true;
+			// "[time] [level] name: text" on the console, which the editor reads from a game it started.
+			bool ConsoleIncludesLevel = false;
 			size_t HistoryCapacity = 4096;
 		};
 
