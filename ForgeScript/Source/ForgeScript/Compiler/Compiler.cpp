@@ -6,9 +6,9 @@
 #include "ForgeScript/VM/VM.h"
 
 #include <algorithm>
-#include <optional>
 #include <set>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -63,6 +63,16 @@ namespace ForgeScript {
 			int TryDepth = 0;
 		};
 
+		// A 'try' with a 'finally' whose try or catch section is being compiled. Leaving it early (return,
+		// stop, skip) runs a copy of its finally code first.
+		struct FinallyContext
+		{
+			size_t BodyStart = 0;  // the first token after 'finally'
+			int TryDepth = 0;      // handlers open outside the 'try'
+			size_t LocalCount = 0; // locals declared outside the 'try'
+			size_t LoopCount = 0;  // loops around the 'try'
+		};
+
 		struct FunctionState
 		{
 			FunctionState* Enclosing = nullptr;
@@ -71,6 +81,7 @@ namespace ForgeScript {
 			std::vector<Local> Locals;
 			std::vector<UpvalueInfo> Upvalues;
 			std::vector<LoopInfo> Loops;
+			std::vector<FinallyContext> Finally;
 			int ScopeDepth = 0;
 			int TryDepth = 0;
 		};
@@ -307,7 +318,7 @@ namespace ForgeScript {
 				case TokenType::Catch: case TokenType::Eof:
 					return true;
 				default:
-					return false;
+					return m_FinallyMarkers.count(m_Pos) > 0;
 			}
 		}
 
@@ -373,6 +384,7 @@ namespace ForgeScript {
 		{
 			const size_t locals = state.Locals.size();
 			const size_t loops = state.Loops.size();
+			const size_t finallies = state.Finally.size();
 			const int scopeDepth = state.ScopeDepth;
 			const int tryDepth = state.TryDepth;
 			const size_t stopWords = m_StopWords.size();
@@ -390,6 +402,7 @@ namespace ForgeScript {
 				m_State = &state;
 				state.Locals.resize(locals);
 				state.Loops.resize(loops);
+				state.Finally.resize(finallies);
 				state.ScopeDepth = scopeDepth;
 				state.TryDepth = tryDepth;
 				m_StopWords.resize(stopWords);
@@ -1378,8 +1391,18 @@ namespace ForgeScript {
 			if (m_State->Loops.empty())
 				ErrorAt(keyword, isBreak ? "'stop' can only be used inside a loop." : "'skip' can only be used inside a loop.");
 
+			// Each finally between here and the loop runs first, innermost first.
+			int depth = m_State->TryDepth;
+			const std::vector<FinallyContext> contexts = m_State->Finally;
+			const size_t loopCount = m_State->Loops.size();
+			for (auto it = contexts.rbegin(); it != contexts.rend() && it->LoopCount >= loopCount; ++it)
+			{
+				for (; depth > it->TryDepth; depth--)
+					EmitOp(OpCode::TryEnd);
+				EmitFinallyCopy(*it);
+			}
 			LoopInfo& loop = m_State->Loops.back();
-			for (int i = m_State->TryDepth; i > loop.TryDepth; i--)
+			for (; depth > loop.TryDepth; depth--)
 				EmitOp(OpCode::TryEnd);
 
 			for (int i = static_cast<int>(m_State->Locals.size()) - 1; i >= 0; i--)
@@ -1567,7 +1590,21 @@ namespace ForgeScript {
 				EmitOp(OpCode::Nothing);
 			else
 				Expression();
-			for (int i = m_State->TryDepth; i > 0; i--)
+			int depth = m_State->TryDepth;
+			if (!m_State->Finally.empty())
+			{
+				// The value waits in a hidden local while each finally on the way out runs, innermost first.
+				AddLocal("");
+				const std::vector<FinallyContext> contexts = m_State->Finally;
+				for (auto it = contexts.rbegin(); it != contexts.rend(); ++it)
+				{
+					for (; depth > it->TryDepth; depth--)
+						EmitOp(OpCode::TryEnd);
+					EmitFinallyCopy(*it);
+				}
+				m_State->Locals.pop_back();
+			}
+			for (; depth > 0; depth--)
 				EmitOp(OpCode::TryEnd);
 			EmitOp(OpCode::Return);
 		}
@@ -1681,10 +1718,74 @@ namespace ForgeScript {
 			EmitOp(OpCode::Pop);
 		}
 
+		// 'finally' at the start of a line, with nothing after it that would make it a value.
+		static bool LooksLikeFinally(const std::vector<Token>& tokens, size_t i)
+		{
+			if (tokens[i].Type != TokenType::Identifier || tokens[i].Lexeme != "finally" || i == 0 || tokens[i - 1].Type != TokenType::Newline)
+				return false;
+			if (i + 1 >= tokens.size())
+				return true;
+			switch (tokens[i + 1].Type)
+			{
+				case TokenType::Newline: case TokenType::Eof: case TokenType::End: case TokenType::Identifier:
+				case TokenType::Set: case TokenType::Constant: case TokenType::Add: case TokenType::Take:
+				case TokenType::Multiply: case TokenType::Divide: case TokenType::Return: case TokenType::Fail:
+				case TokenType::Trigger: case TokenType::Wait: case TokenType::Start: case TokenType::Stop:
+				case TokenType::Skip: case TokenType::For: case TokenType::While: case TokenType::Repeat:
+				case TokenType::Try: case TokenType::Use:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		struct TryParts
+		{
+			size_t Catch = 0;   // this try's 'catch', or 0
+			size_t Finally = 0; // this try's 'finally', or 0
+		};
+
+		// The 'catch' and 'finally' of the 'try' whose code starts at 'start'. 'finally' is not a reserved
+		// word: before it existed, a line starting with it used something named 'finally', so it only
+		// ends a section where nothing called 'finally' can exist.
+		TryParts FindTryParts(size_t start)
+		{
+			TryParts parts;
+			int depth = 0;
+			for (size_t i = start; i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Eof; i++)
+			{
+				if (IsBlockOpener(m_Tokens, i))
+					depth++;
+				else if (m_Tokens[i].Type == TokenType::End && m_Tokens[i - 1].Type != TokenType::Dot && m_Tokens[i - 1].Type != TokenType::Possessive)
+				{
+					if (depth == 0)
+						break;
+					depth--;
+				}
+				else if (depth == 0 && m_Tokens[i].Type == TokenType::Catch && !parts.Catch)
+					parts.Catch = i;
+				else if (depth == 0 && LooksLikeFinally(m_Tokens, i) && !NameMayExist("finally", LooksLikeFinally))
+				{
+					if (parts.Finally)
+						ErrorAt(m_Tokens[i], "A 'try' can have only one 'finally'.");
+					parts.Finally = i;
+				}
+			}
+			if (parts.Finally && parts.Catch > parts.Finally)
+				ErrorAt(m_Tokens[parts.Catch], "Put 'catch' before 'finally', like: try ... catch problem ... finally ... end");
+			return parts;
+		}
+
 		void TryStatement()
 		{
 			Token opener = Current();
 			Advance();
+			const TryParts parts = FindTryParts(m_Pos);
+			if (parts.Finally)
+			{
+				TryFinallyStatement(opener, parts);
+				return;
+			}
 			size_t handler = EmitJump(OpCode::TryBegin);
 			m_State->TryDepth++;
 			ScopedBlock();
@@ -1710,6 +1811,149 @@ namespace ForgeScript {
 			EndScope();
 			ConsumeEnd(opener, "'try'");
 			PatchJump(skipCatch);
+		}
+
+		// try ... [catch problem ...] finally ... end. The finally code runs however the 'try' is left: at
+		// the end of the try or catch code, on an error (which then goes on, unless 'catch' took it), and
+		// on return, stop or skip. Each way out gets its own copy of the finally code.
+		void TryFinallyStatement(const Token& opener, const TryParts& parts)
+		{
+			m_FinallyMarkers.insert(parts.Finally);
+			FinallyContext context;
+			context.BodyStart = parts.Finally + 1;
+			context.TryDepth = m_State->TryDepth;
+			context.LocalCount = m_State->Locals.size();
+			context.LoopCount = m_State->Loops.size();
+			m_State->Finally.push_back(context);
+			std::vector<size_t> toFinally;
+
+			// Without a catch, an error in the try code goes on after the finally code.
+			const size_t tryHandler = EmitJump(parts.Catch ? OpCode::TryBegin : OpCode::TryFinally);
+			m_State->TryDepth++;
+			ScopedBlock();
+			m_State->TryDepth--;
+			EmitOp(OpCode::TryEnd);
+			toFinally.push_back(EmitJump(OpCode::Jump));
+			PatchJump(tryHandler);
+
+			if (!parts.Catch)
+			{
+				EmitFinallyOnError(context, 0);
+			}
+			else
+			{
+				// The error is on the stack when the catch code starts. An error in the catch code goes on
+				// after the finally code.
+				Consume(TokenType::Catch, "Expected 'catch' here.");
+				BeginScope();
+				std::string name;
+				if (Check(TokenType::Identifier) && m_Pos != parts.Finally)
+					name = ConsumeName("Expected a name for the error.");
+				AddLocal(name);
+				const size_t catchHandler = EmitJump(OpCode::TryFinally);
+				m_State->TryDepth++;
+				Block();
+				m_State->TryDepth--;
+				EmitOp(OpCode::TryEnd);
+				EndScope();
+				toFinally.push_back(EmitJump(OpCode::Jump));
+				PatchJump(catchHandler);
+				EmitFinallyOnError(context, 1);
+			}
+
+			m_State->Finally.pop_back();
+			for (size_t jump : toFinally)
+				PatchJump(jump);
+			if (m_Pos != parts.Finally)
+				ErrorAtCurrent("Expected 'finally' here.");
+			Advance(); // finally
+			ScopedBlock();
+			ConsumeEnd(opener, "'try'");
+		}
+
+		// Where a finally handler starts: the stack holds 'below' hidden values (the caught error, during
+		// the catch code), then the error and where it happened. Runs the finally code and raises the
+		// error again from where it happened.
+		void EmitFinallyOnError(const FinallyContext& context, int below)
+		{
+			BeginScope();
+			for (int i = 0; i < below; i++)
+				AddLocal("");
+			const int error = AddLocal("");
+			const int where = AddLocal("");
+			EmitFinallyCopy(context);
+			EmitOp(OpCode::GetLocal);
+			EmitByte(static_cast<uint8_t>(error));
+			EmitOp(OpCode::GetLocal);
+			EmitByte(static_cast<uint8_t>(where));
+			EmitOp(OpCode::Rethrow);
+			EndScope();
+		}
+
+		// Compiles a copy of the finally code of 'context' here. Its handlers are already closed, and the
+		// copy only sees the names visible where the finally code is written, outside the 'try'. Its
+		// mistakes are reported once, where it is written.
+		void EmitFinallyCopy(const FinallyContext& context)
+		{
+			FunctionState& state = *m_State;
+			const size_t position = m_Pos;
+			const size_t closingPos = m_ClosingPos;
+			const int closingLine = m_ClosingLine;
+			const CompileError error = m_Error;
+			std::vector<CompileError>* allErrors = m_AllErrors;
+			const std::vector<FinallyContext> contexts = state.Finally;
+			std::vector<LoopInfo> loops = state.Loops;
+			const size_t localCount = state.Locals.size();
+			const int scopeDepth = state.ScopeDepth;
+			const int tryDepth = state.TryDepth;
+			const size_t stopWords = m_StopWords.size();
+
+			std::vector<std::string> hidden;
+			for (size_t i = context.LocalCount; i < localCount; i++)
+			{
+				hidden.push_back(std::move(state.Locals[i].Name));
+				state.Locals[i].Name.clear();
+			}
+			// Only the finally code of 'try's around this one runs when the copy itself returns early.
+			auto own = std::find_if(state.Finally.begin(), state.Finally.end(),
+				[&context](const FinallyContext& other) { return other.BodyStart == context.BodyStart; });
+			state.Finally.erase(own, state.Finally.end());
+			// 'stop' and 'skip' in it belong to the loops around the 'try'.
+			const size_t outerLoops = std::min(state.Loops.size(), context.LoopCount);
+			state.Loops.resize(outerLoops);
+			state.TryDepth = context.TryDepth;
+
+			std::vector<CompileError> ignored;
+			m_AllErrors = &ignored;
+			m_Pos = context.BodyStart;
+			try
+			{
+				ScopedBlock();
+			}
+			catch (const CompileAbort&)
+			{
+				// Reported where the finally code is written.
+			}
+
+			// Jumps that the copy's 'stop' and 'skip' added are patched by their loops.
+			for (size_t i = 0; i < outerLoops; i++)
+			{
+				loops[i].BreakJumps = std::move(state.Loops[i].BreakJumps);
+				loops[i].ContinueJumps = std::move(state.Loops[i].ContinueJumps);
+			}
+			m_AllErrors = allErrors;
+			m_Error = error;
+			m_Pos = position;
+			m_ClosingPos = closingPos;
+			m_ClosingLine = closingLine;
+			state.Locals.resize(localCount);
+			for (size_t i = context.LocalCount; i < localCount; i++)
+				state.Locals[i].Name = std::move(hidden[i - context.LocalCount]);
+			state.Loops = std::move(loops);
+			state.Finally = contexts;
+			state.ScopeDepth = scopeDepth;
+			state.TryDepth = tryDepth;
+			m_StopWords.resize(stopWords);
 		}
 
 		void FailStatement()
@@ -2163,29 +2407,39 @@ namespace ForgeScript {
 				return false;
 
 			// A local or parameter named 'between' is written in this script too, so the scan covers it.
-			if (!m_BetweenMayBeAName.has_value())
+			return !NameMayExist("between", [](const std::vector<Token>& tokens, size_t i)
 			{
-				std::set<std::string> visited;
-				m_BetweenMayBeAName = MentionsName(m_Tokens, "between", visited);
-			}
-			return !*m_BetweenMayBeAName;
+				return i >= 1 && (tokens[i - 1].Type == TokenType::Is ||
+					(tokens[i - 1].Type == TokenType::Not && i >= 2 && tokens[i - 2].Type == TokenType::Is));
+			});
 		}
 
-		// Whether 'name' is written anywhere in these tokens, other than right after 'is' or 'is not',
-		// or in a script they use without 'as' (which brings in its names). A script that can't be found
-		// counts as mentioning it, to be safe.
-		bool MentionsName(const std::vector<Token>& tokens, std::string_view name, std::set<std::string>& visited)
+		// Whether something called 'name' may exist: the word is written in this script or in one it
+		// uses without 'as', other than where 'isTheForm' says it is the new form itself. Worked out once
+		// per name.
+		template<typename IsTheForm>
+		bool NameMayExist(const std::string& name, IsTheForm isTheForm)
+		{
+			auto known = m_NamesMayExist.find(name);
+			if (known != m_NamesMayExist.end())
+				return known->second;
+			std::set<std::string> visited;
+			const bool mayExist = MentionsName(m_Tokens, name, isTheForm, visited);
+			m_NamesMayExist[name] = mayExist;
+			return mayExist;
+		}
+
+		// Whether 'name' is written anywhere in these tokens (except where 'isTheForm' says so), or in a
+		// script they use without 'as' (which brings in its names). A script that can't be found counts
+		// as mentioning it, to be safe.
+		template<typename IsTheForm>
+		bool MentionsName(const std::vector<Token>& tokens, std::string_view name, IsTheForm isTheForm, std::set<std::string>& visited)
 		{
 			for (size_t i = 0; i < tokens.size(); i++)
 			{
 				const Token& token = tokens[i];
-				if (token.Type == TokenType::Identifier && token.Lexeme == name)
-				{
-					const bool afterIs = i >= 1 && (tokens[i - 1].Type == TokenType::Is ||
-						(tokens[i - 1].Type == TokenType::Not && i >= 2 && tokens[i - 2].Type == TokenType::Is));
-					if (!afterIs)
-						return true;
-				}
+				if (token.Type == TokenType::Identifier && token.Lexeme == name && !isTheForm(tokens, i))
+					return true;
 				if (token.Type == TokenType::Use && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::String)
 				{
 					const bool aliased = i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::Identifier && tokens[i + 2].Lexeme == "as";
@@ -2197,7 +2451,7 @@ namespace ForgeScript {
 					if (!m_VM.ResolveModuleSource(path, resolvedName, source))
 						return true;
 					Lexer lexer(source);
-					if (MentionsName(lexer.Tokenize(), name, visited))
+					if (MentionsName(lexer.Tokenize(), name, isTheForm, visited))
 						return true;
 				}
 			}
@@ -2668,8 +2922,10 @@ namespace ForgeScript {
 		size_t m_ClosingPos = 0;
 		int m_ClosingLine = 0;
 		size_t m_LastCallPos = static_cast<size_t>(-1);
-		// Whether something called 'between' may exist, worked out once when first needed.
-		std::optional<bool> m_BetweenMayBeAName;
+		// Whether something with a name may exist (see NameMayExist), worked out once per name.
+		std::unordered_map<std::string, bool> m_NamesMayExist;
+		// The 'finally' tokens that end a try or catch section.
+		std::set<size_t> m_FinallyMarkers;
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.

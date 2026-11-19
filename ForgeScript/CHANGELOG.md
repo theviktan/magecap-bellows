@@ -27,6 +27,14 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Cleanup that always runs (ForgeScript Roadmap item 7):
+- `try ... catch problem ... finally ... end`. The finally code runs however the `try` is left: at
+  the end, after `catch`, on an error, or on `return`, `stop` or `skip`. Without `catch`, the error
+  goes on after the finally code, still reported at the line where it happened.
+- `finally` is not a reserved word; where a script uses it as a name, it keeps its old meaning.
+  A `try` without `finally` compiles exactly as before.
+- The VS Code extension (1.2.0) colors `finally` and indents after it.
+
 Long text (ForgeScript Roadmap item 6):
 - `"""` ... `"""` for text over several lines, with `"` inside and no escapes. The indentation all
   its lines share is removed, as are the line break after the opening quotes and a last line holding

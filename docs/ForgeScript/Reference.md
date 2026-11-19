@@ -29,7 +29,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Send an event | `trigger hit with 25`, `trigger "game over"` |
 | Wait | `wait 2 seconds`, `wait 250 ms`, `wait 3 frames`, `wait`, `wait until ready` |
 | Run as a task | `start patrol()`, `start guard.patrol(3)` |
-| Errors | `try ... catch problem ... end`, `fail "message"` |
+| Errors | `try ... catch problem ... end`, `fail "message"`, cleanup that always runs: `try ... catch problem ... finally ... end` (without `catch`, the error goes on after the finally code) |
 | Use another script | `use "helpers"`, `use "helpers" as h` |
 | Comments | `# line`, `#[ block ]#` |
 
