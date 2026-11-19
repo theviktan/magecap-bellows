@@ -1,9 +1,16 @@
 #include <doctest/doctest.h>
 
+#include "Bellows/Core/Input.h"
+#include "Bellows/Core/InputMap.h"
 #include "Bellows/Scene/Components.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/UI/UILayout.h"
+
+#include <functional>
+#include <string>
+#include <vector>
 
 using namespace Bellows;
 
@@ -117,6 +124,26 @@ TEST_CASE("UI rect position and size keep the pivot in place")
 	CHECK(GetUIRectPosition(topLeft, cornerMin, cornerMax) == glm::vec2(20.0f, 20.0f));
 }
 
+TEST_CASE("UI navigation moves to the nearest rect in the pressed direction")
+{
+	// A 2 by 2 grid of buttons and a wide one under it:
+	//   [0] [1]
+	//   [2] [3]
+	//   [   4   ]
+	const auto box = [](float x, float y, float w, float h) { return UIRectangle { glm::vec2(x, y), glm::vec2(x + w, y + h) }; };
+	const std::vector<UIRectangle> rects { box(0, 0, 100, 40), box(120, 0, 100, 40), box(0, 60, 100, 40), box(120, 60, 100, 40), box(0, 120, 220, 40) };
+	CHECK(FindUINavigationTarget(rects[0], rects, UINavigationDirection::Right, 0) == 1);
+	CHECK(FindUINavigationTarget(rects[0], rects, UINavigationDirection::Down, 0) == 2);
+	CHECK(FindUINavigationTarget(rects[3], rects, UINavigationDirection::Left, 3) == 2);
+	CHECK(FindUINavigationTarget(rects[3], rects, UINavigationDirection::Up, 3) == 1);
+	CHECK(FindUINavigationTarget(rects[3], rects, UINavigationDirection::Down, 3) == 4);
+	CHECK(FindUINavigationTarget(rects[4], rects, UINavigationDirection::Up, 4) == 2);	// Equal distance: the first
+	// Nothing further that way: no move (no wrapping).
+	CHECK(FindUINavigationTarget(rects[1], rects, UINavigationDirection::Right, 1) == -1);
+	CHECK(FindUINavigationTarget(rects[0], rects, UINavigationDirection::Up, 0) == -1);
+	CHECK(FindUINavigationTarget(rects[0], {}, UINavigationDirection::Down) == -1);
+}
+
 TEST_CASE("Scenes lay out their UI canvases in hierarchy and sort order")
 {
 	Ref<Scene> scene = CreateRef<Scene>("UI");
@@ -225,4 +252,304 @@ TEST_CASE("Scenes lay out their UI canvases in hierarchy and sort order")
 		scene->UpdateUILayout(glm::vec2(800.0f, 600.0f));
 		CHECK_FALSE(scene->IsUIEntity(sign));
 	}
+}
+
+namespace {
+
+	// A running scene with a menu canvas: a background panel and two focusable buttons stacked in it,
+	//   Panel   (100, 100)-(500, 400)
+	//   Play    (150, 150)-(450, 200)
+	//   Quit    (150, 250)-(450, 300)
+	// on an 800 by 600 screen at one reference pixel per screen pixel. UI events are recorded.
+	struct UIInputScene
+	{
+		struct Received
+		{
+			std::string Name;
+			UUID Source = 0;
+			UUID Target = 0;
+		};
+
+		Ref<Scene> SceneRef = CreateRef<Scene>("UI input");
+		Entity Canvas, Panel, Play, Quit;
+		std::vector<Received> Events;
+		Scripting::ScriptEventListenerID Listener = 0;
+
+		UIInputScene()
+		{
+			Input::ResetState();
+			Input::BeginFrame();
+			Input::SetViewportRect(glm::vec2(0.0f), glm::vec2(800.0f, 600.0f));
+			InputMap::SetActions(InputMap::GetDefaultActions());
+
+			Canvas = SceneRef->CreateEntity("Menu");
+			Canvas.AddComponent<UICanvasComponent>().ScaleMode = UIScaleMode::ConstantPixels;
+			Panel = AddRect("Panel", Canvas, { 100.0f, 100.0f }, { 500.0f, 400.0f });
+			Panel.AddComponent<UIImageComponent>();
+			Play = AddRect("Play", Panel, { 50.0f, 50.0f }, { 350.0f, 100.0f });
+			Play.GetComponent<UIRectComponent>().Focusable = true;
+			Quit = AddRect("Quit", Panel, { 50.0f, 150.0f }, { 350.0f, 200.0f });
+			Quit.GetComponent<UIRectComponent>().Focusable = true;
+
+			SceneRef->OnViewportResize(800, 600);
+			SceneRef->OnRuntimeStart();
+			Listener = Scripting::AddScriptEventListener([this](const std::string& name, const Scripting::ScriptValueList&,
+				const Scripting::ScriptEventDelivery& delivery)
+			{
+				Events.push_back({ name, delivery.Source ? delivery.Source->ID : UUID(0), delivery.Target ? delivery.Target->ID : UUID(0) });
+			});
+		}
+
+		~UIInputScene()
+		{
+			Scripting::RemoveScriptEventListener(Listener);
+			SceneRef->OnRuntimeStop();
+			Input::ResetState();
+			Input::BeginFrame();
+			InputMap::SetActions({});
+		}
+
+		Entity AddRect(const char* name, Entity parent, glm::vec2 min, glm::vec2 max)
+		{
+			Entity entity = SceneRef->CreateEntity(name);
+			SceneRef->SetParent(entity, parent);
+			auto& rect = entity.AddComponent<UIRectComponent>();
+			rect.AnchorMin = rect.AnchorMax = glm::vec2(0.0f);
+			rect.OffsetMin = min;
+			rect.OffsetMax = max;
+			return entity;
+		}
+
+		// One frame: the given input changes, then the scene's update (the UI runs first in it).
+		void Frame(const std::function<void()>& input = {})
+		{
+			Input::BeginFrame();
+			if (input)
+				input();
+			SceneRef->OnUpdateRuntime(Timestep(1.0f / 60.0f));
+		}
+
+		void Click(glm::vec2 position)
+		{
+			Frame([&] { Input::InjectMousePosition(position); Input::InjectMouseButton(MouseButton::Left, true); });
+			Frame([&] { Input::InjectMouseButton(MouseButton::Left, false); });
+		}
+
+		void Tap(KeyCode key)
+		{
+			Frame([&] { Input::InjectKey(key, true); });
+			Frame([&] { Input::InjectKey(key, false); });
+		}
+
+		// The names of the recorded events raised by 'source', delivered to that entity itself.
+		std::vector<std::string> EventsFrom(Entity source) const
+		{
+			std::vector<std::string> names;
+			for (const Received& event : Events)
+			{
+				if (event.Source == source.GetUUID() && event.Target == source.GetUUID())
+					names.push_back(event.Name);
+			}
+			return names;
+		}
+	};
+
+	using Names = std::vector<std::string>;
+
+}
+
+TEST_CASE("A game with no UI sees exactly the input it always did")
+{
+	UIInputScene ui;
+	ui.Canvas.GetComponent<UICanvasComponent>().Visible = false;	// No UI on screen at all
+	ui.Frame([] {
+		Input::InjectMousePosition(glm::vec2(300.0f, 175.0f));
+		Input::InjectKey(KeyCode::W, true);
+		Input::InjectKey(KeyCode::Enter, true);
+		Input::InjectMouseButton(MouseButton::Left, true);
+		Input::InjectGamepadButton(GamepadButton::A, true);
+	});
+	CHECK(Input::GetCapture() == InputCapture());
+	CHECK(Input::IsKeyPressed(KeyCode::W));
+	CHECK(Input::IsKeyDown(KeyCode::Enter));
+	CHECK(Input::IsMouseButtonPressed(MouseButton::Left));
+	CHECK(Input::IsGamepadButtonPressed(GamepadButton::A));
+	CHECK(InputMap::IsActionPressed("jump"));
+	CHECK(InputMap::IsActionPressed("ui_accept"));
+	CHECK_FALSE(ui.SceneRef->UIWantsPointer());
+	CHECK_FALSE(ui.SceneRef->UIWantsKeyboard());
+	ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+	CHECK(Input::IsMouseButtonReleased(MouseButton::Left));
+	CHECK(ui.Events.empty());
+	CHECK_FALSE(ui.SceneRef->GetUIFocused());
+}
+
+TEST_CASE("The pointer clicks UI, focuses it, and the game does not see it")
+{
+	UIInputScene ui;
+
+	SUBCASE("Over a button: hovered, and the press is the UI's")
+	{
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 175.0f)); });
+		CHECK(ui.SceneRef->GetUIHovered() == ui.Play);
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK(ui.SceneRef->UIWantsPointer());
+		CHECK_FALSE(Input::IsMouseButtonPressed(MouseButton::Left));
+		CHECK_FALSE(Input::IsMouseButtonDown(MouseButton::Left));
+		CHECK(Input::IsMouseButtonPressed(MouseButton::Left, InputAccess::Raw));
+		CHECK(ui.SceneRef->GetUIPressed() == ui.Play);
+		CHECK(ui.SceneRef->GetUIFocused() == ui.Play);
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+		CHECK_FALSE(Input::IsMouseButtonReleased(MouseButton::Left));
+		CHECK_FALSE(ui.SceneRef->GetUIPressed());
+		CHECK(ui.EventsFrom(ui.Play) == Names { "focused", "clicked" });
+
+		// The click climbs from the button through its parents, in that order.
+		std::vector<UUID> targets;
+		for (const auto& event : ui.Events)
+		{
+			if (event.Name == "clicked")
+				targets.push_back(event.Target);
+		}
+		CHECK(targets == std::vector<UUID> { ui.Play.GetUUID(), ui.Panel.GetUUID(), ui.Canvas.GetUUID() });
+	}
+	SUBCASE("A panel stops the pointer but cannot take focus; text and bare rects let it through")
+	{
+		ui.Click(glm::vec2(300.0f, 350.0f));	// On the panel, below the buttons
+		CHECK(ui.EventsFrom(ui.Panel) == Names { "clicked" });
+		CHECK_FALSE(ui.SceneRef->GetUIFocused());
+
+		ui.Panel.RemoveComponent<UIImageComponent>();
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 350.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK(Input::IsMouseButtonPressed(MouseButton::Left));
+		CHECK_FALSE(ui.SceneRef->GetUIHovered());
+	}
+	SUBCASE("Pressing on one thing and letting go on another clicks nothing")
+	{
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 175.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 275.0f)); Input::InjectMouseButton(MouseButton::Left, false); });
+		CHECK(ui.EventsFrom(ui.Play) == Names { "focused" });
+		CHECK(ui.EventsFrom(ui.Quit).empty());
+	}
+	SUBCASE("A press that starts in the game stays the game's over the UI")
+	{
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(700.0f, 500.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK(Input::IsMouseButtonPressed(MouseButton::Left));
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 175.0f)); });
+		CHECK(Input::IsMouseButtonDown(MouseButton::Left));
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+		CHECK(Input::IsMouseButtonReleased(MouseButton::Left));
+		CHECK(ui.Events.empty());
+	}
+	SUBCASE("Clicking the game clears focus")
+	{
+		ui.Click(glm::vec2(300.0f, 175.0f));
+		ui.Click(glm::vec2(700.0f, 500.0f));
+		CHECK(ui.EventsFrom(ui.Play) == Names { "focused", "clicked", "unfocused" });
+	}
+	SUBCASE("A rect that is not interactable lets the pointer through, with everything under it")
+	{
+		ui.Panel.GetComponent<UIRectComponent>().Interactable = false;
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 175.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK_FALSE(ui.SceneRef->GetUIHovered());
+		CHECK(Input::IsMouseButtonPressed(MouseButton::Left));
+		CHECK_FALSE(ui.SceneRef->SetUIFocus(ui.Play));
+	}
+}
+
+TEST_CASE("Keyboard and gamepad move focus, accept and cancel")
+{
+	UIInputScene ui;
+	// Without focus the arrow keys are the game's.
+	ui.Tap(KeyCode::Down);
+	CHECK_FALSE(ui.SceneRef->GetUIFocused());
+
+	REQUIRE(ui.SceneRef->SetUIFocus(ui.Play));
+	ui.Tap(KeyCode::Down);
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Quit);
+	ui.Tap(KeyCode::Down);	// Nothing further down: focus stays
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Quit);
+	ui.Frame([] { Input::InjectGamepadButton(GamepadButton::DPadUp, true); });
+	ui.Frame([] { Input::InjectGamepadButton(GamepadButton::DPadUp, false); });
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Play);
+
+	// Tab goes round in hierarchy order; Shift+Tab goes back.
+	ui.Tap(KeyCode::Tab);
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Quit);
+	ui.Tap(KeyCode::Tab);
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Play);
+	ui.Frame([] { Input::InjectKey(KeyCode::LeftShift, true); Input::InjectKey(KeyCode::Tab, true); });
+	ui.Frame([] { Input::InjectKey(KeyCode::LeftShift, false); Input::InjectKey(KeyCode::Tab, false); });
+	CHECK(ui.SceneRef->GetUIFocused() == ui.Quit);
+
+	ui.Tap(KeyCode::Enter);
+	ui.Tap(KeyCode::Escape);
+	const Names quit = ui.EventsFrom(ui.Quit);
+	REQUIRE(quit.size() >= 3);
+	CHECK(Names(quit.end() - 2, quit.end()) == Names { "clicked", "cancelled" });
+
+	// Hiding the focused UI lets focus go.
+	ui.Quit.GetComponent<UIRectComponent>().Visible = false;
+	ui.Frame();
+	CHECK_FALSE(ui.SceneRef->GetUIFocused());
+	CHECK(ui.EventsFrom(ui.Quit).back() == "unfocused");
+
+	// Only focusable, shown UI can take focus.
+	CHECK_FALSE(ui.SceneRef->SetUIFocus(ui.Panel));
+	CHECK_FALSE(ui.SceneRef->SetUIFocus(ui.Quit));
+	CHECK(ui.SceneRef->SetUIFocus(Entity()));
+}
+
+TEST_CASE("A modal canvas takes every input and keeps focus inside it")
+{
+	UIInputScene ui;
+	REQUIRE(ui.SceneRef->SetUIFocus(ui.Play));
+
+	Entity dialog = ui.SceneRef->CreateEntity("Dialog");
+	auto& dialogCanvas = dialog.AddComponent<UICanvasComponent>();
+	dialogCanvas.ScaleMode = UIScaleMode::ConstantPixels;
+	dialogCanvas.Modal = true;
+	Entity yes = ui.AddRect("Yes", dialog, { 600.0f, 500.0f }, { 700.0f, 550.0f });
+	yes.GetComponent<UIRectComponent>().Focusable = true;
+	yes.AddComponent<UIImageComponent>();
+
+	ui.Frame([] { Input::InjectKey(KeyCode::W, true); Input::InjectGamepadButton(GamepadButton::X, true); });
+	// The menu behind the dialog loses focus, and the game gets no keys or buttons.
+	CHECK_FALSE(ui.SceneRef->GetUIFocused());
+	CHECK(ui.EventsFrom(ui.Play).back() == "unfocused");
+	CHECK(ui.SceneRef->UIWantsKeyboard());
+	CHECK_FALSE(Input::IsKeyPressed(KeyCode::W));
+	CHECK(Input::IsKeyPressed(KeyCode::W, InputAccess::Raw));
+	CHECK_FALSE(Input::IsGamepadButtonDown(GamepadButton::X));
+	CHECK_FALSE(InputMap::IsActionPressed("move_forward"));
+	ui.Frame([] { Input::InjectKey(KeyCode::W, false); Input::InjectGamepadButton(GamepadButton::X, false); });
+
+	// Clicking the menu behind does nothing; the pointer is the dialog's everywhere.
+	ui.Click(glm::vec2(300.0f, 175.0f));
+	CHECK(ui.EventsFrom(ui.Play) == Names { "focused", "unfocused" });
+	CHECK_FALSE(Input::IsMouseButtonReleased(MouseButton::Left));
+
+	// Navigation starts inside the dialog; cancel with nothing focused comes from the dialog itself.
+	ui.Tap(KeyCode::Escape);
+	CHECK(ui.EventsFrom(dialog) == Names { "cancelled" });
+	ui.Tap(KeyCode::Down);
+	CHECK(ui.SceneRef->GetUIFocused() == yes);
+	CHECK_FALSE(ui.SceneRef->SetUIFocus(ui.Quit));
+
+	// Closing the dialog gives the input back.
+	dialogCanvas.Visible = false;
+	ui.Frame([] { Input::InjectKey(KeyCode::W, true); });
+	CHECK_FALSE(ui.SceneRef->UIWantsKeyboard());
+	CHECK(Input::IsKeyPressed(KeyCode::W));
+	CHECK_FALSE(ui.SceneRef->GetUIFocused());
+}
+
+TEST_CASE("Stopping play gives every input back to the game")
+{
+	{
+		UIInputScene ui;
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 175.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK(Input::GetCapture().Pointer);
+	}
+	CHECK(Input::GetCapture() == InputCapture());
 }

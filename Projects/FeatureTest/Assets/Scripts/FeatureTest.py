@@ -108,6 +108,7 @@ class FeatureTest(bellows.Script):
         self.test_screenshots()
         self.test_saved_data()
         self.test_events()
+        self.test_ui_focus()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -175,7 +176,10 @@ class FeatureTest(bellows.Script):
         # No device input is delivered in automated runs, but every query must work.
         self.check(not bellows.is_key_down(Key.Space) and not bellows.is_key_pressed(Key.W) and not bellows.is_key_released(Key.Escape), "keyboard queries")
         self.check(not bellows.is_key_down("A"), "keys by name")
-        self.check(bellows.action_names() == ["fire", "jump"], "action_names lists the project's actions")
+        ui_actions = ["ui_accept", "ui_cancel", "ui_down", "ui_left", "ui_next", "ui_previous", "ui_right", "ui_up"]
+        self.check(bellows.action_names() == ["fire", "jump"] + ui_actions,
+                   f"action_names lists the project's actions and the UI's ({bellows.action_names()})")
+        self.check(not bellows.ui_wants_pointer() and not bellows.ui_wants_keyboard(), "with no UI under the pointer, input is the game's")
         self.check(not bellows.is_action_down("jump") and not bellows.is_action_pressed("fire") and not bellows.is_action_released("jump"), "input action queries")
         self.check(raises(lambda: bellows.is_action_down("dance"), ValueError), "unknown input actions are rejected")
         self.check(not bellows.is_gamepad_down("A") and not bellows.is_gamepad_pressed("dpad_up") and not bellows.is_gamepad_released("Start"), "gamepad button queries")
@@ -363,7 +367,7 @@ class FeatureTest(bellows.Script):
         self.check(raises(lambda: setattr(text, "overflow", "scroll"), ValueError), "Text rejects unknown overflow")
 
         canvas = entity.add_component(bellows.UICanvas)
-        self.check(close(canvas.reference_size, (1920.0, 1080.0, 0.0)) and canvas.scale_mode == "expand", "UICanvas defaults")
+        self.check(close(canvas.reference_size, (1920.0, 1080.0, 0.0)) and canvas.scale_mode == "expand" and not canvas.modal, "UICanvas defaults")
         canvas.reference_size, canvas.scale_mode, canvas.sort_order = Vec3(1280.0, 720.0, 0.0), "constant_pixels", 4
         self.check(close(canvas.reference_size, (1280.0, 720.0, 0.0)) and canvas.sort_order == 4 and canvas.visible, "UICanvas properties")
         self.check(close(canvas.scale, 1.0), f"UICanvas.scale with constant pixels ({canvas.scale})")
@@ -372,7 +376,7 @@ class FeatureTest(bellows.Script):
         self.check(raises(lambda: setattr(canvas, "scale_mode", "stretch"), ValueError), "UICanvas rejects unknown scale modes")
 
         rect = entity.add_component(bellows.UIRect)
-        self.check(close(rect.anchor_min, (0.5, 0.5, 0.0)) and close(rect.size, (200.0, 50.0, 0.0)) and rect.interactable, "UIRect defaults")
+        self.check(close(rect.anchor_min, (0.5, 0.5, 0.0)) and close(rect.size, (200.0, 50.0, 0.0)) and rect.interactable and not rect.focusable, "UIRect defaults")
         rect.anchor_min, rect.anchor_max, rect.pivot = Vec3(0.0, 1.0, 0.0), Vec3(2.0, 1.0, 0.0), Vec3(0.0, 1.0, 0.0)
         self.check(close(rect.anchor_max, (1.0, 1.0, 0.0)), "UIRect anchors are clamped to 0-1")
         rect.offset_min, rect.offset_max = Vec3(10.0, -60.0, 0.0), Vec3(-10.0, -10.0, 0.0)
@@ -561,6 +565,26 @@ class FeatureTest(bellows.Script):
         self.check(self.events and self.events[-1] == ("feature test", (1.0, "two", [3.0], {"four": 4.0}, self.entity)),
                    "emit reaches on_event, the sender's own included")
         self.check(raises(lambda: bellows.emit("bad", object()), ValueError), "emit rejects values other scripts can't read")
+
+    def test_ui_focus(self):
+        # A small menu under this test's own entity: UI events climb through non-UI parents to its script.
+        menu = bellows.create_entity("Focus Test Menu", parent=self.entity)
+        canvas = menu.add_component(bellows.UICanvas)
+        button = bellows.create_entity("Focus Test Button", parent=menu)
+        rect = button.add_component(bellows.UIRect)
+        self.check(not rect.focus(), "a rect that is not focusable cannot take focus")
+        rect.focusable = True
+        self.check(rect.focus() and rect.focused and bellows.ui_focused() == button, "UIRect.focus gives it focus")
+        self.check(self.events and self.events[-1] == ("focused", (button,)), f"focused reaches the scripts above the button ({self.events[-1:]})")
+        self.check(not rect.hovered and not rect.pressed, "UIRect hovered and pressed")
+        canvas.modal = True
+        self.check(canvas.modal, "UICanvas.modal")
+        canvas.visible = False
+        self.check(not rect.focus(), "hidden UI cannot take focus")
+        bellows.ui_clear_focus()
+        self.check(bellows.ui_focused() is None and self.events[-1] == ("unfocused", (button,)), "ui_clear_focus")
+        self.check(bellows.ui_hovered() is None, "ui_hovered")
+        menu.destroy()
 
     def test_destruction(self):
         temporary = bellows.create_entity("Temporary")

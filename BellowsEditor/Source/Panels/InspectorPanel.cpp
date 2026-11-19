@@ -426,6 +426,7 @@ namespace Bellows {
 					c.ScaleMode = static_cast<UIScaleMode>(scaleMode);
 				UI::Property("Sort Order", c.SortOrder, 0, 0, "Canvases with a higher sort order draw on top");
 				UI::Property("Visible", c.Visible);
+				UI::Property("Modal", c.Modal, "While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)");
 				UI::EndPropertyGrid();
 			}
 		});
@@ -449,7 +450,8 @@ namespace Bellows {
 				UI::PropertyVec2("Offset Min", c.OffsetMin, 1.0f, "The top-left corner's distance from Anchor Min, in reference pixels");
 				UI::PropertyVec2("Offset Max", c.OffsetMax, 1.0f, "The bottom-right corner's distance from Anchor Max, in reference pixels");
 				UI::Property("Visible", c.Visible, "Hidden rects hide everything under them too");
-				UI::Property("Interactable", c.Interactable, "Whether the pointer and keyboard can use it");
+				UI::Property("Interactable", c.Interactable, "Whether the pointer and focus can reach it and what is under it");
+				UI::Property("Focusable", c.Focusable, "Can take keyboard and gamepad focus (Tab, arrows, d-pad)");
 				UI::EndPropertyGrid();
 			}
 		});

@@ -251,6 +251,7 @@ namespace Bellows {
 				component.ScaleMode = UIScaleModeFromString(scaleMode);
 				JsonRead(*it, "SortOrder", component.SortOrder);
 				JsonRead(*it, "Visible", component.Visible);
+				JsonRead(*it, "Modal", component.Modal);
 			}
 
 			if (auto it = json.find("UIRect"); it != json.end())
@@ -263,6 +264,7 @@ namespace Bellows {
 				JsonRead(*it, "OffsetMax", component.OffsetMax);
 				JsonRead(*it, "Visible", component.Visible);
 				JsonRead(*it, "Interactable", component.Interactable);
+				JsonRead(*it, "Focusable", component.Focusable);
 			}
 
 			if (auto it = json.find("UIImage"); it != json.end())
@@ -460,6 +462,7 @@ namespace Bellows {
 			j["ScaleMode"] = UIScaleModeToString(c->ScaleMode);
 			j["SortOrder"] = c->SortOrder;
 			j["Visible"] = c->Visible;
+			j["Modal"] = c->Modal;
 		}
 
 		if (const auto* c = entity.TryGetComponent<UIRectComponent>())
@@ -472,6 +475,7 @@ namespace Bellows {
 			j["OffsetMax"] = c->OffsetMax;
 			j["Visible"] = c->Visible;
 			j["Interactable"] = c->Interactable;
+			j["Focusable"] = c->Focusable;
 		}
 
 		if (const auto* c = entity.TryGetComponent<UIImageComponent>())

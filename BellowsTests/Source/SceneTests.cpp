@@ -88,6 +88,7 @@ namespace {
 		canvas.ScaleMode = UIScaleMode::FitWidth;
 		canvas.SortOrder = -3;
 		canvas.Visible = false;
+		canvas.Modal = true;
 		auto& rect = entity.AddComponent<UIRectComponent>();
 		rect.AnchorMin = glm::vec2(0.0f, 1.0f);
 		rect.AnchorMax = glm::vec2(1.0f, 1.0f);
@@ -96,6 +97,7 @@ namespace {
 		rect.OffsetMax = glm::vec2(-12.0f, -8.0f);
 		rect.Visible = false;
 		rect.Interactable = false;
+		rect.Focusable = true;
 		auto& image = entity.AddComponent<UIImageComponent>();
 		image.TexturePath = "Textures/Panel.png";
 		image.Color = glm::vec4(0.1f, 0.2f, 0.3f, 0.9f);
@@ -269,6 +271,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(canvas.ScaleMode == UIScaleMode::FitWidth);
 	CHECK(canvas.SortOrder == -3);
 	CHECK_FALSE(canvas.Visible);
+	CHECK(canvas.Modal);
 	const UIRectComponent& rect = loadedChild.GetComponent<UIRectComponent>();
 	CHECK(rect.AnchorMin == glm::vec2(0.0f, 1.0f));
 	CHECK(rect.AnchorMax == glm::vec2(1.0f, 1.0f));
@@ -277,6 +280,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(rect.OffsetMax == glm::vec2(-12.0f, -8.0f));
 	CHECK_FALSE(rect.Visible);
 	CHECK_FALSE(rect.Interactable);
+	CHECK(rect.Focusable);
 	const UIImageComponent& image = loadedChild.GetComponent<UIImageComponent>();
 	CHECK(image.TexturePath == "Textures/Panel.png");
 	CHECK(image.Color == glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));

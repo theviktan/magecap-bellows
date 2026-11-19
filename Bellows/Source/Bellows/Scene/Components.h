@@ -274,6 +274,9 @@ namespace Bellows {
 		UIScaleMode ScaleMode = UIScaleMode::Expand;
 		int SortOrder = 0;
 		bool Visible = true;
+		// While a modal canvas is shown, every key, gamepad button and pointer press goes to it: the game
+		// and the UI under it get nothing (a pause menu, a dialog).
+		bool Modal = false;
 	};
 
 	// Where a UI entity sits inside its parent's rectangle (the canvas's screen for the top level).
@@ -287,7 +290,8 @@ namespace Bellows {
 		glm::vec2 OffsetMin { -100.0f, -25.0f };
 		glm::vec2 OffsetMax { 100.0f, 25.0f };
 		bool Visible = true;
-		bool Interactable = true;
+		bool Interactable = true;				// Off: the pointer and focus pass it by, and everything under it
+		bool Focusable = false;					// Can take keyboard and gamepad focus (widgets are by default)
 
 		// Runtime (not serialized): the rectangle on screen in pixels, from the last layout.
 		UIRectangle RuntimeRect;

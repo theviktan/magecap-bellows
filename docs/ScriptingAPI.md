@@ -123,6 +123,8 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | `action_names()` | The project's input actions, sorted by name. |
 | `is_gamepad_down(button)` / `is_gamepad_pressed(button)` / `is_gamepad_released(button)` | Buttons of the first gamepad by name: `"A"`, `"B"`, `"X"`, `"Y"`, `"LeftBumper"`, `"RightBumper"`, `"Back"`, `"Start"`, `"Guide"`, `"LeftThumb"`, `"RightThumb"`, `"DPadUp"`, `"DPadRight"`, `"DPadDown"`, `"DPadLeft"` (Xbox names; any capitalization). Unknown names raise `ValueError`. |
 | `gamepad_connected()` | True while a gamepad is connected. |
+| `ui_wants_pointer()` / `ui_wants_keyboard()` | True while the game UI is using the pointer (it is over a panel or button, a press started on one, or a modal canvas is shown) / the keyboard and gamepad (a modal canvas is shown). Input the UI uses reads as not held, pressed or released, so most games never need to ask. |
+| `ui_focused()` / `ui_hovered()` / `ui_clear_focus()` | The UI entity with keyboard and gamepad focus / under the pointer (or `None`); takes focus away from the UI. |
 | `save_screenshot(path="", max_width=1920)` | Saves what the player sees (the game camera's image, never editor overlays) and returns the file's full path. PNG, or JPEG (quality 85) for `.jpg`/`.jpeg`. `""` names it `Screenshots/<scene>-<date>-<time>.png`; relative paths are inside `user_folder()`; missing folders are created. A wider image is scaled down to `max_width` (0 keeps the full size). Raises `ValueError` before anything is drawn, for other formats, or when the file can't be written. |
 | `user_folder()` | The game's own writable folder for saves, screenshots and reports: `%APPDATA%\MageCapBellows\Games\<project name>` on Windows, `~/.local/share/MageCapBellows/Games/<project name>` on Linux (`$XDG_DATA_HOME` if set; `BELLOWS_USER_DATA_DIR` overrides the base folder). |
 | `save_data(name, value)` | Saves `value` as `user_folder()/Saves/<name>.json`, to read back in a later session; returns `False` (with a Console warning) when the file can't be written. `value`: `None`, bools, numbers, `str`, `Vec3`, and lists and dicts with text keys of these; an `Entity` (it only exists while the game plays), infinite numbers and other types raise `ValueError`. The file is written next to the old save and then renamed over it, so a crash never leaves half a save. `name`: 1 to 64 letters, digits, spaces, `-` and `_`, not starting or ending with a space and not a Windows device name (`CON`, `COM1`, ...); others raise `ValueError`. |
@@ -139,7 +141,10 @@ keyboard, a mouse and a gamepad, and players' controls can change without touchi
 up in **Settings → Project → Input actions**: each action has a list of inputs (`Key:Space`,
 `Mouse:Left`, `Gamepad:A`). New projects start with `move_left`, `move_right`, `move_forward`,
 `move_back`, `jump`, `interact` and `pause` (WASD, the arrow keys, the D-pad, Space, E, Escape and
-the matching gamepad buttons); **Add default actions** adds any that are missing. The project file
+the matching gamepad buttons); **Add default actions** adds any that are missing. Every project also
+has the actions the game UI navigates with, added when it is opened if they are missing: `ui_accept`
+(Enter, gamepad A), `ui_cancel` (Escape, B), `ui_up`, `ui_down`, `ui_left`, `ui_right` (arrow keys,
+D-pad), `ui_next` (Tab, right bumper; Shift+Tab goes back) and `ui_previous` (left bumper). The project file
 stores them under `"Input": { "Actions": { "jump": ["Key:Space", "Gamepad:A"] } }`.
 
 ```python
@@ -257,6 +262,37 @@ canvas is screen text: its `size` is in reference pixels and its box is the enti
   `border_color`, `visible`.
 
 Unknown scale modes raise `ValueError`. Python vectors for UI use x and y; z is ignored.
+
+**UI input.** Each frame, before scripts run, the UI looks at the pointer, the keyboard and the
+gamepad, and the game only sees what the UI leaves it:
+* The pointer uses the frontmost interactable UI under it that stops it: one with a visible
+  `UIImage`, or a focusable `UIRect`. Text and bare rects let it through. While it is over such UI,
+  or a press started on it, the mouse buttons and wheel read as up for the game. A press that started
+  in the game stays the game's until the button is let go.
+* Pressing and letting go on the same UI entity raises `clicked`; pressing on something focusable
+  gives it focus, and pressing anywhere else takes focus away.
+* `UIRect.focusable` lets an entity take keyboard and gamepad focus (and stops the pointer). While
+  something has focus (or a modal canvas is shown), `ui_up`/`ui_down`/`ui_left`/`ui_right` move to
+  the nearest focusable UI that way, `ui_next`/`ui_previous` go through it in hierarchy order,
+  `ui_accept` raises `clicked` and `ui_cancel` raises `cancelled` on the focused entity. Without
+  focus, the arrow keys stay the game's.
+* `UICanvas.modal`: while a modal canvas is shown, every key, gamepad button and pointer press is the
+  UI's, only its own UI can be pointed at or focused, and `ui_cancel` with nothing focused raises
+  `cancelled` from the canvas itself (a pause menu's "back").
+* `UIRect` read-only `hovered`, `pressed` and `focused`; `focus()` gives it focus (`False` when it
+  cannot: not focusable, hidden, not interactable, or behind a modal canvas). Interactable `False`
+  on a rect turns off the pointer and focus for everything under it too.
+
+UI events are sent to the scripts on the UI entity, then on each of its parents up to the root (through
+entities that are not UI too), with the entity as the last value: `clicked (entity)`, `focused
+(entity)`, `unfocused (entity)`, `cancelled (entity)`. Python receives them in `on_event`:
+
+```python
+class Menu(bellows.Script):
+    def on_event(self, name, *values):
+        if name == "clicked" and values[-1].name == "Play":
+            bellows.load_scene("Scenes/Level1.bscene")
+```
 
 ```python
 hud = bellows.create_entity("HUD")

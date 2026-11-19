@@ -169,6 +169,8 @@ namespace Bellows {
 				}
 			}
 		}
+		// The game UI navigates with these, so every project has them.
+		InputMap::AddMissingUIActions(config.InputActions);
 
 		SetActive(project);
 		BW_CORE_INFO("Opened project '{}' ({})", config.Name, project->m_ProjectDirectory.string());

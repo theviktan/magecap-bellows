@@ -82,7 +82,8 @@ TEST_CASE("A minimal project file with only a name and an asset folder loads")
 	CHECK(project->GetConfig().Name == "Probe");
 	CHECK(project->GetAssetDirectory() == std::filesystem::absolute(folder) / "Content");
 	CHECK(AssetManager::GetAssetDirectory() == project->GetAssetDirectory());
-	CHECK(project->GetConfig().InputActions.empty());
+	// A project with no input settings still gets the actions the game UI navigates with, and nothing else.
+	CHECK(project->GetConfig().InputActions == InputMap::GetDefaultUIActions());
 	Project::SetActive(nullptr);
 }
 
@@ -118,6 +119,18 @@ TEST_CASE("Project input actions skip bindings they cannot read")
 	CHECK(actions.at("jump") == std::vector<InputBinding> { InputBinding::Key(KeyCode::Space), InputBinding::Gamepad(GamepadButton::A) });
 	// An action whose inputs are not a list is kept, with no inputs, so it can be fixed in Project Settings.
 	CHECK(actions.at("broken").empty());
+	// UI actions saved before they existed are added; a UI action the project rebound keeps its inputs.
+	CHECK(actions.at("ui_accept") == InputMap::GetDefaultUIActions().at("ui_accept"));
+	Project::SetActive(nullptr);
+
+	REQUIRE(FileSystem::WriteTextFile(folder / "Input.bproject", R"({
+		"Name": "Input",
+		"Input": { "Actions": { "ui_accept": ["Key:Space"] } }
+	})"));
+	project = Project::Load(folder / "Input.bproject");
+	REQUIRE(project);
+	CHECK(project->GetConfig().InputActions.at("ui_accept") == std::vector<InputBinding> { InputBinding::Key(KeyCode::Space) });
+	CHECK(project->GetConfig().InputActions.count("ui_cancel") == 1);
 	Project::SetActive(nullptr);
 }
 

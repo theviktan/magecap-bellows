@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Bellows/Core/Input.h"
 #include "Bellows/Core/KeyCodes.h"
 
 #include <map>
@@ -26,9 +27,9 @@ namespace Bellows {
 		// Accepts the ToString spelling with any capitalization; nullopt if the device or name is unknown.
 		static std::optional<InputBinding> Parse(const std::string& text);
 
-		bool IsDown() const;
-		bool IsPressed() const;
-		bool IsReleased() const;
+		bool IsDown(InputAccess access = InputAccess::Game) const;
+		bool IsPressed(InputAccess access = InputAccess::Game) const;
+		bool IsReleased(InputAccess access = InputAccess::Game) const;
 
 		bool operator==(const InputBinding& other) const = default;
 	};
@@ -49,12 +50,16 @@ namespace Bellows {
 		static const InputActionMap& GetActions();
 		static bool HasAction(const std::string& action);
 
-		static bool IsActionDown(const std::string& action);
-		static bool IsActionPressed(const std::string& action);
-		static bool IsActionReleased(const std::string& action);
+		static bool IsActionDown(const std::string& action, InputAccess access = InputAccess::Game);
+		static bool IsActionPressed(const std::string& action, InputAccess access = InputAccess::Game);
+		static bool IsActionReleased(const std::string& action, InputAccess access = InputAccess::Game);
 
-		// The actions new projects start with: movement, jump, interact and pause.
+		// The actions new projects start with: movement, jump, interact, pause and the UI's.
 		static InputActionMap GetDefaultActions();
+		// The actions the game UI navigates with (ui_accept, ui_cancel, ui_up, ...), which every project
+		// has: projects saved before they existed get them when loaded.
+		static InputActionMap GetDefaultUIActions();
+		static void AddMissingUIActions(InputActionMap& actions);
 	};
 
 }

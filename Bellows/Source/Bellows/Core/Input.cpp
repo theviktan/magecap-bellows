@@ -29,9 +29,16 @@ namespace Bellows {
 			glm::vec2 ViewportSize { 0.0f };
 
 			bool Enabled = true;
+			InputCapture Capture;
 		};
 
 		InputState s_State;
+
+		// Whether input of a kind the UI may have taken can be seen by this reader.
+		bool Visible(bool taken, InputAccess access)
+		{
+			return !taken || access == InputAccess::Raw;
+		}
 
 	}
 
@@ -96,40 +103,40 @@ namespace Bellows {
 		});
 	}
 
-	bool Input::IsKeyDown(KeyCode key)
+	bool Input::IsKeyDown(KeyCode key, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(key);
-		return index < MaxKeyCode && s_State.KeysDown[index];
+		return index < MaxKeyCode && s_State.KeysDown[index] && Visible(s_State.Capture.Keyboard, access);
 	}
 
-	bool Input::IsKeyPressed(KeyCode key)
+	bool Input::IsKeyPressed(KeyCode key, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(key);
-		return index < MaxKeyCode && s_State.KeysPressed[index];
+		return index < MaxKeyCode && s_State.KeysPressed[index] && Visible(s_State.Capture.Keyboard, access);
 	}
 
-	bool Input::IsKeyReleased(KeyCode key)
+	bool Input::IsKeyReleased(KeyCode key, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(key);
-		return index < MaxKeyCode && s_State.KeysReleased[index];
+		return index < MaxKeyCode && s_State.KeysReleased[index] && Visible(s_State.Capture.Keyboard, access);
 	}
 
-	bool Input::IsMouseButtonDown(MouseButton button)
+	bool Input::IsMouseButtonDown(MouseButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxMouseButton && s_State.ButtonsDown[index];
+		return index < MaxMouseButton && s_State.ButtonsDown[index] && Visible(s_State.Capture.Pointer, access);
 	}
 
-	bool Input::IsMouseButtonPressed(MouseButton button)
+	bool Input::IsMouseButtonPressed(MouseButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxMouseButton && s_State.ButtonsPressed[index];
+		return index < MaxMouseButton && s_State.ButtonsPressed[index] && Visible(s_State.Capture.Pointer, access);
 	}
 
-	bool Input::IsMouseButtonReleased(MouseButton button)
+	bool Input::IsMouseButtonReleased(MouseButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxMouseButton && s_State.ButtonsReleased[index];
+		return index < MaxMouseButton && s_State.ButtonsReleased[index] && Visible(s_State.Capture.Pointer, access);
 	}
 
 	bool Input::IsGamepadConnected()
@@ -137,22 +144,22 @@ namespace Bellows {
 		return s_State.GamepadConnected;
 	}
 
-	bool Input::IsGamepadButtonDown(GamepadButton button)
+	bool Input::IsGamepadButtonDown(GamepadButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxGamepadButton && s_State.GamepadDown[index];
+		return index < MaxGamepadButton && s_State.GamepadDown[index] && Visible(s_State.Capture.Gamepad, access);
 	}
 
-	bool Input::IsGamepadButtonPressed(GamepadButton button)
+	bool Input::IsGamepadButtonPressed(GamepadButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxGamepadButton && s_State.GamepadPressed[index];
+		return index < MaxGamepadButton && s_State.GamepadPressed[index] && Visible(s_State.Capture.Gamepad, access);
 	}
 
-	bool Input::IsGamepadButtonReleased(GamepadButton button)
+	bool Input::IsGamepadButtonReleased(GamepadButton button, InputAccess access)
 	{
 		const auto index = static_cast<size_t>(button);
-		return index < MaxGamepadButton && s_State.GamepadReleased[index];
+		return index < MaxGamepadButton && s_State.GamepadReleased[index] && Visible(s_State.Capture.Gamepad, access);
 	}
 
 	void Input::UpdateGamepad(bool connected, const std::array<bool, MaxGamepadButton>& buttonsDown)
@@ -188,9 +195,9 @@ namespace Bellows {
 		return s_State.MouseDelta;
 	}
 
-	glm::vec2 Input::GetScrollDelta()
+	glm::vec2 Input::GetScrollDelta(InputAccess access)
 	{
-		return s_State.ScrollDelta;
+		return Visible(s_State.Capture.Pointer, access) ? s_State.ScrollDelta : glm::vec2(0.0f);
 	}
 
 	void Input::SetViewportRect(const glm::vec2& position, const glm::vec2& size)
@@ -237,6 +244,16 @@ namespace Bellows {
 		s_State.MouseDelta += windowPosition - s_State.WindowMousePosition;
 		s_State.WindowMousePosition = windowPosition;
 		s_State.HasPreviousMousePosition = true;
+	}
+
+	void Input::SetCapture(const InputCapture& capture)
+	{
+		s_State.Capture = capture;
+	}
+
+	const InputCapture& Input::GetCapture()
+	{
+		return s_State.Capture;
 	}
 
 	void Input::ResetState()
