@@ -29,6 +29,11 @@ namespace Bellows {
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
 			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
 			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
+			if (entity.HasComponent<UIButtonComponent>()) return ICON_MOUSE_POINTER_CLICK;
+			if (entity.HasComponent<UIToggleComponent>()) return ICON_SQUARE_CHECK;
+			if (entity.HasComponent<UISliderComponent>()) return ICON_SLIDERS_HORIZONTAL;
+			if (entity.HasComponent<UIDropdownComponent>()) return ICON_CHEVRONS_UP_DOWN;
+			if (entity.HasComponent<UITextInputComponent>()) return ICON_TEXT_CURSOR_INPUT;
 			if (entity.HasComponent<UIScrollComponent>()) return ICON_LAYERS;
 			if (entity.HasComponent<UILayoutComponent>()) return ICON_LAYOUT_GRID;
 			if (entity.HasComponent<UIImageComponent>()) return ICON_IMAGE;
@@ -468,6 +473,60 @@ namespace Bellows {
 				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(300.0f, 60.0f));
 				label.AddComponent<TextComponent>().Size = TextComponent::DefaultScreenSize;
 				finish(label, "UI text");
+			}
+			// Widgets: a rect, a rounded image the widget colors, and a centered label.
+			auto createWidget = [&](const char* name, glm::vec2 size, const char* label) -> Entity
+			{
+				Entity widget = createUI(name);
+				UIRectComponent& rect = widget.GetComponent<UIRectComponent>();
+				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, size);
+				if (label)
+				{
+					TextComponent& text = widget.AddComponent<TextComponent>();
+					text.Text = label;
+					text.Size = 28.0f;
+				}
+				return widget;
+			};
+			if (ImGui::MenuItem(ICON_MOUSE_POINTER_CLICK "  Button"))
+			{
+				Entity button = createWidget("Button", glm::vec2(260.0f, 64.0f), "Button");
+				button.AddComponent<UIImageComponent>().CornerRadius = 12.0f;
+				button.AddComponent<UIButtonComponent>();
+				finish(button, "button");
+			}
+			if (ImGui::MenuItem(ICON_SQUARE_CHECK "  Toggle"))
+			{
+				Entity toggle = createWidget("Toggle", glm::vec2(320.0f, 48.0f), "Option");
+				toggle.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
+				toggle.AddComponent<UIToggleComponent>();
+				finish(toggle, "toggle");
+			}
+			if (ImGui::MenuItem(ICON_SLIDERS_HORIZONTAL "  Slider"))
+			{
+				Entity slider = createWidget("Slider", glm::vec2(320.0f, 40.0f), nullptr);
+				slider.AddComponent<UISliderComponent>().Value = 0.5f;
+				finish(slider, "slider");
+			}
+			if (ImGui::MenuItem(ICON_CHEVRONS_UP_DOWN "  Dropdown"))
+			{
+				Entity dropdown = createWidget("Dropdown", glm::vec2(320.0f, 56.0f), "Option 1");
+				dropdown.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
+				dropdown.AddComponent<UIImageComponent>().CornerRadius = 10.0f;
+				dropdown.AddComponent<UIDropdownComponent>().Options = { "Option 1", "Option 2", "Option 3" };
+				finish(dropdown, "dropdown");
+			}
+			if (ImGui::MenuItem(ICON_TEXT_CURSOR_INPUT "  Text Input"))
+			{
+				Entity field = createWidget("Text Input", glm::vec2(360.0f, 56.0f), "");
+				field.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
+				UIImageComponent& image = field.AddComponent<UIImageComponent>();
+				image.Color = UIColors::Navy;
+				image.CornerRadius = 10.0f;
+				image.BorderWidth = 2.0f;
+				image.BorderColor = UIColors::Slate;
+				field.AddComponent<UITextInputComponent>().Placeholder = "Type here";
+				finish(field, "text input");
 			}
 			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Vertical Layout"))
 			{

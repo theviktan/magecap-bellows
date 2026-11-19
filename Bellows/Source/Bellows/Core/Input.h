@@ -6,6 +6,8 @@
 #include <glm/vec2.hpp>
 
 #include <array>
+#include <functional>
+#include <string>
 
 namespace Bellows {
 
@@ -44,6 +46,17 @@ namespace Bellows {
 		static bool IsKeyDown(KeyCode key, InputAccess access = InputAccess::Game);
 		static bool IsKeyPressed(KeyCode key, InputAccess access = InputAccess::Game);
 		static bool IsKeyReleased(KeyCode key, InputAccess access = InputAccess::Game);
+		// Pressed this frame, or repeated by the operating system while held (for text editing keys).
+		static bool IsKeyTyped(KeyCode key, InputAccess access = InputAccess::Game);
+		// The text typed this frame (UTF-8, without control characters), in the order it was typed.
+		static const std::string& GetTypedText(InputAccess access = InputAccess::Game);
+
+		// The system clipboard's text. Without a window (headless runs, tests) the clipboard is kept
+		// inside the program.
+		static std::string GetClipboardText();
+		static void SetClipboardText(const std::string& text);
+		// Set by the window so the clipboard is the system's; null functions go back to the program's own.
+		static void SetClipboardHandlers(std::function<std::string()> get, std::function<void(const std::string&)> set);
 
 		static bool IsMouseButtonDown(MouseButton button, InputAccess access = InputAccess::Game);
 		static bool IsMouseButtonPressed(MouseButton button, InputAccess access = InputAccess::Game);
@@ -73,6 +86,8 @@ namespace Bellows {
 
 		// Synthetic input for automated tests and AI agents.
 		static void InjectKey(KeyCode key, bool down);
+		static void InjectKeyRepeat(KeyCode key);			// The operating system's repeat of a held key
+		static void InjectText(const std::string& text);	// UTF-8, as if typed
 		static void InjectMouseButton(MouseButton button, bool down);
 		static void InjectGamepadButton(GamepadButton button, bool down);
 		static void InjectMousePosition(const glm::vec2& viewportPosition);
@@ -86,6 +101,7 @@ namespace Bellows {
 		static void ResetState();
 	private:
 		static void SetKey(KeyCode key, bool down);
+		static void AppendTypedCodepoint(uint32_t codepoint);
 		static void SetMouseButton(MouseButton button, bool down);
 		static void SetGamepadButton(GamepadButton button, bool down);
 	};

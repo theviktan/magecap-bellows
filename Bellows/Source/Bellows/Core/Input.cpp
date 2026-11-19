@@ -1,6 +1,8 @@
 #include "bwpch.h"
 #include "Bellows/Core/Input.h"
 
+#include "Bellows/Text/TextLayout.h"
+
 namespace Bellows {
 
 	namespace {
@@ -10,6 +12,11 @@ namespace Bellows {
 			std::array<bool, MaxKeyCode> KeysDown {};
 			std::array<bool, MaxKeyCode> KeysPressed {};
 			std::array<bool, MaxKeyCode> KeysReleased {};
+			std::array<bool, MaxKeyCode> KeysTyped {};
+			std::string TypedText;
+			std::string Clipboard;
+			std::function<std::string()> GetClipboard;
+			std::function<void(const std::string&)> SetClipboard;
 
 			std::array<bool, MaxMouseButton> ButtonsDown {};
 			std::array<bool, MaxMouseButton> ButtonsPressed {};
@@ -46,6 +53,8 @@ namespace Bellows {
 	{
 		s_State.KeysPressed.fill(false);
 		s_State.KeysReleased.fill(false);
+		s_State.KeysTyped.fill(false);
+		s_State.TypedText.clear();
 		s_State.ButtonsPressed.fill(false);
 		s_State.ButtonsReleased.fill(false);
 		s_State.GamepadPressed.fill(false);
@@ -61,6 +70,14 @@ namespace Bellows {
 		{
 			if (s_State.Enabled && !e.IsRepeat())
 				SetKey(e.GetKeyCode(), true);
+			else if (s_State.Enabled)
+				InjectKeyRepeat(e.GetKeyCode());
+			return false;
+		});
+		dispatcher.Dispatch<KeyTypedEvent>([](KeyTypedEvent& e)
+		{
+			if (s_State.Enabled)
+				AppendTypedCodepoint(e.GetCodepoint());
 			return false;
 		});
 		dispatcher.Dispatch<KeyReleasedEvent>([](KeyReleasedEvent& e)
@@ -228,6 +245,59 @@ namespace Bellows {
 		SetKey(key, down);
 	}
 
+	void Input::InjectKeyRepeat(KeyCode key)
+	{
+		const auto index = static_cast<size_t>(key);
+		if (index < MaxKeyCode && s_State.KeysDown[index])
+			s_State.KeysTyped[index] = true;
+	}
+
+	void Input::InjectText(const std::string& text)
+	{
+		for (size_t offset = 0; offset < text.size(); )
+			AppendTypedCodepoint(DecodeUtf8(text, offset));
+	}
+
+	bool Input::IsKeyTyped(KeyCode key, InputAccess access)
+	{
+		const auto index = static_cast<size_t>(key);
+		return index < MaxKeyCode && s_State.KeysTyped[index] && Visible(s_State.Capture.Keyboard, access);
+	}
+
+	const std::string& Input::GetTypedText(InputAccess access)
+	{
+		static const std::string c_Empty;
+		return Visible(s_State.Capture.Keyboard, access) ? s_State.TypedText : c_Empty;
+	}
+
+	std::string Input::GetClipboardText()
+	{
+		return s_State.GetClipboard ? s_State.GetClipboard() : s_State.Clipboard;
+	}
+
+	void Input::SetClipboardText(const std::string& text)
+	{
+		if (s_State.SetClipboard)
+			s_State.SetClipboard(text);
+		else
+			s_State.Clipboard = text;
+	}
+
+	void Input::SetClipboardHandlers(std::function<std::string()> get, std::function<void(const std::string&)> set)
+	{
+		s_State.GetClipboard = std::move(get);
+		s_State.SetClipboard = std::move(set);
+	}
+
+	void Input::AppendTypedCodepoint(uint32_t codepoint)
+	{
+		// Control characters (and invalid code points) are keys, not text.
+		if (codepoint < 0x20 || codepoint == 0x7F || (codepoint >= 0x80 && codepoint < 0xA0) || codepoint > 0x10FFFF
+			|| (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+			return;
+		AppendUtf8(s_State.TypedText, codepoint);
+	}
+
 	void Input::InjectMouseButton(MouseButton button, bool down)
 	{
 		SetMouseButton(button, down);
@@ -290,7 +360,10 @@ namespace Bellows {
 			return;
 
 		if (down && !s_State.KeysDown[index])
+		{
 			s_State.KeysPressed[index] = true;
+			s_State.KeysTyped[index] = true;
+		}
 		else if (!down && s_State.KeysDown[index])
 			s_State.KeysReleased[index] = true;
 		s_State.KeysDown[index] = down;

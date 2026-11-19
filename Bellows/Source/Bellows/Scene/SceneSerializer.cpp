@@ -310,6 +310,44 @@ namespace Bellows {
 				JsonRead(*it, "ShowScrollbars", component.ShowScrollbars);
 			}
 
+			if (auto it = json.find("UIButton"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UIButtonComponent>();
+				JsonRead(*it, "NormalColor", component.NormalColor);
+				JsonRead(*it, "HoverColor", component.HoverColor);
+				JsonRead(*it, "PressedColor", component.PressedColor);
+				JsonRead(*it, "DisabledColor", component.DisabledColor);
+			}
+
+			if (auto it = json.find("UIToggle"); it != json.end())
+				JsonRead(*it, "On", entity.AddOrReplaceComponent<UIToggleComponent>().On);
+
+			if (auto it = json.find("UISlider"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UISliderComponent>();
+				JsonRead(*it, "Min", component.Min);
+				JsonRead(*it, "Max", component.Max);
+				JsonRead(*it, "Step", component.Step);
+				JsonRead(*it, "Value", component.Value);
+			}
+
+			if (auto it = json.find("UIDropdown"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UIDropdownComponent>();
+				JsonRead(*it, "Options", component.Options);
+				JsonRead(*it, "Selected", component.Selected);
+			}
+
+			if (auto it = json.find("UITextInput"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UITextInputComponent>();
+				JsonRead(*it, "Placeholder", component.Placeholder);
+				JsonRead(*it, "MultiLine", component.MultiLine);
+				JsonRead(*it, "Password", component.Password);
+				JsonRead(*it, "MaxLength", component.MaxLength);
+				component.MaxLength = std::max(component.MaxLength, 0);
+			}
+
 			if (auto it = json.find("Prefab"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<PrefabComponent>();
@@ -543,6 +581,43 @@ namespace Bellows {
 			j["ScrollPosition"] = c->ScrollPosition;
 			j["WheelSpeed"] = c->WheelSpeed;
 			j["ShowScrollbars"] = c->ShowScrollbars;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIButtonComponent>())
+		{
+			Json& j = json["UIButton"];
+			j["NormalColor"] = c->NormalColor;
+			j["HoverColor"] = c->HoverColor;
+			j["PressedColor"] = c->PressedColor;
+			j["DisabledColor"] = c->DisabledColor;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIToggleComponent>())
+			json["UIToggle"]["On"] = c->On;
+
+		if (const auto* c = entity.TryGetComponent<UISliderComponent>())
+		{
+			Json& j = json["UISlider"];
+			j["Min"] = c->Min;
+			j["Max"] = c->Max;
+			j["Step"] = c->Step;
+			j["Value"] = c->Value;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIDropdownComponent>())
+		{
+			Json& j = json["UIDropdown"];
+			j["Options"] = c->Options;
+			j["Selected"] = c->Selected;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UITextInputComponent>())
+		{
+			Json& j = json["UITextInput"];
+			j["Placeholder"] = c->Placeholder;
+			j["MultiLine"] = c->MultiLine;
+			j["Password"] = c->Password;
+			j["MaxLength"] = c->MaxLength;
 		}
 
 		if (const auto* c = entity.TryGetComponent<PrefabComponent>())
