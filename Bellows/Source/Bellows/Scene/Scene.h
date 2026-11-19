@@ -121,6 +121,8 @@ namespace Bellows {
 		// Gives focus to a UI entity that can take it (focusable, shown, interactable, not behind a modal
 		// canvas), or clears focus with an empty entity. False (and nothing changes) when it cannot.
 		bool SetUIFocus(Entity entity);
+		// The theme an entity's UI is drawn with: its canvas's (the nearest ancestor with a UICanvas), or the default.
+		Ref<const UITheme> GetUIThemeFor(Entity entity) const;
 		// Whether the UI is using the pointer (over a panel, or held after a press on one) or the
 		// keyboard (a modal canvas is shown) this frame, so the game should leave them alone.
 		bool UIWantsPointer() const { return m_UICapture.Pointer; }
@@ -200,6 +202,8 @@ namespace Bellows {
 		const UITheme& GetUITheme(const UIElement& element) const;
 		const std::string& GetUIStyleClass(const UIElement& element) const;
 		UIWidgetState GetUIWidgetState(const UIElement& element) const;
+		// A label's color: its own, dimmed when its widget is off, or its theme's for its widget's state.
+		glm::vec4 GetUITextColor(const UIElement& element, const TextComponent& text) const;
 		// Text fields: typing and editing keys for the focused one, the caret placed (or a selection
 		// extended) by the pointer, the caret kept in view, and drawing.
 		void UpdateUITextInput(const UIElement& element, std::vector<UIEvent>& events);

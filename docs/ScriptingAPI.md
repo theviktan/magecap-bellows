@@ -244,7 +244,8 @@ Text drawn in the world, crisp at any distance (multi-channel signed distance fi
   the text), `wrap` (wrap at the box's width), `overflow` (`"visible"`, `"clip"` cuts the text at
   the box, `"ellipsis"` ends the last line that fits with "...").
 * `outline_width` (in ems, 0 to 0.1; 0 = no outline), `outline_color`.
-* `face_camera` (always turned toward the camera, like a name over a character), `visible`.
+* `face_camera` (always turned toward the camera, like a name over a character), `visible`,
+  `theme_color` (screen text: the color comes from its canvas's theme; see Themes).
 * `measured_size` (read-only `Vec3`): the laid-out text's width and height in meters.
 
 The text is centered on the entity and faces its forward axis (-Z) unless `face_camera` is set; the
@@ -300,8 +301,9 @@ canvas is screen text: its `size` is in reference pixels and its box is the enti
 focus, draws its own parts in the MageCap colors (navy, slate, off-white, orange), and uses the
 entity's `Text` as its label. The editor's **Create > UI** menu makes each one ready to use.
 * `UIButton`: colors the entity's `UIImage` by state: `normal_color`, `hover_color`,
-  `pressed_color`, `disabled_color` (when its rect isn't interactable). Clicks raise `clicked` like any
-  UI.
+  `pressed_color`, `disabled_color` (when its rect isn't interactable). Each comes from the canvas's
+  theme (and the rect's style class) until it is set; reading one gives the color the button uses.
+  `clear_colors()` goes back to the theme's. Clicks raise `clicked` like any UI.
 * `UIToggle`: a check box at the left, its label beside it. `on`. A click or `ui_accept` flips it
   and raises `changed (on, entity)`.
 * `UISlider`: a track with a knob. `min`, `max`, `step` (values snap to steps from `min`; 0 for any
@@ -327,12 +329,16 @@ entity's `Text` as its label. The editor's **Create > UI** menu makes each one r
     focus; in a multi-line field Enter starts a new line and Ctrl+Enter submits.
 
 **Themes.** Widgets draw their own parts (check boxes, slider tracks and knobs, dropdown backgrounds,
-arrows and lists, the focus ring, text selections) in their canvas's theme:
+arrows and lists, the focus ring, text selections) and button colors in their canvas's theme. A label
+(`Text`) with `theme_color` on takes its color from the theme too, for its widget's state; without it,
+the label keeps its own `color`, at half strength while its widget isn't interactable. The editor's
+**Create > UI** widgets start with `theme_color` on and the theme's look.
 * `UICanvas.theme`: the `.btheme` asset to use; `""` (or `"Builtin/MageCap.btheme"`) is the built-in
   MageCap look (navy, slate, off-white, an orange accent). Name the built-in theme to keep a UI looking
   the same whatever theme a game uses elsewhere.
-* `UIRect.style_class`: one of the theme's named styles, like `"primary"` or `"danger"`; `""` or a name
-  the theme doesn't have uses its plain style.
+* `UIRect.style_class`: one of the theme's named styles; `""` or a name the theme doesn't have uses its
+  plain style. The built-in theme has `"primary"` (an orange button with navy text) and `"danger"` (a
+  red button) for buttons. Classes can't change the focus ring, so focus always shows the same way.
 * A `.btheme` file is JSON and lists only what it changes from the built-in theme. Colors are
   `"#RRGGBB"`, `"#RRGGBBAA"` or `[r, g, b, a]` from 0 to 1. Keys:
   - `Font`, `TextSize`, `TextColor`, `Accent` (focus ring, toggle check, slider fill, selection),

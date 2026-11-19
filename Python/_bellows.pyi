@@ -853,6 +853,11 @@ class Text:
     @face_camera.setter
     def face_camera(self, value: bool) -> None: ...
     @property
+    def theme_color(self) -> bool:
+        """Screen text takes its color from its canvas's theme (for its widget's state) instead of color"""
+    @theme_color.setter
+    def theme_color(self, value: bool) -> None: ...
+    @property
     def visible(self) -> bool: ...
     @visible.setter
     def visible(self, value: bool) -> None: ...
@@ -902,9 +907,10 @@ class Transform:
 
 
 class UIButton:
-    """Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'"""
+    """Clickable: colors its UIImage by state, from its canvas's theme unless it sets its own; a click (or ui_accept while focused) raises 'clicked'"""
     @property
-    def normal_color(self) -> Vec4 | typing.Sequence[float]: ...
+    def normal_color(self) -> Vec4 | typing.Sequence[float]:
+        """Its own once set; otherwise its theme's"""
     @normal_color.setter
     def normal_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
     @property
@@ -922,6 +928,8 @@ class UIButton:
         """When not interactable"""
     @disabled_color.setter
     def disabled_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    def clear_colors(self) -> None:
+        """Goes back to its theme's colors for every state"""
 
 
 class UICanvas:

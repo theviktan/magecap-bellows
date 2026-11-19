@@ -474,7 +474,7 @@ namespace Bellows {
 				label.AddComponent<TextComponent>().Size = TextComponent::DefaultScreenSize;
 				finish(label, "UI text");
 			}
-			// Widgets: a rect, a rounded image the widget colors, and a centered label.
+			// Widgets: a rect, a rounded image the widget colors, and a label colored by the canvas's theme.
 			auto createWidget = [&](const char* name, glm::vec2 size, const char* label) -> Entity
 			{
 				Entity widget = createUI(name);
@@ -485,13 +485,26 @@ namespace Bellows {
 					TextComponent& text = widget.AddComponent<TextComponent>();
 					text.Text = label;
 					text.Size = 28.0f;
+					text.ThemeColor = true;
 				}
 				return widget;
+			};
+			// A rounded image with the theme's look for that widget in its normal state.
+			auto addThemedImage = [&](Entity widget, UIThemeWidget kind)
+			{
+				const Ref<const UITheme> theme = widget.GetScene()->GetUIThemeFor(widget);
+				const UIWidgetStyle& style = theme->Get(kind);
+				const UIStateStyle& normal = style.Get(UIWidgetState::Normal);
+				UIImageComponent& image = widget.AddComponent<UIImageComponent>();
+				image.Color = normal.Background;
+				image.CornerRadius = style.CornerRadius;
+				image.BorderWidth = normal.BorderWidth;
+				image.BorderColor = normal.Border;
 			};
 			if (ImGui::MenuItem(ICON_MOUSE_POINTER_CLICK "  Button"))
 			{
 				Entity button = createWidget("Button", glm::vec2(260.0f, 64.0f), "Button");
-				button.AddComponent<UIImageComponent>().CornerRadius = 12.0f;
+				addThemedImage(button, UIThemeWidget::Button);
 				button.AddComponent<UIButtonComponent>();
 				finish(button, "button");
 			}
@@ -512,7 +525,7 @@ namespace Bellows {
 			{
 				Entity dropdown = createWidget("Dropdown", glm::vec2(320.0f, 56.0f), "Option 1");
 				dropdown.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
-				dropdown.AddComponent<UIImageComponent>().CornerRadius = 10.0f;
+				addThemedImage(dropdown, UIThemeWidget::Dropdown);
 				dropdown.AddComponent<UIDropdownComponent>().Options = { "Option 1", "Option 2", "Option 3" };
 				finish(dropdown, "dropdown");
 			}
@@ -520,11 +533,7 @@ namespace Bellows {
 			{
 				Entity field = createWidget("Text Input", glm::vec2(360.0f, 56.0f), "");
 				field.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
-				UIImageComponent& image = field.AddComponent<UIImageComponent>();
-				image.Color = UIColors::Navy;
-				image.CornerRadius = 10.0f;
-				image.BorderWidth = 2.0f;
-				image.BorderColor = UIColors::Slate;
+				addThemedImage(field, UIThemeWidget::TextInput);
 				field.AddComponent<UITextInputComponent>().Placeholder = "Type here";
 				finish(field, "text input");
 			}

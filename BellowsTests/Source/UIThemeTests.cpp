@@ -4,6 +4,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/Components.h"
 #include "Bellows/UI/UIStyle.h"
 #include "Bellows/UI/UITheme.h"
 
@@ -130,4 +131,34 @@ TEST_CASE("A written theme reads back the same, and assets load and fall back to
 	// A missing theme is reported and draws with the default instead.
 	CHECK(AssetManager::GetUITheme("Themes/Missing.btheme").get() == AssetManager::GetUITheme("").get());
 	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("The default theme's edges and classes keep text and controls readable")
+{
+	const UITheme& theme = GetDefaultUITheme();
+	const glm::vec4 edge = *ParseUIColor("#7076AE");
+	CHECK(Near(theme.Get(UIThemeWidget::TextInput).Get(UIWidgetState::Normal).Border, edge));
+	CHECK(Near(theme.Get(UIThemeWidget::Dropdown).Get(UIWidgetState::Normal).Border, edge));
+	CHECK(Near(theme.Get(UIThemeWidget::TextInput).Get(UIWidgetState::Focused).Border, UIColors::Accent));
+	CHECK(theme.Get(UIThemeWidget::Toggle).Get(UIWidgetState::Disabled).Text.a < 1.0f);
+
+	// "primary" puts navy text on the accent; "danger" a red that off-white reads on.
+	const UIWidgetStyle& primary = theme.Get(UIThemeWidget::Button, "primary");
+	CHECK(Near(primary.Get(UIWidgetState::Normal).Background, UIColors::Accent));
+	CHECK(Near(primary.Get(UIWidgetState::Normal).Text, UIColors::Navy));
+	CHECK(Near(theme.Get(UIThemeWidget::Button, "danger").Get(UIWidgetState::Normal).Background, *ParseUIColor("#A83232")));
+	// Classes style buttons only; other widgets keep the plain look.
+	CHECK(&theme.Get(UIThemeWidget::Toggle, "primary") == &theme.Get(UIThemeWidget::Toggle));
+}
+
+TEST_CASE("A button's colors are its own once set, and its theme's otherwise")
+{
+	const UIWidgetStyle& style = GetDefaultUITheme().Get(UIThemeWidget::Button);
+	UIButtonComponent button;
+	CHECK(Near(button.GetColor(UIWidgetState::Hover, style), UIColors::Slate));
+	CHECK(Near(button.GetColor(UIWidgetState::Focused, style), UIColors::NavyLight));
+	button.NormalColor = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	CHECK(Near(button.GetColor(UIWidgetState::Normal, style), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)));
+	CHECK(Near(button.GetColor(UIWidgetState::Focused, style), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)));	// Focus looks normal
+	CHECK(Near(button.GetColor(UIWidgetState::Pressed, style), UIColors::Accent));
 }

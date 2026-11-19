@@ -530,3 +530,60 @@ TEST_CASE("[gpu] A canvas's theme and a rect's style class restyle the widgets t
 	AssetManager::SetAssetDirectory({});
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }
+
+TEST_CASE("[gpu] Theme classes and theme-colored labels: a primary button, and a disabled label dims")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+	Ref<Scene> scene = CreateRef<Scene>("Classes");
+	Entity canvas = scene->CreateEntity("Canvas");
+	canvas.AddComponent<UICanvasComponent>().ScaleMode = UIScaleMode::ConstantPixels;
+	const auto addButton = [&](const char* name, glm::vec2 min, glm::vec2 max) -> Entity
+	{
+		Entity button = CreateRect(*scene, name, canvas, min, max);
+		button.AddComponent<UIImageComponent>();
+		button.AddComponent<UIButtonComponent>();
+		TextComponent& label = button.AddComponent<TextComponent>();
+		label.Text = "OK";
+		label.Size = 48.0f;
+		label.ThemeColor = true;
+		return button;
+	};
+	Entity primary = addButton("Primary", { 10.0f, 10.0f }, { 246.0f, 80.0f });
+	primary.GetComponent<UIRectComponent>().StyleClass = "primary";
+	Entity off = addButton("Off", { 10.0f, 100.0f }, { 246.0f, 170.0f });
+	off.GetComponent<UIRectComponent>().Interactable = false;
+	off.GetComponent<TextComponent>().ThemeColor = false;
+	off.GetComponent<TextComponent>().Color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+
+	const Image image = Render(renderer, *scene);
+	image.SavePNG(BellowsTests::GetTestOutputDirectory() / "UI_ThemeClasses.png");
+
+	// The primary button is the accent, and its label navy (dark pixels on the orange).
+	CHECK(Near(image.GetPixel(20, 20), UIColors::Accent));
+	uint32_t navyText = 0;
+	for (uint32_t y = 10; y < 80; y++)
+	{
+		for (uint32_t x = 10; x < 246; x++)
+			navyText += Near(image.GetPixel(x, y), UIColors::Navy, 12) ? 1 : 0;
+	}
+	CHECK(navyText > 100);
+	// The disabled button's own green label is drawn at half strength: no full-green pixel.
+	uint32_t fullGreen = 0, someGreen = 0;
+	for (uint32_t y = 100; y < 170; y++)
+	{
+		for (uint32_t x = 10; x < 246; x++)
+		{
+			const glm::u8vec4 pixel = image.GetPixel(x, y);
+			fullGreen += pixel.g > 240 && pixel.r < 60 ? 1 : 0;
+			someGreen += pixel.g > 100 && pixel.g > pixel.r + 40 ? 1 : 0;
+		}
+	}
+	CHECK(fullGreen == 0);
+	CHECK(someGreen > 100);
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}

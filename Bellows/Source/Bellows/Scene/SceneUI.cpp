@@ -382,10 +382,47 @@ namespace Bellows {
 
 	}
 
+	Ref<const UITheme> Scene::GetUIThemeFor(Entity entity) const
+	{
+		for (Entity ancestor = entity; ancestor; ancestor = ancestor.GetParent())
+		{
+			if (const auto* canvas = ancestor.TryGetComponent<UICanvasComponent>())
+				return AssetManager::GetUITheme(canvas->Theme);
+		}
+		return AssetManager::GetUITheme("");
+	}
+
 	const UITheme& Scene::GetUITheme(const UIElement& element) const
 	{
 		auto it = m_UICanvasThemes.find(element.Canvas);
 		return it != m_UICanvasThemes.end() ? *it->second : GetDefaultUITheme();
+	}
+
+	glm::vec4 Scene::GetUITextColor(const UIElement& element, const TextComponent& text) const
+	{
+		const UIWidgetState state = GetUIWidgetState(element);
+		const bool widget = IsUIWidget(element.Handle);
+		if (!text.ThemeColor)
+		{
+			// A label of its own color still shows that its widget is off.
+			const bool dim = widget && state == UIWidgetState::Disabled;
+			return glm::vec4(glm::vec3(text.Color), text.Color.a * (dim ? 0.5f : 1.0f));
+		}
+		const UITheme& theme = GetUITheme(element);
+		const std::string& styleClass = GetUIStyleClass(element);
+		static constexpr std::pair<UIThemeWidget, bool (*)(const entt::registry&, entt::entity)> c_Widgets[] = {
+			{ UIThemeWidget::Button, [](const entt::registry& r, entt::entity e) { return r.all_of<UIButtonComponent>(e); } },
+			{ UIThemeWidget::Toggle, [](const entt::registry& r, entt::entity e) { return r.all_of<UIToggleComponent>(e); } },
+			{ UIThemeWidget::Dropdown, [](const entt::registry& r, entt::entity e) { return r.all_of<UIDropdownComponent>(e); } },
+			{ UIThemeWidget::TextInput, [](const entt::registry& r, entt::entity e) { return r.all_of<UITextInputComponent>(e); } },
+			{ UIThemeWidget::Slider, [](const entt::registry& r, entt::entity e) { return r.all_of<UISliderComponent>(e); } },
+		};
+		for (const auto& [kind, has] : c_Widgets)
+		{
+			if (has(m_Registry, element.Handle))
+				return theme.Get(kind, styleClass).Get(state).Text;
+		}
+		return theme.TextColor;
 	}
 
 	UIWidgetState Scene::GetUIWidgetState(const UIElement& element) const
@@ -443,14 +480,7 @@ namespace Bellows {
 				glm::vec4 color = image->Color;
 				if (button)
 				{
-					if (!element.Interactable)
-						color = button->DisabledColor;
-					else if (m_UIPressed == id)
-						color = button->PressedColor;
-					else if (m_UIHovered == id)
-						color = button->HoverColor;
-					else
-						color = button->NormalColor;
+					color = button->GetColor(widgetState, theme.Get(UIThemeWidget::Button, styleClass));
 				}
 				else if (dropdown)
 				{
@@ -508,7 +538,7 @@ namespace Bellows {
 				if (const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, labelArea.GetSize()))
 				{
 					TextStyle style;
-					style.Color = text->Color;
+					style.Color = GetUITextColor(element, *text);
 					style.OutlineColor = text->OutlineColor;
 					style.OutlineWidth = text->OutlineWidth;
 					const UIRectangle textClip = text->Overflow == TextOverflow::Clip ? element.Clip.Intersect(labelArea) : element.Clip;
@@ -579,7 +609,8 @@ namespace Bellows {
 			settings.Overflow = TextOverflow::Ellipsis;
 			const TextLayout layout = LayoutText(*font, dropdown->Options[i], settings);
 			TextStyle style;
-			style.Color = static_cast<int>(i) == dropdown->Selected ? theme.AccentLight : (label ? label->Color : normal.Text);
+			style.Color = static_cast<int>(i) == dropdown->Selected ? theme.AccentLight
+				: (label && !label->ThemeColor ? label->Color : normal.Text);
 			renderer.SubmitUIText(font, layout, area.Min, style, entityID, &clip);
 		}
 	}

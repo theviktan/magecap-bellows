@@ -361,6 +361,10 @@ class FeatureTest(bellows.Script):
         self.check(text.alignment == "right" and text.vertical_alignment == "bottom" and text.overflow == "ellipsis", "Text alignment and overflow")
         self.check(close(text.box_size, (2.0, 1.0, 0.0)) and not text.wrap and close(text.line_spacing, 1.5), "Text box")
         self.check(close(text.outline_width, 0.1) and text.face_camera and text.visible, "Text outline (clamped to 0.1) and facing")
+        self.check(not text.theme_color, "Text.theme_color is off by default")
+        text.theme_color = True
+        self.check(text.theme_color, "Text.theme_color")
+        text.theme_color = False
         measured = text.measured_size
         self.check(measured.x > 0.5 and close(measured.y, text.size * 1.5 * 2.0, 0.2), f"Text.measured_size ({measured})")
         self.check(raises(lambda: setattr(text, "alignment", "justify"), ValueError), "Text rejects unknown alignments")
@@ -424,9 +428,12 @@ class FeatureTest(bellows.Script):
         self.check(isinstance(scroll.content_size, Vec3) and isinstance(scroll.viewport_size, Vec3), "UIScroll content and viewport sizes")
 
         button = entity.add_component(bellows.UIButton)
-        self.check(isinstance(button.normal_color, Vec4) and button.disabled_color.w < 1.0, "UIButton defaults")
+        self.check(isinstance(button.normal_color, Vec4) and button.disabled_color.w < 1.0, "UIButton defaults come from the theme")
+        themed_hover = button.hover_color
         button.hover_color = Vec4(1.0, 0.0, 0.0, 1.0)
         self.check(close(button.hover_color, (1.0, 0.0, 0.0, 1.0)), "UIButton properties")
+        button.clear_colors()
+        self.check(close(button.hover_color, (themed_hover.x, themed_hover.y, themed_hover.z, themed_hover.w)), "UIButton.clear_colors goes back to the theme")
 
         toggle = entity.add_component(bellows.UIToggle)
         self.check(not toggle.on, "UIToggle defaults")
