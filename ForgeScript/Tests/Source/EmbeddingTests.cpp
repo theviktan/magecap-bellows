@@ -559,13 +559,14 @@ TEST_CASE("PhrasesThatYieldToCalls")
 	CHECK(h.Machine.PhraseYieldsToCalls("show"));
 	h.Machine.Load(
 		"show(\"call\")\n"
+		"show (\"space\")\n"
 		"show of \"of\"\n"
 		"set f to show\n"
 		"f(\"value\")\n"
 		"say show \"menu\"\n"
 		"say show 5 + 1\n", "t.forge");
 	CHECK(h.Errors.empty());
-	CHECK_EQ(h.Output, std::string("\"call\"\n\"of\"\n\"value\"\nshown menu\nshown 6\n"));
+	CHECK_EQ(h.Output, std::string("\"call\"\n\"space\"\n\"of\"\n\"value\"\nshown menu\nshown 6\n"));
 
 	// Without the flag, as before, a phrase takes its first word followed by brackets too.
 	Harness plain;

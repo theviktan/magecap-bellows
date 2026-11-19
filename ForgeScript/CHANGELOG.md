@@ -33,7 +33,8 @@ Menus and HUDs (Phase 2 step 2.6, ForgeScript side):
   "Menus and HUDs", covers buttons (`when "Start" is clicked`), these phrases and UI input.
 - `VM::RegisterPhrase(..., yieldToCalls)`: a host phrase whose first word may already be a name
   (`show` is a ForgeScript function) only applies where that word can't be a value: `show menu` is
-  the phrase, while `show(value)`, `show of x` and `show + 1` keep their old meaning. The API
+  the phrase, while `show(value)`, `show (value)`, `show of x` and `show + 1` keep their old meaning.
+  Yielding goes by the first word, so every phrase starting with that word yields too. The API
   description marks such phrases (`"yields_to_calls": true`), and the language server reads it.
 
 Naming the values in a call (ForgeScript Roadmap item 9):
