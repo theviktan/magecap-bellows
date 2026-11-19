@@ -29,6 +29,8 @@ namespace Bellows {
 	// The part of a widget's rect its label (Text) uses: beside a toggle's box, before a dropdown's arrow.
 	UIRectangle ComputeUIToggleLabelArea(const UIRectangle& rect, float scale);
 	UIRectangle ComputeUIDropdownLabelArea(const UIRectangle& rect, float scale);
+	// Where a text field's text sits: its rect less a margin (smaller for small fields).
+	UIRectangle ComputeUITextInputArea(const UIRectangle& rect, float scale);
 	// The open list of a dropdown: one row per option, as tall as the dropdown, under it, or above it
 	// when it doesn't fit under it but does above.
 	UIRectangle ComputeUIDropdownList(const UIRectangle& rect, size_t optionCount, const glm::vec2& screenSize);

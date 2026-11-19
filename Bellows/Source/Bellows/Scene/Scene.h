@@ -10,6 +10,7 @@
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -178,7 +179,7 @@ namespace Bellows {
 		{
 			std::string Name;
 			UUID Source = 0;
-			std::variant<std::monostate, bool, double> Value;	// Sent before the entity when set ('changed')
+			std::variant<std::monostate, bool, double, std::string> Value;	// Sent before the entity when set ('changed', 'submitted')
 		};
 		enum class UIPointerOwner : uint8_t { None = 0, UI, Game };
 
@@ -194,6 +195,12 @@ namespace Bellows {
 		// Runs the open dropdown list, which takes every input while it is open.
 		void UpdateUIDropdownList(const glm::vec2& pointer, const glm::vec2& screen, std::vector<UIEvent>& events);
 		void SubmitUIDropdownList(SceneRenderer& renderer);
+		// Text fields: typing and editing keys for the focused one, the caret placed (or a selection
+		// extended) by the pointer, the caret kept in view, and drawing.
+		void UpdateUITextInput(const UIElement& element, std::vector<UIEvent>& events);
+		void PlaceUITextCaret(const UIElement& element, const glm::vec2& point, bool extend);
+		void KeepUITextCaretVisible(const UIElement& element);
+		void SubmitUITextInput(SceneRenderer& renderer, const UIElement& element, const glm::vec4& clip);
 		void EmitUIEvents(const std::vector<UIEvent>& events);
 		void ResetUIInput();
 	private:
@@ -218,6 +225,7 @@ namespace Bellows {
 		UIPointerOwner m_UIPointerOwner = UIPointerOwner::None;	// Who a held pointer press belongs to
 		UUID m_UIOpenDropdown = 0;								// The dropdown whose list is open
 		int m_UIDropdownHighlight = -1;							// The option row the keys or pointer are on
+		std::chrono::steady_clock::time_point m_UICaretMoved;	// The caret shows steadily for a moment after it moves
 		InputCapture m_UICapture;
 
 		bool m_IsRunning = false;

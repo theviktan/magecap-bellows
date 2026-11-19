@@ -33,6 +33,7 @@ namespace Bellows {
 			if (entity.HasComponent<UIToggleComponent>()) return ICON_SQUARE_CHECK;
 			if (entity.HasComponent<UISliderComponent>()) return ICON_SLIDERS_HORIZONTAL;
 			if (entity.HasComponent<UIDropdownComponent>()) return ICON_CHEVRONS_UP_DOWN;
+			if (entity.HasComponent<UITextInputComponent>()) return ICON_TEXT_CURSOR_INPUT;
 			if (entity.HasComponent<UIScrollComponent>()) return ICON_LAYERS;
 			if (entity.HasComponent<UILayoutComponent>()) return ICON_LAYOUT_GRID;
 			if (entity.HasComponent<UIImageComponent>()) return ICON_IMAGE;
@@ -514,6 +515,18 @@ namespace Bellows {
 				dropdown.AddComponent<UIImageComponent>().CornerRadius = 10.0f;
 				dropdown.AddComponent<UIDropdownComponent>().Options = { "Option 1", "Option 2", "Option 3" };
 				finish(dropdown, "dropdown");
+			}
+			if (ImGui::MenuItem(ICON_TEXT_CURSOR_INPUT "  Text Input"))
+			{
+				Entity field = createWidget("Text Input", glm::vec2(360.0f, 56.0f), "");
+				field.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
+				UIImageComponent& image = field.AddComponent<UIImageComponent>();
+				image.Color = UIColors::Navy;
+				image.CornerRadius = 10.0f;
+				image.BorderWidth = 2.0f;
+				image.BorderColor = UIColors::Slate;
+				field.AddComponent<UITextInputComponent>().Placeholder = "Type here";
+				finish(field, "text input");
 			}
 			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Vertical Layout"))
 			{

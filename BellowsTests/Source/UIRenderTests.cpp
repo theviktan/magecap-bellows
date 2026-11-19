@@ -19,6 +19,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <functional>
+
 using namespace Bellows;
 
 namespace {
@@ -370,6 +372,98 @@ TEST_CASE("[gpu] Widgets draw their parts, the focus ring and an open dropdown l
 	CHECK(Near(image.GetPixel(240, 212), UIColors::Navy, 6));	// Row 1
 	CHECK(dropdown.GetComponent<TextComponent>().Text == "Low");
 	CHECK(renderer.ReadEntityID(200, 212) == dropdown.GetRenderID());
+
+	scene->OnRuntimeStop();
+	Input::ResetState();
+	Input::BeginFrame();
+	InputMap::SetActions({});
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] Text inputs draw their text, placeholder, selection, caret and password bullets")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+	Ref<Scene> scene = CreateRef<Scene>("Text inputs");
+	Entity canvas = scene->CreateEntity("Canvas");
+	canvas.AddComponent<UICanvasComponent>().ScaleMode = UIScaleMode::ConstantPixels;
+
+	const auto addField = [&](const char* name, glm::vec2 min, glm::vec2 max, const char* text) -> Entity
+	{
+		Entity field = CreateRect(*scene, name, canvas, min, max);
+		UIImageComponent& image = field.AddComponent<UIImageComponent>();
+		image.Color = UIColors::Navy;
+		TextComponent& label = field.AddComponent<TextComponent>();
+		label.Text = text;
+		label.Size = 24.0f;
+		label.Color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+		field.AddComponent<UITextInputComponent>();
+		return field;
+	};
+	Entity empty = addField("Empty", { 10.0f, 10.0f }, { 246.0f, 50.0f }, "");
+	empty.GetComponent<UITextInputComponent>().Placeholder = "Name";
+	Entity edited = addField("Edited", { 10.0f, 70.0f }, { 246.0f, 110.0f }, "hello world");
+	Entity secret = addField("Secret", { 10.0f, 130.0f }, { 246.0f, 170.0f }, "abc");
+	secret.GetComponent<UITextInputComponent>().Password = true;
+
+	// Focus the edited field and select "world" with Shift+Ctrl+Left, as a player would.
+	InputMap::SetActions(InputMap::GetDefaultActions());
+	Input::ResetState();
+	scene->OnViewportResize(c_Size, c_Size);
+	scene->OnRuntimeStart();
+	REQUIRE(scene->SetUIFocus(edited));
+	const auto frame = [&](const std::function<void()>& input)
+	{
+		Input::BeginFrame();
+		input();
+		scene->OnUpdateRuntime(Timestep(1.0f / 60.0f));
+	};
+	frame([] { Input::InjectKey(KeyCode::LeftShift, true); Input::InjectKey(KeyCode::LeftControl, true); Input::InjectKey(KeyCode::Left, true); });
+	frame([] { Input::InjectKey(KeyCode::LeftShift, false); Input::InjectKey(KeyCode::LeftControl, false); Input::InjectKey(KeyCode::Left, false); });
+	REQUIRE(edited.GetComponent<UITextInputComponent>().RuntimeSelection.Begin() == 6);
+
+	const Image image = Render(renderer, *scene);
+	image.SavePNG(BellowsTests::GetTestOutputDirectory() / "UI_TextInputs.png");
+
+	// The placeholder is drawn dimmed: green, but well short of full green.
+	uint32_t dim = 0, bright = 0;
+	for (uint32_t y = 10; y < 50; y++)
+	{
+		for (uint32_t x = 10; x < 246; x++)
+		{
+			const glm::u8vec4 pixel = image.GetPixel(x, y);
+			dim += pixel.g > 60 && pixel.g < 170 && pixel.r < 60 ? 1 : 0;
+			bright += IsGreen(pixel) ? 1 : 0;
+		}
+	}
+	CHECK(dim > 40);
+	CHECK(bright == 0);
+
+	// The edited field's text is in full color, the selection band behind "world" shows orange, and the
+	// caret (in the text's color) stands at the selection's start.
+	CHECK(CountGreen(image, { 10, 70 }, { 246, 110 }) > 100);
+	uint32_t band = 0;
+	for (uint32_t x = 10; x < 246; x++)
+		band += image.GetPixel(x, 80).r > 90 && image.GetPixel(x, 80).b < 90 ? 1 : 0;
+	CHECK(band > 20);
+
+	// The password shows three bullets, not its letters: three separate green blobs.
+	uint32_t runs = 0;
+	bool inRun = false;
+	for (uint32_t x = 10; x < 246; x++)
+	{
+		bool any = false;
+		for (uint32_t y = 140; y < 160; y++)
+			any |= IsGreen(image.GetPixel(x, y));
+		runs += any && !inRun ? 1 : 0;
+		inRun = any;
+	}
+	CHECK(runs == 3);
+	CHECK(renderer.ReadEntityID(120, 90) == edited.GetRenderID());
 
 	scene->OnRuntimeStop();
 	Input::ResetState();

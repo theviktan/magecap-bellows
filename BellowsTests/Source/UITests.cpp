@@ -879,3 +879,137 @@ TEST_CASE("UI widgets: toggles flip, sliders drag and step, dropdowns open and p
 		CHECK_FALSE(ui.SceneRef->UIWantsPointer());
 	}
 }
+
+TEST_CASE("UI text inputs take typing, edit, select, copy and paste, and submit")
+{
+	using Scripting::ScriptValue;
+	using Values = Scripting::ScriptValueList;
+	UIInputScene ui;
+	// The field (550, 200)-(750, 240) on the canvas, beside the menu panel.
+	Entity field = ui.AddRect("Name", ui.Canvas, { 550.0f, 200.0f }, { 750.0f, 240.0f });
+	TextComponent& label = field.AddComponent<TextComponent>();
+	label.Text.clear();
+	label.Size = 20.0f;
+	auto& input = field.AddComponent<UITextInputComponent>();
+	input.Placeholder = "Your name";
+	ui.Frame();
+	const auto value = [&] { return field.GetComponent<TextComponent>().Text; };
+	const auto type = [&](const std::string& text) { ui.Frame([&] { Input::InjectText(text); }); };
+	const auto chord = [&](KeyCode modifier, KeyCode key)
+	{
+		ui.Frame([&] { Input::InjectKey(modifier, true); Input::InjectKey(key, true); });
+		ui.Frame([&] { Input::InjectKey(modifier, false); Input::InjectKey(key, false); });
+	};
+
+	ui.Click(glm::vec2(650.0f, 220.0f));
+	REQUIRE(ui.SceneRef->GetUIFocused() == field);
+
+	SUBCASE("Typing goes into the field, not the game, one 'changed' per edit")
+	{
+		ui.Frame([] { Input::InjectKey(KeyCode::W, true); Input::InjectText("W"); });
+		CHECK_FALSE(Input::IsKeyPressed(KeyCode::W));
+		CHECK(ui.SceneRef->UIWantsKeyboard());
+		ui.Frame([] { Input::InjectKey(KeyCode::W, false); });
+		type("ill \xC3\xA9");
+		CHECK(value() == "Will \xC3\xA9");
+		CHECK(ui.ChangesFrom(field) == Values { ScriptValue(std::string("W")), ScriptValue(std::string("Will \xC3\xA9")) });
+
+		// Left moves the caret instead of focus; Backspace erases before it.
+		ui.Tap(KeyCode::Left);
+		CHECK(ui.SceneRef->GetUIFocused() == field);
+		ui.Tap(KeyCode::Backspace);
+		CHECK(value() == "Will\xC3\xA9");
+		type("!");
+		CHECK(value() == "Will!\xC3\xA9");
+	}
+	SUBCASE("Shift selects, typing replaces the selection, Ctrl moves by words")
+	{
+		type("hello brave world");
+		ui.Frame([] { Input::InjectKey(KeyCode::LeftControl, true); Input::InjectKey(KeyCode::Left, true); });
+		ui.Frame([] { Input::InjectKey(KeyCode::Left, false); Input::InjectKey(KeyCode::LeftShift, true); });
+		ui.Tap(KeyCode::Left);		// Ctrl and Shift held: select "brave "
+		ui.Tap(KeyCode::Left);
+		ui.Frame([] { Input::InjectKey(KeyCode::LeftControl, false); Input::InjectKey(KeyCode::LeftShift, false); });
+		CHECK(input.RuntimeSelection.Begin() == 0);
+		CHECK(input.RuntimeSelection.End() == 12);
+		type("bold ");
+		CHECK(value() == "bold world");
+		ui.Tap(KeyCode::Home);
+		type("[");
+		ui.Tap(KeyCode::End);
+		type("]");
+		CHECK(value() == "[bold world]");
+	}
+	SUBCASE("Ctrl+A, C, X and V use the clipboard")
+	{
+		Input::SetClipboardHandlers(nullptr, nullptr);
+		type("copy me");
+		chord(KeyCode::LeftControl, KeyCode::A);
+		chord(KeyCode::LeftControl, KeyCode::C);
+		CHECK(Input::GetClipboardText() == "copy me");
+		chord(KeyCode::LeftControl, KeyCode::X);
+		CHECK(value().empty());
+		chord(KeyCode::LeftControl, KeyCode::V);
+		chord(KeyCode::LeftControl, KeyCode::V);
+		CHECK(value() == "copy mecopy me");
+
+		// A password shows bullets and can't be copied out; pasting into one still works.
+		input.Password = true;
+		Input::SetClipboardText("secret");
+		chord(KeyCode::LeftControl, KeyCode::A);
+		chord(KeyCode::LeftControl, KeyCode::C);
+		CHECK(Input::GetClipboardText() == "secret");
+		chord(KeyCode::LeftControl, KeyCode::V);
+		CHECK(value() == "secret");
+	}
+	SUBCASE("Enter submits, Escape leaves, and max_length stops typing")
+	{
+		input.MaxLength = 5;
+		type("abcdefg");
+		CHECK(value() == "abcde");
+		ui.Tap(KeyCode::Enter);
+		CHECK(ui.EventsFrom(field) == Names { "focused", "clicked", "changed", "submitted" });
+		CHECK(ui.SceneRef->GetUIFocused() == field);
+		ui.Tap(KeyCode::Escape);
+		CHECK_FALSE(ui.SceneRef->GetUIFocused());
+		CHECK(ui.EventsFrom(field) == Names { "focused", "clicked", "changed", "submitted", "cancelled", "unfocused" });
+		// Unfocused, typing reaches the game again.
+		ui.Frame([] { Input::InjectKey(KeyCode::W, true); Input::InjectText("w"); });
+		CHECK(Input::IsKeyPressed(KeyCode::W));
+		CHECK(value() == "abcde");
+	}
+	SUBCASE("Multi-line: Enter breaks the line, Ctrl+Enter submits, up and down move the caret")
+	{
+		input.MultiLine = true;
+		type("abc");
+		ui.Tap(KeyCode::Enter);
+		type("abc");
+		CHECK(value() == "abc\nabc");
+		ui.Tap(KeyCode::Left);
+		CHECK(input.RuntimeSelection.Caret == 6);
+		ui.Tap(KeyCode::Up);
+		CHECK(ui.SceneRef->GetUIFocused() == field);
+		CHECK(input.RuntimeSelection.Caret == 2);		// Above the caret: between "b" and "c" on the first line
+		ui.Tap(KeyCode::Down);
+		CHECK(input.RuntimeSelection.Caret == 6);
+		ui.Tap(KeyCode::Down);						// Past the last line: to the end
+		CHECK(input.RuntimeSelection.Caret == 7);
+		chord(KeyCode::LeftControl, KeyCode::Enter);
+		CHECK(ui.EventsFrom(field).back() == "submitted");
+		CHECK(value() == "abc\nabc");
+	}
+	SUBCASE("A press places the caret, and a drag selects")
+	{
+		type("abcdef");
+		// The text starts at the field's left margin; a press left of it lands before the first letter.
+		ui.Click(glm::vec2(555.0f, 220.0f));
+		CHECK(input.RuntimeSelection.Caret == 0);
+		type("<");
+		CHECK(value() == "<abcdef");
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(555.0f, 220.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(745.0f, 220.0f)); });
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+		CHECK(input.RuntimeSelection.Begin() == 0);
+		CHECK(input.RuntimeSelection.End() == 7);
+	}
+}

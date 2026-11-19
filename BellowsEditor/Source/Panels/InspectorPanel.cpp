@@ -555,6 +555,19 @@ namespace Bellows {
 			}
 		});
 
+		DrawComponent<UITextInputComponent>(m_Editor, entity, ICON_TEXT_CURSOR_INPUT, "UI Text Input", [](UITextInputComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UITextInput"))
+			{
+				UI::Property("Placeholder", c.Placeholder, "Shown, dimmed, while the text is empty. The text itself is the Text component's");
+				UI::Property("Multi Line", c.MultiLine, "Enter starts a new line; Ctrl+Enter submits");
+				UI::Property("Password", c.Password, "Shows a bullet per character, on one line, and can't be copied");
+				if (UI::Property("Max Length", c.MaxLength, 0, 100000, "The most characters it takes; 0 for no limit"))
+					c.MaxLength = std::max(c.MaxLength, 0);
+				UI::EndPropertyGrid();
+			}
+		});
+
 		DrawComponent<UILayoutComponent>(m_Editor, entity, ICON_LAYOUT_GRID, "UI Layout", [](UILayoutComponent& c)
 		{
 			if (UI::BeginPropertyGrid("UILayout"))
@@ -847,6 +860,7 @@ namespace Bellows {
 		entry.operator()<UIToggleComponent>(ICON_SQUARE_CHECK, "UI Toggle", "UI");
 		entry.operator()<UISliderComponent>(ICON_SLIDERS_HORIZONTAL, "UI Slider", "UI");
 		entry.operator()<UIDropdownComponent>(ICON_CHEVRONS_UP_DOWN, "UI Dropdown", "UI");
+		entry.operator()<UITextInputComponent>(ICON_TEXT_CURSOR_INPUT, "UI Text Input", "UI");
 	}
 
 }

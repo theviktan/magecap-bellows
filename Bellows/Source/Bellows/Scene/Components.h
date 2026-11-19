@@ -9,6 +9,7 @@
 #include "Bellows/Text/TextLayout.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIStyle.h"
+#include "Bellows/UI/UITextEdit.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -386,6 +387,19 @@ namespace Bellows {
 		int Selected = 0;					// Index into Options; -1 shows nothing
 	};
 
+	// A field the player types into. Its text is the entity's TextComponent's (which also sets the font,
+	// size and color); the field draws the caret, the selection and the placeholder.
+	struct UITextInputComponent
+	{
+		std::string Placeholder;			// Shown, dimmed, while the text is empty
+		bool MultiLine = false;				// Enter starts a new line (Ctrl+Enter submits)
+		bool Password = false;				// Shows a bullet per character; copying is off
+		int MaxLength = 0;					// In characters; 0 for no limit
+
+		UITextSelection RuntimeSelection;	// Kept inside the text when it changes from elsewhere
+		glm::vec2 RuntimeScroll { 0.0f };	// Screen pixels the text is moved to keep the caret in view
+	};
+
 	// Marks an entity instantiated from a prefab file.
 	struct PrefabComponent
 	{
@@ -403,7 +417,7 @@ namespace Bellows {
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
 		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
-		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, PrefabComponent>;
+		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 
 	const char* RigidBodyTypeToString(RigidBodyType type);
 	RigidBodyType RigidBodyTypeFromString(std::string_view text);
