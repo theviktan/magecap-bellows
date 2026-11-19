@@ -1,0 +1,43 @@
+# set x, y to ... takes a list apart: one item for each name, in order.
+set name, score to ["Ron", 99]
+say "{name}: {score}"                                   # expect: Ron: 99
+
+# The value is worked out first, so this swaps them.
+set a, b to [1, 2]
+set a, b to [b, a]
+say "{a} {b}"                                           # expect: 2 1
+
+# A vector gives x, y and z, or just x and y.
+set x, y, z to vector(1, 2, 3)
+say "{x} {y} {z}"                                       # expect: 1 2 3
+set px, py to vector(4, 5, 6)
+say "{px} {py}"                                         # expect: 4 5
+
+# Inside a function the names are its own variables, as with any 'set'.
+function describe(entry)
+	set who, points to entry
+	return "{who} has {points}"
+end
+say describe(["Ada", 7])                                # expect: Ada has 7
+
+# It works well in loops over pairs.
+for each pair in [[1, "one"], [2, "two"]]
+	set number, word to pair
+	say "{number} is {word}"
+end
+# expect: 1 is one
+# expect: 2 is two
+
+# Mistakes say what is wrong.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() set p, q to [1, 2, 3] end)    # expect: There are 2 names but the list has 3 items. Give one name for each item.
+say problem_of(function() set p, q to [1] end)          # expect: There are 2 names but the list has 1 item. Give one name for each item.
+say problem_of(function() set p, q to "ab" end)         # expect: Only a list or a vector can be taken apart, like: set x, y to position. This is a text.
+say problem_of(function() set p, q, r, s to vector(1, 2, 3) end)   # expect: A vector can be taken apart into 2 names (x, y) or 3 (x, y, z), not 4.

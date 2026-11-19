@@ -8,6 +8,7 @@ Everything in the language on one page. For explanations and examples, see the [
 |---|---|
 | Make / change a variable | `set health to 100` |
 | Change a property or item | `set enemy.health to 0`, `set list[2] to "x"`, `set my speed to 3` |
+| Take a list apart | `set name, score to entry` (one item per name, exactly), `set x, y, z to position` (a vector: 2 or 3 names), `set a, b to [b, a]` (swaps) |
 | Constant (top level only) | `constant MAX_HP is 100` |
 | Add / subtract | `add 5 to score`, `take 10 from health` |
 | Add to / remove from a list | `add "key" to items`, `take "key" from items` |
