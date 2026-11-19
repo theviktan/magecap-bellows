@@ -32,6 +32,7 @@ This guide teaches the whole language step by step. Every example is real ForgeS
 17. [Scripts attached to entities: `self` and `my`](#17-scripts-attached-to-entities-self-and-my)
 18. [Finding bugs with the debugger](#18-finding-bugs-with-the-debugger)
 19. [Rules worth remembering](#19-rules-worth-remembering)
+20. [Menus and HUDs](#20-menus-and-huds)
 
 For a one-page list of everything, see [Reference.md](Reference.md).
 
@@ -1098,7 +1099,7 @@ end
 
 **1. Set a breakpoint.** Open the script in the Script Editor and click just left of line 5 (`if other.name is "Coin" then`), or put the cursor on the line and press **F9**. A red dot shows the breakpoint. Click it again (or press F9 again) to remove it. Breakpoints move with their lines while you edit, and they stay set until you close the project or the editor.
 
-**2. Play.** Press Play and touch a coin. When a script reaches a line with a breakpoint, the game pauses before that line runs. The Script Editor shows the line with an arrow, and the **Debugger** panel (next to the Console; **View > Panels > Debugger** opens it) shows:
+**2. Play in the editor viewport.** Breakpoints stop the game only when it plays inside the editor, not in its own game window. Choose **Game > Play Scene in Editor Viewport** (or turn off **Game > Play Opens a Game Window**, so Play uses the viewport). In a game window the game runs without stopping, and the editor warns you that your breakpoints won't stop it. Then touch a coin. When a script reaches a line with a breakpoint, the game pauses before that line runs. The Script Editor shows the line with an arrow, and the **Debugger** panel (next to the Console; **View > Panels > Debugger** opens it) shows:
 
 - **Stopped at** the script, the line and why it stopped (a breakpoint, a step, or a pause).
 - **Call stack**: the function or `when` handler that is running, and the ones that called it, innermost first. Click a call to see its variables.
@@ -1144,3 +1145,69 @@ The debugger works in play mode in the MageCap Bellows editor. For checking a sc
 7. **Lists, maps, vectors and objects are shared** when you copy a variable. Use `copy(...)` for a separate one.
 8. **`set` inside a function makes a local variable**, unless the script already has one with that name. Use `my` for object fields.
 9. **Error messages tell you the file, line and what to try.** Read them; they were written to help.
+
+---
+
+## 20. Menus and HUDs
+
+In MageCap Bellows, a menu or a HUD is made of entities: a **UICanvas** holds the screen's UI, and each panel, label and button under it is an entity with a **UIRect** (its place on screen). You build them in the editor (**Create > UI**) and give the menu one script.
+
+### Reacting to buttons
+
+A button raises `clicked` when it's pressed. The event goes to the button's own script first, then to its parent's script, and so on up. So one script on the menu can handle every button, by name:
+
+```forge
+# main_menu.forge, attached to the Main Menu canvas
+when "Start" is clicked
+	load_scene("Scenes/Level1.bscene")
+end
+
+when "Quit" is clicked
+	quit()
+end
+```
+
+- `when "Start" is clicked` runs only for the entity named Start (letter case doesn't matter).
+- `when clicked with widget` runs for any button under the script's entity. The widget is the entity that was clicked, so `say widget.name` tells you which.
+- A widget also raises `focused` and `unfocused` when keyboard or gamepad focus moves to it or away from it, and `cancelled` when the player presses Esc or the gamepad's B while it has focus.
+
+### Changing what's on screen
+
+Every UI entity has these everyday properties:
+
+| Property | What it does |
+|---|---|
+| `text` | The text of its Text component: a label, or a button's caption. `set score_label.text to "Score: {score}"` |
+| `visible` | Whether it shows. Hiding an entity hides everything under it. |
+| `interactable` | Whether the pointer and focus can reach it (and everything under it). A button that isn't interactable shows as disabled. |
+
+And these phrases say the same things in English:
+
+```forge
+set pause_menu to find_entity("Pause Menu")
+set resume_button to find_entity("Resume")
+
+show pause_menu         # set pause_menu.visible to true
+hide pause_menu         # set pause_menu.visible to false
+enable resume_button    # set resume_button.interactable to true
+disable resume_button   # set resume_button.interactable to false
+focus resume_button     # gives it keyboard and gamepad focus
+```
+
+- `focus` gives back whether the widget could take focus. It can't when it isn't focusable, is hidden, isn't interactable, or sits behind a modal canvas: `if not focus name_box then say "can't type yet" end`.
+- Write the widget right after the word, without brackets: `show pause_menu`. With brackets, `show(value)` is still ForgeScript's function for seeing a value the way a programmer does (with quotes around text), as it always was. The same holds for any script that has its own function called `hide`, `enable`, `disable` or `focus`: `hide(x)` calls it.
+- A phrase given something that isn't an entity says so: "'hide' needs a UI entity, like: hide find_entity("Pause Menu"). This is a number."
+
+### When the UI takes the input
+
+While the pointer is over a panel or button, mouse clicks go to the UI, not to the game. A **modal** canvas (a pause menu, a dialog) takes every key and button while it shows. Two functions tell your game scripts when to leave input alone:
+
+```forge
+when update with delta
+	if ui_wants_pointer() then return end    # the pointer is over the UI
+	if is_mouse_pressed("Left") then shoot() end
+end
+```
+
+`ui_wants_keyboard()` does the same for keys: it's true while a text box has focus.
+

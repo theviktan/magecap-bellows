@@ -734,6 +734,7 @@ namespace ForgeScript {
 			entry.Pattern = phrase.GetString("pattern");
 			entry.Returns = phrase.GetString("returns");
 			entry.Doc = phrase.GetString("doc");
+			entry.YieldsToCalls = phrase.Get("yields_to_calls").IsBool() && phrase.Get("yields_to_calls").AsBool();
 			if (!entry.Pattern.empty())
 				m_ApiPhrases.push_back(std::move(entry));
 		}
@@ -915,7 +916,8 @@ namespace ForgeScript {
 		// Engine phrases must be known, or every line that uses one would be a mistake. Their code never
 		// runs here: FindMistakes only compiles.
 		for (const ApiPhrase& phrase : m_ApiPhrases)
-			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); });
+			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); },
+				nullptr, phrase.YieldsToCalls);
 		const std::filesystem::path useFolder = FindUseFolder(path);
 		vm.SetModuleLoader([this, useFolder](const std::string& name, std::string& outName, std::string& outSource)
 		{

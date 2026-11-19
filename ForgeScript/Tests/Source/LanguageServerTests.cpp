@@ -308,6 +308,10 @@ TEST_CASE("LanguageServerKnowsEnginePhrasesFromTheApiFile")
 	Session withApi;
 	CHECK(withApi.Open(LanguageServer::PathToUri(folder.Path / "a.forge"), script).AsArray().empty());
 
+	// A phrase that yields to calls compiles like the engine's: "hide(1, 2)" is a call to a function named
+	// hide, as before the phrase existed, and "hide panel" is the phrase.
+	CHECK(withApi.Open(LanguageServer::PathToUri(folder.Path / "b.forge"), "set panel to 1\nhide panel\nhide(1, 2)\n").AsArray().empty());
+
 	// Without the file the phrase is unknown, the same as a checker without the engine.
 	Session withoutApi(false);
 	CHECK_FALSE(withoutApi.Open(LanguageServer::PathToUri(folder.Path / "a.forge"), script).AsArray().empty());

@@ -240,6 +240,38 @@ TEST_CASE("ForgeScript engine phrases call the shared API")
 	CHECK_EQ(rest.substr(0, split + 1), rest.substr(split + 1));
 }
 
+TEST_CASE("ForgeScript UI phrases show, hide, enable, disable and focus widgets")
+{
+	Ref<Scene> scene = CreateRef<Scene>("UI phrases");
+	Entity menu = scene->CreateEntity("Menu");
+	menu.AddComponent<UICanvasComponent>();
+	Entity play = scene->CreateEntity("Play");
+	scene->SetParent(play, menu);
+	play.AddComponent<UIRectComponent>().Focusable = true;
+	scene->CreateEntity("Label");
+	scene->OnRuntimeStart();
+
+	ForgeScriptHarness h(*scene);
+	h.Machine.Load(
+		"set menu to find_entity(\"Menu\")\n"
+		"set play to find_entity(\"Play\")\n"
+		"hide menu\nsay menu.visible\nshow menu\nsay menu.visible\n"
+		"disable play\nsay play.interactable\nenable play\nsay play.interactable\n"
+		"say focus play\n"
+		"disable play\nsay focus play\n"
+		// 'show' is also ForgeScript's function for seeing a value; with brackets it still is.
+		"show(\"text\")\n"
+		"try\n\thide find_entity(\"Label\")\ncatch problem\n\tsay problem\nend\n"
+		"try\n\thide 5\ncatch problem\n\tsay problem\nend\n",
+		"ui_phrases.forge");
+
+	INFO(h.AllErrors());
+	CHECK(h.Errors.empty());
+	CHECK_EQ(h.Output, std::string("false\ntrue\nfalse\ntrue\ntrue\nfalse\n\"text\"\n"
+		"Entity 'Label' has no UIRect or UICanvas for 'visible'\n'hide' needs a UI entity, like: hide find_entity(\"Pause Menu\"). This is a number.\n"));
+	scene->OnRuntimeStop();
+}
+
 TEST_CASE("Engine phrases are listed for tools")
 {
 	const std::vector<Scripting::ForgeScriptPhraseInfo> phrases = Scripting::GetForgeScriptPhrases();
@@ -248,7 +280,8 @@ TEST_CASE("Engine phrases are listed for tools")
 	{
 		patterns.push_back(phrase.Pattern);
 		CHECK_FALSE(phrase.Doc.empty());
-		CHECK_EQ(phrase.Returns, std::string("str"));
+		CHECK_FALSE(phrase.Returns.empty());
 	}
-	CHECK_EQ(patterns, std::vector<std::string>{ "save screenshot", "save screenshot to (path)", "user folder" });
+	CHECK_EQ(patterns, std::vector<std::string>{ "save screenshot", "save screenshot to (path)", "user folder",
+		"show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)" });
 }

@@ -22,6 +22,7 @@
 		] }
 	],
 	"phrases": [
-		{ "pattern": "save screenshot to (path)", "doc": "Saves what the player sees to path.", "returns": "str" }
+		{ "pattern": "save screenshot to (path)", "doc": "Saves what the player sees to path.", "returns": "str" },
+		{ "pattern": "hide (widget)", "doc": "Hides a UI entity.", "returns": "None", "yields_to_calls": true }
 	]
 }

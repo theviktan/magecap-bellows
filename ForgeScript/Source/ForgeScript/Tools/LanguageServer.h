@@ -104,6 +104,7 @@ namespace ForgeScript {
 			std::string Pattern;
 			std::string Returns;
 			std::string Doc;
+			bool YieldsToCalls = false; // see VM::RegisterPhrase
 		};
 
 	private:

@@ -27,6 +27,15 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Menus and HUDs (Phase 2 step 2.6, ForgeScript side):
+- In MageCap Bellows: `show (widget)`, `hide (widget)`, `enable (widget)`, `disable (widget)` and
+  `focus (widget)`, over Entity's `visible`, `interactable` and `focus()`. A new guide chapter,
+  "Menus and HUDs", covers buttons (`when "Start" is clicked`), these phrases and UI input.
+- `VM::RegisterPhrase(..., yieldToCalls)`: a host phrase whose first word may already be a name
+  (`show` is a ForgeScript function) only applies where that word can't be a value: `show menu` is
+  the phrase, while `show(value)`, `show of x` and `show + 1` keep their old meaning. The API
+  description marks such phrases (`"yields_to_calls": true`), and the language server reads it.
+
 Naming the values in a call (ForgeScript Roadmap item 9):
 - `attack(goblin, crit: 5)`: values can be named after the ones given in order. A skipped value
   gets its default even when a later one is named. Works for script functions, kinds (and `new`),

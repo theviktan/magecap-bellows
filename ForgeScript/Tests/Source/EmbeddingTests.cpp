@@ -549,3 +549,28 @@ TEST_CASE("WhenWithANameRunsOnlyForThatSource")
 	CHECK_EQ(h.Output, std::string("door\n"));
 	CHECK(h.Errors.empty());
 }
+
+TEST_CASE("PhrasesThatYieldToCalls")
+{
+	// 'show' is a ForgeScript function. A host phrase starting with it, registered to yield, is only the
+	// phrase where 'show' can't be a value: "show menu". Calls, 'of' and operators keep their old meaning.
+	Harness h;
+	CHECK(h.Machine.RegisterPhrase("show (thing)", [](CallContext& c) { return c.GetVM().MakeText("shown " + c.GetVM().ToText(c.Arg(0))); }, nullptr, true));
+	CHECK(h.Machine.PhraseYieldsToCalls("show"));
+	h.Machine.Load(
+		"show(\"call\")\n"
+		"show of \"of\"\n"
+		"set f to show\n"
+		"f(\"value\")\n"
+		"say show \"menu\"\n"
+		"say show 5 + 1\n", "t.forge");
+	CHECK(h.Errors.empty());
+	CHECK_EQ(h.Output, std::string("\"call\"\n\"of\"\n\"value\"\nshown menu\nshown 6\n"));
+
+	// Without the flag, as before, a phrase takes its first word followed by brackets too.
+	Harness plain;
+	CHECK(plain.Machine.RegisterPhrase("greet (name)", [](CallContext& c) { return c.GetVM().MakeText("hi " + c.Text(0)); }));
+	CHECK_FALSE(plain.Machine.PhraseYieldsToCalls("greet"));
+	plain.Machine.Load("say greet(\"Ron\")\n", "t.forge");
+	CHECK_EQ(plain.Output, std::string("hi Ron\n"));
+}

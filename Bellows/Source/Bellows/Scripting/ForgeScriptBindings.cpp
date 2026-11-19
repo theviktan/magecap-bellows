@@ -719,6 +719,36 @@ namespace Bellows::Scripting {
 			FS::NativeFn Function;
 		};
 
+		// The widget a UI phrase is about.
+		ScriptEntity PhraseWidget(FS::CallContext& context, const char* phrase)
+		{
+			FS::VM& vm = context.GetVM();
+			const FS::Value value = context.Arg(0);
+			if (!FS::IsObjectType(value, FS::ObjectType::NativeObject) || FS::As<FS::NativeObject>(value)->Type != &TypeFor<ScriptEntity>())
+			{
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs a UI entity, like: " + phrase +
+					" find_entity(\"Pause Menu\"). This is " + (value.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(value)) + ".");
+			}
+			return Convert<ScriptEntity>::From(vm, value, std::string("'") + phrase + "'");
+		}
+
+		// show / hide / enable / disable (widget): the everyday UI properties, as phrases.
+		FS::NativeFn SetUIFlag(const char* phrase, bool interactable, bool value)
+		{
+			return [phrase, interactable, value](FS::CallContext& context)
+			{
+				const ScriptEntity widget = PhraseWidget(context, phrase);
+				Guard([&]
+				{
+					if (interactable)
+						Detail::RequireUIComponent<UIRectComponent>(widget, "interactable", "UIRect").Interactable = value;
+					else
+						Detail::RequireUIVisible(widget) = value;
+				});
+				return FS::Value();
+			};
+		}
+
 		// The phrases are thin wrappers over functions of the shared API, so both spellings behave alike.
 		const std::vector<EnginePhrase>& GetEnginePhrases()
 		{
@@ -733,6 +763,25 @@ namespace Bellows::Scripting {
 					} },
 				{ { "user folder", "The game's own folder for saves, reports and screenshots; same as user_folder()", "str" },
 					[](FS::CallContext& context) { return context.GetVM().MakeText(GetUserFolder().string()); } },
+				{ { "show (widget)", "Shows a UI entity and everything under it; same as set widget.visible to true", "None", true },
+					SetUIFlag("show", false, true) },
+				{ { "hide (widget)", "Hides a UI entity and everything under it; same as set widget.visible to false", "None", true },
+					SetUIFlag("hide", false, false) },
+				{ { "enable (widget)", "Lets the pointer and focus reach a UI entity again; same as set widget.interactable to true", "None", true },
+					SetUIFlag("enable", true, true) },
+				{ { "disable (widget)", "Stops the pointer and focus reaching a UI entity (it shows as disabled); same as set widget.interactable to false", "None", true },
+					SetUIFlag("disable", true, false) },
+				{ { "focus (widget)", "Gives a UI entity keyboard and gamepad focus, and gives back whether it could take it; same as widget.focus()", "bool", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity widget = PhraseWidget(context, "focus");
+						return FS::Value::FromBool(Guard([&]
+						{
+							Detail::RequireUIComponent<UIRectComponent>(widget, "focus", "UIRect");
+							Entity entity = widget.Resolve();
+							return entity.GetScene()->SetUIFocus(entity);
+						}));
+					} },
 			};
 			return s_Phrases;
 		}
@@ -754,7 +803,7 @@ namespace Bellows::Scripting {
 		for (const EnginePhrase& phrase : GetEnginePhrases())
 		{
 			std::string error;
-			const bool registered = vm.RegisterPhrase(phrase.Info.Pattern, phrase.Function, &error);
+			const bool registered = vm.RegisterPhrase(phrase.Info.Pattern, phrase.Function, &error, phrase.Info.YieldsToCalls);
 			BW_CORE_VERIFY(registered, "Engine phrase '{}' is not valid: {}", phrase.Info.Pattern, error);
 		}
 	}

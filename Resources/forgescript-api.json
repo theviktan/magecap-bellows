@@ -2033,6 +2033,36 @@
 			"pattern": "user folder",
 			"doc": "The game's own folder for saves, reports and screenshots; same as user_folder()",
 			"returns": "str"
+		},
+		{
+			"pattern": "show (widget)",
+			"doc": "Shows a UI entity and everything under it; same as set widget.visible to true",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "hide (widget)",
+			"doc": "Hides a UI entity and everything under it; same as set widget.visible to false",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "enable (widget)",
+			"doc": "Lets the pointer and focus reach a UI entity again; same as set widget.interactable to true",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "disable (widget)",
+			"doc": "Stops the pointer and focus reaching a UI entity (it shows as disabled); same as set widget.interactable to false",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "focus (widget)",
+			"doc": "Gives a UI entity keyboard and gamepad focus, and gives back whether it could take it; same as widget.focus()",
+			"returns": "bool",
+			"yields_to_calls": true
 		}
 	]
 }

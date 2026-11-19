@@ -340,7 +340,7 @@ namespace ForgeScript {
 		m_SharedGlobals[Intern(name)] = Value::FromObject(native);
 	}
 
-	bool VM::RegisterPhrase(const std::string& pattern, NativeFn fn, std::string* outError)
+	bool VM::RegisterPhrase(const std::string& pattern, NativeFn fn, std::string* outError, bool yieldToCalls)
 	{
 		PhrasePattern parsed;
 		std::string error;
@@ -381,6 +381,8 @@ namespace ForgeScript {
 			return false;
 		}
 		RegisterFunction(name, static_cast<int>(parsed.SlotCount()), std::move(fn));
+		if (yieldToCalls)
+			m_YieldingPhraseWords.insert(parsed.Parts.front());
 		return true;
 	}
 
