@@ -1406,7 +1406,7 @@ namespace Bellows {
 	}
 
 	void SceneRenderer::SubmitUIRect(const glm::vec2& min, const glm::vec2& max, const UIRectStyle& style, const Ref<Texture2D>& texture,
-		uint32_t entityID, const glm::vec4* clipRect)
+		uint32_t entityID, const glm::vec4* clipRect, const glm::vec4& uvRect)
 	{
 		if (!m_Settings.ShowUI || max.x <= min.x || max.y <= min.y)
 			return;
@@ -1423,7 +1423,7 @@ namespace Bellows {
 		const glm::vec4 params(std::max(style.CornerRadius, 0.0f), hasBorder ? style.BorderWidth : 0.0f, 0.0f, 0.0f);
 		UIVertex corners[4];
 		const glm::vec2 positions[4] = { min, { max.x, min.y }, max, { min.x, max.y } };
-		const glm::vec2 texCoords[4] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
+		const glm::vec2 texCoords[4] = { { uvRect.x, uvRect.y }, { uvRect.z, uvRect.y }, { uvRect.z, uvRect.w }, { uvRect.x, uvRect.w } };
 		for (int i = 0; i < 4; i++)
 		{
 			corners[i].Position = positions[i];

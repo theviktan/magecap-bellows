@@ -2,6 +2,7 @@
 
 #include "TestUtilities.h"
 
+#include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Renderer/Image.h"
@@ -213,5 +214,78 @@ TEST_CASE("[gpu] Screen UI scales with its canvas, hides, clips and can be switc
 		CHECK(CountGreen(image, { 0, 0 }, { c_Size, c_Size }) == 0);
 		CHECK(renderer.ReadEntityID(70, 60) != scene.Panel.GetRenderID());
 	}
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] 9-slice images keep their borders, and scroll areas clip and show a scroll bar")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	// A 16 by 16 texture: a 4 pixel red frame around a blue middle.
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "UISliceProject";
+	Image frame;
+	frame.Width = frame.Height = 16;
+	frame.Pixels.resize(16 * 16 * 4);
+	for (uint32_t y = 0; y < 16; y++)
+	{
+		for (uint32_t x = 0; x < 16; x++)
+		{
+			const bool edge = x < 4 || y < 4 || x >= 12 || y >= 12;
+			uint8_t* pixel = &frame.Pixels[(y * 16 + x) * 4];
+			pixel[0] = edge ? 255 : 0;
+			pixel[1] = 0;
+			pixel[2] = edge ? 0 : 255;
+			pixel[3] = 255;
+		}
+	}
+	REQUIRE(frame.SavePNG(assets / "Frame.png"));
+	AssetManager::SetAssetDirectory(assets);
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+	Ref<Scene> scene = CreateRef<Scene>("UI slices");
+	Entity canvas = scene->CreateEntity("Canvas");
+	canvas.AddComponent<UICanvasComponent>().ScaleMode = UIScaleMode::ConstantPixels;
+
+	// (20, 20)-(220, 100), sliced 4 pixels in from each side.
+	Entity sliced = CreateRect(*scene, "Sliced", canvas, { 20.0f, 20.0f }, { 220.0f, 100.0f });
+	auto& image = sliced.AddComponent<UIImageComponent>();
+	image.TexturePath = "Frame.png";
+	image.SliceBorder = glm::vec4(4.0f);
+
+	// A list at (20, 130)-(220, 230) holding a 400 high green block, so it scrolls.
+	Entity list = CreateRect(*scene, "List", canvas, { 20.0f, 130.0f }, { 220.0f, 230.0f });
+	list.AddComponent<UIScrollComponent>();
+	Entity block = CreateRect(*scene, "Block", list, { 0.0f, 0.0f }, { 180.0f, 400.0f });
+	block.AddComponent<UIImageComponent>().Color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+
+	Image result = Render(renderer, *scene);
+	result.SavePNG(BellowsTests::GetTestOutputDirectory() / "UI_Slices.png");
+
+	const glm::vec4 red(1.0f, 0.0f, 0.0f, 1.0f), blue(0.0f, 0.0f, 1.0f, 1.0f);
+	// The border stays 4 pixels wide; stretched whole it would be 50 wide on the left and right.
+	CHECK(Near(result.GetPixel(21, 60), red, 8));
+	CHECK(Near(result.GetPixel(30, 60), blue, 8));
+	CHECK(Near(result.GetPixel(120, 22), red, 8));
+	CHECK(Near(result.GetPixel(120, 30), blue, 8));
+	CHECK(Near(result.GetPixel(218, 98), red, 8));
+
+	// The block is cut at the list's bottom edge, and a scroll bar thumb shows on its right.
+	CHECK(IsGreen(result.GetPixel(100, 225)));
+	CHECK_FALSE(IsGreen(result.GetPixel(100, 240)));
+	const glm::u8vec4 thumb = result.GetPixel(213, 150);
+	CHECK(thumb.r > 100);	// The light thumb over the dark background, not green
+	CHECK_FALSE(IsGreen(thumb));
+
+	// Scrolled to the end, the block's bottom is in view, and the thumb has moved down.
+	list.GetComponent<UIScrollComponent>().ScrollPosition.y = 1000.0f;
+	result = Render(renderer, *scene);
+	CHECK(list.GetComponent<UIScrollComponent>().ScrollPosition.y == doctest::Approx(300.0f));
+	CHECK(IsGreen(result.GetPixel(100, 135)));
+	CHECK(result.GetPixel(213, 220).r > 100);
+
+	AssetManager::SetAssetDirectory({});
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }

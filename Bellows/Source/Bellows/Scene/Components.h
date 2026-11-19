@@ -292,6 +292,10 @@ namespace Bellows {
 		bool Visible = true;
 		bool Interactable = true;				// Off: the pointer and focus pass it by, and everything under it
 		bool Focusable = false;					// Can take keyboard and gamepad focus (widgets are by default)
+		// Inside a UILayoutComponent: keep the size from the offsets, or share the space left over. The
+		// layout places the rect and ignores its anchors and offsets otherwise.
+		UISizing WidthSizing = UISizing::Fixed;
+		UISizing HeightSizing = UISizing::Fixed;
 
 		// Runtime (not serialized): the rectangle on screen in pixels, from the last layout.
 		UIRectangle RuntimeRect;
@@ -306,11 +310,42 @@ namespace Bellows {
 		float CornerRadius = 0.0f;					// Reference pixels
 		float BorderWidth = 0.0f;					// Reference pixels, drawn inside the rectangle
 		glm::vec4 BorderColor { 0.0f, 0.0f, 0.0f, 1.0f };
+		// 9-slice: the texture's edges (left, top, right, bottom, in texture pixels) keep their size at any
+		// rect size (one texture pixel per reference pixel), and only the middle stretches. 0 stretches all.
+		glm::vec4 SliceBorder { 0.0f };
 		bool Visible = true;
 
 		// Runtime cache (not serialized)
 		Ref<Texture2D> RuntimeTexture;
 		std::string LoadedTexturePath;
+	};
+
+	// Arranges the entity's children that have a UIRectComponent (and are shown): one under another,
+	// side by side, or in a grid, inside the entity's rect.
+	struct UILayoutComponent
+	{
+		UILayoutDirection Direction = UILayoutDirection::Vertical;
+		float Spacing = 8.0f;						// Reference pixels between children
+		glm::vec4 Padding { 0.0f };					// Left, top, right, bottom, reference pixels
+		UIAlignment MainAlignment = UIAlignment::Start;
+		UIAlignment CrossAlignment = UIAlignment::Start;
+		int Columns = 2;							// Grid only
+	};
+
+	// Scrolls and clips the entity's children: they are laid out in its rect (or by its UILayout) and
+	// moved by the scroll position, and nothing under it shows outside its rect. The mouse wheel
+	// scrolls it, and focus moving to something hidden inside scrolls it into view.
+	struct UIScrollComponent
+	{
+		bool Horizontal = false;
+		bool Vertical = true;
+		glm::vec2 ScrollPosition { 0.0f };			// Reference pixels from the content's top-left; kept in range
+		float WheelSpeed = 60.0f;					// Reference pixels per wheel notch
+		bool ShowScrollbars = true;					// Thin bars along the edges when the content doesn't fit
+
+		// Runtime (not serialized), from the last layout, in reference pixels.
+		glm::vec2 RuntimeContentSize { 0.0f };
+		glm::vec2 RuntimeViewportSize { 0.0f };
 	};
 
 	// Marks an entity instantiated from a prefab file.
@@ -329,7 +364,7 @@ namespace Bellows {
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
 		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,
-		UICanvasComponent, UIRectComponent, UIImageComponent, PrefabComponent>;
+		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent, PrefabComponent>;
 
 	const char* RigidBodyTypeToString(RigidBodyType type);
 	RigidBodyType RigidBodyTypeFromString(std::string_view text);

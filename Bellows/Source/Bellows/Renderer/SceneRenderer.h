@@ -194,8 +194,9 @@ namespace Bellows {
 		// into the entity ID image. Positions are output pixels with (0, 0) at the top-left and y down. A
 		// clip rectangle (min xy, max xy in pixels) hides everything outside it. Nothing is drawn while
 		// SceneRendererSettings::ShowUI is off.
+		// 'uvRect' (min uv, max uv) is the part of the texture stretched over the rectangle.
 		void SubmitUIRect(const glm::vec2& min, const glm::vec2& max, const UIRectStyle& style, const Ref<Texture2D>& texture = nullptr,
-			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
+			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr, const glm::vec4& uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 		// 'origin' is where the layout's box (0, 0) lands; the layout's units must be output pixels.
 		void SubmitUIText(const Ref<Font>& font, const TextLayout& layout, const glm::vec2& origin, const TextStyle& style,
 			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);

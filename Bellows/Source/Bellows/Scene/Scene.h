@@ -168,8 +168,10 @@ namespace Bellows {
 			entt::entity Handle = entt::null;
 			entt::entity Canvas = entt::null;	// The canvas it belongs to
 			UIRectangle Rect;
+			UIRectangle Clip;					// Where it may draw and be pointed at (scroll areas cut it)
 			float Scale = 1.0f;					// Screen pixels per reference pixel
 			bool Interactable = true;			// Itself and everything above it up to the canvas
+			size_t SubtreeEnd = 0;				// The index after its last shown descendant
 		};
 		struct UIEvent
 		{
@@ -181,6 +183,7 @@ namespace Bellows {
 		const UIElement* FindUIElement(UUID id) const;
 		bool CanTakeUIFocus(UUID id) const;
 		void ChangeUIFocus(UUID id, std::vector<UIEvent>& events);
+		void ScrollUIIntoView(UUID id);
 		void EmitUIEvents(const std::vector<UIEvent>& events);
 		void ResetUIInput();
 	private:

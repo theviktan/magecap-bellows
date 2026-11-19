@@ -1547,6 +1547,18 @@
 					"doc": "Whether the pointer and focus can reach it and everything under it"
 				},
 				{
+					"name": "width_sizing",
+					"kind": "property",
+					"type": "str",
+					"doc": "Inside a UILayout: 'fixed' keeps its own width, 'fill' shares the space left over"
+				},
+				{
+					"name": "height_sizing",
+					"kind": "property",
+					"type": "str",
+					"doc": "Inside a UILayout: 'fixed' keeps its own height, 'fill' shares the space left over"
+				},
+				{
 					"name": "focusable",
 					"kind": "property",
 					"type": "bool",
@@ -1631,10 +1643,108 @@
 					"doc": ""
 				},
 				{
+					"name": "slice_border",
+					"kind": "property",
+					"type": "list[float]",
+					"doc": "9-slice: the texture's edges [left, top, right, bottom] in texture pixels keep their size and only the middle stretches; 0 stretches all"
+				},
+				{
 					"name": "visible",
 					"kind": "property",
 					"type": "bool",
 					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "UILayout",
+			"doc": "Places the entity's children that have a UIRect: one under another, side by side, or in a grid",
+			"members": [
+				{
+					"name": "direction",
+					"kind": "property",
+					"type": "str",
+					"doc": "'vertical', 'horizontal' or 'grid'"
+				},
+				{
+					"name": "spacing",
+					"kind": "property",
+					"type": "float",
+					"doc": "Reference pixels between children"
+				},
+				{
+					"name": "padding",
+					"kind": "property",
+					"type": "list[float]",
+					"doc": "Space inside the edges: [left, top, right, bottom] in reference pixels"
+				},
+				{
+					"name": "main_alignment",
+					"kind": "property",
+					"type": "str",
+					"doc": "Where the children sit along the direction when none fills: 'start', 'center' or 'end'"
+				},
+				{
+					"name": "cross_alignment",
+					"kind": "property",
+					"type": "str",
+					"doc": "Where a child that doesn't fill sits across the direction: 'start', 'center' or 'end'"
+				},
+				{
+					"name": "columns",
+					"kind": "property",
+					"type": "int",
+					"doc": "Columns of a grid"
+				}
+			]
+		},
+		{
+			"name": "UIScroll",
+			"doc": "Scrolls and clips the entity's children; the mouse wheel scrolls it, and focus scrolls hidden UI into view",
+			"members": [
+				{
+					"name": "horizontal",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "vertical",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "scroll_position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "How far the content is scrolled, in reference pixels (kept in range when the UI is laid out; z unused)"
+				},
+				{
+					"name": "wheel_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Reference pixels per wheel notch"
+				},
+				{
+					"name": "show_scrollbars",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "content_size",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "The size of what it holds, in reference pixels, as of the last frame drawn (z unused)"
+				},
+				{
+					"name": "viewport_size",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "The size of the part in view, in reference pixels, as of the last frame drawn (z unused)"
 				}
 			]
 		},

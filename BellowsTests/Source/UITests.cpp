@@ -124,6 +124,88 @@ TEST_CASE("UI rect position and size keep the pivot in place")
 	CHECK(GetUIRectPosition(topLeft, cornerMin, cornerMax) == glm::vec2(20.0f, 20.0f));
 }
 
+TEST_CASE("UI layout containers place their children")
+{
+	const UIRectangle area { glm::vec2(100.0f, 50.0f), glm::vec2(500.0f, 350.0f) };	// 400 by 300
+	const auto item = [](float w, float h, UISizing width = UISizing::Fixed, UISizing height = UISizing::Fixed)
+	{
+		return UILayoutItem { glm::vec2(w, h), width, height };
+	};
+
+	SUBCASE("Vertical: one under another, with padding and spacing")
+	{
+		UILayoutSettings settings;
+		settings.Spacing = 10.0f;
+		settings.Padding = glm::vec4(20.0f, 30.0f, 20.0f, 30.0f);
+		glm::vec2 content;
+		const auto rects = ArrangeUILayout(settings, area, { item(100, 40), item(200, 60) }, 1.0f, &content);
+		CheckRect(rects[0], { 120.0f, 80.0f }, { 220.0f, 120.0f });
+		CheckRect(rects[1], { 120.0f, 130.0f }, { 320.0f, 190.0f });
+		CHECK(content == glm::vec2(240.0f, 170.0f));	// 200 wide + padding; 40 + 10 + 60 high + padding
+	}
+	SUBCASE("Vertical: fill shares what is left, and stretches across")
+	{
+		UILayoutSettings settings;
+		settings.Spacing = 10.0f;
+		const auto rects = ArrangeUILayout(settings, area, { item(100, 40), item(0, 0, UISizing::Fill, UISizing::Fill), item(0, 50, UISizing::Fill) }, 1.0f);
+		CheckRect(rects[0], { 100.0f, 50.0f }, { 200.0f, 90.0f });
+		CheckRect(rects[1], { 100.0f, 100.0f }, { 500.0f, 290.0f });	// 300 - 40 - 50 - 2 * 10 = 190
+		CheckRect(rects[2], { 100.0f, 300.0f }, { 500.0f, 350.0f });
+	}
+	SUBCASE("Horizontal: centered as a group, items centered across, at twice the scale")
+	{
+		UILayoutSettings settings;
+		settings.Direction = UILayoutDirection::Horizontal;
+		settings.Spacing = 10.0f;
+		settings.MainAlignment = UIAlignment::Center;
+		settings.CrossAlignment = UIAlignment::Center;
+		const auto rects = ArrangeUILayout(settings, area, { item(50, 20), item(40, 50) }, 2.0f);
+		// 100 + 20 + 80 = 200 wide of 400, so it starts 100 in; heights 40 and 100 of 300.
+		CheckRect(rects[0], { 200.0f, 180.0f }, { 300.0f, 220.0f });
+		CheckRect(rects[1], { 320.0f, 150.0f }, { 400.0f, 250.0f });
+	}
+	SUBCASE("Horizontal: aligned to the end")
+	{
+		UILayoutSettings settings;
+		settings.Direction = UILayoutDirection::Horizontal;
+		settings.MainAlignment = UIAlignment::End;
+		settings.CrossAlignment = UIAlignment::End;
+		const auto rects = ArrangeUILayout(settings, area, { item(50, 20) }, 1.0f);
+		CheckRect(rects[0], { 450.0f, 330.0f }, { 500.0f, 350.0f });
+	}
+	SUBCASE("Grid: equal columns, rows as tall as their tallest child")
+	{
+		UILayoutSettings settings;
+		settings.Direction = UILayoutDirection::Grid;
+		settings.Columns = 3;
+		settings.Spacing = 20.0f;
+		glm::vec2 content;
+		const auto rects = ArrangeUILayout(settings, area,
+			{ item(0, 40, UISizing::Fill), item(50, 60), item(0, 30, UISizing::Fill, UISizing::Fill), item(0, 50, UISizing::Fill) }, 1.0f, &content);
+		// (400 - 2 * 20) / 3 = 120 per column; row 0 is 60 high, row 1 is 50.
+		CheckRect(rects[0], { 100.0f, 50.0f }, { 220.0f, 90.0f });
+		CheckRect(rects[1], { 240.0f, 50.0f }, { 290.0f, 110.0f });
+		CheckRect(rects[2], { 380.0f, 50.0f }, { 500.0f, 110.0f });	// Fills its row's height
+		CheckRect(rects[3], { 100.0f, 130.0f }, { 220.0f, 180.0f });
+		CHECK(content.y == doctest::Approx(130.0f));
+	}
+	SUBCASE("Nothing to place, or no room")
+	{
+		CHECK(ArrangeUILayout(UILayoutSettings(), area, {}, 1.0f).empty());
+		const UIRectangle tiny { glm::vec2(0.0f), glm::vec2(10.0f) };
+		UILayoutSettings settings;
+		settings.Padding = glm::vec4(20.0f);
+		const auto rects = ArrangeUILayout(settings, tiny, { item(0, 0, UISizing::Fill, UISizing::Fill) }, 1.0f);
+		CHECK(rects[0].GetSize() == glm::vec2(0.0f));
+	}
+	for (UILayoutDirection direction : { UILayoutDirection::Vertical, UILayoutDirection::Horizontal, UILayoutDirection::Grid })
+		CHECK(UILayoutDirectionFromString(UILayoutDirectionToString(direction)) == direction);
+	for (UIAlignment alignment : { UIAlignment::Start, UIAlignment::Center, UIAlignment::End })
+		CHECK(UIAlignmentFromString(UIAlignmentToString(alignment)) == alignment);
+	CHECK(UISizingFromString("fill") == UISizing::Fill);
+	CHECK_FALSE(IsUISizingName("stretch"));
+}
+
 TEST_CASE("UI navigation moves to the nearest rect in the pressed direction")
 {
 	// A 2 by 2 grid of buttons and a wide one under it:
@@ -552,4 +634,82 @@ TEST_CASE("Stopping play gives every input back to the game")
 		CHECK(Input::GetCapture().Pointer);
 	}
 	CHECK(Input::GetCapture() == InputCapture());
+}
+
+TEST_CASE("Layouts and scroll areas place, clip and scroll a scene's UI")
+{
+	UIInputScene ui;
+	// The fixture's buttons would sit among the list's rows; only the rows take focus here.
+	ui.Play.GetComponent<UIRectComponent>().Focusable = false;
+	ui.Quit.GetComponent<UIRectComponent>().Focusable = false;
+	// A scrolling list in the panel: 6 rows of 60 under 10 of padding and spacing, in 300 of height.
+	Entity list = ui.AddRect("List", ui.Panel, { 0.0f, 0.0f }, { 400.0f, 300.0f });
+	auto& layout = list.AddComponent<UILayoutComponent>();
+	layout.Spacing = 10.0f;
+	layout.Padding = glm::vec4(10.0f);
+	auto& scroll = list.AddComponent<UIScrollComponent>();
+	std::vector<Entity> rows;
+	for (int i = 0; i < 6; i++)
+	{
+		Entity row = ui.AddRect(("Row " + std::to_string(i)).c_str(), list, { 0.0f, 0.0f }, { 0.0f, 60.0f });
+		auto& rect = row.GetComponent<UIRectComponent>();
+		rect.WidthSizing = UISizing::Fill;
+		rect.Focusable = true;
+		rows.push_back(row);
+	}
+	ui.Frame();
+
+	// The layout ignores the rows' own anchors and offsets: full width minus padding, stacked.
+	const auto rectOf = [](Entity e) { return e.GetComponent<UIRectComponent>().RuntimeRect; };
+	CHECK(rectOf(rows[0]).Min == glm::vec2(110.0f, 110.0f));
+	CHECK(rectOf(rows[0]).Max == glm::vec2(490.0f, 170.0f));
+	CHECK(rectOf(rows[1]).Min.y == doctest::Approx(180.0f));
+	// 6 * 60 + 5 * 10 + 2 * 10 = 430 of content in 300.
+	CHECK(scroll.RuntimeContentSize.y == doctest::Approx(430.0f));
+	CHECK(scroll.RuntimeViewportSize.y == doctest::Approx(300.0f));
+
+	SUBCASE("The wheel scrolls, and the position stays in range")
+	{
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 200.0f)); Input::InjectScroll(glm::vec2(0.0f, -1.0f)); });
+		CHECK(scroll.ScrollPosition.y == doctest::Approx(60.0f));
+		CHECK_FALSE(Input::GetScrollDelta() != glm::vec2(0.0f));	// The game doesn't see the wheel
+		ui.Frame();
+		CHECK(rectOf(rows[0]).Min.y == doctest::Approx(50.0f));
+		ui.Frame([] { Input::InjectScroll(glm::vec2(0.0f, -10.0f)); });
+		CHECK(scroll.ScrollPosition.y == doctest::Approx(130.0f));	// 430 - 300
+		scroll.ScrollPosition.y = -50.0f;
+		ui.Frame();
+		CHECK(scroll.ScrollPosition.y == doctest::Approx(0.0f));
+	}
+	SUBCASE("Scrolled-out rows can't be pointed at")
+	{
+		scroll.ScrollPosition.y = 130.0f;
+		ui.Frame();
+		// Row 1 now spans y 50-110, partly above the list, which starts at 100: above it, it is cut away.
+		CHECK(rectOf(rows[1]).Min.y == doctest::Approx(50.0f));
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 80.0f)); });
+		CHECK_FALSE(ui.SceneRef->GetUIHovered());
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 105.0f)); });
+		CHECK(ui.SceneRef->GetUIHovered() == rows[1]);
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(300.0f, 380.0f)); });
+		CHECK(ui.SceneRef->GetUIHovered() == rows[5]);
+	}
+	SUBCASE("Moving focus to a hidden row scrolls it into view")
+	{
+		REQUIRE(ui.SceneRef->SetUIFocus(rows[0]));
+		for (int i = 0; i < 5; i++)
+			ui.Tap(KeyCode::Down);
+		CHECK(ui.SceneRef->GetUIFocused() == rows[5]);
+		CHECK(scroll.ScrollPosition.y == doctest::Approx(130.0f));
+		ui.Frame();
+		CHECK(rectOf(rows[5]).Max.y <= 400.0f + 0.01f);
+		REQUIRE(ui.SceneRef->SetUIFocus(rows[0]));
+		CHECK(scroll.ScrollPosition.y == doctest::Approx(0.0f));
+	}
+	SUBCASE("Hidden children leave the layout")
+	{
+		rows[0].GetComponent<UIRectComponent>().Visible = false;
+		ui.Frame();
+		CHECK(rectOf(rows[1]).Min.y == doctest::Approx(110.0f));
+	}
 }

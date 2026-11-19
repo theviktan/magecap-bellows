@@ -431,10 +431,22 @@ namespace Bellows {
 			}
 		});
 
-		DrawComponent<UIRectComponent>(m_Editor, entity, ICON_SCAN, "UI Rect", [](UIRectComponent& c)
+		// Inside a layout container the rect's place comes from the layout, and only its sizing matters.
+		const Entity parent = entity.GetParent();
+		const bool inLayout = parent && parent.HasComponent<UILayoutComponent>();
+		DrawComponent<UIRectComponent>(m_Editor, entity, ICON_SCAN, "UI Rect", [inLayout](UIRectComponent& c)
 		{
 			if (UI::BeginPropertyGrid("UIRect"))
 			{
+				if (inLayout)
+				{
+					static const char* const c_Sizings[] = { "Fixed", "Fill" };
+					int widthSizing = static_cast<int>(c.WidthSizing), heightSizing = static_cast<int>(c.HeightSizing);
+					if (UI::PropertyCombo("Width", widthSizing, c_Sizings, 2, "Fixed: its own width (Size). Fill: a share of the space left over"))
+						c.WidthSizing = static_cast<UISizing>(widthSizing);
+					if (UI::PropertyCombo("Height", heightSizing, c_Sizings, 2, "Fixed: its own height (Size). Fill: a share of the space left over"))
+						c.HeightSizing = static_cast<UISizing>(heightSizing);
+				}
 				glm::vec2 position = GetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax);
 				if (UI::PropertyVec2("Position", position, 1.0f, "Where the pivot sits relative to the anchors, in reference pixels"))
 					SetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax, position);
@@ -468,7 +480,49 @@ namespace Bellows {
 					c.BorderWidth = std::max(c.BorderWidth, 0.0f);
 				if (c.BorderWidth > 0.0f)
 					UI::PropertyColor("Border Color", c.BorderColor);
+				if (!c.TexturePath.empty() && UI::PropertyVec4("9-Slice Border", c.SliceBorder, 0.25f,
+					"Left, top, right and bottom edges of the texture, in texture pixels, that keep their size while the middle stretches"))
+					c.SliceBorder = glm::max(c.SliceBorder, glm::vec4(0.0f));
 				UI::Property("Visible", c.Visible);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UILayoutComponent>(m_Editor, entity, ICON_LAYOUT_GRID, "UI Layout", [](UILayoutComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UILayout"))
+			{
+				static const char* const c_Directions[] = { "Vertical", "Horizontal", "Grid" };
+				int direction = static_cast<int>(c.Direction);
+				if (UI::PropertyCombo("Direction", direction, c_Directions, 3, "One under another, side by side, or in a grid filling rows left to right"))
+					c.Direction = static_cast<UILayoutDirection>(direction);
+				if (c.Direction == UILayoutDirection::Grid && UI::Property("Columns", c.Columns, 1, 64))
+					c.Columns = std::max(c.Columns, 1);
+				if (UI::Property("Spacing", c.Spacing, 0.5f, 0.0f, 10000.0f, "%.1f", "Reference pixels between children"))
+					c.Spacing = std::max(c.Spacing, 0.0f);
+				if (UI::PropertyVec4("Padding", c.Padding, 0.5f, "Left, top, right and bottom, in reference pixels"))
+					c.Padding = glm::max(c.Padding, glm::vec4(0.0f));
+				static const char* const c_Alignments[] = { "Start", "Center", "End" };
+				int mainAlignment = static_cast<int>(c.MainAlignment), crossAlignment = static_cast<int>(c.CrossAlignment);
+				if (UI::PropertyCombo("Main Alignment", mainAlignment, c_Alignments, 3, "Where the children sit along the direction when none fills"))
+					c.MainAlignment = static_cast<UIAlignment>(mainAlignment);
+				if (UI::PropertyCombo("Cross Alignment", crossAlignment, c_Alignments, 3, "Where a child that doesn't fill sits across the direction"))
+					c.CrossAlignment = static_cast<UIAlignment>(crossAlignment);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UIScrollComponent>(m_Editor, entity, ICON_LAYERS, "UI Scroll", [](UIScrollComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIScroll"))
+			{
+				UI::Property("Horizontal", c.Horizontal);
+				UI::Property("Vertical", c.Vertical);
+				if (UI::PropertyVec2("Scroll Position", c.ScrollPosition, 1.0f, "In reference pixels; kept in range"))
+					c.ScrollPosition = glm::max(c.ScrollPosition, glm::vec2(0.0f));
+				if (UI::Property("Wheel Speed", c.WheelSpeed, 1.0f, 0.0f, 10000.0f, "%.0f", "Reference pixels per wheel notch"))
+					c.WheelSpeed = std::max(c.WheelSpeed, 0.0f);
+				UI::Property("Show Scrollbars", c.ShowScrollbars);
 				UI::EndPropertyGrid();
 			}
 		});
@@ -720,6 +774,8 @@ namespace Bellows {
 		entry.operator()<UICanvasComponent>(ICON_MONITOR, "UI Canvas", "UI");
 		entry.operator()<UIRectComponent>(ICON_SCAN, "UI Rect", "UI");
 		entry.operator()<UIImageComponent>(ICON_IMAGE, "UI Image", "UI");
+		entry.operator()<UILayoutComponent>(ICON_LAYOUT_GRID, "UI Layout", "UI");
+		entry.operator()<UIScrollComponent>(ICON_LAYERS, "UI Scroll", "UI");
 	}
 
 }

@@ -259,14 +259,31 @@ canvas is screen text: its `size` is in reference pixels and its box is the enti
   as of the last frame drawn). An entity without a `UIRect` fills its parent's rect.
 * `UIImage`: a filled rectangle: `texture` (empty = plain color), `color` (multiplies the
   texture), `corner_radius` and `border_width` (reference pixels; the border is inside the rect),
-  `border_color`, `visible`.
+  `border_color`, `visible`, and `slice_border` (9-slice: `[left, top, right, bottom]` in texture
+  pixels; those edges keep their size, one texture pixel per reference pixel, and only the middle
+  stretches, so a framed panel texture fits any size; all 0 stretches the whole texture).
+* `UILayout`: arranges the entity's children that have a `UIRect` (hidden ones leave the layout):
+  `direction` (`"vertical"`, `"horizontal"` or `"grid"`, which fills rows left to right),
+  `spacing` and `padding` (`[left, top, right, bottom]`, reference pixels), `main_alignment` (where
+  the children sit along the direction when none fills) and `cross_alignment` (where a child that
+  doesn't fill sits across it): `"start"`, `"center"` or `"end"`; `columns` for a grid. Each child's
+  `UIRect.width_sizing` and `height_sizing` (`"fixed"`: its own `size`; `"fill"`: a share of the
+  space left over) say how big it is; the layout ignores its anchors and offsets otherwise. A grid
+  gives every column the same width and each row the height of its tallest child.
+* `UIScroll`: scrolls and clips the entity's children (laid out in its rect, or by its `UILayout`):
+  `vertical` (default) and `horizontal`, `scroll_position` (reference pixels, kept in range),
+  `wheel_speed` (reference pixels per wheel notch), `show_scrollbars`, and read-only `content_size`
+  and `viewport_size`. Nothing under it draws or can be pointed at outside its rect. The mouse wheel
+  scrolls the scroll area under the pointer, and keyboard or gamepad focus moving to something out of
+  view scrolls it in.
 
-Unknown scale modes raise `ValueError`. Python vectors for UI use x and y; z is ignored.
+Unknown scale modes, layout directions, alignments and sizings raise `ValueError`, and so do edge lists
+that aren't 4 numbers. Python vectors for UI use x and y; z is ignored.
 
 **UI input.** Each frame, before scripts run, the UI looks at the pointer, the keyboard and the
 gamepad, and the game only sees what the UI leaves it:
 * The pointer uses the frontmost interactable UI under it that stops it: one with a visible
-  `UIImage`, or a focusable `UIRect`. Text and bare rects let it through. While it is over such UI,
+  `UIImage`, a focusable `UIRect` or a `UIScroll`. Text and bare rects let it through. While it is over such UI,
   or a press started on it, the mouse buttons and wheel read as up for the game. A press that started
   in the game stays the game's until the button is let go.
 * Pressing and letting go on the same UI entity raises `clicked`; pressing on something focusable

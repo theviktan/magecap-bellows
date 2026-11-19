@@ -29,6 +29,8 @@ namespace Bellows {
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
 			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
 			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
+			if (entity.HasComponent<UIScrollComponent>()) return ICON_LAYERS;
+			if (entity.HasComponent<UILayoutComponent>()) return ICON_LAYOUT_GRID;
 			if (entity.HasComponent<UIImageComponent>()) return ICON_IMAGE;
 			if (entity.HasComponent<UIRectComponent>()) return ICON_SCAN;
 			if (entity.HasComponent<ScriptComponent>()) return ICON_FILE_CODE;
@@ -466,6 +468,28 @@ namespace Bellows {
 				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(300.0f, 60.0f));
 				label.AddComponent<TextComponent>().Size = TextComponent::DefaultScreenSize;
 				finish(label, "UI text");
+			}
+			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Vertical Layout"))
+			{
+				Entity group = createUI("Layout");
+				UIRectComponent& rect = group.GetComponent<UIRectComponent>();
+				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
+				group.AddComponent<UILayoutComponent>();
+				finish(group, "UI layout");
+			}
+			if (ImGui::MenuItem(ICON_LAYERS "  Scroll List"))
+			{
+				// A scrolling panel whose children stack and stretch across it.
+				Entity list = createUI("Scroll List");
+				UIRectComponent& rect = list.GetComponent<UIRectComponent>();
+				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
+				UIImageComponent& image = list.AddComponent<UIImageComponent>();
+				image.Color = glm::vec4(0.09f, 0.09f, 0.16f, 0.9f);
+				image.CornerRadius = 12.0f;
+				UILayoutComponent& layout = list.AddComponent<UILayoutComponent>();
+				layout.Padding = glm::vec4(12.0f);
+				list.AddComponent<UIScrollComponent>();
+				finish(list, "scroll list");
 			}
 			ImGui::EndMenu();
 		}

@@ -91,6 +91,40 @@ namespace Bellows::Scripting {
 			return UIScaleModeFromString(name);
 		}
 
+		inline UILayoutDirection RequireUILayoutDirection(const std::string& name)
+		{
+			if (!IsUILayoutDirectionName(name))
+				throw ScriptValueError("Unknown layout direction '" + name + "'. Directions: vertical, horizontal, grid");
+			return UILayoutDirectionFromString(name);
+		}
+
+		inline UIAlignment RequireUIAlignment(const std::string& name)
+		{
+			if (!IsUIAlignmentName(name))
+				throw ScriptValueError("Unknown alignment '" + name + "'. Alignments: start, center, end");
+			return UIAlignmentFromString(name);
+		}
+
+		inline UISizing RequireUISizing(const std::string& name)
+		{
+			if (!IsUISizingName(name))
+				throw ScriptValueError("Unknown sizing '" + name + "'. Sizings: fixed, fill");
+			return UISizingFromString(name);
+		}
+
+		// Four edges (left, top, right, bottom) as a list of four numbers, none below 0.
+		inline glm::vec4 RequireEdges(const std::vector<float>& values, const char* what)
+		{
+			if (values.size() != 4)
+				throw ScriptValueError(std::string(what) + " needs 4 numbers (left, top, right, bottom), but got " + std::to_string(values.size()));
+			return glm::max(glm::vec4(values[0], values[1], values[2], values[3]), glm::vec4(0.0f));
+		}
+
+		inline std::vector<float> ToList(const glm::vec4& value)
+		{
+			return { value.x, value.y, value.z, value.w };
+		}
+
 		// Script vectors are 3D; UI positions and sizes use x and y.
 		inline glm::vec3 ToScriptVector(const glm::vec2& value) { return glm::vec3(value, 0.0f); }
 
@@ -485,6 +519,12 @@ namespace Bellows::Scripting {
 			"Hidden rects hide everything under them too");
 		rect.Property("interactable", [](const UIRectRef& r) { return r.Get().Interactable; }, [](const UIRectRef& r, bool v) { r.Get().Interactable = v; },
 			"Whether the pointer and focus can reach it and everything under it");
+		rect.Property("width_sizing", [](const UIRectRef& r) { return std::string(UISizingToString(r.Get().WidthSizing)); },
+			[](const UIRectRef& r, const std::string& v) { r.Get().WidthSizing = Detail::RequireUISizing(v); },
+			"Inside a UILayout: 'fixed' keeps its own width, 'fill' shares the space left over");
+		rect.Property("height_sizing", [](const UIRectRef& r) { return std::string(UISizingToString(r.Get().HeightSizing)); },
+			[](const UIRectRef& r, const std::string& v) { r.Get().HeightSizing = Detail::RequireUISizing(v); },
+			"Inside a UILayout: 'fixed' keeps its own height, 'fill' shares the space left over");
 		rect.Property("focusable", [](const UIRectRef& r) { return r.Get().Focusable; }, [](const UIRectRef& r, bool v) { r.Get().Focusable = v; },
 			"Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer");
 		rect.ReadOnly("hovered", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIHovered() == e; },
@@ -511,7 +551,44 @@ namespace Bellows::Scripting {
 			[](const UIImageRef& r, float v) { r.Get().BorderWidth = std::max(v, 0.0f); }, "In reference pixels, drawn inside the rect");
 		image.Property("border_color", [](const UIImageRef& r) { return ColorValue { r.Get().BorderColor }; },
 			[](const UIImageRef& r, const ColorValue& v) { r.Get().BorderColor = v.Value; }, "");
+		image.Property("slice_border", [](const UIImageRef& r) { return Detail::ToList(r.Get().SliceBorder); },
+			[](const UIImageRef& r, const std::vector<float>& v) { r.Get().SliceBorder = Detail::RequireEdges(v, "slice_border"); },
+			"9-slice: the texture's edges [left, top, right, bottom] in texture pixels keep their size and only the middle stretches; 0 stretches all");
 		image.Property("visible", [](const UIImageRef& r) { return r.Get().Visible; }, [](const UIImageRef& r, bool v) { r.Get().Visible = v; }, "");
+
+		auto layout = api.template Class<UILayoutRef>("UILayout",
+			"Places the entity's children that have a UIRect: one under another, side by side, or in a grid");
+		layout.Property("direction", [](const UILayoutRef& r) { return std::string(UILayoutDirectionToString(r.Get().Direction)); },
+			[](const UILayoutRef& r, const std::string& v) { r.Get().Direction = Detail::RequireUILayoutDirection(v); }, "'vertical', 'horizontal' or 'grid'");
+		layout.Property("spacing", [](const UILayoutRef& r) { return r.Get().Spacing; }, [](const UILayoutRef& r, float v) { r.Get().Spacing = std::max(v, 0.0f); },
+			"Reference pixels between children");
+		layout.Property("padding", [](const UILayoutRef& r) { return Detail::ToList(r.Get().Padding); },
+			[](const UILayoutRef& r, const std::vector<float>& v) { r.Get().Padding = Detail::RequireEdges(v, "padding"); },
+			"Space inside the edges: [left, top, right, bottom] in reference pixels");
+		layout.Property("main_alignment", [](const UILayoutRef& r) { return std::string(UIAlignmentToString(r.Get().MainAlignment)); },
+			[](const UILayoutRef& r, const std::string& v) { r.Get().MainAlignment = Detail::RequireUIAlignment(v); },
+			"Where the children sit along the direction when none fills: 'start', 'center' or 'end'");
+		layout.Property("cross_alignment", [](const UILayoutRef& r) { return std::string(UIAlignmentToString(r.Get().CrossAlignment)); },
+			[](const UILayoutRef& r, const std::string& v) { r.Get().CrossAlignment = Detail::RequireUIAlignment(v); },
+			"Where a child that doesn't fill sits across the direction: 'start', 'center' or 'end'");
+		layout.Property("columns", [](const UILayoutRef& r) { return r.Get().Columns; }, [](const UILayoutRef& r, int v) { r.Get().Columns = std::max(v, 1); },
+			"Columns of a grid");
+
+		auto scroll = api.template Class<UIScrollRef>("UIScroll",
+			"Scrolls and clips the entity's children; the mouse wheel scrolls it, and focus scrolls hidden UI into view");
+		scroll.Property("horizontal", [](const UIScrollRef& r) { return r.Get().Horizontal; }, [](const UIScrollRef& r, bool v) { r.Get().Horizontal = v; }, "");
+		scroll.Property("vertical", [](const UIScrollRef& r) { return r.Get().Vertical; }, [](const UIScrollRef& r, bool v) { r.Get().Vertical = v; }, "");
+		scroll.Property("scroll_position", [](const UIScrollRef& r) { return Detail::ToScriptVector(r.Get().ScrollPosition); },
+			[](const UIScrollRef& r, const glm::vec3& v) { r.Get().ScrollPosition = glm::max(glm::vec2(v), glm::vec2(0.0f)); },
+			"How far the content is scrolled, in reference pixels (kept in range when the UI is laid out; z unused)");
+		scroll.Property("wheel_speed", [](const UIScrollRef& r) { return r.Get().WheelSpeed; },
+			[](const UIScrollRef& r, float v) { r.Get().WheelSpeed = std::max(v, 0.0f); }, "Reference pixels per wheel notch");
+		scroll.Property("show_scrollbars", [](const UIScrollRef& r) { return r.Get().ShowScrollbars; },
+			[](const UIScrollRef& r, bool v) { r.Get().ShowScrollbars = v; }, "");
+		scroll.ReadOnly("content_size", [](const UIScrollRef& r) { return Detail::ToScriptVector(r.Get().RuntimeContentSize); },
+			"The size of what it holds, in reference pixels, as of the last frame drawn (z unused)");
+		scroll.ReadOnly("viewport_size", [](const UIScrollRef& r) { return Detail::ToScriptVector(r.Get().RuntimeViewportSize); },
+			"The size of the part in view, in reference pixels, as of the last frame drawn (z unused)");
 
 		// --- Entity -----------------------------------------------------------
 		auto entity = api.template Class<ScriptEntity>("Entity", "A handle to an entity in a scene");
