@@ -428,6 +428,7 @@ namespace Bellows {
 				UI::Property("Sort Order", c.SortOrder, 0, 0, "Canvases with a higher sort order draw on top");
 				UI::Property("Visible", c.Visible);
 				UI::Property("Modal", c.Modal, "While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)");
+				UI::PropertyAsset("Theme", c.Theme, AssetType::Theme, "A .btheme file its widgets are drawn with; empty uses the built-in MageCap theme");
 				UI::EndPropertyGrid();
 			}
 		});
@@ -465,6 +466,7 @@ namespace Bellows {
 				UI::Property("Visible", c.Visible, "Hidden rects hide everything under them too");
 				UI::Property("Interactable", c.Interactable, "Whether the pointer and focus can reach it and what is under it");
 				UI::Property("Focusable", c.Focusable, "Can take keyboard and gamepad focus (Tab, arrows, d-pad)");
+				UI::Property("Style Class", c.StyleClass, "A named style of the canvas's theme, like primary or danger; empty for the plain style");
 				UI::EndPropertyGrid();
 			}
 		});

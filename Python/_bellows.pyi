@@ -951,6 +951,11 @@ class UICanvas:
     @modal.setter
     def modal(self, value: bool) -> None: ...
     @property
+    def theme(self) -> str:
+        """The .btheme asset its UI is drawn with; "" is the built-in one, Builtin/MageCap.btheme"""
+    @theme.setter
+    def theme(self, value: str) -> None: ...
+    @property
     def scale(self) -> float:
         """Screen pixels per reference pixel at the current screen size"""
 
@@ -1105,6 +1110,11 @@ class UIRect:
         """Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer"""
     @focusable.setter
     def focusable(self, value: bool) -> None: ...
+    @property
+    def style_class(self) -> str:
+        """A named style of its canvas's theme ("primary", "danger"); "" for the theme's plain style"""
+    @style_class.setter
+    def style_class(self, value: str) -> None: ...
     @property
     def hovered(self) -> bool:
         """True while the pointer is over it (and it is what the pointer would use)"""

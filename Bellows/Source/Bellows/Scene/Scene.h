@@ -6,6 +6,7 @@
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Renderer/SceneRenderer.h"
 #include "Bellows/UI/UILayout.h"
+#include "Bellows/UI/UITheme.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -195,6 +196,10 @@ namespace Bellows {
 		// Runs the open dropdown list, which takes every input while it is open.
 		void UpdateUIDropdownList(const glm::vec2& pointer, const glm::vec2& screen, std::vector<UIEvent>& events);
 		void SubmitUIDropdownList(SceneRenderer& renderer);
+		// The theme of the element's canvas, its style class (from its UIRect), and the state it shows.
+		const UITheme& GetUITheme(const UIElement& element) const;
+		const std::string& GetUIStyleClass(const UIElement& element) const;
+		UIWidgetState GetUIWidgetState(const UIElement& element) const;
 		// Text fields: typing and editing keys for the focused one, the caret placed (or a selection
 		// extended) by the pointer, the caret kept in view, and drawing.
 		void UpdateUITextInput(const UIElement& element, std::vector<UIEvent>& events);
@@ -218,6 +223,7 @@ namespace Bellows {
 		std::vector<UIElement> m_UIElements;
 		std::unordered_map<entt::entity, size_t> m_UIElementIndex;
 		std::unordered_set<entt::entity> m_UIEntities;
+		std::unordered_map<entt::entity, Ref<const UITheme>> m_UICanvasThemes;	// Each shown canvas's theme
 		entt::entity m_UIModalCanvas = entt::null;		// The top shown modal canvas
 		UUID m_UIHovered = 0;
 		UUID m_UIPressed = 0;

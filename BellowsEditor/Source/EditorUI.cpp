@@ -479,6 +479,7 @@ namespace Bellows::UI {
 			case AssetType::Audio:			return ICON_MUSIC;
 			case AssetType::Script:			return ICON_FILE_CODE;
 			case AssetType::Font:			return ICON_FILE_TYPE;
+			case AssetType::Theme:			return ICON_PALETTE;
 			default:						return ICON_FILE;
 		}
 	}
@@ -496,6 +497,7 @@ namespace Bellows::UI {
 			case AssetType::Audio:			return IM_COL32(170, 140, 245, 255);
 			case AssetType::Script:			return IM_COL32(120, 210, 230, 255);
 			case AssetType::Font:			return IM_COL32(235, 225, 200, 255);
+			case AssetType::Theme:			return IM_COL32(245, 135, 58, 255);
 			default:						return Theme::TextMuted;
 		}
 	}

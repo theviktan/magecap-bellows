@@ -4,6 +4,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Math/Math.h"
@@ -469,5 +470,63 @@ TEST_CASE("[gpu] Text inputs draw their text, placeholder, selection, caret and 
 	Input::ResetState();
 	Input::BeginFrame();
 	InputMap::SetActions({});
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] A canvas's theme and a rect's style class restyle the widgets they draw")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "UIThemeProject";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Themes" / "Loud.btheme", R"({
+		"Accent": "#00FF00",
+		"Toggle": { "Normal": { "Background": "#FF00FF" } },
+		"Dropdown": { "Normal": { "Background": "#FFFF00" } },
+		"Classes": { "cold": { "Toggle": { "Normal": { "Background": "#0000FF" } } } }
+	})"));
+	AssetManager::SetAssetDirectory(assets);
+	AssetManager::Invalidate("Themes/Loud.btheme");
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+	Ref<Scene> scene = CreateRef<Scene>("Themes");
+	Entity canvas = scene->CreateEntity("Canvas");
+	UICanvasComponent& canvasComponent = canvas.AddComponent<UICanvasComponent>();
+	canvasComponent.ScaleMode = UIScaleMode::ConstantPixels;
+	canvasComponent.Theme = "Themes/Loud.btheme";
+	Entity plain = CreateRect(*scene, "Plain", canvas, { 10.0f, 10.0f }, { 110.0f, 40.0f });
+	plain.AddComponent<UIToggleComponent>().On = false;
+	Entity cold = CreateRect(*scene, "Cold", canvas, { 10.0f, 60.0f }, { 110.0f, 90.0f });
+	cold.AddComponent<UIToggleComponent>().On = true;
+	cold.GetComponent<UIRectComponent>().StyleClass = "cold";
+	Entity dropdown = CreateRect(*scene, "Dropdown", canvas, { 10.0f, 110.0f }, { 200.0f, 140.0f });
+	dropdown.AddComponent<UIImageComponent>();
+	dropdown.AddComponent<UIDropdownComponent>().Options = { "One" };
+
+	const Image image = Render(renderer, *scene);
+	image.SavePNG(BellowsTests::GetTestOutputDirectory() / "UI_Themes.png");
+
+	const auto boxCenter = [](glm::vec2 min, glm::vec2 max)
+	{
+		const UIRectangle box = ComputeUIToggleBox(UIRectangle { min, max }, 1.0f);
+		const glm::vec2 center = (box.Min + box.Max) * 0.5f;
+		return glm::uvec2(center);
+	};
+	const glm::uvec2 plainBox = boxCenter({ 10.0f, 10.0f }, { 110.0f, 40.0f });
+	const glm::uvec2 coldBox = boxCenter({ 10.0f, 60.0f }, { 110.0f, 90.0f });
+	const UIRectangle coldRect = ComputeUIToggleBox(UIRectangle { { 10.0f, 60.0f }, { 110.0f, 90.0f } }, 1.0f);
+	CHECK(Near(image.GetPixel(plainBox.x, plainBox.y), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f)));
+	CHECK(Near(image.GetPixel(coldBox.x, coldBox.y), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f)));	// The check is the theme's accent
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(coldRect.Min.x) + 4, coldBox.y), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)));	// The class's box
+	CHECK(Near(image.GetPixel(100, 125), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f)));
+
+	// Without a theme the canvas draws with the default again.
+	canvasComponent.Theme.clear();
+	const Image plainImage = Render(renderer, *scene);
+	CHECK(Near(plainImage.GetPixel(plainBox.x, plainBox.y), UIColors::Navy));
+
+	AssetManager::SetAssetDirectory({});
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }

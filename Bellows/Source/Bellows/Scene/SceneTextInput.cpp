@@ -7,7 +7,6 @@
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Text/Font.h"
 #include "Bellows/Text/TextLayout.h"
-#include "Bellows/UI/UIStyle.h"
 #include "Bellows/UI/UITextEdit.h"
 #include "Bellows/UI/UIWidgets.h"
 
@@ -270,7 +269,8 @@ namespace Bellows {
 		auto& input = entity.GetComponent<UITextInputComponent>();
 		const auto* text = entity.TryGetComponent<TextComponent>();
 		const std::string& value = text ? text->Text : std::string();
-		const glm::vec4 color = text ? text->Color : UIColors::OffWhite;
+		const UITheme& theme = GetUITheme(element);
+		const glm::vec4 color = text ? text->Color : theme.TextColor;
 		const uint32_t entityID = entity.GetRenderID();
 		const UIRectangle areaClip = element.Clip.Intersect(view->Area);
 		const glm::vec4 textClip(areaClip.Min, areaClip.Max);
@@ -284,7 +284,7 @@ namespace Bellows {
 			const size_t first = UICharacterIndex(value, input.RuntimeSelection.Begin());
 			const size_t last = UICharacterIndex(value, input.RuntimeSelection.End());
 			UIRectStyle band;
-			band.Color = glm::vec4(glm::vec3(UIColors::Accent), 0.4f);
+			band.Color = glm::vec4(glm::vec3(theme.Accent), theme.Accent.a * 0.4f);
 			for (size_t line = LineOfCharacter(*view, first); line <= LineOfCharacter(*view, last); line++)
 			{
 				const size_t lineStart = view->LineFirstCharacter[line];

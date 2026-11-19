@@ -1486,6 +1486,12 @@
 					"doc": "While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)"
 				},
 				{
+					"name": "theme",
+					"kind": "property",
+					"type": "str",
+					"doc": "The .btheme asset its UI is drawn with; \"\" is the built-in one, Builtin/MageCap.btheme"
+				},
+				{
 					"name": "scale",
 					"kind": "property",
 					"type": "float",
@@ -1569,6 +1575,12 @@
 					"kind": "property",
 					"type": "bool",
 					"doc": "Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer"
+				},
+				{
+					"name": "style_class",
+					"kind": "property",
+					"type": "str",
+					"doc": "A named style of its canvas's theme (\"primary\", \"danger\"); \"\" for the theme's plain style"
 				},
 				{
 					"name": "hovered",
