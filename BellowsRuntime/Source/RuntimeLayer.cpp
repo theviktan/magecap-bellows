@@ -28,6 +28,7 @@ namespace Bellows {
 		m_Project->ApplyAudioSettings();
 		m_Project->ApplyInputSettings();
 
+		Scripting::SetStartedFromEditor(m_Options.StartedByEditor);
 		ScriptEngine::SetQuitHandler([](int exitCode) { Application::Get().Close(exitCode); });
 		ScriptEngine::SetLoadSceneHandler([this](const std::string& path)
 		{
@@ -66,6 +67,7 @@ namespace Bellows {
 		ScriptEngine::SetQuitHandler(nullptr);
 		ScriptEngine::SetLoadSceneHandler(nullptr);
 		ScriptEngine::SetScreenshotHandler(nullptr);
+		Scripting::SetStartedFromEditor(false);
 	}
 
 	bool RuntimeLayer::LoadScene(const std::string& assetPath)

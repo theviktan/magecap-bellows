@@ -23,6 +23,7 @@ namespace Bellows::Scripting {
 		Scene* s_ContextScene = nullptr;
 		uint64_t s_ContextSceneID = 0;
 		std::function<void(int)> s_QuitHandler;
+		bool s_StartedFromEditor = false;
 		std::function<bool(const std::string&)> s_LoadSceneHandler;
 		std::function<std::optional<Image>()> s_ScreenshotHandler;
 		float s_DeltaTime = 0.0f;
@@ -95,6 +96,8 @@ namespace Bellows::Scripting {
 	}
 
 	void SetQuitHandler(std::function<void(int)> handler) { s_QuitHandler = std::move(handler); }
+	void SetStartedFromEditor(bool started) { s_StartedFromEditor = started; }
+	bool IsStartedFromEditor() { return s_StartedFromEditor; }
 	void SetLoadSceneHandler(std::function<bool(const std::string&)> handler) { s_LoadSceneHandler = std::move(handler); }
 	void SetScreenshotHandler(std::function<std::optional<Image>()> handler) { s_ScreenshotHandler = std::move(handler); }
 

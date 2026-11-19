@@ -185,6 +185,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `scene_name()`, `is_playing()` | Current scene name; whether the game is running. |
 | `load_scene(path)` | Switches to another scene at the end of the frame. Returns `False` if it does not exist. |
 | `quit(exit_code=0)` | Quits the game (in the editor: stops play mode). |
+| `started_from_editor()` | `True` while the game plays in the editor: in its viewport, or in a game window the editor started. `False` in an exported game or a runtime started by hand. For tools that should behave differently while you develop (a crash reporter that ignores editor runs). |
 | `get_gravity()` / `set_gravity(Vec3)` | Scene gravity (default `(0, -9.81, 0)`). |
 | `raycast(origin, direction, max_distance=1000)` | First physics collider hit, as a `RaycastHit` (`entity`, `point`, `normal`, `distance`) or `None`. Play mode only. |
 

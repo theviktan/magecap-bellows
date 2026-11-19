@@ -1519,6 +1519,9 @@ def set_gravity(gravity: Vec3 | typing.Sequence[float]) -> None: ...
 
 def set_master_volume(volume: float) -> None: ...
 
+def started_from_editor() -> bool:
+    """True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"""
+
 def time() -> float:
     """Seconds since play started"""
 
