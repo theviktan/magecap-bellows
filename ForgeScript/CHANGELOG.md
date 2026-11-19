@@ -27,6 +27,11 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Picking one of two values (ForgeScript Roadmap item 4):
+- `set size to "big" if x > 3 otherwise "small"`. Only the picked value runs, so
+  `target.name if target otherwise "no one"` is safe. It binds looser than `or` and chains in
+  order. Before, a value followed by `if` was always a mistake, so no script changes meaning.
+
 Game math and data, like GDScript's and Python's:
 - `move_toward(from, to, step)` (numbers or vectors), `inverse_lerp`, `remap`, `smoothstep`,
   `wrap`, `snapped`, and `random_seed(n)` for repeatable random numbers.

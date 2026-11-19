@@ -113,3 +113,13 @@ TEST_CASE("PhrasePatterns")
 	CHECK(table.IsHeadWord("say"));
 	CHECK(!table.IsHeadWord("move"));
 }
+
+TEST_CASE("LexerInlineIfInsideBracketsHasNoEnd")
+{
+	// The 'if' picks a value, so the newline after the list item ends nothing and is skipped,
+	// while a real 'if' block inside a function in brackets keeps its newlines.
+	std::vector<TokenType> picked = Types("say [1 if yes otherwise 2,\n3]");
+	CHECK(std::count(picked.begin(), picked.end(), TokenType::Newline) == 1);
+	std::vector<TokenType> block = Types("say [function(x) if x then\nreturn 1\nend end]");
+	CHECK(std::count(block.begin(), block.end(), TokenType::Newline) == 3);
+}

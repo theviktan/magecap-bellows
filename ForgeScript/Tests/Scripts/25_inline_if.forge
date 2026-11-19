@@ -1,0 +1,60 @@
+# 'value if test otherwise other' picks one of two values.
+set health to 80
+say "healthy" if health > 50 otherwise "hurt"           # expect: healthy
+set health to 10
+say "healthy" if health > 50 otherwise "hurt"           # expect: hurt
+say 1 if yes else 2                                     # expect: 1
+
+# Only the value that is picked runs, so reading from nothing is safe.
+set target to nothing
+say target.name if target otherwise "no target"         # expect: no target
+set calls to 0
+function count_call()
+	add 1 to calls
+	return "called"
+end
+set ignored to count_call() if false otherwise "skipped"
+say ignored                                             # expect: skipped
+say calls                                               # expect: 0
+set used to "skipped" if false otherwise count_call()
+say used                                                # expect: called
+say calls                                               # expect: 1
+
+# Chains read in order, and it binds looser than 'and' / 'or'.
+function grade(score)
+	return "A" if score >= 90 otherwise "B" if score >= 80 otherwise "C"
+end
+say grade(95)                                           # expect: A
+say grade(85)                                           # expect: B
+say grade(20)                                           # expect: C
+say "on" if health > 5 and health < 20 otherwise "off"  # expect: on
+say (2 if true otherwise 3) * 10                        # expect: 20
+
+# Anywhere a value goes: lists, maps, calls, text, conditions.
+say [1 if true otherwise 0, 2]                          # expect: [1, 2]
+say { mood: "calm" if health > 5 otherwise "scared" }   # expect: {"mood": "calm"}
+say max(1 if false otherwise 7, 3)                      # expect: 7
+say "You are {"fine" if health > 5 otherwise "low"}."   # expect: You are fine.
+if (health if health > 0 otherwise 0) is 10 then
+	say "ten"                                           # expect: ten
+end
+
+# Inside a loop, each pass picks again.
+set labels to []
+for i from 1 to 3 do
+	add "odd" if i % 2 is 1 otherwise "even" to labels
+end
+say labels                                              # expect: ["odd", "even", "odd"]
+
+# On a block's first line, an 'if' right after the header still starts an 'if' block, as before.
+for each n in [7] if n > 5 then say n end end           # expect: 7
+for i from 1 to 1 if yes then say i end end             # expect: 1
+repeat 1 times if yes then say "again" end end          # expect: again
+if yes if yes then say "nested" end end                 # expect: nested
+set looped to 0
+while looped < 1 if yes then add 1 to looped end end
+say looped                                              # expect: 1
+
+# Inside a function written within brackets, and inside text.
+say [1, 5].map(function(x) return "big" if x > 3 otherwise "small" end)   # expect: ["small", "big"]
+say "{"one" if yes otherwise "two"} and {3 if no otherwise 4}"            # expect: one and 4

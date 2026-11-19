@@ -44,6 +44,14 @@ namespace ForgeScript {
 
 	const char* TokenTypeName(TokenType type);
 
+	// Whether an 'if' coming right after tokens[0 .. index) picks one of two values
+	// ("big" if x > 3 otherwise "small") rather than starting an 'if' block. It does when it follows a
+	// value, except on a block's first line before 'then' or 'do' (after the header of for, while,
+	// until, repeat, if, when or catch, or a function's parameters): there an 'if' starts the block's
+	// first statement, as it always has. The compiler, the lexer and the tools all use this one rule,
+	// so they agree on where blocks end.
+	bool IfPicksAValue(const std::vector<Token>& tokens, size_t index);
+
 	// Turns ForgeScript source code into a list of tokens.
 	// The whole file is tokenized up front so the compiler can look ahead (used for phrases).
 	class Lexer
@@ -91,6 +99,8 @@ namespace ForgeScript {
 		// "function ... end" written within the brackets, where they do.
 		enum class Nesting : uint8_t { Bracket, Block };
 		std::vector<Nesting> m_Nesting;
+		// The tokens so far, which IfPicksAValue looks back over.
+		std::vector<Token> m_Tokens;
 		TokenType m_PreviousType = TokenType::Newline;
 		std::string_view m_PreviousLexeme;
 	};
