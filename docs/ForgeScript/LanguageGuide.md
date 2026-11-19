@@ -849,6 +849,31 @@ end
 
 You can `fail` with any value, such as a map: `fail { code: 404, reason: "missing" }`.
 
+### Cleanup that always runs: finally
+
+Put code after `finally` when it must run however the `try` ends: normally, with an error, or because of `return`, `stop` or `skip`.
+
+```forge
+function save_slot(slot)
+	show_spinner()
+	try
+		save_data("slot {slot}", progress)
+	catch problem
+		say "Saving failed: {problem}"
+	finally
+		hide_spinner()      # runs whether saving worked or not
+	end
+end
+```
+
+- `finally` goes on its own line, after `catch` if there is one: `try ... catch problem ... finally ... end`.
+- With a `catch`, an error in the try code is caught first, then the finally code runs.
+- **Without a `catch`, the error is not caught.** The finally code runs and the error goes on, with its original line, to the next `try` around it (or is reported). This is different from `try ... end` with nothing after it, which ignores the error.
+- An error inside the catch code goes on in the same way, after the finally code.
+- `return` inside the try code works out the value first, then runs the finally code, then returns. So if the try code says `return score` and the finally code says `set score to 0`, you get back the old score.
+- A `return`, `stop` or `skip` inside the finally code itself takes over, and an error that was on its way is dropped. Keep finally code to cleanup.
+- `finally` is not a reserved word. If a script (or one it brings in with `use`) uses `finally` as a name, a line starting with `finally` keeps its old meaning there.
+
 `assert(condition, "message")` fails with the message when the condition is false. It is useful for checking your own assumptions.
 
 ---

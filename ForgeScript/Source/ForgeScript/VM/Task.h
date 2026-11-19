@@ -28,6 +28,8 @@ namespace ForgeScript {
 		size_t FrameCount = 0;
 		size_t StackSize = 0;
 		size_t CatchIp = 0;
+		// A 'finally' handler also receives where the error happened, so it can be raised again from there.
+		bool Finally = false;
 	};
 
 	enum class TaskState : uint8_t

@@ -99,6 +99,8 @@ namespace ForgeScript {
 		Trigger,         // u16 event name, u8 argument count
 		Use,             // u16 path constant, u8 bindAll (0 = push module, 1 = copy globals)
 		Between,         //                           value low high -> bool (both ends included, either order)
+		TryFinally,      // u16 offset to the finally code; on an error pushes the error and where it happened
+		Rethrow,         //                           error where -> (raises the error again from where it happened)
 	};
 
 	enum class TypeCheck : uint8_t

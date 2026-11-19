@@ -2059,7 +2059,23 @@ namespace ForgeScript {
 		}
 	}
 
-	void VM::ReportFailure(Task* task, const Value& error)
+	// Where an error happened, as a list: the file, the line, then the trace. A 'finally' handler keeps it
+	// with the error, so an error that goes on after the finally code is reported where it happened.
+	Value VM::DescribeWhere(Task* task)
+	{
+		std::string file;
+		int line = 0;
+		const std::vector<std::string> trace = BuildTrace(task, file, line);
+		Value where = MakeList();
+		std::vector<Value>& items = As<List>(where)->Items;
+		items.push_back(MakeText(file));
+		items.push_back(Value::FromNumber(line));
+		for (const std::string& entry : trace)
+			items.push_back(MakeText(entry));
+		return where;
+	}
+
+	void VM::ReportFailure(Task* task, const Value& error, const Value* where)
 	{
 		std::string message;
 		if (IsObjectType(error, ObjectType::String))
@@ -2068,7 +2084,22 @@ namespace ForgeScript {
 			message = "A " + TypeOf(error) + " was raised as an error.";
 		std::string file;
 		int line = 0;
-		std::vector<std::string> trace = BuildTrace(task, file, line);
+		std::vector<std::string> trace;
+		if (where && IsObjectType(*where, ObjectType::List) && As<List>(*where)->Items.size() >= 2)
+		{
+			const std::vector<Value>& items = As<List>(*where)->Items;
+			file = IsObjectType(items[0], ObjectType::String) ? As<String>(items[0])->Text : std::string();
+			line = items[1].IsNumber() ? static_cast<int>(items[1].AsNumber()) : 0;
+			for (size_t i = 2; i < items.size(); i++)
+			{
+				if (IsObjectType(items[i], ObjectType::String))
+					trace.push_back(As<String>(items[i])->Text);
+			}
+		}
+		else
+		{
+			trace = BuildTrace(task, file, line);
+		}
 
 		task->State = TaskState::Failed;
 		CloseUpvalues(task, 0);
@@ -2094,20 +2125,26 @@ namespace ForgeScript {
 			m_ErrorHandler(report);
 	}
 
-	bool VM::ThrowValue(Task* task, const Value& error)
+	// 'where' is given when the error is raised again after finally code, to keep where it first happened.
+	bool VM::ThrowValue(Task* task, const Value& error, const Value* where)
 	{
 		if (!task->Handlers.empty())
 		{
 			TryHandler handler = task->Handlers.back();
 			task->Handlers.pop_back();
+			// Worked out before the frames are unwound; allocating here is safe, as the collector only runs
+			// between instructions.
+			const Value place = handler.Finally ? (where ? *where : DescribeWhere(task)) : Value();
 			CloseUpvalues(task, handler.StackSize);
 			task->Frames.resize(handler.FrameCount);
 			task->Stack.resize(handler.StackSize);
 			task->Stack.push_back(error);
+			if (handler.Finally)
+				task->Stack.push_back(place);
 			task->Frames.back().Ip = handler.CatchIp;
 			return true;
 		}
-		ReportFailure(task, error);
+		ReportFailure(task, error, where);
 		return false;
 	}
 
@@ -2783,14 +2820,26 @@ namespace ForgeScript {
 					break;
 				}
 
-				case OpCode::TryBegin:
+				case OpCode::TryBegin: case OpCode::TryFinally:
 				{
 					uint16_t offset = FORGESCRIPT_READ_U16();
 					TryHandler handler;
 					handler.FrameCount = task->Frames.size();
 					handler.StackSize = stack.size();
 					handler.CatchIp = frame->Ip + offset;
+					handler.Finally = op == OpCode::TryFinally;
 					task->Handlers.push_back(handler);
+					break;
+				}
+				case OpCode::Rethrow:
+				{
+					const Value where = stack.back();
+					stack.pop_back();
+					const Value error = stack.back();
+					stack.pop_back();
+					if (!ThrowValue(task, error, &where))
+						return;
+					FORGESCRIPT_REFRESH();
 					break;
 				}
 				case OpCode::TryEnd:

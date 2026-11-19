@@ -81,7 +81,7 @@ namespace ForgeScript {
 				Keyword("to", "set x to 5, add 1 to score", "Part of set, add and counting loops."),
 				Keyword("trigger", "trigger event with values", "Sends an event: every matching when block runs right away."),
 				Keyword("true", "true", "The value for yes."),
-				Keyword("try", "try ... catch problem ... end", "Runs a block and catches any error inside it."),
+				Keyword("try", "try ... catch problem ... finally ... end", "Runs a block and catches any error inside it. Code after finally always runs, however the try ends; without catch the error then goes on."),
 				Keyword("until", "until done ... end, wait until ready", "Repeats until the condition is true, or waits until it is."),
 				Keyword("use", "use \"helpers\", use \"helpers\" as h", "Brings in another script's functions, phrases and kinds."),
 				Keyword("wait", "wait 2 seconds, wait 3 frames, wait until ready", "Pauses only this task while the game keeps running."),

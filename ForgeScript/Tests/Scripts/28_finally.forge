@@ -1,0 +1,140 @@
+# 'finally' code runs however the 'try' ends.
+function attempt(what)
+	try
+		say "try " + what
+		if what is "fail" then fail "boom" end
+		if what is "return" then return "returned early" end
+	catch problem
+		say "caught " + problem
+		if what is "fail" then return "returned from catch" end
+	finally
+		say "cleanup " + what
+	end
+	return "reached the end"
+end
+say attempt("normal")
+# expect: try normal
+# expect: cleanup normal
+# expect: reached the end
+say attempt("fail")
+# expect: try fail
+# expect: caught boom
+# expect: cleanup fail
+# expect: returned from catch
+say attempt("return")
+# expect: try return
+# expect: cleanup return
+# expect: returned early
+
+# stop and skip run it too, every time round.
+for each i in [1, 2, 3]
+	try
+		if i is 1 then skip end
+		if i is 3 then stop end
+		say "body {i}"
+	finally
+		say "finally {i}"
+	end
+end
+# expect: finally 1
+# expect: body 2
+# expect: finally 2
+# expect: finally 3
+
+# Without catch, the error goes on after the finally code.
+function risky()
+	try
+		fail "inner problem"
+	finally
+		say "risky cleanup"
+	end
+	say "never reached"
+end
+try
+	risky()
+catch problem
+	say "outer caught: " + problem
+end
+# expect: risky cleanup
+# expect: outer caught: inner problem
+
+# An error in the catch code goes on too, after the finally code.
+try
+	try
+		fail "first"
+	catch problem
+		fail "while handling " + problem
+	finally
+		say "still cleaned up"
+	end
+catch problem
+	say "outer caught: " + problem
+end
+# expect: still cleaned up
+# expect: outer caught: while handling first
+
+# Nested tries run their finally code from the inside out.
+function nested()
+	try
+		try
+			return 1
+		finally
+			say "inner finally"
+		end
+	finally
+		say "outer finally"
+	end
+end
+say nested()
+# expect: inner finally
+# expect: outer finally
+# expect: 1
+
+# The return value is worked out before the finally code runs.
+set score to 7
+function take_score()
+	try
+		return score
+	finally
+		set score to 0
+	end
+end
+say take_score()                                        # expect: 7
+say score                                               # expect: 0
+
+# The finally code has its own variables, and sees only what is visible where it is written.
+set label to "outside"
+function shadow()
+	try
+		set label_inside to "try variable"
+		return label_inside
+	finally
+		set cleanup_note to "note"
+		say label + " " + cleanup_note
+	end
+end
+say shadow()
+# expect: outside note
+# expect: try variable
+
+# stop in the finally code leaves the loop around the try.
+repeat 3 times
+	try
+		say "once"
+	finally
+		stop
+	end
+end
+say "left the loop"
+# expect: once
+# expect: left the loop
+
+# wait works inside it.
+try
+	say "before wait"
+finally
+	wait 0.01
+	say "after wait"
+end
+# expect: before wait
+# expect: after wait

@@ -309,3 +309,43 @@ TEST_CASE("LongTextWorksWithTheOtherForms")
 	CHECK(variables[1].Name == "speed");
 	CHECK_CONTAINS(CompileFails("say \"\"\"open\n").Message, "missing its closing \"\"\" quotes");
 }
+
+TEST_CASE("FinallyKeepsItsOldMeaningForANameCalledFinally")
+{
+	// Before 'finally' existed, a line starting with it used something named 'finally'. Where a script
+	// has such a name, it still does.
+	CHECK_EQ(Output("set finally to 3\ntry\n\tsay 1\n\tfinally\ncatch p\n\tsay p\nend\nsay \"done\"\n"), std::string("1\ndone\n"));
+	CHECK_EQ(Output("function finally()\n\tsay \"called\"\nend\ntry\n\tfinally()\nend\n"), std::string("called\n"));
+	// Without such a name, it starts the cleanup code.
+	CHECK_EQ(Output("try\n\tsay 1\nfinally\n\tsay 2\nend\n"), std::string("1\n2\n"));
+}
+
+TEST_CASE("CompileErrorsInFinally")
+{
+	CHECK_CONTAINS(CompileFails("try\n\tsay 1\nfinally\n\tsay 2\nfinally\n\tsay 3\nend\n").Message, "only one 'finally'");
+	CHECK_CONTAINS(CompileFails("try\n\tsay 1\nfinally\n\tsay 2\ncatch p\n\tsay 3\nend\n").Message, "Put 'catch' before 'finally'");
+	CHECK_CONTAINS(CompileFails("try\n\tsay 1\nfinally\n\tsay 2\n").Message, "missing its 'end'");
+
+	// The finally code is compiled once for each way out, but its mistakes are reported once.
+	VM vm;
+	const std::vector<CompileError> mistakes = vm.FindMistakes(
+		"function f(x)\n\ttry\n\t\tif x then return 1 end\n\t\tfail \"no\"\n\tcatch p\n\t\treturn 2\n\tfinally\n\t\tsay oops oops\n\tend\nend\n", "test.forge");
+	REQUIRE(mistakes.size() == 1);
+	CHECK_EQ(mistakes[0].Line, 8);
+}
+
+TEST_CASE("AnErrorThroughFinallyIsReportedWhereItHappened")
+{
+	VM vm;
+	ScriptError error;
+	std::string output;
+	vm.SetPrintHandler([&output](const std::string& text) { output += text + "\n"; });
+	vm.SetErrorHandler([&error](const ScriptError& e) { error = e; });
+	vm.RunInModule(vm.CreateModule("test"),
+		"function deep()\n\tsay [1][5]\nend\ntry\n\tdeep()\nfinally\n\tsay \"cleanup\"\nend\n", "test.forge");
+	CHECK_EQ(output, std::string("cleanup\n"));
+	CHECK_CONTAINS(error.Message, "outside the list");
+	CHECK_EQ(error.Line, 2);
+	REQUIRE(error.Trace.size() == 2);
+	CHECK_CONTAINS(error.Trace[0], "'deep'");
+}
