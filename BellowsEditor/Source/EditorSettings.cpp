@@ -165,6 +165,7 @@ namespace Bellows {
 		JsonRead(json, "AgentServerPort", settings.AgentServerPort);
 		JsonRead(json, "UIScale", settings.UIScale);
 		JsonRead(json, "ShowGrid", settings.ShowGrid);
+		JsonRead(json, "ShowUI", settings.ShowUI);
 		JsonRead(json, "CameraSpeed", settings.CameraSpeed);
 		JsonRead(json, "ShowContentFolderTree", settings.ShowContentFolderTree);
 		JsonRead(json, "LastProjectLocation", settings.LastProjectLocation);
@@ -192,6 +193,7 @@ namespace Bellows {
 		json["AgentServerPort"] = AgentServerPort;
 		json["UIScale"] = UIScale;
 		json["ShowGrid"] = ShowGrid;
+		json["ShowUI"] = ShowUI;
 		json["CameraSpeed"] = CameraSpeed;
 		json["ShowContentFolderTree"] = ShowContentFolderTree;
 		json["LastProjectLocation"] = LastProjectLocation;

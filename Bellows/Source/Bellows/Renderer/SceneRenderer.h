@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -67,6 +68,7 @@ namespace Bellows {
 		bool ShowGrid = false;
 		float GridCellSize = 1.0f;
 		bool ShowSelectionOutline = true;
+		bool ShowUI = true;					// Screen UI (the editor can hide it while editing the 3D scene)
 		glm::vec4 OutlineColor { 1.0f, 0.52f, 0.12f, 1.0f };
 	};
 
@@ -124,6 +126,16 @@ namespace Bellows {
 		float OutlineWidth = 0.0f;
 	};
 
+	// How a screen UI rectangle is drawn. Sizes are in output pixels; colors are sRGB with alpha. The
+	// border is drawn inside the rectangle, and the corner radius is capped at half the shorter side.
+	struct UIRectStyle
+	{
+		glm::vec4 Color { 1.0f };
+		float CornerRadius = 0.0f;
+		float BorderWidth = 0.0f;
+		glm::vec4 BorderColor { 0.0f, 0.0f, 0.0f, 1.0f };
+	};
+
 	struct SceneRendererStatistics
 	{
 		uint32_t DrawCalls = 0;
@@ -177,6 +189,17 @@ namespace Bellows {
 		void SubmitText(const Ref<Font>& font, const TextLayout& layout, const glm::mat4& layoutToWorld, const TextStyle& style,
 			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
 
+		// Screen UI, drawn over everything else in submission order, at the output resolution, after
+		// tonemapping, FXAA and the editor overlays (so it is never blurred, bloomed or tonemapped), and
+		// into the entity ID image. Positions are output pixels with (0, 0) at the top-left and y down. A
+		// clip rectangle (min xy, max xy in pixels) hides everything outside it. Nothing is drawn while
+		// SceneRendererSettings::ShowUI is off.
+		void SubmitUIRect(const glm::vec2& min, const glm::vec2& max, const UIRectStyle& style, const Ref<Texture2D>& texture = nullptr,
+			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
+		// 'origin' is where the layout's box (0, 0) lands; the layout's units must be output pixels.
+		void SubmitUIText(const Ref<Font>& font, const TextLayout& layout, const glm::vec2& origin, const TextStyle& style,
+			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
+
 		void SetSelectedEntities(const std::vector<uint32_t>& entityIDs);
 
 		// Records and submits all passes.
@@ -218,6 +241,27 @@ namespace Bellows {
 			uint32_t EntityID;
 		};
 
+		struct UIVertex
+		{
+			glm::vec2 Position;		// Output pixels
+			glm::vec2 TexCoord;
+			glm::vec4 Color;
+			glm::vec4 Color2;		// Border or outline color
+			glm::vec4 Shape;		// Rectangles: offset from the center, half size (pixels)
+			glm::vec4 Params;		// Corner radius, border width, outline width, 0 rectangle / 1 glyph
+			uint32_t EntityID;
+		};
+
+		// A run of UI vertices sharing a texture, a distance range and a clip rectangle.
+		struct UIDraw
+		{
+			nvrhi::IBindingSet* Set = nullptr;
+			float DistanceRange = 0.0f;
+			glm::ivec4 Scissor { 0 };		// min xy, max xy in pixels
+			uint32_t FirstVertex = 0;
+			uint32_t VertexCount = 0;
+		};
+
 		// One block of text: a run of vertices sharing a font, drawn far to near.
 		struct TextDraw
 		{
@@ -245,7 +289,13 @@ namespace Bellows {
 		void RenderTonemap(nvrhi::ICommandList* commandList);
 		void RenderText(nvrhi::ICommandList* commandList);
 		void RenderOverlays(nvrhi::ICommandList* commandList);
+		void RenderUI(nvrhi::ICommandList* commandList);
+		void RenderSelectionOutline(nvrhi::ICommandList* commandList);
+		// A texture and sampler set for the text and UI pipelines. 'owner' keeps the texture alive while
+		// the set exists; sets whose owner nothing else holds are dropped at the next BeginScene.
+		nvrhi::IBindingSet* GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner);
 		nvrhi::IBindingSet* GetTextBindingSet(const Ref<Font>& font);
+		void AddUIQuad(nvrhi::IBindingSet* set, float distanceRange, const glm::vec4* clipRect, const UIVertex (&corners)[4]);
 
 		void DrawFullscreen(nvrhi::ICommandList* commandList, nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* framebuffer,
 			nvrhi::IBindingSet* bindingSet, uint32_t width, uint32_t height);
@@ -277,6 +327,8 @@ namespace Bellows {
 		std::vector<LineVertex> m_LineVertices;
 		std::vector<TextVertex> m_TextVertices;
 		std::vector<TextDraw> m_TextDraws;
+		std::vector<UIVertex> m_UIVertices;
+		std::vector<UIDraw> m_UIDraws;
 		std::vector<uint32_t> m_SelectedEntities;
 		std::vector<Ref<Mesh>> m_FrameMeshes;			// Keeps submitted meshes alive until the frame is recorded
 		std::vector<Ref<Material>> m_FrameMaterials;
@@ -290,6 +342,7 @@ namespace Bellows {
 		nvrhi::InputLayoutHandle m_MeshInputLayout;
 		nvrhi::InputLayoutHandle m_LineInputLayout;
 		nvrhi::InputLayoutHandle m_TextInputLayout;
+		nvrhi::InputLayoutHandle m_UIInputLayout;
 
 		// Render targets
 		nvrhi::TextureHandle m_DepthTexture;
@@ -313,6 +366,7 @@ namespace Bellows {
 		nvrhi::FramebufferHandle m_FinalFramebuffer;
 		nvrhi::FramebufferHandle m_FinalDepthFramebuffer;
 		nvrhi::FramebufferHandle m_EntityIDDepthFramebuffer;	// Entity IDs + read-only depth (text picking)
+		nvrhi::FramebufferHandle m_EntityIDFramebuffer;		// Entity IDs alone (UI picking)
 		std::vector<nvrhi::FramebufferHandle> m_BloomFramebuffers;
 		std::vector<nvrhi::FramebufferHandle> m_ShadowFramebuffers;
 
@@ -327,6 +381,7 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_TonemapPipeline, m_FXAAPipeline;
 		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
 		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
+		nvrhi::GraphicsPipelineHandle m_UIPipeline, m_UIIDPipeline;
 
 		// Constant buffers
 		nvrhi::BufferHandle m_FrameBuffer;
@@ -340,6 +395,8 @@ namespace Bellows {
 		size_t m_LineVertexCapacity = 0;
 		nvrhi::BufferHandle m_TextVertexBuffer;
 		size_t m_TextVertexCapacity = 0;
+		nvrhi::BufferHandle m_UIVertexBuffer;
+		size_t m_UIVertexCapacity = 0;
 
 		// Binding sets
 		nvrhi::BindingSetHandle m_SceneSet;
@@ -350,13 +407,13 @@ namespace Bellows {
 		std::vector<nvrhi::BindingSetHandle> m_BloomDownsampleSets, m_BloomUpsampleSets;
 		nvrhi::BindingSetHandle m_TonemapSet, m_FXAASet;
 		nvrhi::BindingSetHandle m_GridSet, m_OutlineSet;
-		// One per font atlas; the font is kept so its texture outlives the set.
-		struct TextBinding
+		// One per texture (font atlases and UI images).
+		struct TextureBinding
 		{
-			Ref<Font> FontRef;
+			std::shared_ptr<const void> Owner;
 			nvrhi::BindingSetHandle Set;
 		};
-		std::unordered_map<const Font*, TextBinding> m_TextSets;
+		std::unordered_map<nvrhi::ITexture*, TextureBinding> m_TextureSets;
 	};
 
 }

@@ -324,6 +324,12 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['Text']) -> Text | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UIRect']) -> UIRect | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UIImage']) -> UIImage | None: ...
+    @typing.overload
     def get_component(self, component: type[_Component]) -> _Component | None: ...
     @typing.overload
     def get_component(self, component: str) -> typing.Any: ...
@@ -361,6 +367,12 @@ class Entity:
     def add_component(self, component: typing.Literal['AudioListener']) -> AudioListener: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Text']) -> Text: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UICanvas']) -> UICanvas: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIRect']) -> UIRect: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIImage']) -> UIImage: ...
     @typing.overload
     def add_component(self, component: type[_Component]) -> _Component: ...
     @typing.overload
@@ -739,7 +751,7 @@ class Text:
     def font(self, value: str) -> None: ...
     @property
     def size(self) -> float:
-        """The height of one em, in meters for world text"""
+        """The height of one em: meters for world text, reference pixels for screen text under a UI canvas"""
     @size.setter
     def size(self, value: float) -> None: ...
     @property
@@ -796,7 +808,7 @@ class Text:
     def visible(self, value: bool) -> None: ...
     @property
     def measured_size(self) -> Vec3:
-        """The size the text takes up (x width, y height), for fitting boxes and backgrounds to it"""
+        """The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it"""
 
 
 class Transform:
@@ -837,6 +849,119 @@ class Transform:
     def right(self) -> Vec3: ...
     @property
     def up(self) -> Vec3: ...
+
+
+class UICanvas:
+    """The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game"""
+    @property
+    def reference_size(self) -> Vec3:
+        """The screen size the UI is designed for, in reference pixels (x width, y height; z unused)"""
+    @reference_size.setter
+    def reference_size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def scale_mode(self) -> str:
+        """'fit_height', 'fit_width', 'expand' (the whole reference area fits) or 'constant_pixels'"""
+    @scale_mode.setter
+    def scale_mode(self, value: str) -> None: ...
+    @property
+    def sort_order(self) -> int:
+        """Canvases with a higher sort order draw on top"""
+    @sort_order.setter
+    def sort_order(self, value: int) -> None: ...
+    @property
+    def visible(self) -> bool: ...
+    @visible.setter
+    def visible(self, value: bool) -> None: ...
+    @property
+    def scale(self) -> float:
+        """Screen pixels per reference pixel at the current screen size"""
+
+
+class UIImage:
+    """A filled rectangle with optional rounded corners, border and texture, sized by the entity's UIRect"""
+    @property
+    def texture(self) -> str:
+        """An image in the assets stretched over the rect; empty draws a plain color"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def color(self) -> Vec4 | typing.Sequence[float]:
+        """Multiplies the texture"""
+    @color.setter
+    def color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def corner_radius(self) -> float:
+        """In reference pixels"""
+    @corner_radius.setter
+    def corner_radius(self, value: float) -> None: ...
+    @property
+    def border_width(self) -> float:
+        """In reference pixels, drawn inside the rect"""
+    @border_width.setter
+    def border_width(self, value: float) -> None: ...
+    @property
+    def border_color(self) -> Vec4 | typing.Sequence[float]: ...
+    @border_color.setter
+    def border_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def visible(self) -> bool: ...
+    @visible.setter
+    def visible(self, value: bool) -> None: ...
+
+
+class UIRect:
+    """Where a UI entity sits inside its parent: anchors are fractions of the parent ((0, 0) top-left, (1, 1) bottom-right), offsets are reference pixels from the anchored corners"""
+    @property
+    def anchor_min(self) -> Vec3:
+        """The parent's point the top-left corner follows (z unused)"""
+    @anchor_min.setter
+    def anchor_min(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def anchor_max(self) -> Vec3:
+        """The parent's point the bottom-right corner follows; different anchors stretch with the parent (z unused)"""
+    @anchor_max.setter
+    def anchor_max(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def pivot(self) -> Vec3:
+        """The point of the rect that stays put when its size changes ((0, 0) top-left, (1, 1) bottom-right; z unused)"""
+    @pivot.setter
+    def pivot(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def offset_min(self) -> Vec3:
+        """The top-left corner's distance from anchor_min (z unused)"""
+    @offset_min.setter
+    def offset_min(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def offset_max(self) -> Vec3:
+        """The bottom-right corner's distance from anchor_max (z unused)"""
+    @offset_max.setter
+    def offset_max(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def position(self) -> Vec3:
+        """Where the pivot sits relative to the anchors, in reference pixels (moves both offsets; z unused)"""
+    @position.setter
+    def position(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def size(self) -> Vec3:
+        """The size in reference pixels, keeping the pivot in place (with stretching anchors, the size beyond the stretched part; z unused)"""
+    @size.setter
+    def size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def visible(self) -> bool:
+        """Hidden rects hide everything under them too"""
+    @visible.setter
+    def visible(self, value: bool) -> None: ...
+    @property
+    def interactable(self) -> bool:
+        """Whether the pointer and keyboard can use it"""
+    @interactable.setter
+    def interactable(self, value: bool) -> None: ...
+    @property
+    def screen_position(self) -> Vec3:
+        """The top-left corner on screen, in pixels from the screen's top-left, as of the last frame drawn (z unused)"""
+    @property
+    def screen_size(self) -> Vec3:
+        """The size on screen in pixels, as of the last frame drawn (z unused)"""
 
 
 class Vec2:

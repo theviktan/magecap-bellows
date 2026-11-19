@@ -308,6 +308,7 @@ namespace Bellows {
 			if (UI::Property("Camera Speed", speed, 0.1f, 0.1f, 500.0f, "%.1f m/s", "Mouse wheel while flying (right mouse button) also changes it"))
 				m_Editor.GetCamera().SetFlySpeed(speed);
 			changed |= UI::Property("Show Grid", settings.ShowGrid);
+			changed |= UI::Property("Show Game UI", settings.ShowUI, "Draw the game's UI canvases over the 3D view while editing (the game camera always shows them)");
 			changed |= UI::Property("UI Scale", settings.UIScale, 0.01f, 0.0f, 3.0f, settings.UIScale <= 0.0f ? "Auto" : "%.2f", "Takes effect after a restart. 0 follows the monitor.");
 			UI::EndPropertyGrid();
 		}

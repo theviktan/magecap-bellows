@@ -974,6 +974,7 @@ namespace Bellows {
 		SceneRendererSettings& settings = m_ViewportRenderer->GetSettings();
 		settings.ShowGrid = m_Settings.ShowGrid && m_SceneState == SceneState::Edit;
 		settings.ShowSelectionOutline = !m_ViewportShowsGameView;
+		settings.ShowUI = m_ViewportShowsGameView || m_Settings.ShowUI;
 
 		std::vector<uint32_t> selectedIDs;
 		for (UUID uuid : m_Selection)
@@ -1640,6 +1641,7 @@ namespace Bellows {
 			}
 			ImGui::Separator();
 			ImGui::MenuItem(ICON_GRID_3X3 "  Grid", nullptr, &m_Settings.ShowGrid);
+			ImGui::MenuItem(ICON_MONITOR "  Game UI", nullptr, &m_Settings.ShowUI);
 			ImGui::MenuItem(ICON_BOX "  Collider Outlines", nullptr, &m_ShowColliders);
 			ImGui::MenuItem(ICON_ACTIVITY "  Statistics", nullptr, &m_ShowStatistics);
 			ImGui::Separator();
@@ -1939,12 +1941,15 @@ namespace Bellows {
 		endOverlay();
 
 		// View options, right aligned
-		const int viewButtons = m_SceneState == SceneState::Edit ? 3 : 4;
+		const int viewButtons = m_SceneState == SceneState::Edit ? 4 : 5;
 		const float viewWidth = buttonSize * static_cast<float>(viewButtons) + padding * static_cast<float>(viewButtons + 1);
 		const ImVec2 viewOrigin(m_ViewportPosition.x + m_ViewportSize.x - viewWidth - 10.0f * scale, origin.y);
 		beginOverlay("View", viewOrigin, viewButtons);
 		if (UI::IconButton(ICON_GRID_3X3, "Grid", m_Settings.ShowGrid))
 			m_Settings.ShowGrid = !m_Settings.ShowGrid;
+		ImGui::SameLine();
+		if (UI::IconButton(ICON_MONITOR, "Game UI (always shown through the game camera)", m_Settings.ShowUI))
+			m_Settings.ShowUI = !m_Settings.ShowUI;
 		ImGui::SameLine();
 		if (UI::IconButton(ICON_BOX, "Collider outlines", m_ShowColliders))
 			m_ShowColliders = !m_ShowColliders;
@@ -1971,8 +1976,9 @@ namespace Bellows {
 
 	void EditorLayer::DrawGizmo()
 	{
+		// UI entities are placed by their UI rect, not their transform, so the 3D gizmo would mislead.
 		Entity entity = GetPrimarySelection();
-		if (!entity || m_GizmoMode == GizmoMode::None || IsUsingGameCamera())
+		if (!entity || m_GizmoMode == GizmoMode::None || IsUsingGameCamera() || GetActiveScene()->IsInsideUICanvas(entity))
 		{
 			if (m_GizmoWasUsing && !ImGuizmo::IsUsing())
 				m_GizmoWasUsing = false;

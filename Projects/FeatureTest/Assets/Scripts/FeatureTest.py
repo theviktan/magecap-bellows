@@ -362,12 +362,41 @@ class FeatureTest(bellows.Script):
         self.check(raises(lambda: setattr(text, "alignment", "justify"), ValueError), "Text rejects unknown alignments")
         self.check(raises(lambda: setattr(text, "overflow", "scroll"), ValueError), "Text rejects unknown overflow")
 
+        canvas = entity.add_component(bellows.UICanvas)
+        self.check(close(canvas.reference_size, (1920.0, 1080.0, 0.0)) and canvas.scale_mode == "expand", "UICanvas defaults")
+        canvas.reference_size, canvas.scale_mode, canvas.sort_order = Vec3(1280.0, 720.0, 0.0), "constant_pixels", 4
+        self.check(close(canvas.reference_size, (1280.0, 720.0, 0.0)) and canvas.sort_order == 4 and canvas.visible, "UICanvas properties")
+        self.check(close(canvas.scale, 1.0), f"UICanvas.scale with constant pixels ({canvas.scale})")
+        canvas.scale_mode = "fit_height"
+        self.check(canvas.scale > 0.0, f"UICanvas.scale fitting the height ({canvas.scale})")
+        self.check(raises(lambda: setattr(canvas, "scale_mode", "stretch"), ValueError), "UICanvas rejects unknown scale modes")
+
+        rect = entity.add_component(bellows.UIRect)
+        self.check(close(rect.anchor_min, (0.5, 0.5, 0.0)) and close(rect.size, (200.0, 50.0, 0.0)) and rect.interactable, "UIRect defaults")
+        rect.anchor_min, rect.anchor_max, rect.pivot = Vec3(0.0, 1.0, 0.0), Vec3(2.0, 1.0, 0.0), Vec3(0.0, 1.0, 0.0)
+        self.check(close(rect.anchor_max, (1.0, 1.0, 0.0)), "UIRect anchors are clamped to 0-1")
+        rect.offset_min, rect.offset_max = Vec3(10.0, -60.0, 0.0), Vec3(-10.0, -10.0, 0.0)
+        self.check(close(rect.position, (10.0, -10.0, 0.0)) and close(rect.size, (-20.0, 50.0, 0.0)), "UIRect position and size from offsets")
+        rect.size = Vec3(0.0, 80.0, 0.0)
+        self.check(close(rect.offset_min, (10.0, -90.0, 0.0)) and close(rect.offset_max, (10.0, -10.0, 0.0)), "UIRect.size keeps the pivot in place")
+        rect.position = Vec3(20.0, -20.0, 0.0)
+        self.check(close(rect.offset_min, (20.0, -100.0, 0.0)) and close(rect.offset_max, (20.0, -20.0, 0.0)), "UIRect.position moves both offsets")
+        rect.visible, rect.interactable = False, False
+        self.check(not rect.visible and not rect.interactable, "UIRect visibility")
+
+        image = entity.add_component(bellows.UIImage)
+        image.texture, image.color, image.corner_radius = "Textures/GroundTiles.png", (0.1, 0.2, 0.3, 0.5), -4.0
+        image.border_width, image.border_color = 3.0, (1.0, 0.5, 0.0, 1.0)
+        self.check(image.texture == "Textures/GroundTiles.png" and close(image.color, (0.1, 0.2, 0.3, 0.5)), "UIImage properties")
+        self.check(close(image.corner_radius, 0.0) and close(image.border_width, 3.0) and close(image.border_color, (1.0, 0.5, 0.0, 1.0)),
+                   "UIImage corners (no negative radius) and border")
+
         script = entity.add_component(bellows.ScriptComponent)
         script.path, script.class_name = "Scripts/Spinner.py", "Spinner"
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner", "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text"]
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
             entity.remove_component(name)

@@ -242,6 +242,40 @@ namespace Bellows {
 				JsonRead(*it, "Visible", component.Visible);
 			}
 
+			if (auto it = json.find("UICanvas"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UICanvasComponent>();
+				JsonRead(*it, "ReferenceSize", component.ReferenceSize);
+				std::string scaleMode = UIScaleModeToString(component.ScaleMode);
+				JsonRead(*it, "ScaleMode", scaleMode);
+				component.ScaleMode = UIScaleModeFromString(scaleMode);
+				JsonRead(*it, "SortOrder", component.SortOrder);
+				JsonRead(*it, "Visible", component.Visible);
+			}
+
+			if (auto it = json.find("UIRect"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UIRectComponent>();
+				JsonRead(*it, "AnchorMin", component.AnchorMin);
+				JsonRead(*it, "AnchorMax", component.AnchorMax);
+				JsonRead(*it, "Pivot", component.Pivot);
+				JsonRead(*it, "OffsetMin", component.OffsetMin);
+				JsonRead(*it, "OffsetMax", component.OffsetMax);
+				JsonRead(*it, "Visible", component.Visible);
+				JsonRead(*it, "Interactable", component.Interactable);
+			}
+
+			if (auto it = json.find("UIImage"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UIImageComponent>();
+				JsonRead(*it, "Texture", component.TexturePath);
+				JsonRead(*it, "Color", component.Color);
+				JsonRead(*it, "CornerRadius", component.CornerRadius);
+				JsonRead(*it, "BorderWidth", component.BorderWidth);
+				JsonRead(*it, "BorderColor", component.BorderColor);
+				JsonRead(*it, "Visible", component.Visible);
+			}
+
 			if (auto it = json.find("Prefab"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<PrefabComponent>();
@@ -416,6 +450,38 @@ namespace Bellows {
 			j["OutlineWidth"] = c->OutlineWidth;
 			j["OutlineColor"] = c->OutlineColor;
 			j["FaceCamera"] = c->FaceCamera;
+			j["Visible"] = c->Visible;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UICanvasComponent>())
+		{
+			Json& j = json["UICanvas"];
+			j["ReferenceSize"] = c->ReferenceSize;
+			j["ScaleMode"] = UIScaleModeToString(c->ScaleMode);
+			j["SortOrder"] = c->SortOrder;
+			j["Visible"] = c->Visible;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIRectComponent>())
+		{
+			Json& j = json["UIRect"];
+			j["AnchorMin"] = c->AnchorMin;
+			j["AnchorMax"] = c->AnchorMax;
+			j["Pivot"] = c->Pivot;
+			j["OffsetMin"] = c->OffsetMin;
+			j["OffsetMax"] = c->OffsetMax;
+			j["Visible"] = c->Visible;
+			j["Interactable"] = c->Interactable;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIImageComponent>())
+		{
+			Json& j = json["UIImage"];
+			j["Texture"] = c->TexturePath;
+			j["Color"] = c->Color;
+			j["CornerRadius"] = c->CornerRadius;
+			j["BorderWidth"] = c->BorderWidth;
+			j["BorderColor"] = c->BorderColor;
 			j["Visible"] = c->Visible;
 		}
 

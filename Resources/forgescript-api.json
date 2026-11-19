@@ -1338,7 +1338,7 @@
 					"name": "size",
 					"kind": "property",
 					"type": "float",
-					"doc": "The height of one em, in meters for world text"
+					"doc": "The height of one em: meters for world text, reference pixels for screen text under a UI canvas"
 				},
 				{
 					"name": "color",
@@ -1411,7 +1411,160 @@
 					"kind": "property",
 					"type": "Vec3",
 					"readonly": true,
-					"doc": "The size the text takes up (x width, y height), for fitting boxes and backgrounds to it"
+					"doc": "The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it"
+				}
+			]
+		},
+		{
+			"name": "UICanvas",
+			"doc": "The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game",
+			"members": [
+				{
+					"name": "reference_size",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The screen size the UI is designed for, in reference pixels (x width, y height; z unused)"
+				},
+				{
+					"name": "scale_mode",
+					"kind": "property",
+					"type": "str",
+					"doc": "'fit_height', 'fit_width', 'expand' (the whole reference area fits) or 'constant_pixels'"
+				},
+				{
+					"name": "sort_order",
+					"kind": "property",
+					"type": "int",
+					"doc": "Canvases with a higher sort order draw on top"
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "scale",
+					"kind": "property",
+					"type": "float",
+					"readonly": true,
+					"doc": "Screen pixels per reference pixel at the current screen size"
+				}
+			]
+		},
+		{
+			"name": "UIRect",
+			"doc": "Where a UI entity sits inside its parent: anchors are fractions of the parent ((0, 0) top-left, (1, 1) bottom-right), offsets are reference pixels from the anchored corners",
+			"members": [
+				{
+					"name": "anchor_min",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The parent's point the top-left corner follows (z unused)"
+				},
+				{
+					"name": "anchor_max",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The parent's point the bottom-right corner follows; different anchors stretch with the parent (z unused)"
+				},
+				{
+					"name": "pivot",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The point of the rect that stays put when its size changes ((0, 0) top-left, (1, 1) bottom-right; z unused)"
+				},
+				{
+					"name": "offset_min",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The top-left corner's distance from anchor_min (z unused)"
+				},
+				{
+					"name": "offset_max",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The bottom-right corner's distance from anchor_max (z unused)"
+				},
+				{
+					"name": "position",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Where the pivot sits relative to the anchors, in reference pixels (moves both offsets; z unused)"
+				},
+				{
+					"name": "size",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The size in reference pixels, keeping the pivot in place (with stretching anchors, the size beyond the stretched part; z unused)"
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Hidden rects hide everything under them too"
+				},
+				{
+					"name": "interactable",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Whether the pointer and keyboard can use it"
+				},
+				{
+					"name": "screen_position",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "The top-left corner on screen, in pixels from the screen's top-left, as of the last frame drawn (z unused)"
+				},
+				{
+					"name": "screen_size",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "The size on screen in pixels, as of the last frame drawn (z unused)"
+				}
+			]
+		},
+		{
+			"name": "UIImage",
+			"doc": "A filled rectangle with optional rounded corners, border and texture, sized by the entity's UIRect",
+			"members": [
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "An image in the assets stretched over the rect; empty draws a plain color"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Multiplies the texture"
+				},
+				{
+					"name": "corner_radius",
+					"kind": "property",
+					"type": "float",
+					"doc": "In reference pixels"
+				},
+				{
+					"name": "border_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "In reference pixels, drawn inside the rect"
+				},
+				{
+					"name": "border_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": ""
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
 				}
 			]
 		},

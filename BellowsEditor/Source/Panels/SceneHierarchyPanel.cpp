@@ -27,7 +27,10 @@ namespace Bellows {
 			if (entity.HasComponent<PrefabComponent>()) return ICON_PACKAGE;
 			if (entity.HasComponent<MeshRendererComponent>()) return ICON_BOX;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
+			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
 			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
+			if (entity.HasComponent<UIImageComponent>()) return ICON_IMAGE;
+			if (entity.HasComponent<UIRectComponent>()) return ICON_SCAN;
 			if (entity.HasComponent<ScriptComponent>()) return ICON_FILE_CODE;
 			if (entity.HasComponent<RigidBodyComponent>()) return ICON_ATOM;
 			return ICON_CIRCLE;
@@ -417,6 +420,54 @@ namespace Bellows {
 		{
 			create("Text").AddComponent<TextComponent>();
 			m_Editor.CommitChange("Create text");
+		}
+
+		if (ImGui::BeginMenu(ICON_MONITOR "  UI"))
+		{
+			// UI elements live under a canvas: inside the selected one, or in a new canvas.
+			auto createUI = [&](const char* name) -> Entity
+			{
+				Entity uiParent = parent && scene->IsInsideUICanvas(parent) ? parent : Entity();
+				if (!uiParent)
+				{
+					uiParent = scene->CreateChildEntity(parent, "Canvas");
+					uiParent.AddComponent<UICanvasComponent>();
+				}
+				Entity entity = scene->CreateChildEntity(uiParent, name);
+				entity.AddComponent<UIRectComponent>();
+				return entity;
+			};
+			auto finish = [&](Entity entity, const char* name)
+			{
+				m_Editor.Select(entity);
+				m_Editor.CommitChange(std::string("Create ") + name);
+			};
+
+			if (ImGui::MenuItem(ICON_MONITOR "  Canvas"))
+			{
+				Entity canvas = scene->CreateChildEntity(parent, "Canvas");
+				canvas.AddComponent<UICanvasComponent>();
+				finish(canvas, "canvas");
+			}
+			if (ImGui::MenuItem(ICON_IMAGE "  Panel"))
+			{
+				Entity panel = createUI("Panel");
+				UIRectComponent& rect = panel.GetComponent<UIRectComponent>();
+				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
+				UIImageComponent& image = panel.AddComponent<UIImageComponent>();
+				image.Color = glm::vec4(0.09f, 0.09f, 0.16f, 0.9f);
+				image.CornerRadius = 12.0f;
+				finish(panel, "panel");
+			}
+			if (ImGui::MenuItem(ICON_TYPE "  Text"))
+			{
+				Entity label = createUI("Label");
+				UIRectComponent& rect = label.GetComponent<UIRectComponent>();
+				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(300.0f, 60.0f));
+				label.AddComponent<TextComponent>().Size = TextComponent::DefaultScreenSize;
+				finish(label, "UI text");
+			}
+			ImGui::EndMenu();
 		}
 	}
 

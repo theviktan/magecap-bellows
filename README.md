@@ -21,6 +21,8 @@ can drive end to end.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.
 * **Text**: crisp world-space text from any .ttf/.otf font (multi-channel signed distance fields),
   with wrapping, alignment, clipping, ellipsis, outlines and camera-facing labels.
+* **Game UI**: screen canvases that scale with the screen, rects anchored and stretched like Godot's,
+  rounded panels with borders and images, and screen text, drawn crisp over the game.
 * **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics and audio. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).

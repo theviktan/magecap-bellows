@@ -374,13 +374,18 @@ namespace Bellows {
 			}
 		});
 
-		DrawComponent<TextComponent>(m_Editor, entity, ICON_TYPE, "Text", [](TextComponent& c)
+		// Text inside a UI canvas is screen text: sized in reference pixels and boxed by its UI rect.
+		const bool screenText = entity.GetScene()->IsInsideUICanvas(entity);
+		DrawComponent<TextComponent>(m_Editor, entity, ICON_TYPE, "Text", [screenText](TextComponent& c)
 		{
 			if (UI::BeginPropertyGrid("Text"))
 			{
 				UI::PropertyMultiline("Text", c.Text);
 				UI::PropertyAsset("Font", c.FontPath, AssetType::Font, "A .ttf or .otf font; empty uses the built-in font (Inter)");
-				UI::Property("Size", c.Size, 0.01f, 0.0f, 1000.0f, "%.2f", "The height of one em, in meters (a line is about 1.2 em)");
+				if (screenText)
+					UI::Property("Size", c.Size, 0.5f, 0.0f, 1000.0f, "%.1f", "The height of one em, in reference pixels (a line is about 1.2 em)");
+				else
+					UI::Property("Size", c.Size, 0.01f, 0.0f, 1000.0f, "%.2f", "The height of one em, in meters (a line is about 1.2 em)");
 				UI::PropertyColor("Color", c.Color);
 				static const char* const c_Alignments[] = { "Left", "Center", "Right" };
 				int alignment = static_cast<int>(c.Alignment);
@@ -390,9 +395,9 @@ namespace Bellows {
 				int verticalAlignment = static_cast<int>(c.VerticalAlignment);
 				if (UI::PropertyCombo("Vertical Alignment", verticalAlignment, c_VerticalAlignments, 3))
 					c.VerticalAlignment = static_cast<TextVerticalAlignment>(verticalAlignment);
-				if (UI::PropertyVec2("Box Size", c.BoxSize, 0.01f, "Width and height of the text's box, in meters; 0 sizes it to the text"))
+				if (!screenText && UI::PropertyVec2("Box Size", c.BoxSize, 0.01f, "Width and height of the text's box, in meters; 0 sizes it to the text"))
 					c.BoxSize = glm::max(c.BoxSize, glm::vec2(0.0f));
-				UI::Property("Wrap", c.Wrap, "Wrap lines at the box's width");
+				UI::Property("Wrap", c.Wrap, screenText ? "Wrap lines at the UI rect's width" : "Wrap lines at the box's width");
 				static const char* const c_Overflows[] = { "Visible", "Clip", "Ellipsis" };
 				int overflow = static_cast<int>(c.Overflow);
 				if (UI::PropertyCombo("Overflow", overflow, c_Overflows, 3, "Text past the box: drawn anyway, cut at the box, or ended with \"...\""))
@@ -401,7 +406,66 @@ namespace Bellows {
 				UI::PropertySlider("Outline Width", c.OutlineWidth, 0.0f, 0.1f, "%.3f", "In ems");
 				if (c.OutlineWidth > 0.0f)
 					UI::PropertyColor("Outline Color", c.OutlineColor);
-				UI::Property("Face Camera", c.FaceCamera, "Always turned toward the camera, like a name over a character");
+				if (!screenText)
+					UI::Property("Face Camera", c.FaceCamera, "Always turned toward the camera, like a name over a character");
+				UI::Property("Visible", c.Visible);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UICanvasComponent>(m_Editor, entity, ICON_MONITOR, "UI Canvas", [](UICanvasComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UICanvas"))
+			{
+				if (UI::PropertyVec2("Reference Size", c.ReferenceSize, 1.0f, "The screen size this UI is designed for, in reference pixels"))
+					c.ReferenceSize = glm::max(c.ReferenceSize, glm::vec2(1.0f));
+				static const char* const c_ScaleModes[] = { "Fit Height", "Fit Width", "Expand", "Constant Pixels" };
+				int scaleMode = static_cast<int>(c.ScaleMode);
+				if (UI::PropertyCombo("Scale Mode", scaleMode, c_ScaleModes, 4,
+					"How the reference size meets the screen: fill its height, fill its width, fit all of it, or one pixel per pixel"))
+					c.ScaleMode = static_cast<UIScaleMode>(scaleMode);
+				UI::Property("Sort Order", c.SortOrder, 0, 0, "Canvases with a higher sort order draw on top");
+				UI::Property("Visible", c.Visible);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UIRectComponent>(m_Editor, entity, ICON_SCAN, "UI Rect", [](UIRectComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIRect"))
+			{
+				glm::vec2 position = GetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax);
+				if (UI::PropertyVec2("Position", position, 1.0f, "Where the pivot sits relative to the anchors, in reference pixels"))
+					SetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax, position);
+				glm::vec2 size = GetUIRectSize(c.OffsetMin, c.OffsetMax);
+				if (UI::PropertyVec2("Size", size, 1.0f, "In reference pixels; with stretching anchors, added to the stretched size"))
+					SetUIRectSize(c.Pivot, c.OffsetMin, c.OffsetMax, size);
+				if (UI::PropertyVec2("Anchor Min", c.AnchorMin, 0.01f, "The parent's point the top-left corner follows: (0, 0) top-left, (1, 1) bottom-right"))
+					c.AnchorMin = glm::clamp(c.AnchorMin, 0.0f, 1.0f);
+				if (UI::PropertyVec2("Anchor Max", c.AnchorMax, 0.01f, "The parent's point the bottom-right corner follows; different anchors stretch with the parent"))
+					c.AnchorMax = glm::clamp(c.AnchorMax, 0.0f, 1.0f);
+				if (UI::PropertyVec2("Pivot", c.Pivot, 0.01f, "The point of the rect that stays put when its size changes: (0, 0) top-left, (1, 1) bottom-right"))
+					c.Pivot = glm::clamp(c.Pivot, 0.0f, 1.0f);
+				UI::PropertyVec2("Offset Min", c.OffsetMin, 1.0f, "The top-left corner's distance from Anchor Min, in reference pixels");
+				UI::PropertyVec2("Offset Max", c.OffsetMax, 1.0f, "The bottom-right corner's distance from Anchor Max, in reference pixels");
+				UI::Property("Visible", c.Visible, "Hidden rects hide everything under them too");
+				UI::Property("Interactable", c.Interactable, "Whether the pointer and keyboard can use it");
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UIImageComponent>(m_Editor, entity, ICON_IMAGE, "UI Image", [](UIImageComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIImage"))
+			{
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "An image stretched over the rect; empty draws a plain color");
+				UI::PropertyColor("Color", c.Color, false, "Multiplies the texture");
+				if (UI::Property("Corner Radius", c.CornerRadius, 0.5f, 0.0f, 10000.0f, "%.1f", "In reference pixels"))
+					c.CornerRadius = std::max(c.CornerRadius, 0.0f);
+				if (UI::Property("Border Width", c.BorderWidth, 0.25f, 0.0f, 10000.0f, "%.1f", "In reference pixels, drawn inside the rect"))
+					c.BorderWidth = std::max(c.BorderWidth, 0.0f);
+				if (c.BorderWidth > 0.0f)
+					UI::PropertyColor("Border Color", c.BorderColor);
 				UI::Property("Visible", c.Visible);
 				UI::EndPropertyGrid();
 			}
@@ -616,6 +680,12 @@ namespace Bellows {
 						component.Offset = bounds.GetCenter();
 					}
 				}
+				if constexpr (std::is_same_v<T, TextComponent>)
+				{
+					// Screen text is sized in reference pixels, not meters.
+					if (entity.GetScene()->IsInsideUICanvas(entity))
+						component.Size = TextComponent::DefaultScreenSize;
+				}
 				m_Editor.CommitChange(std::string("Add ") + name);
 				ImGui::CloseCurrentPopup();
 			}
@@ -630,6 +700,7 @@ namespace Bellows {
 		entry.operator()<PointLightComponent>(ICON_LIGHTBULB, "Point Light", "Rendering");
 		entry.operator()<SpotLightComponent>(ICON_FLASHLIGHT, "Spot Light", "Rendering");
 		entry.operator()<SkyLightComponent>(ICON_CLOUD, "Sky Light", "Rendering");
+		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");
 		entry.operator()<RigidBodyComponent>(ICON_ATOM, "Rigid Body", "Physics");
@@ -642,7 +713,11 @@ namespace Bellows {
 		entry.operator()<ScriptComponent>(ICON_FILE_CODE, "Script", "Behavior");
 		entry.operator()<AudioSourceComponent>(ICON_VOLUME_2, "Audio Source", "Audio");
 		entry.operator()<AudioListenerComponent>(ICON_MUSIC, "Audio Listener", "Audio");
-		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
+		if (m_ComponentFilter.empty())
+			UI::SectionHeader("UI");
+		entry.operator()<UICanvasComponent>(ICON_MONITOR, "UI Canvas", "UI");
+		entry.operator()<UIRectComponent>(ICON_SCAN, "UI Rect", "UI");
+		entry.operator()<UIImageComponent>(ICON_IMAGE, "UI Image", "UI");
 	}
 
 }

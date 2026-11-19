@@ -4,6 +4,7 @@
 #include "Bellows/Core/Timestep.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Renderer/SceneRenderer.h"
+#include "Bellows/UI/UILayout.h"
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -11,6 +12,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Bellows {
@@ -82,11 +84,25 @@ namespace Bellows {
 		// While paused, advance the given number of frames.
 		void Step(uint32_t frames = 1) { m_StepFrames += frames; }
 
-		// Submits every renderable, light and the environment. Uses 'camera' as the view.
-		// 'submitExtras' runs before the frame is finished (editor overlays, debug lines).
-		// The text's layout, laid out again only when it changed; null when no font could be loaded.
+		// The text's world layout (Size and BoxSize as they are), laid out again only when it changed;
+		// null when no font could be loaded.
 		static const TextLayout* UpdateTextLayout(TextComponent& text);
+		// The size the text takes at its own Size, wrapped at BoxSize.x when that is set (meters for
+		// world text, reference pixels for screen text). Leaves the cached layout alone.
+		static glm::vec2 MeasureTextSize(TextComponent& text);
+		// Submits every renderable, light, the environment and the screen UI. Uses 'camera' as the view.
+		// 'submitExtras' runs before the frame is finished (editor overlays, debug lines).
 		void OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras = {});
+
+		// Lays out every UI canvas for a screen of 'screenSize' pixels: sets each UIRectComponent's
+		// RuntimeRect and the order UI elements are drawn in (OnRender does this every frame).
+		void UpdateUILayout(const glm::vec2& screenSize);
+		// True for a canvas and everything under it (until another canvas starts), as of the last layout.
+		bool IsUIEntity(Entity entity) const;
+		// The UI entities that are shown, in drawing order (back to front), as of the last layout.
+		std::vector<Entity> GetVisibleUIEntities();
+		// True for an entity that is a canvas or has one above it, from the hierarchy alone.
+		bool IsInsideUICanvas(Entity entity);
 		// Finds the primary camera entity and builds a RenderCamera for the given aspect ratio.
 		bool GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera);
 		Entity GetPrimaryCameraEntity();
@@ -124,7 +140,17 @@ namespace Bellows {
 		void FlushPendingDestroys();
 		void RemoveFromParentList(Entity entity);
 		void UpdateRuntimeCaches();
+		static const TextLayout* LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize);
+		void SubmitUI(SceneRenderer& renderer);
 	private:
+		// A visible UI entity and where it is drawn, in drawing order.
+		struct UIElement
+		{
+			entt::entity Handle = entt::null;
+			UIRectangle Rect;
+			float Scale = 1.0f;		// Screen pixels per reference pixel
+		};
+
 		uint64_t m_SceneID = 0;
 		std::string m_Name;
 		entt::registry m_Registry;
@@ -135,6 +161,9 @@ namespace Bellows {
 
 		uint32_t m_ViewportWidth = 1280;
 		uint32_t m_ViewportHeight = 720;
+
+		std::vector<UIElement> m_UIElements;
+		std::unordered_set<entt::entity> m_UIEntities;
 
 		bool m_IsRunning = false;
 		bool m_IsPaused = false;

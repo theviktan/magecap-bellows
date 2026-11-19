@@ -7,6 +7,7 @@
 #include "Bellows/Scene/ScriptField.h"
 #include "Bellows/Text/Font.h"
 #include "Bellows/Text/TextLayout.h"
+#include "Bellows/UI/UILayout.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -231,9 +232,13 @@ namespace Bellows {
 
 	// Text drawn with a font's distance-field atlas, crisp at any size. In the world, the text's box is
 	// centered on the entity, lies in its XY plane (readable from +Z) and follows its transform, or
-	// turns to face the camera.
+	// turns to face the camera. Inside a UI canvas it is screen text: Size is in reference pixels and the
+	// box is the entity's UI rectangle (BoxSize and FaceCamera are not used).
 	struct TextComponent
 	{
+		// A good starting size for screen text, in reference pixels (the editor uses it for new labels).
+		static constexpr float DefaultScreenSize = 32.0f;
+
 		std::string Text = "Text";
 		std::string FontPath;			// A .ttf or .otf in the assets; empty = the built-in Inter
 		float Size = 0.5f;				// One em, in meters (the height of a line is about 1.2 em)
@@ -256,6 +261,54 @@ namespace Bellows {
 		uint64_t RuntimeLayoutKey = 0;
 	};
 
+	// -------------------------------------------------------------------------
+	// Game UI
+	// -------------------------------------------------------------------------
+
+	// The root of a screen UI, drawn over the game at the screen's resolution. It covers the whole screen
+	// whatever its own parent is; its descendants with a UIRectComponent are laid out inside it, and a
+	// TextComponent among them is screen text. Canvases with a higher SortOrder draw on top.
+	struct UICanvasComponent
+	{
+		glm::vec2 ReferenceSize { 1920.0f, 1080.0f };	// The screen size the UI is designed for, in reference pixels
+		UIScaleMode ScaleMode = UIScaleMode::Expand;
+		int SortOrder = 0;
+		bool Visible = true;
+	};
+
+	// Where a UI entity sits inside its parent's rectangle (the canvas's screen for the top level).
+	// Anchors are fractions of the parent ((0, 0) its top-left, (1, 1) its bottom-right); offsets are
+	// in reference pixels from the anchored corners. Hidden rects hide their descendants too.
+	struct UIRectComponent
+	{
+		glm::vec2 AnchorMin { 0.5f };
+		glm::vec2 AnchorMax { 0.5f };
+		glm::vec2 Pivot { 0.5f };					// The point that stays put when the size changes
+		glm::vec2 OffsetMin { -100.0f, -25.0f };
+		glm::vec2 OffsetMax { 100.0f, 25.0f };
+		bool Visible = true;
+		bool Interactable = true;
+
+		// Runtime (not serialized): the rectangle on screen in pixels, from the last layout.
+		UIRectangle RuntimeRect;
+	};
+
+	// A filled rectangle with optional rounded corners, border and texture, sized by the entity's
+	// UIRectComponent (or filling its parent's rectangle without one).
+	struct UIImageComponent
+	{
+		std::string TexturePath;					// An image in the assets; empty = plain color
+		glm::vec4 Color { 1.0f };					// sRGB with alpha; multiplies the texture
+		float CornerRadius = 0.0f;					// Reference pixels
+		float BorderWidth = 0.0f;					// Reference pixels, drawn inside the rectangle
+		glm::vec4 BorderColor { 0.0f, 0.0f, 0.0f, 1.0f };
+		bool Visible = true;
+
+		// Runtime cache (not serialized)
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// Marks an entity instantiated from a prefab file.
 	struct PrefabComponent
 	{
@@ -271,7 +324,8 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, PrefabComponent>;
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,
+		UICanvasComponent, UIRectComponent, UIImageComponent, PrefabComponent>;
 
 	const char* RigidBodyTypeToString(RigidBodyType type);
 	RigidBodyType RigidBodyTypeFromString(std::string_view text);
