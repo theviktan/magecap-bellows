@@ -25,6 +25,7 @@
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include <glm/gtc/constants.hpp>
@@ -540,7 +541,13 @@ namespace Bellows {
 		m_DebugStopPending = false;
 		m_PausedByDebugger = false;
 		if (m_RuntimeScene)
+		{
+			// Like 'when destroyed', 'game quitting' runs to the end: code held at a breakpoint does not go
+			// on, and the handlers do not stop at breakpoints.
+			m_ScriptDebugger.EndSession();
+			Scripting::EmitGameQuitting();
 			m_RuntimeScene->OnRuntimeStop();
+		}
 		m_RuntimeScene.reset();
 		m_SceneState = SceneState::Edit;
 		m_PendingSceneLoad.reset();

@@ -64,6 +64,9 @@ namespace Bellows {
 		bool StepOut();
 		// Stops the next ForgeScript line that runs. False when not playing or already stopped.
 		bool Pause();
+		// Play is ending: held code does not go on, and nothing stops at a breakpoint for the rest of
+		// this play session, so quit handlers run to the end. The breakpoints stay set for the next one.
+		void EndSession();
 
 		// What the stopped script can see; empty when nothing is stopped. Frame 0 is the innermost call.
 		std::vector<ForgeScript::DebugFrame> GetCallStack() const;

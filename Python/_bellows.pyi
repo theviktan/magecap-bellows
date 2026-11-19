@@ -1333,6 +1333,9 @@ def log(*args: typing.Any) -> None:
 
 def log_error(*args: typing.Any) -> None: ...
 
+def log_folder() -> str:
+    """user_folder()/Logs, where a game playing in its own window writes Game.log, and Game.previous.log from its last run (playing inside the editor logs to the editor's Console instead)"""
+
 def log_warning(*args: typing.Any) -> None: ...
 
 def mouse_delta() -> Vec2:

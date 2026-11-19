@@ -122,6 +122,31 @@ namespace Bellows::Scripting {
 	// nesting, with the same limits as EmitScriptEvent.
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values);
 
+	// A script error, as each language's runtime reports it to scripts that watch for errors (a crash
+	// reporter). File is the script's asset path with forward slashes ("Scripts/player.py"), or a file
+	// name when the code is outside the assets; Line is 0 when unknown. Stack lists the calls, innermost
+	// first, each "file:line in function", or "file:line" for code at the top of a file.
+	struct ScriptErrorReport
+	{
+		std::string Message;
+		std::string File;
+		int Line = 0;
+		std::vector<std::string> Stack;
+		std::string Language;	// "python" or "forgescript"
+		std::string Name;		// The error's name (Python's exception class), or "" when it has none
+	};
+
+	// Broadcasts the 'script error' event with the values message, file, line, stack, language and
+	// name, in that order. The caller still logs the error. An error raised while a 'script error'
+	// handler runs is not sent again (it is only logged), so a broken handler cannot loop. Never throws.
+	void ReportScriptError(const ScriptErrorReport& report);
+
+	// Broadcasts 'game quitting' (no values) once, just before a normal quit: the window closing,
+	// quit(), the end of a --frames run, and the editor's Stop. It is not sent when load_scene() changes
+	// the scene. Handlers run to completion before anything shuts down, so they can still save or send
+	// over the network. Never throws.
+	void EmitGameQuitting();
+
 	// The scene that module-level functions (create_entity, find_entity, ...) operate on.
 	void SetContextScene(Scene* scene);
 	Scene* GetContextScene();			// May be null
@@ -139,6 +164,9 @@ namespace Bellows::Scripting {
 	// The game's own folder for saves, screenshots and reports, writable even when the game is
 	// installed read-only: <user data>/MageCapBellows/Games/<project name>.
 	std::filesystem::path GetUserFolder();
+	// GetUserFolder()/Logs: where a game playing in its own window writes Game.log and, from its last
+	// run, Game.previous.log.
+	std::filesystem::path GetLogFolder();
 	// Saves what the player sees as PNG (or JPEG for .jpg/.jpeg) and returns the absolute path.
 	// "" names it Screenshots/<scene>-<date>-<time>.png and a relative path is inside GetUserFolder().
 	// max_width > 0 scales a wider image down to that width. Throws ScriptValueError.
