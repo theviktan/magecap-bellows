@@ -8,6 +8,7 @@
 #include "Bellows/Text/Font.h"
 #include "Bellows/Text/TextLayout.h"
 #include "Bellows/UI/UILayout.h"
+#include "Bellows/UI/UIStyle.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -348,6 +349,43 @@ namespace Bellows {
 		glm::vec2 RuntimeViewportSize { 0.0f };
 	};
 
+	// --- Widgets. Each one can take focus and stops the pointer; clicking it (or ui_accept while it has
+	// focus) raises 'clicked'. A widget whose value changes raises 'changed' (value, widget). ---------
+
+	// Colors its UIImage by state: normal, under the pointer, held down, or not interactable.
+	struct UIButtonComponent
+	{
+		glm::vec4 NormalColor = UIColors::NavyLight;
+		glm::vec4 HoverColor = UIColors::Slate;
+		glm::vec4 PressedColor = UIColors::Accent;
+		glm::vec4 DisabledColor { 0.165f, 0.180f, 0.325f, 0.45f };
+	};
+
+	// A check box on the left of its rect (the rest is for its label, a Text on the same entity).
+	// Clicking flips On and raises 'changed' (on, widget).
+	struct UIToggleComponent
+	{
+		bool On = false;
+	};
+
+	// A horizontal track with a knob. Dragging, clicking the track, or ui_left / ui_right while it has
+	// focus change Value (snapped to Step, kept between Min and Max) and raise 'changed' (value, widget).
+	struct UISliderComponent
+	{
+		float Min = 0.0f;
+		float Max = 1.0f;
+		float Step = 0.0f;					// 0: any value; arrow keys then move a twentieth of the range
+		float Value = 0.0f;
+	};
+
+	// A button that opens a list of options. Its Text shows the selected option. Picking one raises
+	// 'changed' (index, widget).
+	struct UIDropdownComponent
+	{
+		std::vector<std::string> Options;
+		int Selected = 0;					// Index into Options; -1 shows nothing
+	};
+
 	// Marks an entity instantiated from a prefab file.
 	struct PrefabComponent
 	{
@@ -364,7 +402,8 @@ namespace Bellows {
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
 		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,
-		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent, PrefabComponent>;
+		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
+		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, PrefabComponent>;
 
 	const char* RigidBodyTypeToString(RigidBodyType type);
 	RigidBodyType RigidBodyTypeFromString(std::string_view text);

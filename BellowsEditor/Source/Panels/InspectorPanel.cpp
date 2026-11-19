@@ -11,6 +11,7 @@
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
+#include "Bellows/UI/UIWidgets.h"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -488,6 +489,72 @@ namespace Bellows {
 			}
 		});
 
+		DrawComponent<UIButtonComponent>(m_Editor, entity, ICON_MOUSE_POINTER_CLICK, "UI Button", [](UIButtonComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIButton"))
+			{
+				UI::PropertyColor("Normal Color", c.NormalColor, false, "Its UI Image's color when nothing is happening");
+				UI::PropertyColor("Hover Color", c.HoverColor, false, "Under the pointer");
+				UI::PropertyColor("Pressed Color", c.PressedColor, false, "Held down");
+				UI::PropertyColor("Disabled Color", c.DisabledColor, false, "When its UI Rect is not interactable");
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UIToggleComponent>(m_Editor, entity, ICON_SQUARE_CHECK, "UI Toggle", [](UIToggleComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIToggle"))
+			{
+				UI::Property("On", c.On);
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UISliderComponent>(m_Editor, entity, ICON_SLIDERS_HORIZONTAL, "UI Slider", [](UISliderComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UISlider"))
+			{
+				bool changed = UI::Property("Min", c.Min, 0.01f, 0.0f, 0.0f, "%.3f");
+				changed |= UI::Property("Max", c.Max, 0.01f, 0.0f, 0.0f, "%.3f");
+				changed |= UI::Property("Step", c.Step, 0.01f, 0.0f, 0.0f, "%.3f", "Values snap to steps from Min; 0 for any value");
+				changed |= UI::PropertySlider("Value", c.Value, std::min(c.Min, c.Max), std::max(c.Min, c.Max), "%.3f");
+				if (changed)
+				{
+					c.Step = std::max(c.Step, 0.0f);
+					c.Value = SnapUISliderValue(c.Value, c.Min, c.Max, c.Step);
+				}
+				UI::EndPropertyGrid();
+			}
+		});
+
+		DrawComponent<UIDropdownComponent>(m_Editor, entity, ICON_CHEVRONS_UP_DOWN, "UI Dropdown", [](UIDropdownComponent& c)
+		{
+			if (UI::BeginPropertyGrid("UIDropdown"))
+			{
+				std::string lines;
+				for (size_t i = 0; i < c.Options.size(); i++)
+					lines += (i > 0 ? "\n" : "") + c.Options[i];
+				if (UI::PropertyMultiline("Options", lines, 4, "One option per line"))
+				{
+					c.Options.clear();
+					size_t start = 0;
+					while (start <= lines.size())
+					{
+						const size_t end = std::min(lines.find('\n', start), lines.size());
+						c.Options.push_back(lines.substr(start, end - start));
+						start = end + 1;
+					}
+					if (c.Options.size() == 1 && c.Options[0].empty())
+						c.Options.clear();
+				}
+				const int last = static_cast<int>(c.Options.size()) - 1;
+				if (UI::Property("Selected", c.Selected, -1, std::max(last, -1), "The selected option's index; -1 for none"))
+					c.Selected = std::clamp(c.Selected, -1, last);
+				c.Selected = std::min(c.Selected, last);
+				UI::EndPropertyGrid();
+			}
+		});
+
 		DrawComponent<UILayoutComponent>(m_Editor, entity, ICON_LAYOUT_GRID, "UI Layout", [](UILayoutComponent& c)
 		{
 			if (UI::BeginPropertyGrid("UILayout"))
@@ -776,6 +843,10 @@ namespace Bellows {
 		entry.operator()<UIImageComponent>(ICON_IMAGE, "UI Image", "UI");
 		entry.operator()<UILayoutComponent>(ICON_LAYOUT_GRID, "UI Layout", "UI");
 		entry.operator()<UIScrollComponent>(ICON_LAYERS, "UI Scroll", "UI");
+		entry.operator()<UIButtonComponent>(ICON_MOUSE_POINTER_CLICK, "UI Button", "UI");
+		entry.operator()<UIToggleComponent>(ICON_SQUARE_CHECK, "UI Toggle", "UI");
+		entry.operator()<UISliderComponent>(ICON_SLIDERS_HORIZONTAL, "UI Slider", "UI");
+		entry.operator()<UIDropdownComponent>(ICON_CHEVRONS_UP_DOWN, "UI Dropdown", "UI");
 	}
 
 }

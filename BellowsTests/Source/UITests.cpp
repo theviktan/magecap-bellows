@@ -7,6 +7,7 @@
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/UI/UILayout.h"
+#include "Bellows/UI/UIWidgets.h"
 
 #include <functional>
 #include <string>
@@ -206,6 +207,47 @@ TEST_CASE("UI layout containers place their children")
 	CHECK_FALSE(IsUISizingName("stretch"));
 }
 
+TEST_CASE("UI widgets place their parts and snap slider values")
+{
+	CHECK(SnapUISliderValue(0.37f, 0.0f, 1.0f, 0.25f) == doctest::Approx(0.25f));
+	CHECK(SnapUISliderValue(0.38f, 0.0f, 1.0f, 0.25f) == doctest::Approx(0.5f));
+	CHECK(SnapUISliderValue(7.0f, 2.0f, 12.0f, 3.0f) == doctest::Approx(8.0f));	// Steps count from min
+	CHECK(SnapUISliderValue(99.0f, 0.0f, 10.0f, 0.0f) == doctest::Approx(10.0f));
+	CHECK(SnapUISliderValue(5.0f, 10.0f, 0.0f, 0.0f) == doctest::Approx(5.0f));	// Min and max either way round
+	CHECK(SnapUISliderValue(std::nanf(""), 0.0f, 1.0f, 0.0f) == doctest::Approx(0.0f));
+	CHECK(UISliderKeyStep(0.0f, 100.0f, 0.0f) == doctest::Approx(5.0f));
+	CHECK(UISliderKeyStep(0.0f, 100.0f, 2.0f) == doctest::Approx(2.0f));
+
+	// A 220 by 40 slider: a 10 pixel knob keeps the track 10 in from each end.
+	const UIRectangle slider { glm::vec2(100.0f, 50.0f), glm::vec2(320.0f, 90.0f) };
+	const UISliderGeometry geometry = ComputeUISliderGeometry(slider, 0.5f, 0.0f, 1.0f, 1.0f);
+	CHECK(geometry.Track.Min.x == doctest::Approx(110.0f));
+	CHECK(geometry.Track.Max.x == doctest::Approx(310.0f));
+	CHECK(geometry.Knob == glm::vec2(210.0f, 70.0f));
+	CHECK(UISliderValueAt(slider, 210.0f, 0.0f, 1.0f, 0.0f, 1.0f) == doctest::Approx(0.5f));
+	CHECK(UISliderValueAt(slider, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f) == doctest::Approx(0.0f));
+	CHECK(UISliderValueAt(slider, 500.0f, 0.0f, 10.0f, 1.0f, 1.0f) == doctest::Approx(10.0f));
+	CHECK(UISliderValueAt(slider, 175.0f, 0.0f, 10.0f, 1.0f, 1.0f) == doctest::Approx(3.0f));	// 3.25 snaps to 3
+
+	const UIRectangle toggle { glm::vec2(0.0f, 0.0f), glm::vec2(300.0f, 40.0f) };
+	const UIRectangle box = ComputeUIToggleBox(toggle, 1.0f);
+	CHECK(box.GetSize() == glm::vec2(28.0f));
+	CHECK(box.Min == glm::vec2(0.0f, 6.0f));
+	CHECK(ComputeUIToggleLabelArea(toggle, 1.0f).Min.x == doctest::Approx(40.0f));
+
+	// A dropdown near the bottom opens upward; one with room below opens downward.
+	const glm::vec2 screen(800.0f, 600.0f);
+	const UIRectangle low { glm::vec2(100.0f, 500.0f), glm::vec2(300.0f, 540.0f) };
+	const UIRectangle list = ComputeUIDropdownList(low, 3, screen);
+	CHECK(list.Min == glm::vec2(100.0f, 380.0f));
+	CHECK(list.Max == glm::vec2(300.0f, 500.0f));
+	CHECK(UIDropdownRowAt(list, 3, glm::vec2(150.0f, 385.0f)) == 0);
+	CHECK(UIDropdownRowAt(list, 3, glm::vec2(150.0f, 499.0f)) == 2);
+	CHECK(UIDropdownRowAt(list, 3, glm::vec2(350.0f, 450.0f)) == -1);
+	const UIRectangle high { glm::vec2(100.0f, 50.0f), glm::vec2(300.0f, 90.0f) };
+	CHECK(ComputeUIDropdownList(high, 3, screen).Min.y == doctest::Approx(90.0f));
+}
+
 TEST_CASE("UI navigation moves to the nearest rect in the pressed direction")
 {
 	// A 2 by 2 grid of buttons and a wide one under it:
@@ -350,6 +392,7 @@ namespace {
 			std::string Name;
 			UUID Source = 0;
 			UUID Target = 0;
+			Scripting::ScriptValueList Values;
 		};
 
 		Ref<Scene> SceneRef = CreateRef<Scene>("UI input");
@@ -375,10 +418,10 @@ namespace {
 
 			SceneRef->OnViewportResize(800, 600);
 			SceneRef->OnRuntimeStart();
-			Listener = Scripting::AddScriptEventListener([this](const std::string& name, const Scripting::ScriptValueList&,
+			Listener = Scripting::AddScriptEventListener([this](const std::string& name, const Scripting::ScriptValueList& values,
 				const Scripting::ScriptEventDelivery& delivery)
 			{
-				Events.push_back({ name, delivery.Source ? delivery.Source->ID : UUID(0), delivery.Target ? delivery.Target->ID : UUID(0) });
+				Events.push_back({ name, delivery.Source ? delivery.Source->ID : UUID(0), delivery.Target ? delivery.Target->ID : UUID(0), values });
 			});
 		}
 
@@ -421,6 +464,21 @@ namespace {
 		{
 			Frame([&] { Input::InjectKey(key, true); });
 			Frame([&] { Input::InjectKey(key, false); });
+		}
+
+		// The first value of each 'changed' raised by 'source' (delivered to it), checking each ends with it.
+		Scripting::ScriptValueList ChangesFrom(Entity source) const
+		{
+			Scripting::ScriptValueList changes;
+			for (const Received& event : Events)
+			{
+				if (event.Name != "changed" || event.Source != source.GetUUID() || event.Target != source.GetUUID())
+					continue;
+				REQUIRE(event.Values.size() == 2);
+				CHECK(event.Values[1] == Scripting::ScriptValue(Scripting::ScriptEntity(source)));
+				changes.push_back(event.Values[0]);
+			}
+			return changes;
 		}
 
 		// The names of the recorded events raised by 'source', delivered to that entity itself.
@@ -711,5 +769,113 @@ TEST_CASE("Layouts and scroll areas place, clip and scroll a scene's UI")
 		rows[0].GetComponent<UIRectComponent>().Visible = false;
 		ui.Frame();
 		CHECK(rectOf(rows[1]).Min.y == doctest::Approx(110.0f));
+	}
+}
+
+TEST_CASE("UI widgets: toggles flip, sliders drag and step, dropdowns open and pick")
+{
+	using Scripting::ScriptValue;
+	using Values = Scripting::ScriptValueList;
+	UIInputScene ui;
+	// Toggle (150, 315)-(450, 345) and slider (150, 355)-(450, 385) in the panel, under the buttons;
+	// dropdown (550, 100)-(750, 140) on the canvas, its list (550, 140)-(750, 260) below it.
+	Entity toggle = ui.AddRect("Sound", ui.Panel, { 50.0f, 215.0f }, { 350.0f, 245.0f });
+	toggle.AddComponent<UIToggleComponent>();
+	Entity slider = ui.AddRect("Volume", ui.Panel, { 50.0f, 255.0f }, { 350.0f, 285.0f });
+	slider.AddComponent<UISliderComponent>().Step = 0.25f;
+	Entity dropdown = ui.AddRect("Quality", ui.Canvas, { 550.0f, 100.0f }, { 750.0f, 140.0f });
+	dropdown.AddComponent<UIDropdownComponent>().Options = { "Low", "Medium", "High" };
+	dropdown.AddComponent<TextComponent>().Text = "Low";
+	ui.Frame();
+
+	SUBCASE("A toggle flips on each click and says so")
+	{
+		ui.Click(glm::vec2(300.0f, 330.0f));
+		CHECK(toggle.GetComponent<UIToggleComponent>().On);
+		CHECK(ui.SceneRef->GetUIFocused() == toggle);
+		ui.Click(glm::vec2(300.0f, 330.0f));
+		CHECK_FALSE(toggle.GetComponent<UIToggleComponent>().On);
+		CHECK(ui.ChangesFrom(toggle) == Values { ScriptValue(true), ScriptValue(false) });
+		CHECK(ui.EventsFrom(toggle) == Names { "focused", "clicked", "changed", "clicked", "changed" });
+
+		// ui_accept flips the focused toggle too; a toggle that is not interactable ignores everything.
+		ui.Tap(KeyCode::Enter);
+		CHECK(toggle.GetComponent<UIToggleComponent>().On);
+		toggle.GetComponent<UIRectComponent>().Interactable = false;
+		ui.Click(glm::vec2(300.0f, 330.0f));
+		CHECK(toggle.GetComponent<UIToggleComponent>().On);
+	}
+	SUBCASE("A slider follows a drag, snapped to its step, even past its ends")
+	{
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(150.0f, 370.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK(slider.GetComponent<UISliderComponent>().Value == 0.0f);
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(310.0f, 370.0f)); });
+		CHECK(slider.GetComponent<UISliderComponent>().Value == 0.5f);
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(700.0f, 500.0f)); });
+		CHECK(slider.GetComponent<UISliderComponent>().Value == 1.0f);
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+		// No change, no event: the press at 0 sent nothing.
+		CHECK(ui.ChangesFrom(slider) == Values { ScriptValue(0.5), ScriptValue(1.0) });
+		CHECK(ui.SceneRef->GetUIFocused() == slider);
+
+		// Focused, left and right move it a step instead of moving focus.
+		ui.Tap(KeyCode::Left);
+		CHECK(slider.GetComponent<UISliderComponent>().Value == 0.75f);
+		CHECK(ui.SceneRef->GetUIFocused() == slider);
+		ui.Tap(KeyCode::Right);
+		ui.Tap(KeyCode::Right);
+		CHECK(slider.GetComponent<UISliderComponent>().Value == 1.0f);
+		CHECK(ui.ChangesFrom(slider).size() == 4);
+	}
+	SUBCASE("A dropdown opens on a click, picks the clicked row, and shows it")
+	{
+		ui.Click(glm::vec2(650.0f, 120.0f));
+		CHECK(ui.SceneRef->UIWantsPointer());
+		// The open list takes the click: the panel under the cursor hears nothing.
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(650.0f, 240.0f)); Input::InjectMouseButton(MouseButton::Left, true); });
+		CHECK_FALSE(Input::IsMouseButtonPressed(MouseButton::Left));
+		ui.Frame([] { Input::InjectMouseButton(MouseButton::Left, false); });
+		CHECK(dropdown.GetComponent<UIDropdownComponent>().Selected == 2);
+		CHECK(dropdown.GetComponent<TextComponent>().Text == "High");
+		CHECK(ui.ChangesFrom(dropdown) == Values { ScriptValue(2.0) });
+
+		// A click outside the list closes it and changes nothing.
+		ui.Click(glm::vec2(650.0f, 120.0f));
+		ui.Click(glm::vec2(20.0f, 20.0f));
+		CHECK(dropdown.GetComponent<UIDropdownComponent>().Selected == 2);
+		ui.Click(glm::vec2(650.0f, 160.0f));
+		CHECK(dropdown.GetComponent<UIDropdownComponent>().Selected == 2);	// That click only opened it
+	}
+	SUBCASE("The keyboard opens a focused dropdown, moves through it, and picks or cancels")
+	{
+		ui.SceneRef->SetUIFocus(dropdown);
+		ui.Tap(KeyCode::Enter);
+		ui.Tap(KeyCode::Down);
+		ui.Tap(KeyCode::Down);
+		ui.Tap(KeyCode::Down);	// Stops at the last option
+		ui.Tap(KeyCode::Up);
+		ui.Tap(KeyCode::Enter);
+		CHECK(dropdown.GetComponent<UIDropdownComponent>().Selected == 1);
+		CHECK(dropdown.GetComponent<TextComponent>().Text == "Medium");
+
+		// Escape closes it unchanged, and the next keys move focus again.
+		ui.Tap(KeyCode::Enter);
+		ui.Tap(KeyCode::Down);
+		ui.Tap(KeyCode::Escape);
+		CHECK(dropdown.GetComponent<UIDropdownComponent>().Selected == 1);
+		CHECK(ui.ChangesFrom(dropdown) == Values { ScriptValue(1.0) });
+		CHECK(ui.SceneRef->GetUIFocused() == dropdown);
+		ui.Tap(KeyCode::Tab);
+		CHECK(ui.SceneRef->GetUIFocused() != dropdown);
+	}
+	SUBCASE("Stopping play closes an open dropdown")
+	{
+		ui.Click(glm::vec2(650.0f, 120.0f));
+		ui.Frame([] { Input::InjectMousePosition(glm::vec2(20.0f, 20.0f)); });
+		CHECK(ui.SceneRef->UIWantsPointer());	// Open, the list takes the pointer everywhere
+		ui.SceneRef->OnRuntimeStop();
+		ui.SceneRef->OnRuntimeStart();
+		ui.Frame();
+		CHECK_FALSE(ui.SceneRef->UIWantsPointer());
 	}
 }

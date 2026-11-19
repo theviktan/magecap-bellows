@@ -5,6 +5,7 @@
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scripting/ScriptApi.h"
+#include "Bellows/UI/UIWidgets.h"
 
 // The game UI: layout, drawing and input. Kept apart from Scene.cpp, which runs everything else.
 
@@ -301,6 +302,78 @@ namespace Bellows {
 
 	}
 
+	namespace {
+
+		void SubmitToggleBox(SceneRenderer& renderer, const UIRectangle& rect, bool on, float scale, uint32_t entityID, const glm::vec4& clip)
+		{
+			const UIRectangle box = ComputeUIToggleBox(rect, scale);
+			UIRectStyle frame;
+			frame.Color = UIColors::Navy;
+			frame.CornerRadius = 5.0f * scale;
+			frame.BorderWidth = 2.0f * scale;
+			frame.BorderColor = UIColors::OffWhite;
+			renderer.SubmitUIRect(box.Min, box.Max, frame, nullptr, entityID, &clip);
+			if (on)
+			{
+				const float inset = std::max(box.GetSize().x * 0.25f, 4.0f * scale);
+				UIRectStyle check;
+				check.Color = UIColors::Accent;
+				check.CornerRadius = 2.0f * scale;
+				renderer.SubmitUIRect(box.Min + inset, box.Max - inset, check, nullptr, entityID, &clip);
+			}
+		}
+
+		void SubmitSlider(SceneRenderer& renderer, const UIRectangle& rect, const UISliderComponent& slider, bool active, float scale,
+			uint32_t entityID, const glm::vec4& clip)
+		{
+			const UISliderGeometry geometry = ComputeUISliderGeometry(rect, slider.Value, slider.Min, slider.Max, scale);
+			const float halfTrack = geometry.Track.GetSize().y * 0.5f;
+			UIRectStyle track;
+			track.Color = UIColors::Slate;
+			track.CornerRadius = halfTrack;
+			renderer.SubmitUIRect(geometry.Track.Min, geometry.Track.Max, track, nullptr, entityID, &clip);
+			UIRectStyle fill = track;
+			fill.Color = UIColors::Accent;
+			renderer.SubmitUIRect(geometry.Track.Min, glm::vec2(geometry.Knob.x, geometry.Track.Max.y), fill, nullptr, entityID, &clip);
+			UIRectStyle knob;
+			knob.Color = active ? UIColors::AccentLight : UIColors::OffWhite;
+			knob.CornerRadius = geometry.KnobRadius;
+			knob.BorderWidth = 2.0f * scale;
+			knob.BorderColor = UIColors::Accent;
+			renderer.SubmitUIRect(geometry.Knob - geometry.KnobRadius, geometry.Knob + geometry.KnobRadius, knob, nullptr, entityID, &clip);
+		}
+
+		// A downward-pointing arrow at the right of a dropdown, built from shrinking bars.
+		void SubmitDropdownArrow(SceneRenderer& renderer, const UIRectangle& rect, bool open, float scale, uint32_t entityID, const glm::vec4& clip)
+		{
+			const float size = std::min(rect.GetSize().y * 0.3f, 12.0f * scale);
+			const glm::vec2 center(rect.Max.x - std::min(rect.GetSize().y, 48.0f * scale) * 0.5f, (rect.Min.y + rect.Max.y) * 0.5f);
+			constexpr int c_Rows = 5;
+			const float rowHeight = size / static_cast<float>(c_Rows);
+			UIRectStyle style;
+			style.Color = UIColors::OffWhite;
+			for (int i = 0; i < c_Rows; i++)
+			{
+				const int widthIndex = open ? i : c_Rows - 1 - i;
+				const float halfWidth = size * (static_cast<float>(widthIndex) + 1.0f) / static_cast<float>(c_Rows);
+				const float top = center.y - size * 0.5f + rowHeight * static_cast<float>(i);
+				renderer.SubmitUIRect(glm::vec2(center.x - halfWidth, top), glm::vec2(center.x + halfWidth, top + rowHeight), style, nullptr, entityID, &clip);
+			}
+		}
+
+		void SubmitFocusRing(SceneRenderer& renderer, const UIRectangle& rect, float cornerRadius, float scale, const glm::vec4& clip)
+		{
+			const float gap = 3.0f * scale;
+			UIRectStyle ring;
+			ring.Color = glm::vec4(0.0f);
+			ring.CornerRadius = cornerRadius + gap;
+			ring.BorderWidth = 2.0f * scale;
+			ring.BorderColor = UIColors::Accent;
+			renderer.SubmitUIRect(rect.Min - gap, rect.Max + gap, ring, nullptr, 0, &clip);
+		}
+
+	}
+
 	void Scene::SubmitUI(SceneRenderer& renderer)
 	{
 		// Scroll bars go over the scrolled content, so each waits until its scroll area's last descendant.
@@ -321,9 +394,28 @@ namespace Bellows {
 			flushScrollbars(elementIndex);
 			const UIElement& element = m_UIElements[elementIndex];
 			Entity entity(element.Handle, this);
+			const UUID id = entity.GetUUID();
 			const glm::vec4 clip(element.Clip.Min, element.Clip.Max);
+			const auto* button = m_Registry.try_get<UIButtonComponent>(element.Handle);
+			auto* dropdown = m_Registry.try_get<UIDropdownComponent>(element.Handle);
+			const UIImageComponent* imageForRing = m_Registry.try_get<UIImageComponent>(element.Handle);
 			if (auto* image = m_Registry.try_get<UIImageComponent>(element.Handle); image && image->Visible)
 			{
+				// A button (or a dropdown, with the button's colors) shows its state through its image.
+				glm::vec4 color = image->Color;
+				if (button || dropdown)
+				{
+					static const UIButtonComponent c_DropdownColors;
+					const UIButtonComponent& colors = button ? *button : c_DropdownColors;
+					if (!element.Interactable)
+						color = colors.DisabledColor;
+					else if (m_UIPressed == id || m_UIOpenDropdown == id)
+						color = colors.PressedColor;
+					else if (m_UIHovered == id)
+						color = colors.HoverColor;
+					else
+						color = colors.NormalColor;
+				}
 				if (image->LoadedTexturePath != image->TexturePath)
 				{
 					// UI is drawn into the finished (sRGB) image, so image pixels are used as they are.
@@ -333,13 +425,13 @@ namespace Bellows {
 				const bool sliced = image->RuntimeTexture && glm::any(glm::greaterThan(image->SliceBorder, glm::vec4(0.0f)));
 				if (sliced)
 				{
-					SubmitSlicedImage(renderer, element.Rect, image->RuntimeTexture, image->SliceBorder, image->Color, element.Scale,
+					SubmitSlicedImage(renderer, element.Rect, image->RuntimeTexture, image->SliceBorder, color, element.Scale,
 						entity.GetRenderID(), clip);
 				}
 				else
 				{
 					UIRectStyle style;
-					style.Color = image->Color;
+					style.Color = color;
 					style.CornerRadius = image->CornerRadius * element.Scale;
 					style.BorderWidth = image->BorderWidth * element.Scale;
 					style.BorderColor = image->BorderColor;
@@ -347,24 +439,101 @@ namespace Bellows {
 				}
 			}
 
+			// Widget parts, and the area their label (Text) is laid out in.
+			UIRectangle labelArea = element.Rect;
+			if (const auto* toggle = m_Registry.try_get<UIToggleComponent>(element.Handle))
+			{
+				SubmitToggleBox(renderer, element.Rect, toggle->On, element.Scale, entity.GetRenderID(), clip);
+				labelArea = ComputeUIToggleLabelArea(element.Rect, element.Scale);
+			}
+			if (const auto* slider = m_Registry.try_get<UISliderComponent>(element.Handle))
+				SubmitSlider(renderer, element.Rect, *slider, m_UIPressed == id, element.Scale, entity.GetRenderID(), clip);
+			if (dropdown)
+			{
+				SubmitDropdownArrow(renderer, element.Rect, m_UIOpenDropdown == id, element.Scale, entity.GetRenderID(), clip);
+				labelArea = ComputeUIDropdownLabelArea(element.Rect, element.Scale);
+				// The dropdown's Text shows its selected option.
+				auto* label = m_Registry.try_get<TextComponent>(element.Handle);
+				if (label && dropdown->Selected >= 0 && dropdown->Selected < static_cast<int>(dropdown->Options.size()))
+					label->Text = dropdown->Options[static_cast<size_t>(dropdown->Selected)];
+			}
+
 			if (auto* text = m_Registry.try_get<TextComponent>(element.Handle); text && text->Visible && !text->Text.empty())
 			{
-				if (const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, element.Rect.GetSize()))
+				if (const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, labelArea.GetSize()))
 				{
 					TextStyle style;
 					style.Color = text->Color;
 					style.OutlineColor = text->OutlineColor;
 					style.OutlineWidth = text->OutlineWidth;
-					const UIRectangle textClip = text->Overflow == TextOverflow::Clip ? element.Clip.Intersect(element.Rect) : element.Clip;
+					const UIRectangle textClip = text->Overflow == TextOverflow::Clip ? element.Clip.Intersect(labelArea) : element.Clip;
 					const glm::vec4 clipRect(textClip.Min, textClip.Max);
-					renderer.SubmitUIText(text->RuntimeFont, *layout, element.Rect.Min, style, entity.GetRenderID(), &clipRect);
+					renderer.SubmitUIText(text->RuntimeFont, *layout, labelArea.Min, style, entity.GetRenderID(), &clipRect);
 				}
 			}
+
+			// Keyboard and gamepad focus shows as a ring around the focused UI.
+			if (m_UIFocused == id)
+				SubmitFocusRing(renderer, element.Rect, imageForRing ? imageForRing->CornerRadius * element.Scale : 0.0f, element.Scale, clip);
 
 			if (const auto* scroll = m_Registry.try_get<UIScrollComponent>(element.Handle); scroll && scroll->ShowScrollbars)
 				pendingScrollbars.push_back(elementIndex);
 		}
 		flushScrollbars(m_UIElements.size());
+		SubmitUIDropdownList(renderer);
+	}
+
+	void Scene::SubmitUIDropdownList(SceneRenderer& renderer)
+	{
+		const UIElement* element = FindUIElement(m_UIOpenDropdown);
+		Entity entity = TryGetEntityByUUID(m_UIOpenDropdown);
+		const auto* dropdown = entity ? entity.TryGetComponent<UIDropdownComponent>() : nullptr;
+		if (!element || !dropdown || dropdown->Options.empty())
+			return;
+
+		// The list draws over everything, as tall as the dropdown per row, in the dropdown's font.
+		const glm::vec2 screen(static_cast<float>(renderer.GetViewportWidth()), static_cast<float>(renderer.GetViewportHeight()));
+		const size_t count = dropdown->Options.size();
+		const UIRectangle list = ComputeUIDropdownList(element->Rect, count, screen);
+		const glm::vec4 clip(glm::vec2(0.0f), screen);
+		const uint32_t entityID = entity.GetRenderID();
+		UIRectStyle background;
+		background.Color = UIColors::Navy;
+		background.CornerRadius = 8.0f * element->Scale;
+		background.BorderWidth = 1.0f * element->Scale;
+		background.BorderColor = UIColors::Slate;
+		renderer.SubmitUIRect(list.Min, list.Max, background, nullptr, entityID, &clip);
+
+		const TextComponent* label = entity.TryGetComponent<TextComponent>();
+		const Ref<Font> font = AssetManager::GetFont(label ? label->FontPath : std::string());
+		const float rowHeight = list.GetSize().y / static_cast<float>(count);
+		for (size_t i = 0; i < count; i++)
+		{
+			const UIRectangle row { glm::vec2(list.Min.x, list.Min.y + rowHeight * static_cast<float>(i)),
+				glm::vec2(list.Max.x, list.Min.y + rowHeight * static_cast<float>(i + 1)) };
+			if (static_cast<int>(i) == m_UIDropdownHighlight)
+			{
+				UIRectStyle highlight;
+				highlight.Color = UIColors::Slate;
+				highlight.CornerRadius = 6.0f * element->Scale;
+				const float inset = 3.0f * element->Scale;
+				renderer.SubmitUIRect(row.Min + inset, row.Max - inset, highlight, nullptr, entityID, &clip);
+			}
+			if (!font)
+				continue;
+			TextLayoutSettings settings;
+			settings.Size = (label ? label->Size : TextComponent::DefaultScreenSize) * element->Scale;
+			const UIRectangle area = ComputeUIDropdownLabelArea(row, element->Scale);
+			settings.BoxSize = area.GetSize();
+			settings.Wrap = false;
+			settings.Alignment = label ? label->Alignment : TextAlignment::Left;
+			settings.VerticalAlignment = TextVerticalAlignment::Middle;
+			settings.Overflow = TextOverflow::Ellipsis;
+			const TextLayout layout = LayoutText(*font, dropdown->Options[i], settings);
+			TextStyle style;
+			style.Color = static_cast<int>(i) == dropdown->Selected ? UIColors::AccentLight : (label ? label->Color : UIColors::OffWhite);
+			renderer.SubmitUIText(font, layout, area.Min, style, entityID, &clip);
+		}
 	}
 
 	const Scene::UIElement* Scene::FindUIElement(UUID id) const
@@ -384,7 +553,99 @@ namespace Bellows {
 		if (m_UIModalCanvas != entt::null && element->Canvas != m_UIModalCanvas)
 			return false;
 		const UIRectComponent* rect = m_Registry.try_get<UIRectComponent>(element->Handle);
-		return rect && rect->Focusable;
+		return rect && (rect->Focusable || IsUIWidget(element->Handle));
+	}
+
+	bool Scene::IsUIWidget(entt::entity handle) const
+	{
+		return m_Registry.any_of<UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent>(handle);
+	}
+
+	void Scene::ActivateUIWidget(UUID id, std::vector<UIEvent>& events)
+	{
+		Entity entity = TryGetEntityByUUID(id);
+		if (!entity)
+			return;
+		if (auto* toggle = entity.TryGetComponent<UIToggleComponent>())
+		{
+			toggle->On = !toggle->On;
+			events.push_back({ "changed", id, toggle->On });
+		}
+		if (auto* dropdown = entity.TryGetComponent<UIDropdownComponent>(); dropdown && !dropdown->Options.empty())
+		{
+			m_UIOpenDropdown = id;
+			m_UIDropdownHighlight = std::clamp(dropdown->Selected, 0, static_cast<int>(dropdown->Options.size()) - 1);
+		}
+	}
+
+	void Scene::SetUISliderValue(UUID id, float value, std::vector<UIEvent>& events)
+	{
+		Entity entity = TryGetEntityByUUID(id);
+		auto* slider = entity ? entity.TryGetComponent<UISliderComponent>() : nullptr;
+		if (!slider)
+			return;
+		value = SnapUISliderValue(value, slider->Min, slider->Max, slider->Step);
+		if (value == slider->Value)
+			return;
+		slider->Value = value;
+		events.push_back({ "changed", id, static_cast<double>(value) });
+	}
+
+	void Scene::SelectUIDropdownOption(UUID id, int index, std::vector<UIEvent>& events)
+	{
+		Entity entity = TryGetEntityByUUID(id);
+		auto* dropdown = entity ? entity.TryGetComponent<UIDropdownComponent>() : nullptr;
+		if (!dropdown || index < 0 || index >= static_cast<int>(dropdown->Options.size()) || index == dropdown->Selected)
+			return;
+		dropdown->Selected = index;
+		if (auto* text = entity.TryGetComponent<TextComponent>())
+			text->Text = dropdown->Options[static_cast<size_t>(index)];
+		events.push_back({ "changed", id, static_cast<double>(index) });
+	}
+
+	void Scene::UpdateUIDropdownList(const glm::vec2& pointer, const glm::vec2& screen, std::vector<UIEvent>& events)
+	{
+		const UIElement* element = FindUIElement(m_UIOpenDropdown);
+		Entity entity = TryGetEntityByUUID(m_UIOpenDropdown);
+		const auto* dropdown = entity ? entity.TryGetComponent<UIDropdownComponent>() : nullptr;
+		if (!element || !element->Interactable || !dropdown || dropdown->Options.empty())
+		{
+			m_UIOpenDropdown = 0;
+			return;
+		}
+
+		const size_t count = dropdown->Options.size();
+		const UIRectangle list = ComputeUIDropdownList(element->Rect, count, screen);
+		const int row = UIDropdownRowAt(list, count, pointer);
+		if (row >= 0 && Input::GetMouseDelta() != glm::vec2(0.0f))
+			m_UIDropdownHighlight = row;
+
+		const auto pressed = [](const char* action) { return InputMap::IsActionPressed(action, InputAccess::Raw); };
+		const UUID id = m_UIOpenDropdown;
+		if (Input::IsMouseButtonPressed(MouseButton::Left, InputAccess::Raw))
+		{
+			// A press anywhere closes the list: on a row it picks that option first. The press is the UI's
+			// until it is let go, and clicks nothing else.
+			if (row >= 0)
+				SelectUIDropdownOption(id, row, events);
+			m_UIOpenDropdown = 0;
+			m_UIPressed = 0;
+			m_UIPointerOwner = UIPointerOwner::UI;
+			return;
+		}
+		if (pressed("ui_up"))
+			m_UIDropdownHighlight = std::max(m_UIDropdownHighlight - 1, 0);
+		if (pressed("ui_down"))
+			m_UIDropdownHighlight = std::min(m_UIDropdownHighlight + 1, static_cast<int>(count) - 1);
+		if (pressed("ui_accept"))
+		{
+			SelectUIDropdownOption(id, m_UIDropdownHighlight, events);
+			m_UIOpenDropdown = 0;
+		}
+		else if (pressed("ui_cancel"))
+		{
+			m_UIOpenDropdown = 0;
+		}
 	}
 
 	void Scene::ChangeUIFocus(UUID id, std::vector<UIEvent>& events)
@@ -400,16 +661,27 @@ namespace Bellows {
 
 	void Scene::EmitUIEvents(const std::vector<UIEvent>& events)
 	{
-		// UI events carry the UI entity as their last (here only) value and climb through its parents.
+		// UI events carry the UI entity as their last value (after the new value, for 'changed') and climb
+		// through its parents.
 		for (const UIEvent& event : events)
 		{
-			if (Entity source = TryGetEntityByUUID(event.Source))
-				Scripting::EmitScriptEventFrom(Scripting::ScriptEntity(source), event.Name, { Scripting::ScriptValue(Scripting::ScriptEntity(source)) });
+			Entity source = TryGetEntityByUUID(event.Source);
+			if (!source)
+				continue;
+			Scripting::ScriptValueList values;
+			if (const bool* on = std::get_if<bool>(&event.Value))
+				values.emplace_back(*on);
+			else if (const double* number = std::get_if<double>(&event.Value))
+				values.emplace_back(*number);
+			values.emplace_back(Scripting::ScriptEntity(source));
+			Scripting::EmitScriptEventFrom(Scripting::ScriptEntity(source), event.Name, values);
 		}
 	}
 
 	void Scene::ResetUIInput()
 	{
+		m_UIOpenDropdown = 0;
+		m_UIDropdownHighlight = -1;
 		m_UIHovered = 0;
 		m_UIPressed = 0;
 		m_UIFocused = 0;
@@ -444,13 +716,26 @@ namespace Bellows {
 				continue;
 			const UIRectComponent* rect = m_Registry.try_get<UIRectComponent>(it->Handle);
 			const UIImageComponent* image = m_Registry.try_get<UIImageComponent>(it->Handle);
-			if ((rect && rect->Focusable) || (image && image->Visible) || m_Registry.all_of<UIScrollComponent>(it->Handle))
+			if ((rect && rect->Focusable) || (image && image->Visible) || m_Registry.all_of<UIScrollComponent>(it->Handle) || IsUIWidget(it->Handle))
 			{
 				target = m_Registry.get<IDComponent>(it->Handle).ID;
 				break;
 			}
 		}
 		m_UIHovered = target;
+
+		// An open dropdown list sits over everything and takes every input until it closes.
+		if (m_UIOpenDropdown)
+		{
+			m_UIHovered = 0;
+			UpdateUIDropdownList(pointer, screen, events);
+			if (!Input::IsMouseButtonDown(MouseButton::Left, InputAccess::Raw))
+				m_UIPointerOwner = UIPointerOwner::None;
+			m_UICapture = InputCapture { true, true, true };
+			Input::SetCapture(m_UICapture);
+			EmitUIEvents(events);
+			return;
+		}
 
 		// The wheel scrolls the frontmost scroll area under the pointer that has somewhere to go that way.
 		if (const glm::vec2 wheel = Input::GetScrollDelta(InputAccess::Raw); wheel != glm::vec2(0.0f))
@@ -480,6 +765,14 @@ namespace Bellows {
 			ChangeUIFocus(target && CanTakeUIFocus(target) ? target : UUID(0), events);
 		}
 
+		// A slider follows the pointer while the press that started on it is held.
+		if (m_UIPressed && Input::IsMouseButtonDown(MouseButton::Left, InputAccess::Raw))
+		{
+			const UIElement* element = FindUIElement(m_UIPressed);
+			if (const auto* slider = element ? m_Registry.try_get<UISliderComponent>(element->Handle) : nullptr)
+				SetUISliderValue(m_UIPressed, UISliderValueAt(element->Rect, pointer.x, slider->Min, slider->Max, slider->Step, element->Scale), events);
+		}
+
 		InputCapture capture;
 		capture.Pointer = modal || m_UIPointerOwner == UIPointerOwner::UI || (m_UIPointerOwner == UIPointerOwner::None && target);
 		capture.Keyboard = modal;
@@ -488,7 +781,10 @@ namespace Bellows {
 		if (Input::IsMouseButtonReleased(MouseButton::Left, InputAccess::Raw))
 		{
 			if (m_UIPressed && m_UIPressed == target)
+			{
 				events.push_back({ "clicked", target });
+				ActivateUIWidget(target, events);
+			}
 			m_UIPressed = 0;
 			m_UIPointerOwner = UIPointerOwner::None;
 		}
@@ -528,6 +824,15 @@ namespace Bellows {
 				const int index = current < 0 ? (next ? 0 : count - 1) : (current + (next ? 1 : count - 1)) % count;
 				ChangeUIFocus(focusables[static_cast<size_t>(index)], events);
 			}
+			else if (const UIElement* focused = FindUIElement(m_UIFocused);
+				focused && m_Registry.all_of<UISliderComponent>(focused->Handle) && (pressed("ui_left") || pressed("ui_right")))
+			{
+				// Left and right move a focused slider instead of focus.
+				const auto& slider = m_Registry.get<UISliderComponent>(focused->Handle);
+				const float direction = (pressed("ui_right") ? 1.0f : 0.0f) - (pressed("ui_left") ? 1.0f : 0.0f);
+				const float sign = slider.Max >= slider.Min ? 1.0f : -1.0f;
+				SetUISliderValue(m_UIFocused, slider.Value + direction * sign * UISliderKeyStep(slider.Min, slider.Max, slider.Step), events);
+			}
 			else if (count > 0)
 			{
 				static constexpr std::pair<const char*, UINavigationDirection> c_Directions[] = {
@@ -546,7 +851,10 @@ namespace Bellows {
 			}
 
 			if (pressed("ui_accept") && m_UIFocused)
+			{
 				events.push_back({ "clicked", m_UIFocused });
+				ActivateUIWidget(m_UIFocused, events);
+			}
 			if (pressed("ui_cancel"))
 			{
 				if (m_UIFocused)

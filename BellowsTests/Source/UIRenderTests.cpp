@@ -4,6 +4,8 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
+#include "Bellows/Core/Input.h"
+#include "Bellows/Core/InputMap.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Renderer/Image.h"
 #include "Bellows/Renderer/RenderDevice.h"
@@ -12,6 +14,8 @@
 #include "Bellows/Scene/Components.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
+#include "Bellows/UI/UIStyle.h"
+#include "Bellows/UI/UIWidgets.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -287,5 +291,89 @@ TEST_CASE("[gpu] 9-slice images keep their borders, and scroll areas clip and sh
 	CHECK(result.GetPixel(213, 220).r > 100);
 
 	AssetManager::SetAssetDirectory({});
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] Widgets draw their parts, the focus ring and an open dropdown list")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+	Ref<Scene> scene = CreateRef<Scene>("Widgets");
+	Entity canvas = scene->CreateEntity("Canvas");
+	canvas.AddComponent<UICanvasComponent>().ScaleMode = UIScaleMode::ConstantPixels;
+
+	Entity button = CreateRect(*scene, "Button", canvas, { 10.0f, 10.0f }, { 110.0f, 40.0f });
+	button.AddComponent<UIImageComponent>();
+	button.AddComponent<UIButtonComponent>();
+	Entity disabled = CreateRect(*scene, "Disabled", canvas, { 130.0f, 10.0f }, { 230.0f, 40.0f });
+	disabled.AddComponent<UIImageComponent>();
+	disabled.AddComponent<UIButtonComponent>();
+	disabled.GetComponent<UIRectComponent>().Interactable = false;
+	Entity off = CreateRect(*scene, "Off", canvas, { 10.0f, 60.0f }, { 110.0f, 90.0f });
+	off.AddComponent<UIToggleComponent>();
+	Entity on = CreateRect(*scene, "On", canvas, { 130.0f, 60.0f }, { 230.0f, 90.0f });
+	on.AddComponent<UIToggleComponent>().On = true;
+	Entity slider = CreateRect(*scene, "Slider", canvas, { 10.0f, 110.0f }, { 230.0f, 130.0f });
+	slider.AddComponent<UISliderComponent>().Value = 0.5f;
+	Entity dropdown = CreateRect(*scene, "Dropdown", canvas, { 140.0f, 150.0f }, { 250.0f, 175.0f });
+	dropdown.AddComponent<UIImageComponent>();
+	dropdown.AddComponent<UIDropdownComponent>().Options = { "Low", "Medium", "High" };
+	dropdown.AddComponent<TextComponent>().Size = 14.0f;
+
+	// Open the dropdown from the keyboard, as a player would.
+	InputMap::SetActions(InputMap::GetDefaultActions());
+	Input::ResetState();
+	scene->OnViewportResize(c_Size, c_Size);
+	scene->OnRuntimeStart();
+	REQUIRE(scene->SetUIFocus(dropdown));
+	Input::BeginFrame();
+	Input::InjectKey(KeyCode::Enter, true);
+	scene->OnUpdateRuntime(Timestep(1.0f / 60.0f));
+	Input::BeginFrame();
+	Input::InjectKey(KeyCode::Enter, false);
+	scene->OnUpdateRuntime(Timestep(1.0f / 60.0f));
+
+	const Image image = Render(renderer, *scene);
+	image.SavePNG(BellowsTests::GetTestOutputDirectory() / "UI_Widgets.png");
+
+	// A button colors its image by state.
+	CHECK(Near(image.GetPixel(60, 25), UIColors::NavyLight));
+	CHECK_FALSE(Near(image.GetPixel(180, 25), UIColors::NavyLight, 6));
+
+	// A toggle's box is filled with the accent only when it is on.
+	const UIRectangle offBox = ComputeUIToggleBox(UIRectangle { { 10.0f, 60.0f }, { 110.0f, 90.0f } }, 1.0f);
+	const UIRectangle onBox = ComputeUIToggleBox(UIRectangle { { 130.0f, 60.0f }, { 230.0f, 90.0f } }, 1.0f);
+	const glm::vec2 offCenter = (offBox.Min + offBox.Max) * 0.5f;
+	const glm::vec2 onCenter = (onBox.Min + onBox.Max) * 0.5f;
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(offCenter.x), static_cast<uint32_t>(offCenter.y)), UIColors::Navy));
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(onCenter.x), static_cast<uint32_t>(onCenter.y)), UIColors::Accent));
+
+	// A slider at half: filled up to the knob, plain after it, the knob off-white.
+	const UISliderGeometry geometry = ComputeUISliderGeometry(UIRectangle { { 10.0f, 110.0f }, { 230.0f, 130.0f } }, 0.5f, 0.0f, 1.0f, 1.0f);
+	const uint32_t trackY = static_cast<uint32_t>(geometry.Knob.y);
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(geometry.Knob.x - 40.0f), trackY), UIColors::Accent));
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(geometry.Knob.x + 40.0f), trackY), UIColors::Slate));
+	CHECK(Near(image.GetPixel(static_cast<uint32_t>(geometry.Knob.x), trackY), UIColors::OffWhite));
+
+	// The open dropdown shows pressed, has the focus ring, and its list (one row per option) is drawn
+	// under it with the selected row highlighted.
+	CHECK(Near(image.GetPixel(160, 162), UIColors::Accent));
+	CHECK(Near(image.GetPixel(138, 162), UIColors::Accent, 12));
+	const UIRectangle list = ComputeUIDropdownList(UIRectangle { { 140.0f, 150.0f }, { 250.0f, 175.0f } }, 3, glm::vec2(c_Size));
+	CHECK(list.Min.y == doctest::Approx(175.0f));
+	CHECK(Near(image.GetPixel(248, 187), UIColors::Navy, 6));	// Row 0, right of its highlight
+	CHECK(Near(image.GetPixel(240, 187), UIColors::Slate, 6));	// Row 0's highlight
+	CHECK(Near(image.GetPixel(240, 212), UIColors::Navy, 6));	// Row 1
+	CHECK(dropdown.GetComponent<TextComponent>().Text == "Low");
+	CHECK(renderer.ReadEntityID(200, 212) == dropdown.GetRenderID());
+
+	scene->OnRuntimeStop();
+	Input::ResetState();
+	Input::BeginFrame();
+	InputMap::SetActions({});
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }

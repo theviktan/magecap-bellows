@@ -26,10 +26,12 @@
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Text/TextLayout.h"
 #include "Bellows/UI/UILayout.h"
+#include "Bellows/UI/UIWidgets.h"
 
 #include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <optional>
 #include <stdexcept>
@@ -147,6 +149,58 @@ namespace Bellows::Scripting {
 			if (auto* canvas = entity.TryGetComponent<UICanvasComponent>())
 				return canvas->Visible;
 			throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIRect or UICanvas for 'visible'");
+		}
+
+		inline int RequireDropdownIndex(const UIDropdownComponent& dropdown, double index)
+		{
+			if (index != std::floor(index) || index < -1.0 || index >= static_cast<double>(dropdown.Options.size()))
+				throw ScriptValueError("A dropdown with " + std::to_string(dropdown.Options.size()) + " options takes an index from 0 to "
+					+ std::to_string(static_cast<int>(dropdown.Options.size()) - 1) + " (or -1 for none), not " + std::to_string(index));
+			return static_cast<int>(index);
+		}
+
+		inline double RequireNumberValue(const ScriptValue& value, const char* widget)
+		{
+			if (const double* number = std::get_if<double>(&value.Data))
+				return *number;
+			throw ScriptValueError(std::string("The value of a ") + widget + " is a number");
+		}
+
+		// Entity.value: a toggle's on/off, a slider's value or a dropdown's selected index.
+		inline ScriptValue GetWidgetValue(const ScriptEntity& handle)
+		{
+			Entity entity = handle.Resolve();
+			if (const auto* toggle = entity.TryGetComponent<UIToggleComponent>())
+				return ScriptValue(toggle->On);
+			if (const auto* slider = entity.TryGetComponent<UISliderComponent>())
+				return ScriptValue(static_cast<double>(slider->Value));
+			if (const auto* dropdown = entity.TryGetComponent<UIDropdownComponent>())
+				return ScriptValue(static_cast<double>(dropdown->Selected));
+			throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider or UIDropdown for 'value'");
+		}
+
+		inline void SetWidgetValue(const ScriptEntity& handle, const ScriptValue& value)
+		{
+			Entity entity = handle.Resolve();
+			if (auto* toggle = entity.TryGetComponent<UIToggleComponent>())
+			{
+				const bool* on = std::get_if<bool>(&value.Data);
+				if (!on)
+					throw ScriptValueError("The value of a toggle is true or false");
+				toggle->On = *on;
+			}
+			else if (auto* slider = entity.TryGetComponent<UISliderComponent>())
+			{
+				slider->Value = SnapUISliderValue(static_cast<float>(RequireNumberValue(value, "slider")), slider->Min, slider->Max, slider->Step);
+			}
+			else if (auto* dropdown = entity.TryGetComponent<UIDropdownComponent>())
+			{
+				dropdown->Selected = RequireDropdownIndex(*dropdown, RequireNumberValue(value, "dropdown"));
+			}
+			else
+			{
+				throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider or UIDropdown for 'value'");
+			}
 		}
 
 		// Script vectors are 3D; UI positions and sizes use x and y.
@@ -580,6 +634,51 @@ namespace Bellows::Scripting {
 			"9-slice: the texture's edges [left, top, right, bottom] in texture pixels keep their size and only the middle stretches; 0 stretches all");
 		image.Property("visible", [](const UIImageRef& r) { return r.Get().Visible; }, [](const UIImageRef& r, bool v) { r.Get().Visible = v; }, "");
 
+		auto button = api.template Class<UIButtonRef>("UIButton",
+			"Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'");
+		button.Property("normal_color", [](const UIButtonRef& r) { return ColorValue { r.Get().NormalColor }; },
+			[](const UIButtonRef& r, const ColorValue& v) { r.Get().NormalColor = v.Value; }, "");
+		button.Property("hover_color", [](const UIButtonRef& r) { return ColorValue { r.Get().HoverColor }; },
+			[](const UIButtonRef& r, const ColorValue& v) { r.Get().HoverColor = v.Value; }, "Under the pointer");
+		button.Property("pressed_color", [](const UIButtonRef& r) { return ColorValue { r.Get().PressedColor }; },
+			[](const UIButtonRef& r, const ColorValue& v) { r.Get().PressedColor = v.Value; }, "Held down");
+		button.Property("disabled_color", [](const UIButtonRef& r) { return ColorValue { r.Get().DisabledColor }; },
+			[](const UIButtonRef& r, const ColorValue& v) { r.Get().DisabledColor = v.Value; }, "When not interactable");
+
+		auto toggle = api.template Class<UIToggleRef>("UIToggle", "A check box; clicking flips it and raises 'changed' (on, widget)");
+		toggle.Property("on", [](const UIToggleRef& r) { return r.Get().On; }, [](const UIToggleRef& r, bool v) { r.Get().On = v; }, "");
+
+		auto slider = api.template Class<UISliderRef>("UISlider",
+			"A track with a knob; dragging, clicking or ui_left/ui_right while focused raise 'changed' (value, widget)");
+		slider.Property("min", [](const UISliderRef& r) { return r.Get().Min; },
+			[](const UISliderRef& r, float v) { UISliderComponent& c = r.Get(); c.Min = v; c.Value = SnapUISliderValue(c.Value, c.Min, c.Max, c.Step); }, "");
+		slider.Property("max", [](const UISliderRef& r) { return r.Get().Max; },
+			[](const UISliderRef& r, float v) { UISliderComponent& c = r.Get(); c.Max = v; c.Value = SnapUISliderValue(c.Value, c.Min, c.Max, c.Step); }, "");
+		slider.Property("step", [](const UISliderRef& r) { return r.Get().Step; },
+			[](const UISliderRef& r, float v) { UISliderComponent& c = r.Get(); c.Step = std::max(v, 0.0f); c.Value = SnapUISliderValue(c.Value, c.Min, c.Max, c.Step); },
+			"Values snap to steps from min; 0 for any value");
+		slider.Property("value", [](const UISliderRef& r) { return r.Get().Value; },
+			[](const UISliderRef& r, float v) { UISliderComponent& c = r.Get(); c.Value = SnapUISliderValue(v, c.Min, c.Max, c.Step); },
+			"Kept between min and max and snapped to step");
+
+		auto dropdown = api.template Class<UIDropdownRef>("UIDropdown",
+			"A button that opens a list of options; picking one raises 'changed' (index, widget), and its Text shows the selection");
+		dropdown.Property("options", [](const UIDropdownRef& r) { return r.Get().Options; },
+			[](const UIDropdownRef& r, const std::vector<std::string>& v)
+			{
+				UIDropdownComponent& c = r.Get();
+				c.Options = v;
+				c.Selected = std::clamp(c.Selected, c.Options.empty() ? -1 : 0, static_cast<int>(c.Options.size()) - 1);
+			}, "The choices, in order");
+		dropdown.Property("selected", [](const UIDropdownRef& r) { return r.Get().Selected; },
+			[](const UIDropdownRef& r, int v) { UIDropdownComponent& c = r.Get(); c.Selected = Detail::RequireDropdownIndex(c, v); },
+			"The selected option's index, or -1 for none");
+		dropdown.ReadOnly("selected_text", [](const UIDropdownRef& r)
+			{
+				const UIDropdownComponent& c = r.Get();
+				return c.Selected >= 0 && c.Selected < static_cast<int>(c.Options.size()) ? c.Options[static_cast<size_t>(c.Selected)] : std::string();
+			}, "The selected option, or empty");
+
 		auto layout = api.template Class<UILayoutRef>("UILayout",
 			"Places the entity's children that have a UIRect: one under another, side by side, or in a grid");
 		layout.Property("direction", [](const UILayoutRef& r) { return std::string(UILayoutDirectionToString(r.Get().Direction)); },
@@ -637,6 +736,9 @@ namespace Bellows::Scripting {
 		entity.Property("interactable", [](const ScriptEntity& e) { return Detail::RequireUIComponent<UIRectComponent>(e, "interactable", "UIRect").Interactable; },
 			[](const ScriptEntity& e, bool v) { Detail::RequireUIComponent<UIRectComponent>(e, "interactable", "UIRect").Interactable = v; },
 			"Whether the pointer and focus can reach a UI entity and everything under it");
+		entity.Property("value", [](const ScriptEntity& e) { return Detail::GetWidgetValue(e); },
+			[](const ScriptEntity& e, const ScriptValue& v) { Detail::SetWidgetValue(e, v); },
+			"A toggle's on/off (true or false), a slider's value, or a dropdown's selected index; setting it raises no 'changed'");
 		entity.Method("focus", [](const ScriptEntity& e)
 			{
 				Detail::RequireUIComponent<UIRectComponent>(e, "focus", "UIRect");
