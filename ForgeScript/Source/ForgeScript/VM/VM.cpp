@@ -1101,18 +1101,31 @@ namespace ForgeScript {
 	bool VM::CallClosure(Task* task, Closure* closure, size_t argCount, uint8_t flags)
 	{
 		Function* fn = closure->Fn;
-		if (static_cast<int>(argCount) != fn->Arity)
+		const int given = static_cast<int>(argCount);
+		const int fewest = fn->DefaultIps.empty() ? fn->Arity : fn->MinArity;
+		if (given < fewest || given > fn->Arity)
 		{
-			return Fail("'" + FunctionLabel(fn) + "' needs " + ValueCount(fn->Arity) + ", but was given " +
-				ValueCount(static_cast<int>(argCount)) + ".");
+			const std::string needs = fewest == fn->Arity ? ValueCount(fn->Arity)
+				: std::to_string(fewest) + " to " + ValueCount(fn->Arity);
+			return Fail("'" + FunctionLabel(fn) + "' needs " + needs + ", but was given " + ValueCount(given) + ".");
 		}
 		if (task->Frames.size() >= m_Config.MaxCallDepth)
 			return Fail("Too many functions calling each other (is a function calling itself forever?).");
 
+		// Values left out get their defaults: their places are made here, and the call starts at the
+		// code that fills in the first one left out.
+		size_t start = 0;
+		if (!fn->DefaultIps.empty())
+		{
+			for (int i = given; i < fn->Arity; i++)
+				task->Stack.push_back(Value());
+			start = fn->DefaultIps[static_cast<size_t>(given - fewest)];
+		}
+
 		CallFrame frame;
 		frame.Function = closure;
-		frame.Ip = 0;
-		frame.Base = task->Stack.size() - argCount - 1;
+		frame.Ip = start;
+		frame.Base = task->Stack.size() - static_cast<size_t>(fn->Arity) - 1;
 		frame.Flags = flags;
 		task->Frames.push_back(frame);
 		return true;

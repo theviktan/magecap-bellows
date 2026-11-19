@@ -27,6 +27,14 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Default values (ForgeScript Roadmap item 8):
+- `function attack(target, damage is 10)`: calls may leave out values that have a default. Each
+  default is worked out at the call (so `bag is []` is a new list each time), can use the values
+  before it, and comes after the values without one. Works in kinds, `setup` and function values.
+- A call with the wrong number of values says the range: "'attack' needs 1 to 2 values".
+- The language server shows defaults in outlines and signature help. Before, `is` in a parameter
+  list was always a mistake, so no script changes meaning.
+
 Cleanup that always runs (ForgeScript Roadmap item 7):
 - `try ... catch problem ... finally ... end`. The finally code runs however the `try` is left: at
   the end, after `catch`, on an error, or on `return`, `stop` or `skip`. Without `catch`, the error

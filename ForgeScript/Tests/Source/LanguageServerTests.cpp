@@ -875,3 +875,23 @@ TEST_CASE("LanguageServerHelpsWithSignatures")
 	CHECK(at(1, 2).IsNull());
 	CHECK(at(99, 0).IsNull());
 }
+
+TEST_CASE("LanguageServerShowsDefaultValues")
+{
+	// A default value shows in the signature as written, and names inside it aren't parameters.
+	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols(
+		"function attack(target, damage is max(base, 2), label is \"hit {target}\")\nend\n");
+	std::vector<std::string> described;
+	for (const LanguageServer::Symbol& symbol : symbols)
+		described.push_back(symbol.Signature);
+	CHECK_EQ(described, std::vector<std::string> {
+		"target", "damage", "label", "function attack(target, damage is max(base, 2), label is \"hit {target}\")" });
+
+	Session session;
+	const std::string uri = "file:///tmp/defaults.forge";
+	session.Open(uri, "function walk(steps, speed is 2)\nend\nwalk(3, \n");
+	const Json help = session.At("textDocument/signatureHelp", uri, 2, 8);
+	REQUIRE_FALSE(help.IsNull());
+	CHECK_EQ(help.Get("signatures").AsArray().at(0).GetString("label"), std::string("walk(steps, speed is 2)"));
+	CHECK_EQ(help.Get("activeParameter").AsNumber(), 1.0);
+}
