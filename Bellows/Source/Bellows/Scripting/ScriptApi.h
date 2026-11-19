@@ -125,6 +125,27 @@ namespace Bellows::Scripting {
 	// max_width > 0 scales a wider image down to that width. Throws ScriptValueError.
 	std::string SaveScreenshot(const std::string& path, int maxWidth);
 
+	// Saved data, for progress that outlives a play session: GetUserFolder()/Saves/<name>.json. A name is
+	// 1 to 64 letters, digits, spaces, '-' and '_' (not starting or ending with a space, and not a
+	// name Windows reserves, like CON), so it always stays a plain file in that folder; others throw
+	// ScriptValueError.
+	//
+	// SaveData writes nothing, true/false, numbers, text, vectors, and lists and maps of these (an
+	// entity only exists for one play session, so it is refused with ScriptValueError, like infinite
+	// numbers). The file is written next to the old one and then renamed over it, so a crash never
+	// leaves half a save. Returns false, with a Console warning, when the file can't be written.
+	bool SaveData(const std::string& name, const ScriptValue& value);
+	// The saved value, or 'fallback' when there is no save. A save that can't be read is renamed to
+	// <name>.damaged.json with a Console warning, so the game's next save can't overwrite what is
+	// left of it, and 'fallback' comes back: a broken save never stops a game.
+	ScriptValue LoadData(const std::string& name, const ScriptValue& fallback);
+	bool HasData(const std::string& name);
+	// Returns false when there was nothing to delete.
+	bool DeleteData(const std::string& name);
+	// Real-world seconds since January 1, 1970 (UTC). Unlike GetTime(), it keeps counting while the
+	// game is closed, so a game can tell how long the player was away.
+	double GetRealTime();
+
 	// Frame timing published to scripts.
 	void SetFrameTiming(float deltaTime, float time, uint64_t frame);
 	float GetDeltaTime();

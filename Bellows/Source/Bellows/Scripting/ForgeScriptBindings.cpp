@@ -408,6 +408,25 @@ namespace Bellows::Scripting {
 			}
 		};
 
+		// Any value another language can read (save_data's value): nothing, true/false, numbers, text,
+		// vectors, entities, and lists and maps of these.
+		template<>
+		struct Convert<ScriptValue>
+		{
+			static FS::Value To(FS::VM& vm, const ScriptValue& value) { return FromScriptValue(vm, value); }
+			static ScriptValue From(FS::VM& vm, const FS::Value& value, const std::string& what)
+			{
+				std::vector<std::string> unsendable;
+				ScriptValue result = ToScriptValue(vm, value, unsendable);
+				if (!unsendable.empty())
+				{
+					throw FS::RuntimeError(what + " can hold nothing, true/false, numbers, text, vectors, entities, and lists and maps of these, not " +
+						unsendable.front() + ".");
+				}
+				return result;
+			}
+		};
+
 		// -------------------------------------------------------------------------
 		// Wrapping C++ functions
 		// -------------------------------------------------------------------------

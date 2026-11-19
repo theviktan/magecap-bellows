@@ -190,6 +190,19 @@ function test_screenshots()
 	check(fails(function() save screenshot to "FeatureTest/forge.bmp" end), "unsupported screenshot formats are rejected")
 end
 
+function test_saved_data()
+	delete_data("Feature Test")
+	check(load_data("Feature Test", 7) is 7, "load_data gives the default when nothing is saved")
+	set progress to { credits: 12.5, ships: ["Comet", "Nova"], spawn: vector(1, 2, 3), docked: true, captain: nothing }
+	check(save_data("Feature Test", progress) and has_data("Feature Test"), "save_data and has_data")
+	set loaded to load_data("Feature Test")
+	check(loaded is progress and loaded.spawn.y is 2, "load_data gives back what was saved ({loaded})")
+	check(fails(function() save_data("Feature Test", [self]) end), "entities can't be saved")
+	check(fails(function() save_data("../Feature Test", 1) end), "save names stay in the Saves folder")
+	check(delete_data("Feature Test") and not has_data("Feature Test"), "delete_data")
+	check(real_time() > 1700000000, "real_time is seconds since 1970 ({real_time()})")
+end
+
 function test_destruction()
 	set temporary to create_entity("Forge Temporary")
 	destroy(temporary)
@@ -250,6 +263,7 @@ function run_tests()
 		test_components()
 		test_materials()
 		test_screenshots()
+		test_saved_data()
 		test_destruction()
 		test_physics()
 		test_events()

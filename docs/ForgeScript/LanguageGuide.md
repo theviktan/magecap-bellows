@@ -860,6 +860,31 @@ end
 
 The script's top level runs again in the new version, so a line there that creates entities creates them again; put such lines in `when created`. If the new version has a mistake, the game keeps running the old one and the Console shows what to fix.
 
+### Saving progress
+
+`save_data(name, value)` keeps a value after the game closes, and `load_data(name, default)` gets it back the next time. The value can be a number, text, true/false, a vector, `nothing`, or a list or map of these, so one map usually holds a whole save:
+
+```forge
+when created
+	set save to load_data("starfall", { credits: 100, ships: [], saved_at: real_time() })
+	# real_time() counts while the game is closed, so the station earns rent while you're away.
+	set away to real_time() - save.saved_at
+	add rent_per_second * away to save.credits
+end
+
+function save_progress()
+	set save.saved_at to real_time()
+	save_data("starfall", save)
+end
+```
+
+- The first time, there is no save yet, so `load_data` gives back the default.
+- Saves go in the game's own folder (`user_folder()`), in `Saves/<name>.json`. A name has letters, digits, spaces, `-` and `_`, up to 64 characters.
+- Saving never leaves half a file, even if the game crashes. A save that can't be read is kept as `<name>.damaged.json`, and `load_data` gives the default, so the game still starts.
+- `has_data(name)` tells whether something is saved; `delete_data(name)` removes it (a "New game" button).
+- An entity can't be saved, because entities only exist while the game plays. Save its name, or the values you need from it.
+- `real_time()` is real-world seconds since 1970; `time()` is seconds since play started.
+
 ---
 
 ## 18. Finding bugs with the debugger
