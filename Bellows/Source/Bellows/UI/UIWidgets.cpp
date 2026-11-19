@@ -63,6 +63,12 @@ namespace Bellows {
 		return { glm::vec2(rect.Min.x + 12.0f * scale, rect.Min.y), glm::vec2(std::max(rect.Max.x - arrowSpace, rect.Min.x), rect.Max.y) };
 	}
 
+	UIRectangle ComputeUITextInputArea(const UIRectangle& rect, float scale)
+	{
+		const glm::vec2 margin = glm::min(glm::vec2(12.0f, 6.0f) * scale, rect.GetSize() * 0.25f);
+		return { rect.Min + margin, glm::max(rect.Max - margin, rect.Min + margin) };
+	}
+
 	UIRectangle ComputeUIDropdownList(const UIRectangle& rect, size_t optionCount, const glm::vec2& screenSize)
 	{
 		const float rowHeight = rect.GetSize().y;

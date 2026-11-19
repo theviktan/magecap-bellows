@@ -72,5 +72,7 @@ namespace Bellows {
 
 	// Decodes one UTF-8 character at 'offset' and moves past it; U+FFFD for an invalid sequence.
 	uint32_t DecodeUtf8(std::string_view text, size_t& offset);
+	// Adds a code point to 'text' as UTF-8 (U+FFFD for one that isn't a character).
+	void AppendUtf8(std::string& text, uint32_t codepoint);
 
 }

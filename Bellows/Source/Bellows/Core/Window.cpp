@@ -75,6 +75,12 @@ namespace Bellows {
 			return;
 		}
 
+		// Scripts and text fields use the system clipboard through this window.
+		GLFWwindow* clipboardWindow = m_Window;
+		Input::SetClipboardHandlers(
+			[clipboardWindow]() { const char* text = glfwGetClipboardString(clipboardWindow); return std::string(text ? text : ""); },
+			[clipboardWindow](const std::string& text) { glfwSetClipboardString(clipboardWindow, text.c_str()); });
+
 		// Wayland has no window icons (the desktop file names one), and GLFW reports trying as an error.
 		if (!specification.IconPath.empty() && glfwGetPlatform() != GLFW_PLATFORM_WAYLAND)
 		{
@@ -205,7 +211,10 @@ namespace Bellows {
 	Window::~Window()
 	{
 		if (m_Window)
+		{
+			Input::SetClipboardHandlers(nullptr, nullptr);
 			glfwDestroyWindow(m_Window);
+		}
 	}
 
 	void Window::PollEvents()

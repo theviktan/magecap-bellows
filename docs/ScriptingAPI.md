@@ -205,7 +205,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `translate(delta)`, `rotate(degrees)`, `look_at(target, up=Vec3(0,1,0))` | Movement helpers (`rotate` is in local space). |
 | `transform` | The `Transform` component. |
 | `add_component(c)`, `get_component(c)`, `has_component(c)`, `remove_component(c)`, `components` | `c` is a component class (`bellows.RigidBody`) or name (`"RigidBody"`). `add_component` returns the component (existing or new); `get_component` returns `None` when missing. |
-| `value` | A widget's value: a `UIToggle`'s `on`, a `UISlider`'s `value` or a `UIDropdown`'s `selected` (see Widgets). |
+| `value` | A widget's value: a `UIToggle`'s `on`, a `UISlider`'s `value`, a `UIDropdown`'s `selected` or a `UITextInput`'s text (see Widgets). |
 | `text`, `visible`, `interactable`, `focus()` | Everyday UI shortcuts: `text` is its `Text` component's text; `visible` is its `UIRect`'s (or `UICanvas`'s) visibility; `interactable` is its `UIRect`'s; `focus()` gives it keyboard and gamepad focus and returns `False` when it can't take it. An entity without the component they need raises `RuntimeError` naming the entity. |
 | `script` | The running script instance (play mode), or `None`. |
 
@@ -314,9 +314,21 @@ entity's `Text` as its label. The editor's **Create > UI** menu makes each one r
   pointing highlights, a click or `ui_accept` picks, `ui_up`/`ui_down` move, and `ui_cancel` or a click
   outside closes it. Picking another option raises `changed (index, entity)`. The entity's `Text`
   always shows the selected option.
+* `UITextInput`: a field the player types into. Its text is the entity's `Text` (whose font, size and
+  color it uses), so `entity.text` reads it. `placeholder` (shown dimmed while it's empty),
+  `multi_line`, `password` (a bullet per character, on one line, never copied) and `max_length`
+  (characters; 0 for no limit; negative raises `ValueError`).
+  - A click focuses it and places the caret; dragging selects. While it has focus it takes the whole
+    keyboard (the game sees no keys), and the caret blinks.
+  - Keys: typing, Backspace and Delete (Ctrl: a word), Left/Right (Ctrl: by words; Shift: select),
+    Home/End, Ctrl+A, Ctrl+C/X/V (the system clipboard), Up/Down between lines when multi-line, Tab
+    to the next focusable UI, Escape to leave the field (`cancelled`, then `unfocused`).
+  - Each edit raises `changed (text, entity)`. Enter raises `submitted (text, entity)` and keeps
+    focus; in a multi-line field Enter starts a new line and Ctrl+Enter submits.
 
-`Entity.value` is the shortcut: a toggle's `on` (`True`/`False`), a slider's `value`, or a dropdown's
-`selected`, read or set, checked and snapped the same way. An entity with none of them raises
+`Entity.value` is the shortcut: a toggle's `on` (`True`/`False`), a slider's `value`, a dropdown's
+`selected`, or a text input's text (kept to what typing could enter: one line unless multi-line, at
+most `max_length` characters), read or set, checked and snapped the same way. An entity with none of them raises
 `RuntimeError` naming the entity. Setting a value from a script raises no `changed` event (only the
 player's input does).
 
@@ -345,7 +357,8 @@ gamepad, and the game only sees what the UI leaves it:
 
 UI events are sent to the scripts on the UI entity, then on each of its parents up to the root (through
 entities that are not UI too), with the entity as the last value: `clicked (entity)`, `focused
-(entity)`, `unfocused (entity)`, `cancelled (entity)`, and from widgets `changed (value, entity)`.
+(entity)`, `unfocused (entity)`, `cancelled (entity)`, and from widgets `changed (value, entity)` and
+`submitted (text, entity)`.
 Python receives them in `on_event`:
 
 ```python

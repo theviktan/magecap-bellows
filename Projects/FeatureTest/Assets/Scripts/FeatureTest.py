@@ -447,13 +447,21 @@ class FeatureTest(bellows.Script):
         dropdown.options = ["Only"]
         self.check(dropdown.selected == 0, "UIDropdown keeps its selection inside new options")
 
+        text_input = entity.add_component(bellows.UITextInput)
+        self.check(text_input.placeholder == "" and not text_input.multi_line and not text_input.password
+                   and text_input.max_length == 0, "UITextInput defaults")
+        text_input.placeholder, text_input.multi_line, text_input.password, text_input.max_length = "Name", True, True, 8
+        self.check(text_input.placeholder == "Name" and text_input.multi_line and text_input.password
+                   and text_input.max_length == 8, "UITextInput properties")
+        self.check(raises(lambda: setattr(text_input, "max_length", -1), ValueError), "UITextInput rejects a negative max_length")
+
         script = entity.add_component(bellows.ScriptComponent)
         script.path, script.class_name = "Scripts/Spinner.py", "Spinner"
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner", "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
                     "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
-                    "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown"]
+                    "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
             entity.remove_component(name)
@@ -676,6 +684,13 @@ class FeatureTest(bellows.Script):
         button.value = True
         self.check(button.value is True, "Entity.value sets a toggle")
         self.check(raises(lambda: setattr(button, "value", 1), ValueError), "a toggle's value is true or false")
+        button.remove_component("UIToggle")
+        field = button.add_component("UITextInput")
+        field.max_length = 5
+        button.value = "Hello\nWorld"
+        self.check(button.value == "Hello" and button.text == "Hello", f"Entity.value sets a text input, kept to what typing would keep ({button.value!r})")
+        self.check(raises(lambda: setattr(button, "value", 3), ValueError), "a text input's value is text")
+        button.remove_component("UITextInput")
         try:
             self.entity.value
             self.check(False, "Entity.value needs a widget")

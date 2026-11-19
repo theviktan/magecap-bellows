@@ -245,6 +245,7 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<UIToggleComponent>("UIToggle"),
 			MakeComponentInfo<UISliderComponent>("UISlider"),
 			MakeComponentInfo<UIDropdownComponent>("UIDropdown"),
+			MakeComponentInfo<UITextInputComponent>("UITextInput"),
 		};
 		return s_Infos;
 	}
@@ -292,6 +293,7 @@ namespace Bellows::Scripting {
 		if (type == typeid(UIToggleComponent)) return "UIToggle";
 		if (type == typeid(UISliderComponent)) return "UISlider";
 		if (type == typeid(UIDropdownComponent)) return "UIDropdown";
+		if (type == typeid(UITextInputComponent)) return "UITextInput";
 		return "Unknown";
 	}
 

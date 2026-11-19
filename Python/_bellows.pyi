@@ -291,7 +291,7 @@ class Entity:
     def interactable(self, value: bool) -> None: ...
     @property
     def value(self) -> typing.Any:
-        """A toggle's on/off (true or false), a slider's value, or a dropdown's selected index; setting it raises no 'changed'"""
+        """A toggle's on/off (true or false), a slider's value, a dropdown's selected index, or a text input's text; setting it raises no 'changed'"""
     @value.setter
     def value(self, value: typing.Any) -> None: ...
     def focus(self) -> bool:
@@ -364,6 +364,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['UIDropdown']) -> UIDropdown | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['UITextInput']) -> UITextInput | None: ...
+    @typing.overload
     def get_component(self, component: type[_Component]) -> _Component | None: ...
     @typing.overload
     def get_component(self, component: str) -> typing.Any: ...
@@ -419,6 +421,8 @@ class Entity:
     def add_component(self, component: typing.Literal['UISlider']) -> UISlider: ...
     @typing.overload
     def add_component(self, component: typing.Literal['UIDropdown']) -> UIDropdown: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UITextInput']) -> UITextInput: ...
     @typing.overload
     def add_component(self, component: type[_Component]) -> _Component: ...
     @typing.overload
@@ -1172,6 +1176,30 @@ class UISlider:
         """Kept between min and max and snapped to step"""
     @value.setter
     def value(self, value: float) -> None: ...
+
+
+class UITextInput:
+    """A field the player types into; its text is the entity's Text. Raises 'changed' (text, widget) as it is edited and 'submitted' (text, widget) on Enter (Ctrl+Enter when multi-line)"""
+    @property
+    def placeholder(self) -> str:
+        """Shown, dimmed, while the text is empty"""
+    @placeholder.setter
+    def placeholder(self, value: str) -> None: ...
+    @property
+    def multi_line(self) -> bool:
+        """Enter starts a new line; Ctrl+Enter submits"""
+    @multi_line.setter
+    def multi_line(self, value: bool) -> None: ...
+    @property
+    def password(self) -> bool:
+        """Shows a bullet per character, on one line, and can't be copied"""
+    @password.setter
+    def password(self, value: bool) -> None: ...
+    @property
+    def max_length(self) -> int:
+        """The most characters it takes; 0 for no limit"""
+    @max_length.setter
+    def max_length(self, value: int) -> None: ...
 
 
 class UIToggle:

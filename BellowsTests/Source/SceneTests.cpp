@@ -132,6 +132,11 @@ namespace {
 		auto& dropdown = entity.AddComponent<UIDropdownComponent>();
 		dropdown.Options = { "Low", "Medium", "High \xE2\x98\x85" };
 		dropdown.Selected = 2;
+		auto& textInput = entity.AddComponent<UITextInputComponent>();
+		textInput.Placeholder = "Your name";
+		textInput.MultiLine = true;
+		textInput.Password = true;
+		textInput.MaxLength = 24;
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
 
@@ -344,6 +349,11 @@ TEST_CASE("Scene serialization round-trips every component")
 	const UIDropdownComponent& dropdown = loadedChild.GetComponent<UIDropdownComponent>();
 	CHECK(dropdown.Options == std::vector<std::string> { "Low", "Medium", "High \xE2\x98\x85" });
 	CHECK(dropdown.Selected == 2);
+	const UITextInputComponent& textInput = loadedChild.GetComponent<UITextInputComponent>();
+	CHECK(textInput.Placeholder == "Your name");
+	CHECK(textInput.MultiLine);
+	CHECK(textInput.Password);
+	CHECK(textInput.MaxLength == 24);
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")

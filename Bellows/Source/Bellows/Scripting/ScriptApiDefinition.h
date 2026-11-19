@@ -166,23 +166,45 @@ namespace Bellows::Scripting {
 			throw ScriptValueError(std::string("The value of a ") + widget + " is a number");
 		}
 
-		// Entity.value: a toggle's on/off, a slider's value or a dropdown's selected index.
+		// What a text field keeps of text set from a script: what typing it in would keep.
+		inline std::string CleanTextInputValue(const UITextInputComponent& input, const std::string& text)
+		{
+			std::string value;
+			UITextSelection selection;
+			InsertUIText(value, selection, text, input.MultiLine && !input.Password, input.MaxLength);
+			return value;
+		}
+
+		// Entity.value: a toggle's on/off, a slider's value, a dropdown's selected index or a text field's text.
 		inline ScriptValue GetWidgetValue(const ScriptEntity& handle)
 		{
 			Entity entity = handle.Resolve();
+			if (entity.HasComponent<UITextInputComponent>())
+			{
+				const auto* text = entity.TryGetComponent<TextComponent>();
+				return ScriptValue(text ? text->Text : std::string());
+			}
 			if (const auto* toggle = entity.TryGetComponent<UIToggleComponent>())
 				return ScriptValue(toggle->On);
 			if (const auto* slider = entity.TryGetComponent<UISliderComponent>())
 				return ScriptValue(static_cast<double>(slider->Value));
 			if (const auto* dropdown = entity.TryGetComponent<UIDropdownComponent>())
 				return ScriptValue(static_cast<double>(dropdown->Selected));
-			throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider or UIDropdown for 'value'");
+			throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider, UIDropdown or UITextInput for 'value'");
 		}
 
 		inline void SetWidgetValue(const ScriptEntity& handle, const ScriptValue& value)
 		{
 			Entity entity = handle.Resolve();
-			if (auto* toggle = entity.TryGetComponent<UIToggleComponent>())
+			if (const auto* input = entity.TryGetComponent<UITextInputComponent>())
+			{
+				const std::string* text = std::get_if<std::string>(&value.Data);
+				if (!text)
+					throw ScriptValueError("The value of a text input is text");
+				const std::string clean = CleanTextInputValue(*input, *text);
+				(entity.HasComponent<TextComponent>() ? entity.GetComponent<TextComponent>() : entity.AddComponent<TextComponent>()).Text = clean;
+			}
+			else if (auto* toggle = entity.TryGetComponent<UIToggleComponent>())
 			{
 				const bool* on = std::get_if<bool>(&value.Data);
 				if (!on)
@@ -199,7 +221,7 @@ namespace Bellows::Scripting {
 			}
 			else
 			{
-				throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider or UIDropdown for 'value'");
+				throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIToggle, UISlider, UIDropdown or UITextInput for 'value'");
 			}
 		}
 
@@ -679,6 +701,22 @@ namespace Bellows::Scripting {
 				return c.Selected >= 0 && c.Selected < static_cast<int>(c.Options.size()) ? c.Options[static_cast<size_t>(c.Selected)] : std::string();
 			}, "The selected option, or empty");
 
+		auto textInput = api.template Class<UITextInputRef>("UITextInput",
+			"A field the player types into; its text is the entity's Text. Raises 'changed' (text, widget) as it is edited and 'submitted' (text, widget) on Enter (Ctrl+Enter when multi-line)");
+		textInput.Property("placeholder", [](const UITextInputRef& r) { return r.Get().Placeholder; },
+			[](const UITextInputRef& r, const std::string& v) { r.Get().Placeholder = v; }, "Shown, dimmed, while the text is empty");
+		textInput.Property("multi_line", [](const UITextInputRef& r) { return r.Get().MultiLine; },
+			[](const UITextInputRef& r, bool v) { r.Get().MultiLine = v; }, "Enter starts a new line; Ctrl+Enter submits");
+		textInput.Property("password", [](const UITextInputRef& r) { return r.Get().Password; },
+			[](const UITextInputRef& r, bool v) { r.Get().Password = v; }, "Shows a bullet per character, on one line, and can't be copied");
+		textInput.Property("max_length", [](const UITextInputRef& r) { return r.Get().MaxLength; },
+			[](const UITextInputRef& r, int v)
+			{
+				if (v < 0)
+					throw ScriptValueError("max_length is a number of characters (0 for no limit), not " + std::to_string(v));
+				r.Get().MaxLength = v;
+			}, "The most characters it takes; 0 for no limit");
+
 		auto layout = api.template Class<UILayoutRef>("UILayout",
 			"Places the entity's children that have a UIRect: one under another, side by side, or in a grid");
 		layout.Property("direction", [](const UILayoutRef& r) { return std::string(UILayoutDirectionToString(r.Get().Direction)); },
@@ -738,7 +776,7 @@ namespace Bellows::Scripting {
 			"Whether the pointer and focus can reach a UI entity and everything under it");
 		entity.Property("value", [](const ScriptEntity& e) { return Detail::GetWidgetValue(e); },
 			[](const ScriptEntity& e, const ScriptValue& v) { Detail::SetWidgetValue(e, v); },
-			"A toggle's on/off (true or false), a slider's value, or a dropdown's selected index; setting it raises no 'changed'");
+			"A toggle's on/off (true or false), a slider's value, a dropdown's selected index, or a text input's text; setting it raises no 'changed'");
 		entity.Method("focus", [](const ScriptEntity& e)
 			{
 				Detail::RequireUIComponent<UIRectComponent>(e, "focus", "UIRect");

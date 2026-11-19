@@ -338,6 +338,16 @@ namespace Bellows {
 				JsonRead(*it, "Selected", component.Selected);
 			}
 
+			if (auto it = json.find("UITextInput"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UITextInputComponent>();
+				JsonRead(*it, "Placeholder", component.Placeholder);
+				JsonRead(*it, "MultiLine", component.MultiLine);
+				JsonRead(*it, "Password", component.Password);
+				JsonRead(*it, "MaxLength", component.MaxLength);
+				component.MaxLength = std::max(component.MaxLength, 0);
+			}
+
 			if (auto it = json.find("Prefab"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<PrefabComponent>();
@@ -599,6 +609,15 @@ namespace Bellows {
 			Json& j = json["UIDropdown"];
 			j["Options"] = c->Options;
 			j["Selected"] = c->Selected;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UITextInputComponent>())
+		{
+			Json& j = json["UITextInput"];
+			j["Placeholder"] = c->Placeholder;
+			j["MultiLine"] = c->MultiLine;
+			j["Password"] = c->Password;
+			j["MaxLength"] = c->MaxLength;
 		}
 
 		if (const auto* c = entity.TryGetComponent<PrefabComponent>())

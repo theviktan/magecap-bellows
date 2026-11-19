@@ -1760,6 +1760,36 @@
 			]
 		},
 		{
+			"name": "UITextInput",
+			"doc": "A field the player types into; its text is the entity's Text. Raises 'changed' (text, widget) as it is edited and 'submitted' (text, widget) on Enter (Ctrl+Enter when multi-line)",
+			"members": [
+				{
+					"name": "placeholder",
+					"kind": "property",
+					"type": "str",
+					"doc": "Shown, dimmed, while the text is empty"
+				},
+				{
+					"name": "multi_line",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Enter starts a new line; Ctrl+Enter submits"
+				},
+				{
+					"name": "password",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Shows a bullet per character, on one line, and can't be copied"
+				},
+				{
+					"name": "max_length",
+					"kind": "property",
+					"type": "int",
+					"doc": "The most characters it takes; 0 for no limit"
+				}
+			]
+		},
+		{
 			"name": "UILayout",
 			"doc": "Places the entity's children that have a UIRect: one under another, side by side, or in a grid",
 			"members": [
@@ -1928,7 +1958,7 @@
 					"name": "value",
 					"kind": "property",
 					"type": "Value",
-					"doc": "A toggle's on/off (true or false), a slider's value, or a dropdown's selected index; setting it raises no 'changed'"
+					"doc": "A toggle's on/off (true or false), a slider's value, a dropdown's selected index, or a text input's text; setting it raises no 'changed'"
 				},
 				{
 					"name": "focus",

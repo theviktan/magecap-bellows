@@ -458,7 +458,9 @@ namespace Bellows {
 					label->Text = dropdown->Options[static_cast<size_t>(dropdown->Selected)];
 			}
 
-			if (auto* text = m_Registry.try_get<TextComponent>(element.Handle); text && text->Visible && !text->Text.empty())
+			if (m_Registry.all_of<UITextInputComponent>(element.Handle))
+				SubmitUITextInput(renderer, element, clip);
+			else if (auto* text = m_Registry.try_get<TextComponent>(element.Handle); text && text->Visible && !text->Text.empty())
 			{
 				if (const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, labelArea.GetSize()))
 				{
@@ -558,7 +560,7 @@ namespace Bellows {
 
 	bool Scene::IsUIWidget(entt::entity handle) const
 	{
-		return m_Registry.any_of<UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent>(handle);
+		return m_Registry.any_of<UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent>(handle);
 	}
 
 	void Scene::ActivateUIWidget(UUID id, std::vector<UIEvent>& events)
@@ -657,6 +659,17 @@ namespace Bellows {
 		m_UIFocused = id;
 		if (m_UIFocused)
 			events.push_back({ "focused", m_UIFocused });
+		// A text field gets the caret at the end of its text (a press then moves it where it lands).
+		if (const UIElement* element = FindUIElement(id))
+		{
+			if (auto* input = m_Registry.try_get<UITextInputComponent>(element->Handle))
+			{
+				const auto* text = m_Registry.try_get<TextComponent>(element->Handle);
+				input->RuntimeSelection.CollapseTo(text ? text->Text.size() : 0);
+				m_UICaretMoved = std::chrono::steady_clock::now();
+				KeepUITextCaretVisible(*element);
+			}
+		}
 	}
 
 	void Scene::EmitUIEvents(const std::vector<UIEvent>& events)
@@ -673,6 +686,8 @@ namespace Bellows {
 				values.emplace_back(*on);
 			else if (const double* number = std::get_if<double>(&event.Value))
 				values.emplace_back(*number);
+			else if (const std::string* text = std::get_if<std::string>(&event.Value))
+				values.emplace_back(*text);
 			values.emplace_back(Scripting::ScriptEntity(source));
 			Scripting::EmitScriptEventFrom(Scripting::ScriptEntity(source), event.Name, values);
 		}
@@ -763,6 +778,11 @@ namespace Bellows {
 			m_UIPointerOwner = target || modal ? UIPointerOwner::UI : UIPointerOwner::Game;
 			m_UIPressed = target;
 			ChangeUIFocus(target && CanTakeUIFocus(target) ? target : UUID(0), events);
+			if (const UIElement* element = FindUIElement(target); element && m_Registry.all_of<UITextInputComponent>(element->Handle))
+			{
+				const bool shift = Input::IsKeyDown(KeyCode::LeftShift, InputAccess::Raw) || Input::IsKeyDown(KeyCode::RightShift, InputAccess::Raw);
+				PlaceUITextCaret(*element, pointer, shift);
+			}
 		}
 
 		// A slider follows the pointer while the press that started on it is held.
@@ -771,12 +791,26 @@ namespace Bellows {
 			const UIElement* element = FindUIElement(m_UIPressed);
 			if (const auto* slider = element ? m_Registry.try_get<UISliderComponent>(element->Handle) : nullptr)
 				SetUISliderValue(m_UIPressed, UISliderValueAt(element->Rect, pointer.x, slider->Min, slider->Max, slider->Step, element->Scale), events);
+			// A drag that started in a text field selects text, even past its edges.
+			else if (element && element->Interactable && m_Registry.all_of<UITextInputComponent>(element->Handle)
+				&& Input::GetMouseDelta() != glm::vec2(0.0f))
+				PlaceUITextCaret(*element, pointer, true);
 		}
 
 		InputCapture capture;
 		capture.Pointer = modal || m_UIPointerOwner == UIPointerOwner::UI || (m_UIPointerOwner == UIPointerOwner::None && target);
 		capture.Keyboard = modal;
 		capture.Gamepad = modal;
+
+		// A focused text field takes the whole keyboard: typing, and the keys that edit and move in it.
+		const UIElement* editing = FindUIElement(m_UIFocused);
+		if (editing && (!editing->Interactable || !m_Registry.all_of<UITextInputComponent>(editing->Handle)))
+			editing = nullptr;
+		if (editing)
+		{
+			capture.Keyboard = true;
+			UpdateUITextInput(*editing, events);
+		}
 
 		if (Input::IsMouseButtonReleased(MouseButton::Left, InputAccess::Raw))
 		{
@@ -813,7 +847,17 @@ namespace Bellows {
 				rects.push_back(element.Rect);
 			}
 
-			const auto pressed = [](const char* action) { return InputMap::IsActionPressed(action, InputAccess::Raw); };
+			// In a text field the arrows, Enter and (on several lines) up and down edit the text instead.
+			const bool multiLineEditing = editing && m_Registry.get<UITextInputComponent>(editing->Handle).MultiLine
+				&& !m_Registry.get<UITextInputComponent>(editing->Handle).Password;
+			const auto pressed = [&](const char* action)
+			{
+				const std::string_view name(action);
+				if (editing && (name == "ui_left" || name == "ui_right" || name == "ui_accept"
+					|| (multiLineEditing && (name == "ui_up" || name == "ui_down"))))
+					return false;
+				return InputMap::IsActionPressed(action, InputAccess::Raw);
+			};
 			const bool shift = Input::IsKeyDown(KeyCode::LeftShift, InputAccess::Raw) || Input::IsKeyDown(KeyCode::RightShift, InputAccess::Raw);
 			const bool nextPressed = pressed("ui_next");
 			const bool previous = pressed("ui_previous") || (nextPressed && shift);
@@ -858,7 +902,12 @@ namespace Bellows {
 			if (pressed("ui_cancel"))
 			{
 				if (m_UIFocused)
+				{
 					events.push_back({ "cancelled", m_UIFocused });
+					// Escape leaves a text field (a second press then reaches the canvas or the menu).
+					if (editing)
+						ChangeUIFocus(0, events);
+				}
 				else if (modal)
 					events.push_back({ "cancelled", m_Registry.get<IDComponent>(m_UIModalCanvas).ID });
 			}

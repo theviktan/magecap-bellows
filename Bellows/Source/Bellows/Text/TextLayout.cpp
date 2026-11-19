@@ -134,6 +134,34 @@ namespace Bellows {
 
 	}
 
+	void AppendUtf8(std::string& text, uint32_t codepoint)
+	{
+		if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+			codepoint = c_Replacement;
+		if (codepoint < 0x80)
+		{
+			text += static_cast<char>(codepoint);
+		}
+		else if (codepoint < 0x800)
+		{
+			text += static_cast<char>(0xC0 | (codepoint >> 6));
+			text += static_cast<char>(0x80 | (codepoint & 0x3F));
+		}
+		else if (codepoint < 0x10000)
+		{
+			text += static_cast<char>(0xE0 | (codepoint >> 12));
+			text += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+			text += static_cast<char>(0x80 | (codepoint & 0x3F));
+		}
+		else
+		{
+			text += static_cast<char>(0xF0 | (codepoint >> 18));
+			text += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+			text += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+			text += static_cast<char>(0x80 | (codepoint & 0x3F));
+		}
+	}
+
 	uint32_t DecodeUtf8(std::string_view text, size_t& offset)
 	{
 		const auto byte = [&](size_t i) { return static_cast<uint8_t>(text[i]); };
