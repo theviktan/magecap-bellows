@@ -513,6 +513,7 @@ namespace ForgeScript {
 				report.Line = error.Line;
 				report.Trace.push_back("in " + (error.File.empty() ? std::string("script") : error.File) + " line " + std::to_string(error.Line) +
 					(error.Column > 0 ? ", column " + std::to_string(error.Column) : std::string()));
+				report.Frames.push_back({ error.File.empty() ? std::string("script") : error.File, error.Line, std::string(), 1 });
 				m_ErrorHandler(report);
 			}
 			return result;
@@ -2097,7 +2098,7 @@ namespace ForgeScript {
 
 	// ======================================================================= Errors
 
-	std::vector<std::string> VM::BuildTrace(Task* task, std::string& outFile, int& outLine)
+	std::vector<std::string> VM::BuildTrace(Task* task, std::string& outFile, int& outLine, std::vector<StackFrame>* outFrames)
 	{
 		std::vector<std::string> trace;
 		outFile.clear();
@@ -2113,6 +2114,14 @@ namespace ForgeScript {
 				outLine = line;
 			}
 			bool isScript = it + 1 == task->Frames.rend() && fn->Arity == 0 && fn->Name && fn->Owner && fn->Name->Text == fn->Owner->Name;
+			if (outFrames)
+			{
+				const std::string function = isScript ? std::string() : FunctionLabel(fn);
+				if (!outFrames->empty() && outFrames->back().File == file && outFrames->back().Line == line && outFrames->back().Function == function)
+					outFrames->back().Repeats++;
+				else
+					outFrames->push_back({ file, line, function, 1 });
+			}
 			std::string label = isScript ? std::string("in ") + file : "in '" + FunctionLabel(fn) + "' (" + file;
 			label += isScript ? " line " + std::to_string(line) : " line " + std::to_string(line) + ")";
 			trace.push_back(label);
@@ -2148,19 +2157,27 @@ namespace ForgeScript {
 		}
 	}
 
-	// Where an error happened, as a list: the file, the line, then the trace. A 'finally' handler keeps it
-	// with the error, so an error that goes on after the finally code is reported where it happened.
+	// Where an error happened, as a list: the file, the line, the trace lines, then each frame as
+	// [file, line, function, repeats]. A 'finally' handler keeps it with the error, so an error that goes
+	// on after the finally code is reported where it happened. Only the VM reads it.
 	Value VM::DescribeWhere(Task* task)
 	{
 		std::string file;
 		int line = 0;
-		const std::vector<std::string> trace = BuildTrace(task, file, line);
+		std::vector<StackFrame> frames;
+		const std::vector<std::string> trace = BuildTrace(task, file, line, &frames);
 		Value where = MakeList();
-		std::vector<Value>& items = As<List>(where)->Items;
-		items.push_back(MakeText(file));
-		items.push_back(Value::FromNumber(line));
+		Value traceList = MakeList();
+		Value frameList = MakeList();
+		As<List>(where)->Items = { MakeText(file), Value::FromNumber(line), traceList, frameList };
 		for (const std::string& entry : trace)
-			items.push_back(MakeText(entry));
+			As<List>(traceList)->Items.push_back(MakeText(entry));
+		for (const StackFrame& frame : frames)
+		{
+			Value item = MakeList();
+			As<List>(item)->Items = { MakeText(frame.File), Value::FromNumber(frame.Line), MakeText(frame.Function), Value::FromNumber(frame.Repeats) };
+			As<List>(frameList)->Items.push_back(item);
+		}
 		return where;
 	}
 
@@ -2174,20 +2191,33 @@ namespace ForgeScript {
 		std::string file;
 		int line = 0;
 		std::vector<std::string> trace;
-		if (where && IsObjectType(*where, ObjectType::List) && As<List>(*where)->Items.size() >= 2)
+		std::vector<StackFrame> frames;
+		auto text = [](const Value& value) { return IsObjectType(value, ObjectType::String) ? As<String>(value)->Text : std::string(); };
+		auto number = [](const Value& value) { return value.IsNumber() ? static_cast<int>(value.AsNumber()) : 0; };
+		if (where && IsObjectType(*where, ObjectType::List) && As<List>(*where)->Items.size() == 4)
 		{
 			const std::vector<Value>& items = As<List>(*where)->Items;
-			file = IsObjectType(items[0], ObjectType::String) ? As<String>(items[0])->Text : std::string();
-			line = items[1].IsNumber() ? static_cast<int>(items[1].AsNumber()) : 0;
-			for (size_t i = 2; i < items.size(); i++)
+			file = text(items[0]);
+			line = number(items[1]);
+			if (IsObjectType(items[2], ObjectType::List))
 			{
-				if (IsObjectType(items[i], ObjectType::String))
-					trace.push_back(As<String>(items[i])->Text);
+				for (const Value& entry : As<List>(items[2])->Items)
+					trace.push_back(text(entry));
+			}
+			if (IsObjectType(items[3], ObjectType::List))
+			{
+				for (const Value& entry : As<List>(items[3])->Items)
+				{
+					if (!IsObjectType(entry, ObjectType::List) || As<List>(entry)->Items.size() != 4)
+						continue;
+					const std::vector<Value>& parts = As<List>(entry)->Items;
+					frames.push_back({ text(parts[0]), number(parts[1]), text(parts[2]), number(parts[3]) });
+				}
 			}
 		}
 		else
 		{
-			trace = BuildTrace(task, file, line);
+			trace = BuildTrace(task, file, line, &frames);
 		}
 
 		task->State = TaskState::Failed;
@@ -2209,6 +2239,7 @@ namespace ForgeScript {
 		report.File = file;
 		report.Line = line;
 		report.Trace = std::move(trace);
+		report.Frames = std::move(frames);
 		task->FailureMessage = report.ToString();
 		if (m_ErrorHandler)
 			m_ErrorHandler(report);

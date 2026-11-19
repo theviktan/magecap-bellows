@@ -35,6 +35,9 @@ Naming the values in a call (ForgeScript Roadmap item 9):
   'target'.", "'attack' was given 'target' twice."
 - Signature help highlights the parameter a named value is for. Before, `name:` in a call was always
   a mistake, so no script changes meaning.
+For hosts:
+- `ScriptError::Frames`: an uncaught error's call stack as data (file, line, function, repeats),
+  innermost first, beside the text `Trace`. Errors that go on after `finally` code keep theirs.
 
 Default values (ForgeScript Roadmap item 8):
 - `function attack(target, damage is 10)`: calls may leave out values that have a default. Each

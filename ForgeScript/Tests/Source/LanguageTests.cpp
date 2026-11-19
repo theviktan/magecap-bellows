@@ -377,3 +377,46 @@ TEST_CASE("CompileErrorsInNamedValues")
 	// A map in a call is still a map.
 	CHECK_EQ(Output("function f(m)\n\treturn m.size\nend\nsay f({a: 1, b: 2})\n"), std::string("2\n"));
 }
+
+namespace {
+
+	// The structured stack of the first error a script reports.
+	std::vector<StackFrame> FramesOf(const std::string& source)
+	{
+		VM vm;
+		std::vector<StackFrame> frames;
+		bool seen = false;
+		vm.SetPrintHandler([](const std::string&) {});
+		vm.SetErrorHandler([&](const ScriptError& error)
+		{
+			if (!seen)
+				frames = error.Frames;
+			seen = true;
+		});
+		vm.RunInModule(vm.CreateModule("game.forge"), source, "game.forge");
+		return frames;
+	}
+
+	std::string Describe(const std::vector<StackFrame>& frames)
+	{
+		std::string text;
+		for (const StackFrame& frame : frames)
+			text += frame.File + ":" + std::to_string(frame.Line) + (frame.Function.empty() ? "" : " in " + frame.Function) +
+				(frame.Repeats > 1 ? " x" + std::to_string(frame.Repeats) : "") + "\n";
+		return text;
+	}
+
+}
+
+TEST_CASE("ErrorsCarryAStructuredStack")
+{
+	// Innermost first, with the function's name, and "" for code at the top of a script.
+	CHECK_EQ(Describe(FramesOf("function heal(x)\n\tsay [1][x]\nend\nfunction turn()\n\theal(5)\nend\nturn()\n")),
+		std::string("game.forge:2 in heal\ngame.forge:5 in turn\ngame.forge:7\n"));
+	// A function calling itself shows once, with how many times in a row.
+	CHECK_EQ(Describe(FramesOf("function down(n)\n\tif n is 0 then fail \"bottom\" end\n\tdown(n - 1)\nend\ndown(3)\n")),
+		std::string("game.forge:2 in down\ngame.forge:3 in down x3\ngame.forge:5\n"));
+	// An error that goes on after finally code keeps the stack from where it happened.
+	CHECK_EQ(Describe(FramesOf("function deep()\n\tfail \"no\"\nend\ntry\n\tdeep()\nfinally\n\tsay 1\nend\n")),
+		std::string("game.forge:2 in deep\ngame.forge:5\n"));
+}
