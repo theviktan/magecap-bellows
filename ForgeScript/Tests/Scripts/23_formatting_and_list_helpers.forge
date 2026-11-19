@@ -1,0 +1,66 @@
+# Text for players to read: grouped numbers, clocks and padding.
+say format_number(1250)                     # expect: 1,250
+say format_number(1250.5, 2)                # expect: 1,250.50
+say format_number(-1234567.891, 1)          # expect: -1,234,567.9
+say format_number(999)                      # expect: 999
+say format_number(0.5, 3)                   # expect: 0.500
+say format_number(-0.004, 2)                # expect: 0.00
+say format_number(infinity)                 # expect: infinity
+say format_time(0)                          # expect: 0:00
+say format_time(59.9)                       # expect: 0:59
+say format_time(65)                         # expect: 1:05
+say format_time(600)                        # expect: 10:00
+say format_time(3723)                       # expect: 1:02:03
+say format_time(-5)                         # expect: -0:05
+say "7".pad_start(3, "0")                   # expect: 007
+say "hi".pad_end(5, ".") + "|"              # expect: hi...|
+say "héllo".pad_start(6) + "|"              # expect:  héllo|
+say "long text".pad_start(3)                # expect: long text
+say "★".pad_end(3, "☆")                     # expect: ★☆☆
+
+# Lists: counting and checking with a function, and number summaries.
+set health to [0, 12, 0, 5]
+say health.count(function(h) return h is 0 end)     # expect: 2
+say health.count(0)                                  # expect: 2
+say ["a", "b", "a"].count("a")                       # expect: 2
+say health.any(function(h) return h is above 10 end) # expect: true
+say health.all(function(h) return h is 0 end)        # expect: false
+say [].all(function(h) return false end)             # expect: true
+say [].any(function(h) return true end)              # expect: false
+say health.min()                                     # expect: 0
+say health.max()                                     # expect: 12
+say health.average()                                 # expect: 4.25
+say [].average()                                     # expect: nothing
+say [].max()                                         # expect: nothing
+
+# 'any' stops at the first yes; 'all' at the first no.
+set asked to 0
+health.any(function(h)
+	add 1 to asked
+	return h is 12
+end)
+say asked                                            # expect: 2
+
+# The function may change the list while it is asked about each item.
+set party to [1, 2, 3]
+say party.all(function(member)
+	add member to party
+	return true
+end)                                                 # expect: true
+say party.length                                     # expect: 6
+
+# Mistakes say what to write instead.
+function problem_of(action)
+	try
+		action()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() health.any(3) end)                 # expect: any needs a function that answers yes or no for each item, like: enemies.any(function(enemy) return enemy.health is 0 end)
+say problem_of(function() [1, "two"].max() end)              # expect: max only works on a list of numbers, but the list has text.
+say problem_of(function() "7".pad_start(3, "00") end)        # expect: pad_start fills with one character, like: "7".pad_start(3, "0")
+say problem_of(function() "7".pad_start(-1) end)             # expect: pad_start needs a width of 0 or more.
+say problem_of(function() format_number(5, 11) end)          # expect: format_number needs 0 to 10 decimals, but got 11.
+say problem_of(function() format_time(infinity) end)         # expect: format_time needs a number of seconds, but got infinity.

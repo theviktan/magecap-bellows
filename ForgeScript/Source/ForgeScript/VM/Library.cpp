@@ -3,6 +3,7 @@
 #include "ForgeScript/Core/Utf8.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -364,6 +365,63 @@ namespace ForgeScript {
 			}
 			return Value::FromNumber(std::round(x));
 		});
+		// For scores and money on a HUD: "1,250" and "1,250.50". The digits come from to_chars, which
+		// never depends on the computer's language settings.
+		RegisterFunction("format_number", AnyArity, [](CallContext& c)
+		{
+			const double x = c.Number(0);
+			const int64_t decimals = c.Count() > 1 ? c.Integer(1) : 0;
+			if (decimals < 0 || decimals > 10)
+				c.Error("format_number needs 0 to 10 decimals, but got " + std::to_string(decimals) + ".");
+			if (!std::isfinite(x))
+				return c.GetVM().MakeText(FormatNumber(x));
+			char buffer[400];
+			const auto [end, problem] = std::to_chars(buffer, buffer + sizeof(buffer), x, std::chars_format::fixed, static_cast<int>(decimals));
+			if (problem != std::errc())
+				return c.GetVM().MakeText(FormatNumber(x));
+			std::string digits(buffer, end);
+			std::string sign;
+			if (!digits.empty() && digits.front() == '-')
+			{
+				digits.erase(0, 1);
+				// Rounding -0.004 to two decimals gives "-0.00"; a zero has no sign.
+				if (digits.find_first_not_of("0.") != std::string::npos)
+					sign = "-";
+			}
+			const size_t point = digits.find('.');
+			std::string whole = digits.substr(0, point);
+			const std::string fraction = point == std::string::npos ? std::string() : digits.substr(point);
+			std::string grouped;
+			for (size_t i = 0; i < whole.size(); i++)
+			{
+				if (i > 0 && (whole.size() - i) % 3 == 0)
+					grouped += ',';
+				grouped += whole[i];
+			}
+			return c.GetVM().MakeText(sign + grouped + fraction);
+		});
+		// For timers: "1:05", or "1:02:03" from an hour on. Parts of a second are dropped, so a countdown
+		// shows 0:00 only when it is really over.
+		RegisterFunction("format_time", 1, [](CallContext& c)
+		{
+			const double seconds = c.Number(0);
+			if (!std::isfinite(seconds))
+				c.Error("format_time needs a number of seconds, but got " + FormatNumber(seconds) + ".");
+			const double whole = std::floor(std::abs(seconds));
+			if (whole > 9.0e15)
+				c.Error("format_time needs fewer seconds than that.");
+			const auto total = static_cast<int64_t>(whole);
+			const int64_t hours = total / 3600;
+			const int64_t minutes = (total / 60) % 60;
+			const int64_t rest = total % 60;
+			auto twoDigits = [](int64_t n) { return (n < 10 ? "0" : "") + std::to_string(n); };
+			std::string text = seconds < 0 && total > 0 ? "-" : "";
+			if (hours > 0)
+				text += std::to_string(hours) + ":" + twoDigits(minutes) + ":" + twoDigits(rest);
+			else
+				text += std::to_string(minutes) + ":" + twoDigits(rest);
+			return c.GetVM().MakeText(text);
+		});
 		RegisterFunction("atan2", 2, [](CallContext& c) { return Value::FromNumber(std::atan2(c.Number(0), c.Number(1))); });
 		RegisterFunction("clamp", 3, [](CallContext& c)
 		{
@@ -723,6 +781,88 @@ namespace ForgeScript {
 			return Value();
 		});
 
+		// Asks 'fn' about each item, on a copy of the list kept safe from the garbage collector, so the
+		// function may change the list while it runs. Stops when 'visit' returns false.
+		auto askEach = [selfList](CallContext& c, const Value& fn, const std::function<bool(const Value& item, bool yes)>& visit)
+		{
+			VM& vm = c.GetVM();
+			std::vector<Value> snapshot = selfList(c)->Items;
+			Value held = vm.MakeList(snapshot);
+			Handle keep(vm, held);
+			for (const Value& item : snapshot)
+			{
+				if (!visit(item, vm.CallFromNative(fn, { item }).IsTruthy()))
+					return;
+			}
+		};
+		auto needFunction = [](CallContext& c, const char* name)
+		{
+			if (!c.IsCallable(0))
+			{
+				c.Error(std::string(name) + " needs a function that answers yes or no for each item, like: enemies." + name +
+					"(function(enemy) return enemy.health is 0 end)");
+			}
+		};
+		RegisterMethod(ListMethods, "count", 1, [selfList, askEach](CallContext& c)
+		{
+			// With a function: how many items it says yes to. With a value: how many items equal it.
+			double count = 0;
+			if (c.IsCallable(0))
+				askEach(c, c.Arg(0), [&count](const Value&, bool yes) { count += yes ? 1 : 0; return true; });
+			else
+			{
+				for (const Value& item : selfList(c)->Items)
+					count += ContentsEqual(item, c.Arg(0)) ? 1 : 0;
+			}
+			return Value::FromNumber(count);
+		});
+		RegisterMethod(ListMethods, "any", 1, [askEach, needFunction](CallContext& c)
+		{
+			needFunction(c, "any");
+			bool found = false;
+			askEach(c, c.Arg(0), [&found](const Value&, bool yes) { found = yes; return !yes; });
+			return Value::FromBool(found);
+		});
+		RegisterMethod(ListMethods, "all", 1, [askEach, needFunction](CallContext& c)
+		{
+			needFunction(c, "all");
+			bool every = true;
+			askEach(c, c.Arg(0), [&every](const Value&, bool yes) { every = yes; return yes; });
+			return Value::FromBool(every);
+		});
+		// The numbers of a list, for min, max and average; an empty list gives nothing back.
+		auto numbersOf = [selfList](CallContext& c, const char* name)
+		{
+			std::vector<double> numbers;
+			for (const Value& item : selfList(c)->Items)
+			{
+				if (!item.IsNumber())
+					c.Error(std::string(name) + " only works on a list of numbers, but the list has " + c.GetVM().TypeOf(item) + ".");
+				numbers.push_back(item.AsNumber());
+			}
+			return numbers;
+		};
+		RegisterMethod(ListMethods, "min", 0, [numbersOf](CallContext& c)
+		{
+			const std::vector<double> numbers = numbersOf(c, "min");
+			return numbers.empty() ? Value() : Value::FromNumber(*std::min_element(numbers.begin(), numbers.end()));
+		});
+		RegisterMethod(ListMethods, "max", 0, [numbersOf](CallContext& c)
+		{
+			const std::vector<double> numbers = numbersOf(c, "max");
+			return numbers.empty() ? Value() : Value::FromNumber(*std::max_element(numbers.begin(), numbers.end()));
+		});
+		RegisterMethod(ListMethods, "average", 0, [numbersOf](CallContext& c)
+		{
+			const std::vector<double> numbers = numbersOf(c, "average");
+			if (numbers.empty())
+				return Value();
+			double total = 0;
+			for (double number : numbers)
+				total += number;
+			return Value::FromNumber(total / static_cast<double>(numbers.size()));
+		});
+
 		// ------------------------------------------------------------------ Text
 
 		auto selfText = [](CallContext& c) -> const std::string& { return As<String>(c.Self())->Text; };
@@ -832,6 +972,29 @@ namespace ForgeScript {
 				result += selfText(c);
 			return c.GetVM().MakeText(result);
 		});
+		// "7".pad_start(3, "0") is "007". Widths count letters, not bytes, so "é" is one.
+		auto pad = [selfText](CallContext& c, bool atStart) -> Value
+		{
+			const char* name = atStart ? "pad_start" : "pad_end";
+			const int64_t width = c.Integer(0);
+			if (width < 0)
+				c.Error(std::string(name) + " needs a width of 0 or more.");
+			const std::string fill = c.Count() > 1 ? c.Text(1) : std::string(" ");
+			if (Utf8::Length(fill) != 1)
+				c.Error(std::string(name) + " fills with one character, like: \"7\"." + name + "(3, \"0\")");
+			const std::string& text = selfText(c);
+			const size_t length = Utf8::Length(text);
+			if (static_cast<uint64_t>(width) <= length)
+				return c.GetVM().MakeText(text);
+			if (width > 1000000)
+				c.Error(std::string(name) + " needs a width of at most 1,000,000.");
+			std::string padding;
+			for (size_t i = length; i < static_cast<size_t>(width); i++)
+				padding += fill;
+			return c.GetVM().MakeText(atStart ? padding + text : text + padding);
+		};
+		RegisterMethod(TextMethods, "pad_start", AnyArity, [pad](CallContext& c) { return pad(c, true); });
+		RegisterMethod(TextMethods, "pad_end", AnyArity, [pad](CallContext& c) { return pad(c, false); });
 		RegisterMethod(TextMethods, "characters", 0, [selfText](CallContext& c)
 		{
 			const std::string& text = selfText(c);
