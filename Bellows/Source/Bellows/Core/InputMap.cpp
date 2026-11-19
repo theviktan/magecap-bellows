@@ -70,35 +70,35 @@ namespace Bellows {
 		return std::nullopt;
 	}
 
-	bool InputBinding::IsDown() const
+	bool InputBinding::IsDown(InputAccess access) const
 	{
 		switch (Source)
 		{
-			case Device::Key:		return Input::IsKeyDown(static_cast<KeyCode>(Code));
-			case Device::Mouse:		return Input::IsMouseButtonDown(static_cast<MouseButton>(Code));
-			case Device::Gamepad:	return Input::IsGamepadButtonDown(static_cast<GamepadButton>(Code));
+			case Device::Key:		return Input::IsKeyDown(static_cast<KeyCode>(Code), access);
+			case Device::Mouse:		return Input::IsMouseButtonDown(static_cast<MouseButton>(Code), access);
+			case Device::Gamepad:	return Input::IsGamepadButtonDown(static_cast<GamepadButton>(Code), access);
 		}
 		return false;
 	}
 
-	bool InputBinding::IsPressed() const
+	bool InputBinding::IsPressed(InputAccess access) const
 	{
 		switch (Source)
 		{
-			case Device::Key:		return Input::IsKeyPressed(static_cast<KeyCode>(Code));
-			case Device::Mouse:		return Input::IsMouseButtonPressed(static_cast<MouseButton>(Code));
-			case Device::Gamepad:	return Input::IsGamepadButtonPressed(static_cast<GamepadButton>(Code));
+			case Device::Key:		return Input::IsKeyPressed(static_cast<KeyCode>(Code), access);
+			case Device::Mouse:		return Input::IsMouseButtonPressed(static_cast<MouseButton>(Code), access);
+			case Device::Gamepad:	return Input::IsGamepadButtonPressed(static_cast<GamepadButton>(Code), access);
 		}
 		return false;
 	}
 
-	bool InputBinding::IsReleased() const
+	bool InputBinding::IsReleased(InputAccess access) const
 	{
 		switch (Source)
 		{
-			case Device::Key:		return Input::IsKeyReleased(static_cast<KeyCode>(Code));
-			case Device::Mouse:		return Input::IsMouseButtonReleased(static_cast<MouseButton>(Code));
-			case Device::Gamepad:	return Input::IsGamepadButtonReleased(static_cast<GamepadButton>(Code));
+			case Device::Key:		return Input::IsKeyReleased(static_cast<KeyCode>(Code), access);
+			case Device::Mouse:		return Input::IsMouseButtonReleased(static_cast<MouseButton>(Code), access);
+			case Device::Gamepad:	return Input::IsGamepadButtonReleased(static_cast<GamepadButton>(Code), access);
 		}
 		return false;
 	}
@@ -118,13 +118,13 @@ namespace Bellows {
 		return FindBindings(action) != nullptr;
 	}
 
-	bool InputMap::IsActionDown(const std::string& action)
+	bool InputMap::IsActionDown(const std::string& action, InputAccess access)
 	{
 		const std::vector<InputBinding>* bindings = FindBindings(action);
-		return bindings && std::any_of(bindings->begin(), bindings->end(), [](const InputBinding& b) { return b.IsDown(); });
+		return bindings && std::any_of(bindings->begin(), bindings->end(), [access](const InputBinding& b) { return b.IsDown(access); });
 	}
 
-	bool InputMap::IsActionPressed(const std::string& action)
+	bool InputMap::IsActionPressed(const std::string& action, InputAccess access)
 	{
 		const std::vector<InputBinding>* bindings = FindBindings(action);
 		if (!bindings)
@@ -133,15 +133,15 @@ namespace Bellows {
 		bool pressed = false;
 		for (const InputBinding& binding : *bindings)
 		{
-			if (binding.IsPressed())
+			if (binding.IsPressed(access))
 				pressed = true;
-			else if (binding.IsDown())
+			else if (binding.IsDown(access))
 				return false;
 		}
 		return pressed;
 	}
 
-	bool InputMap::IsActionReleased(const std::string& action)
+	bool InputMap::IsActionReleased(const std::string& action, InputAccess access)
 	{
 		const std::vector<InputBinding>* bindings = FindBindings(action);
 		if (!bindings)
@@ -149,9 +149,9 @@ namespace Bellows {
 		bool released = false;
 		for (const InputBinding& binding : *bindings)
 		{
-			if (binding.IsDown())
+			if (binding.IsDown(access))
 				return false;
-			released |= binding.IsReleased();
+			released |= binding.IsReleased(access);
 		}
 		return released;
 	}
@@ -159,7 +159,7 @@ namespace Bellows {
 	InputActionMap InputMap::GetDefaultActions()
 	{
 		using B = InputBinding;
-		return {
+		InputActionMap actions {
 			{ "move_left", { B::Key(KeyCode::A), B::Key(KeyCode::Left), B::Gamepad(GamepadButton::DPadLeft) } },
 			{ "move_right", { B::Key(KeyCode::D), B::Key(KeyCode::Right), B::Gamepad(GamepadButton::DPadRight) } },
 			{ "move_forward", { B::Key(KeyCode::W), B::Key(KeyCode::Up), B::Gamepad(GamepadButton::DPadUp) } },
@@ -168,6 +168,31 @@ namespace Bellows {
 			{ "interact", { B::Key(KeyCode::E), B::Gamepad(GamepadButton::X) } },
 			{ "pause", { B::Key(KeyCode::Escape), B::Gamepad(GamepadButton::Start) } },
 		};
+		actions.merge(GetDefaultUIActions());
+		return actions;
+	}
+
+	InputActionMap InputMap::GetDefaultUIActions()
+	{
+		// Shift+Tab also goes back: the UI treats ui_next with Shift held as ui_previous.
+		using B = InputBinding;
+		return {
+			{ "ui_accept", { B::Key(KeyCode::Enter), B::Key(KeyCode::KPEnter), B::Gamepad(GamepadButton::A) } },
+			{ "ui_cancel", { B::Key(KeyCode::Escape), B::Gamepad(GamepadButton::B) } },
+			{ "ui_up", { B::Key(KeyCode::Up), B::Gamepad(GamepadButton::DPadUp) } },
+			{ "ui_down", { B::Key(KeyCode::Down), B::Gamepad(GamepadButton::DPadDown) } },
+			{ "ui_left", { B::Key(KeyCode::Left), B::Gamepad(GamepadButton::DPadLeft) } },
+			{ "ui_right", { B::Key(KeyCode::Right), B::Gamepad(GamepadButton::DPadRight) } },
+			{ "ui_next", { B::Key(KeyCode::Tab), B::Gamepad(GamepadButton::RightBumper) } },
+			{ "ui_previous", { B::Gamepad(GamepadButton::LeftBumper) } },
+		};
+	}
+
+	void InputMap::AddMissingUIActions(InputActionMap& actions)
+	{
+		// A project that rebound a UI action keeps its bindings; only missing actions are added.
+		for (auto& [name, bindings] : GetDefaultUIActions())
+			actions.try_emplace(name, std::move(bindings));
 	}
 
 }

@@ -140,6 +140,24 @@
 			"doc": "True while a gamepad is connected"
 		},
 		{
+			"name": "ui_wants_pointer",
+			"params": [],
+			"returns": "bool",
+			"doc": "True while the game UI is using the pointer (over a panel or button, or a modal canvas is shown); the mouse buttons then read as up"
+		},
+		{
+			"name": "ui_wants_keyboard",
+			"params": [],
+			"returns": "bool",
+			"doc": "True while the game UI is using the keyboard and gamepad (a modal canvas is shown); keys and buttons then read as up"
+		},
+		{
+			"name": "ui_clear_focus",
+			"params": [],
+			"returns": "None",
+			"doc": "Takes focus away from the UI"
+		},
+		{
 			"name": "is_gamepad_down",
 			"params": [
 				{
@@ -254,6 +272,18 @@
 			],
 			"returns": "None",
 			"doc": ""
+		},
+		{
+			"name": "ui_focused",
+			"params": [],
+			"returns": "Entity | None",
+			"doc": "The UI entity with keyboard and gamepad focus, or None"
+		},
+		{
+			"name": "ui_hovered",
+			"params": [],
+			"returns": "Entity | None",
+			"doc": "The UI entity under the pointer that the pointer can use, or None"
 		},
 		{
 			"name": "find_entity",
@@ -1444,6 +1474,12 @@
 					"doc": ""
 				},
 				{
+					"name": "modal",
+					"kind": "property",
+					"type": "bool",
+					"doc": "While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)"
+				},
+				{
 					"name": "scale",
 					"kind": "property",
 					"type": "float",
@@ -1508,7 +1544,41 @@
 					"name": "interactable",
 					"kind": "property",
 					"type": "bool",
-					"doc": "Whether the pointer and keyboard can use it"
+					"doc": "Whether the pointer and focus can reach it and everything under it"
+				},
+				{
+					"name": "focusable",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer"
+				},
+				{
+					"name": "hovered",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True while the pointer is over it (and it is what the pointer would use)"
+				},
+				{
+					"name": "pressed",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True from a press on it until the button is let go"
+				},
+				{
+					"name": "focused",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True while it has keyboard and gamepad focus"
+				},
+				{
+					"name": "focus",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": "Gives it focus; False when it cannot take focus (not focusable, hidden, not interactable, or behind a modal canvas)"
 				},
 				{
 					"name": "screen_position",

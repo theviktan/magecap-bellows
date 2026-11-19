@@ -1,6 +1,7 @@
 #include "Bellows/UI/UILayout.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace Bellows {
 
@@ -63,6 +64,35 @@ namespace Bellows {
 		result.Max = parent.Min + anchorMax * parentSize + offsetMax * scale;
 		result.Max = glm::max(result.Max, result.Min);
 		return result;
+	}
+
+	int FindUINavigationTarget(const UIRectangle& from, const std::vector<UIRectangle>& candidates, UINavigationDirection direction, int skip)
+	{
+		// Screen y points down, so "up" is -y.
+		static constexpr glm::vec2 c_Directions[] = { { 0.0f, -1.0f }, { 0.0f, 1.0f }, { -1.0f, 0.0f }, { 1.0f, 0.0f } };
+		const glm::vec2 forward = c_Directions[static_cast<int>(direction)];
+		const glm::vec2 origin = (from.Min + from.Max) * 0.5f;
+
+		int best = -1;
+		float bestScore = 0.0f;
+		for (int i = 0; i < static_cast<int>(candidates.size()); i++)
+		{
+			if (i == skip)
+				continue;
+			const glm::vec2 offset = (candidates[i].Min + candidates[i].Max) * 0.5f - origin;
+			const float ahead = glm::dot(offset, forward);
+			if (ahead <= 0.5f)
+				continue;
+			// Something one step to the side counts as far as two steps ahead.
+			const float aside = std::abs(offset.x * forward.y - offset.y * forward.x);
+			const float score = ahead + 2.0f * aside;
+			if (best < 0 || score < bestScore)
+			{
+				best = i;
+				bestScore = score;
+			}
+		}
+		return best;
 	}
 
 	glm::vec2 GetUIRectPosition(const glm::vec2& pivot, const glm::vec2& offsetMin, const glm::vec2& offsetMax)

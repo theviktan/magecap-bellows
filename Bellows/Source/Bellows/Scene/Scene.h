@@ -2,6 +2,7 @@
 
 #include "Bellows/Core/Base.h"
 #include "Bellows/Core/Timestep.h"
+#include "Bellows/Core/Input.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Renderer/SceneRenderer.h"
 #include "Bellows/UI/UILayout.h"
@@ -103,6 +104,24 @@ namespace Bellows {
 		std::vector<Entity> GetVisibleUIEntities();
 		// True for an entity that is a canvas or has one above it, from the hierarchy alone.
 		bool IsInsideUICanvas(Entity entity);
+
+		// The game UI's input for this frame, run by OnUpdateRuntime before scripts: what the pointer is
+		// over and pressing, keyboard and gamepad focus and navigation, the events they raise (clicked,
+		// focused, unfocused, cancelled, sent up from the UI entity through its parents), and the input
+		// the UI takes from the game (Input::SetCapture).
+		void UpdateUIInput();
+		// The UI entity under the pointer that the pointer can use, the one a press started on (until
+		// the button is let go), and the one with keyboard and gamepad focus. Empty when there is none.
+		Entity GetUIHovered();
+		Entity GetUIPressed();
+		Entity GetUIFocused();
+		// Gives focus to a UI entity that can take it (focusable, shown, interactable, not behind a modal
+		// canvas), or clears focus with an empty entity. False (and nothing changes) when it cannot.
+		bool SetUIFocus(Entity entity);
+		// Whether the UI is using the pointer (over a panel, or held after a press on one) or the
+		// keyboard (a modal canvas is shown) this frame, so the game should leave them alone.
+		bool UIWantsPointer() const { return m_UICapture.Pointer; }
+		bool UIWantsKeyboard() const { return m_UICapture.Keyboard; }
 		// Finds the primary camera entity and builds a RenderCamera for the given aspect ratio.
 		bool GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera);
 		Entity GetPrimaryCameraEntity();
@@ -142,15 +161,29 @@ namespace Bellows {
 		void UpdateRuntimeCaches();
 		static const TextLayout* LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize);
 		void SubmitUI(SceneRenderer& renderer);
-	private:
+
 		// A visible UI entity and where it is drawn, in drawing order.
 		struct UIElement
 		{
 			entt::entity Handle = entt::null;
+			entt::entity Canvas = entt::null;	// The canvas it belongs to
 			UIRectangle Rect;
-			float Scale = 1.0f;		// Screen pixels per reference pixel
+			float Scale = 1.0f;					// Screen pixels per reference pixel
+			bool Interactable = true;			// Itself and everything above it up to the canvas
 		};
+		struct UIEvent
+		{
+			std::string Name;
+			UUID Source = 0;
+		};
+		enum class UIPointerOwner : uint8_t { None = 0, UI, Game };
 
+		const UIElement* FindUIElement(UUID id) const;
+		bool CanTakeUIFocus(UUID id) const;
+		void ChangeUIFocus(UUID id, std::vector<UIEvent>& events);
+		void EmitUIEvents(const std::vector<UIEvent>& events);
+		void ResetUIInput();
+	private:
 		uint64_t m_SceneID = 0;
 		std::string m_Name;
 		entt::registry m_Registry;
@@ -163,7 +196,14 @@ namespace Bellows {
 		uint32_t m_ViewportHeight = 720;
 
 		std::vector<UIElement> m_UIElements;
+		std::unordered_map<entt::entity, size_t> m_UIElementIndex;
 		std::unordered_set<entt::entity> m_UIEntities;
+		entt::entity m_UIModalCanvas = entt::null;		// The top shown modal canvas
+		UUID m_UIHovered = 0;
+		UUID m_UIPressed = 0;
+		UUID m_UIFocused = 0;
+		UIPointerOwner m_UIPointerOwner = UIPointerOwner::None;	// Who a held pointer press belongs to
+		InputCapture m_UICapture;
 
 		bool m_IsRunning = false;
 		bool m_IsPaused = false;

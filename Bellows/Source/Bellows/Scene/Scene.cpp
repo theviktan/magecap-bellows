@@ -401,6 +401,7 @@ namespace Bellows {
 		m_FrameCount = 0;
 		m_PhysicsAccumulator = 0.0f;
 		s_ActiveScene = this;
+		ResetUIInput();
 
 		UpdateRuntimeCaches();
 
@@ -429,6 +430,7 @@ namespace Bellows {
 		m_Audio.reset();
 		m_PhysicsWorld.reset();
 		m_IsRunning = false;
+		ResetUIInput();
 		if (s_ActiveScene == this)
 			s_ActiveScene = nullptr;
 	}
@@ -450,6 +452,9 @@ namespace Bellows {
 
 		s_ActiveScene = this;
 		const float deltaTime = timestep.GetSeconds();
+
+		// The UI goes first, so scripts see this frame's UI events and only the input it left the game.
+		UpdateUIInput();
 
 		if (ScriptEngine::IsInitialized())
 		{
@@ -785,148 +790,6 @@ namespace Bellows {
 		if (submitExtras)
 			submitExtras(renderer);
 		renderer.EndScene();
-	}
-
-	namespace {
-
-		// Where an entity sits in the hierarchy: its index among the roots, then among each parent's
-		// children down to it. Comparing these orders entities as the hierarchy panel lists them.
-		std::vector<size_t> GetHierarchyPath(Entity entity, const std::vector<UUID>& roots)
-		{
-			std::vector<size_t> path;
-			for (Entity current = entity; current;)
-			{
-				const UUID id = current.GetUUID();
-				Entity parent = current.GetParent();
-				const std::vector<UUID>& siblings = parent ? parent.GetComponent<RelationshipComponent>().Children : roots;
-				path.push_back(static_cast<size_t>(std::find(siblings.begin(), siblings.end(), id) - siblings.begin()));
-				current = parent;
-			}
-			std::reverse(path.begin(), path.end());
-			return path;
-		}
-
-	}
-
-	void Scene::UpdateUILayout(const glm::vec2& screenSize)
-	{
-		m_UIElements.clear();
-		m_UIEntities.clear();
-
-		// Canvases draw by SortOrder, and in hierarchy order where the sort orders are equal.
-		struct CanvasEntry
-		{
-			entt::entity Handle;
-			int SortOrder;
-			std::vector<size_t> Path;
-		};
-		std::vector<CanvasEntry> canvases;
-		auto canvasView = m_Registry.view<UICanvasComponent>();
-		for (entt::entity handle : canvasView)
-			canvases.push_back({ handle, canvasView.get<UICanvasComponent>(handle).SortOrder, GetHierarchyPath(Entity(handle, this), m_RootEntities) });
-		std::sort(canvases.begin(), canvases.end(), [](const CanvasEntry& a, const CanvasEntry& b)
-		{
-			return a.SortOrder != b.SortOrder ? a.SortOrder < b.SortOrder : a.Path < b.Path;
-		});
-
-		const UIRectangle screen { glm::vec2(0.0f), glm::max(screenSize, glm::vec2(0.0f)) };
-		std::function<void(entt::entity, const UIRectangle&, float, bool)> visit =
-			[&](entt::entity handle, const UIRectangle& parentRect, float scale, bool visible)
-		{
-			m_UIEntities.insert(handle);
-			UIRectangle rect = parentRect;
-			if (auto* ui = m_Registry.try_get<UIRectComponent>(handle))
-			{
-				rect = ResolveUIRect(ui->AnchorMin, ui->AnchorMax, ui->OffsetMin, ui->OffsetMax, parentRect, scale);
-				ui->RuntimeRect = rect;
-				visible = visible && ui->Visible;
-			}
-			if (visible)
-				m_UIElements.push_back({ handle, rect, scale });
-			for (UUID childID : m_Registry.get<RelationshipComponent>(handle).Children)
-			{
-				// A canvas below starts a UI of its own.
-				auto it = m_EntityMap.find(childID);
-				if (it != m_EntityMap.end() && !m_Registry.all_of<UICanvasComponent>(it->second))
-					visit(it->second, rect, scale, visible);
-			}
-		};
-
-		for (const CanvasEntry& entry : canvases)
-		{
-			const UICanvasComponent& canvas = m_Registry.get<UICanvasComponent>(entry.Handle);
-			const float scale = ComputeUIScale(canvas.ReferenceSize, canvas.ScaleMode, screen.GetSize());
-			m_UIEntities.insert(entry.Handle);
-			if (canvas.Visible)
-				m_UIElements.push_back({ entry.Handle, screen, scale });
-			for (UUID childID : m_Registry.get<RelationshipComponent>(entry.Handle).Children)
-			{
-				auto it = m_EntityMap.find(childID);
-				if (it != m_EntityMap.end() && !m_Registry.all_of<UICanvasComponent>(it->second))
-					visit(it->second, screen, scale, canvas.Visible);
-			}
-		}
-	}
-
-	bool Scene::IsUIEntity(Entity entity) const
-	{
-		return entity && m_UIEntities.contains(static_cast<entt::entity>(entity));
-	}
-
-	std::vector<Entity> Scene::GetVisibleUIEntities()
-	{
-		std::vector<Entity> entities;
-		entities.reserve(m_UIElements.size());
-		for (const UIElement& element : m_UIElements)
-			entities.emplace_back(element.Handle, this);
-		return entities;
-	}
-
-	bool Scene::IsInsideUICanvas(Entity entity)
-	{
-		for (Entity current = entity; current; current = current.GetParent())
-		{
-			if (current.HasComponent<UICanvasComponent>())
-				return true;
-		}
-		return false;
-	}
-
-	void Scene::SubmitUI(SceneRenderer& renderer)
-	{
-		for (const UIElement& element : m_UIElements)
-		{
-			Entity entity(element.Handle, this);
-			if (auto* image = m_Registry.try_get<UIImageComponent>(element.Handle); image && image->Visible)
-			{
-				if (image->LoadedTexturePath != image->TexturePath)
-				{
-					// UI is drawn into the finished (sRGB) image, so image pixels are used as they are.
-					image->RuntimeTexture = image->TexturePath.empty() ? nullptr : AssetManager::GetTexture(image->TexturePath, TextureColorSpace::Linear);
-					image->LoadedTexturePath = image->TexturePath;
-				}
-				UIRectStyle style;
-				style.Color = image->Color;
-				style.CornerRadius = image->CornerRadius * element.Scale;
-				style.BorderWidth = image->BorderWidth * element.Scale;
-				style.BorderColor = image->BorderColor;
-				renderer.SubmitUIRect(element.Rect.Min, element.Rect.Max, style, image->RuntimeTexture, entity.GetRenderID());
-			}
-
-			if (auto* text = m_Registry.try_get<TextComponent>(element.Handle); text && text->Visible && !text->Text.empty())
-			{
-				const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, element.Rect.GetSize());
-				if (!layout)
-					continue;
-				TextStyle style;
-				style.Color = text->Color;
-				style.OutlineColor = text->OutlineColor;
-				style.OutlineWidth = text->OutlineWidth;
-				const glm::vec4 clip(element.Rect.Min, element.Rect.Max);
-				renderer.SubmitUIText(text->RuntimeFont, *layout, element.Rect.Min, style, entity.GetRenderID(),
-					text->Overflow == TextOverflow::Clip ? &clip : nullptr);
-			}
-		}
 	}
 
 }

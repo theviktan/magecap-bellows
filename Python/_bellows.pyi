@@ -873,6 +873,11 @@ class UICanvas:
     @visible.setter
     def visible(self, value: bool) -> None: ...
     @property
+    def modal(self) -> bool:
+        """While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)"""
+    @modal.setter
+    def modal(self, value: bool) -> None: ...
+    @property
     def scale(self) -> float:
         """Screen pixels per reference pixel at the current screen size"""
 
@@ -953,9 +958,25 @@ class UIRect:
     def visible(self, value: bool) -> None: ...
     @property
     def interactable(self) -> bool:
-        """Whether the pointer and keyboard can use it"""
+        """Whether the pointer and focus can reach it and everything under it"""
     @interactable.setter
     def interactable(self, value: bool) -> None: ...
+    @property
+    def focusable(self) -> bool:
+        """Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer"""
+    @focusable.setter
+    def focusable(self, value: bool) -> None: ...
+    @property
+    def hovered(self) -> bool:
+        """True while the pointer is over it (and it is what the pointer would use)"""
+    @property
+    def pressed(self) -> bool:
+        """True from a press on it until the button is let go"""
+    @property
+    def focused(self) -> bool:
+        """True while it has keyboard and gamepad focus"""
+    def focus(self) -> bool:
+        """Gives it focus; False when it cannot take focus (not focusable, hidden, not interactable, or behind a modal canvas)"""
     @property
     def screen_position(self) -> Vec3:
         """The top-left corner on screen, in pixels from the screen's top-left, as of the last frame drawn (z unused)"""
@@ -1254,6 +1275,21 @@ def set_master_volume(volume: float) -> None: ...
 
 def time() -> float:
     """Seconds since play started"""
+
+def ui_clear_focus() -> None:
+    """Takes focus away from the UI"""
+
+def ui_focused() -> Entity | None:
+    """The UI entity with keyboard and gamepad focus, or None"""
+
+def ui_hovered() -> Entity | None:
+    """The UI entity under the pointer that the pointer can use, or None"""
+
+def ui_wants_keyboard() -> bool:
+    """True while the game UI is using the keyboard and gamepad (a modal canvas is shown); keys and buttons then read as up"""
+
+def ui_wants_pointer() -> bool:
+    """True while the game UI is using the pointer (over a panel or button, or a modal canvas is shown); the mouse buttons then read as up"""
 
 def user_folder() -> str:
     """The game's own writable folder for saves, screenshots and reports"""

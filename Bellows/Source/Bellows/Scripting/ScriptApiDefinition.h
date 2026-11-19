@@ -151,6 +151,11 @@ namespace Bellows::Scripting {
 		api.Function("is_action_released", [](const std::string& action) { return InputMap::IsActionReleased(Detail::RequireAction(action)); },
 			"True on the frame the action ended", Arg("action"));
 		api.Function("gamepad_connected", []() { return Input::IsGamepadConnected(); }, "True while a gamepad is connected");
+		api.Function("ui_wants_pointer", []() { return RequireContextScene().UIWantsPointer(); },
+			"True while the game UI is using the pointer (over a panel or button, or a modal canvas is shown); the mouse buttons then read as up");
+		api.Function("ui_wants_keyboard", []() { return RequireContextScene().UIWantsKeyboard(); },
+			"True while the game UI is using the keyboard and gamepad (a modal canvas is shown); keys and buttons then read as up");
+		api.Function("ui_clear_focus", []() { RequireContextScene().SetUIFocus(Entity()); }, "Takes focus away from the UI");
 		api.Function("is_gamepad_down", [](const std::string& button) { return Input::IsGamepadButtonDown(Detail::RequireGamepadButton(button)); },
 			"True while the gamepad button (\"A\", \"Start\", \"DPadLeft\", ...) is held", Arg("button"));
 		api.Function("is_gamepad_pressed", [](const std::string& button) { return Input::IsGamepadButtonPressed(Detail::RequireGamepadButton(button)); },
@@ -444,6 +449,8 @@ namespace Bellows::Scripting {
 		canvas.Property("sort_order", [](const UICanvasRef& r) { return r.Get().SortOrder; }, [](const UICanvasRef& r, int v) { r.Get().SortOrder = v; },
 			"Canvases with a higher sort order draw on top");
 		canvas.Property("visible", [](const UICanvasRef& r) { return r.Get().Visible; }, [](const UICanvasRef& r, bool v) { r.Get().Visible = v; }, "");
+		canvas.Property("modal", [](const UICanvasRef& r) { return r.Get().Modal; }, [](const UICanvasRef& r, bool v) { r.Get().Modal = v; },
+			"While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)");
 		canvas.ReadOnly("scale", [](const UICanvasRef& r)
 			{
 				const UICanvasComponent& c = r.Get();
@@ -477,7 +484,17 @@ namespace Bellows::Scripting {
 		rect.Property("visible", [](const UIRectRef& r) { return r.Get().Visible; }, [](const UIRectRef& r, bool v) { r.Get().Visible = v; },
 			"Hidden rects hide everything under them too");
 		rect.Property("interactable", [](const UIRectRef& r) { return r.Get().Interactable; }, [](const UIRectRef& r, bool v) { r.Get().Interactable = v; },
-			"Whether the pointer and keyboard can use it");
+			"Whether the pointer and focus can reach it and everything under it");
+		rect.Property("focusable", [](const UIRectRef& r) { return r.Get().Focusable; }, [](const UIRectRef& r, bool v) { r.Get().Focusable = v; },
+			"Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer");
+		rect.ReadOnly("hovered", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIHovered() == e; },
+			"True while the pointer is over it (and it is what the pointer would use)");
+		rect.ReadOnly("pressed", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIPressed() == e; },
+			"True from a press on it until the button is let go");
+		rect.ReadOnly("focused", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIFocused() == e; },
+			"True while it has keyboard and gamepad focus");
+		rect.Method("focus", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->SetUIFocus(e); },
+			"Gives it focus; False when it cannot take focus (not focusable, hidden, not interactable, or behind a modal canvas)");
 		rect.ReadOnly("screen_position", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().RuntimeRect.Min); },
 			"The top-left corner on screen, in pixels from the screen's top-left, as of the last frame drawn (z unused)");
 		rect.ReadOnly("screen_size", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().RuntimeRect.GetSize()); },
@@ -624,6 +641,11 @@ namespace Bellows::Scripting {
 				return ScriptEntity(scene.CreateChildEntity(Detail::ResolveOptional(parent), name));
 			}, "Creates an entity in the active scene", Arg("name", std::string("Entity")), Arg("parent", std::optional<ScriptEntity>()));
 		api.Function("destroy", [](const ScriptEntity& target) { if (Entity e = target.TryResolve()) e.GetScene()->DestroyEntity(e); }, "", Arg("entity"));
+		// Defined after Entity, so their return type has its script name.
+		api.Function("ui_focused", []() { return EntityOrNone(RequireContextScene().GetUIFocused()); },
+			"The UI entity with keyboard and gamepad focus, or None");
+		api.Function("ui_hovered", []() { return EntityOrNone(RequireContextScene().GetUIHovered()); },
+			"The UI entity under the pointer that the pointer can use, or None");
 		api.Function("find_entity", [](const std::string& name) { return EntityOrNone(RequireContextScene().FindEntityByName(name)); }, "", Arg("name"));
 		api.Function("get_entity", [](uint64_t id) { return EntityOrNone(RequireContextScene().TryGetEntityByUUID(UUID(id))); }, "", Arg("id"));
 		api.Function("get_entities", [](const std::optional<ComponentName>& component)
