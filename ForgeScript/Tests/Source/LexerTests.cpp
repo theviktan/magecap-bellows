@@ -132,7 +132,7 @@ TEST_CASE("LexerLongText")
 	CHECK(tokens[3].Type == TokenType::String);
 	CHECK_EQ(tokens[3].Text, std::string("one \"two\"\n  three"));
 	// Lines after the text are counted right.
-	CHECK(tokens[5].Lexeme == "say");
+	CHECK_EQ(std::string(tokens[5].Lexeme), std::string("say"));
 	CHECK_EQ(tokens[5].Line, 5);
 
 	// "{ }" inside long text splits it like other text, and the indentation goes from every part.
