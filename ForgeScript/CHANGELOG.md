@@ -27,6 +27,16 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Menus and HUDs (Phase 2 step 2.6, ForgeScript side):
+- In MageCap Bellows: `show (widget)`, `hide (widget)`, `enable (widget)`, `disable (widget)` and
+  `focus (widget)`, over Entity's `visible`, `interactable` and `focus()`. A new guide chapter,
+  "Menus and HUDs", covers buttons (`when "Start" is clicked`), these phrases and UI input.
+- `VM::RegisterPhrase(..., yieldToCalls)`: a host phrase whose first word may already be a name
+  (`show` is a ForgeScript function) only applies where that word can't be a value: `show menu` is
+  the phrase, while `show(value)`, `show (value)`, `show of x` and `show + 1` keep their old meaning.
+  Yielding goes by the first word, so every phrase starting with that word yields too. The API
+  description marks such phrases (`"yields_to_calls": true`), and the language server reads it.
+
 Taking a list apart (ForgeScript Roadmap item 10):
 - `set name, score to entry`: one name per item, exactly; a vector gives x, y (and z). The value
   is worked out first, so `set a, b to [b, a]` swaps. The names follow the usual rules of `set`.

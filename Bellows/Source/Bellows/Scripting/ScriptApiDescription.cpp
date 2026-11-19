@@ -297,7 +297,12 @@ namespace Bellows::Scripting {
 				// ForgeScript's engine phrases (save screenshot to "bug.png"), so tools know them too.
 				Json phrases = Json::array();
 				for (const ForgeScriptPhraseInfo& phrase : GetForgeScriptPhrases())
-					phrases.push_back(Json { { "pattern", phrase.Pattern }, { "doc", phrase.Doc }, { "returns", phrase.Returns } });
+				{
+					Json entry { { "pattern", phrase.Pattern }, { "doc", phrase.Doc }, { "returns", phrase.Returns } };
+					if (phrase.YieldsToCalls)
+						entry["yields_to_calls"] = true;
+					phrases.push_back(std::move(entry));
+				}
 				return Json { { "version", 1 }, { "functions", std::move(functions) }, { "types", std::move(types) }, { "phrases", std::move(phrases) } };
 			}
 

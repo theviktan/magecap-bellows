@@ -29,6 +29,9 @@ namespace Bellows::Scripting {
 		std::string Pattern;    // words, with each value in parentheses: "save screenshot to (path)"
 		std::string Doc;
 		std::string Returns;    // the type of what it gives back, like the API description's "returns"
+		// The first word may already be a name (show is a ForgeScript function), so it stays one wherever a
+		// call or an operator follows it: see ForgeScript's VM::RegisterPhrase.
+		bool YieldsToCalls = false;
 	};
 
 	// Every engine phrase RegisterForgeScriptApi adds, for tools (forgescript-api.json's "phrases").

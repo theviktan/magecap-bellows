@@ -2319,6 +2319,24 @@ namespace ForgeScript {
 
 		// ------------------------------------------------------------------ Phrases
 
+		// Whether this token, right after a name, makes it part of a longer value: a call, an index, a
+		// member, 'of', or an operator.
+		static bool ContinuesValue(const Token& token)
+		{
+			switch (token.Type)
+			{
+				case TokenType::LeftParen: case TokenType::LeftBracket: case TokenType::Dot: case TokenType::Possessive:
+				case TokenType::Of: case TokenType::Is: case TokenType::And: case TokenType::Or: case TokenType::Contains:
+				case TokenType::If: case TokenType::Plus: case TokenType::Minus: case TokenType::Star: case TokenType::Slash:
+				case TokenType::Percent: case TokenType::Caret: case TokenType::Equal: case TokenType::EqualEqual:
+				case TokenType::BangEqual: case TokenType::Less: case TokenType::LessEqual: case TokenType::Greater:
+				case TokenType::GreaterEqual:
+					return true;
+				default:
+					return false;
+			}
+		}
+
 		bool CanStartExpression(const Token& token) const
 		{
 			switch (token.Type)
@@ -2374,6 +2392,10 @@ namespace ForgeScript {
 
 			// A local variable with the same name wins over a phrase.
 			if (ResolveLocal(m_State, word) != -1 || IsVisibleInEnclosing(word))
+				return false;
+			// Some phrases start with a word that may be a name too, like 'show': there the word followed by
+			// a call or an operator keeps its old meaning, and only "show menu" is the phrase.
+			if (m_VM.PhraseYieldsToCalls(word) && ContinuesValue(Peek(1)))
 				return false;
 
 			const PhraseTable::Node* node = it->second.get();

@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -152,7 +153,11 @@ namespace ForgeScript {
 		void RegisterFunction(const std::string& name, int arity, NativeFn fn);
 		// Makes a C++ phrase usable from every script:  RegisterPhrase("move (thing) toward (target) by (amount)", ...)
 		// Returns false (and reports why through outError) if the pattern is not valid.
-		bool RegisterPhrase(const std::string& pattern, NativeFn fn, std::string* outError = nullptr);
+		// With yieldToCalls, the phrase's first word stays a plain name wherever a call or value could
+		// follow it, as it was before the phrase existed: "show(value)" still calls the show function,
+		// and only "show menu" is the phrase. For phrases whose first word may already be a name.
+		bool RegisterPhrase(const std::string& pattern, NativeFn fn, std::string* outError = nullptr, bool yieldToCalls = false);
+		bool PhraseYieldsToCalls(const std::string& firstWord) const { return m_YieldingPhraseWords.count(firstWord) > 0; }
 		// Shares a value with every script, like "player" or "gravity".
 		void SetSharedGlobal(const std::string& name, Value value);
 		Value GetSharedGlobal(const std::string& name);
@@ -397,6 +402,7 @@ namespace ForgeScript {
 		size_t m_NextGC = 0;
 		size_t m_ObjectCount = 0;
 		int m_GCPaused = 0;
+		std::set<std::string> m_YieldingPhraseWords;
 
 		// Debugger state
 		DebugHandler m_DebugHandler;
