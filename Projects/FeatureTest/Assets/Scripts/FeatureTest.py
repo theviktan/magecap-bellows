@@ -609,6 +609,28 @@ class FeatureTest(bellows.Script):
         bellows.ui_clear_focus()
         self.check(bellows.ui_focused() is None and self.events[-1] == ("unfocused", (button,)), "ui_clear_focus")
         self.check(bellows.ui_hovered() is None, "ui_hovered")
+
+        # The everyday UI properties on Entity, and the error that names an entity lacking the component.
+        canvas.visible, canvas.modal = True, False
+        self.check(menu.visible, "Entity.visible reads a canvas")
+        button.visible = False
+        self.check(not rect.visible and not button.visible, "Entity.visible sets the UIRect")
+        button.visible, button.interactable = True, False
+        self.check(not rect.interactable and not button.interactable, "Entity.interactable")
+        self.check(not button.focus(), "Entity.focus refuses UI that isn't interactable")
+        button.interactable = True
+        self.check(button.focus() and bellows.ui_focused() == button, "Entity.focus")
+        button.add_component("Text")
+        button.text = "Play"
+        self.check(button.text == "Play" and button.get_component("Text").text == "Play", "Entity.text")
+        try:
+            self.entity.text
+            self.check(False, "Entity.text needs a Text component")
+        except RuntimeError as error:
+            self.check(self.entity.name in str(error) and "Text" in str(error), f"Entity.text names the entity ({error})")
+        self.check(raises(lambda: setattr(self.entity, "visible", False), RuntimeError), "Entity.visible needs UI")
+        self.check(raises(lambda: self.entity.focus(), RuntimeError), "Entity.focus needs a UIRect")
+        bellows.ui_clear_focus()
         menu.destroy()
 
     def test_destruction(self):
