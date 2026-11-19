@@ -991,6 +991,8 @@ namespace Bellows::Scripting {
 		api.Function("real_time", []() { return GetRealTime(); },
 			"Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()");
 		api.Function("quit", [](int exitCode) { RequestQuit(exitCode); }, "Quits the game (stops play mode in the editor)", Arg("exit_code", 0));
+		api.Function("started_from_editor", []() { return IsStartedFromEditor(); },
+			"True while the game plays in the editor (its viewport, or a game window it started); false in an exported game");
 
 		// --- Audio ------------------------------------------------------------
 		api.Function("play_sound", [](const std::string& path, float volume, const std::string& bus)

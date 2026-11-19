@@ -154,6 +154,10 @@ namespace Bellows::Scripting {
 
 	// Host callbacks (the runtime and the editor decide what quitting or loading a scene means).
 	void SetQuitHandler(std::function<void(int)> handler);
+	// Whether the game was started from the editor: playing in its viewport, or in a game window it
+	// started. Set by the host; false in exported games and runtimes started by hand.
+	void SetStartedFromEditor(bool started);
+	bool IsStartedFromEditor();
 	void SetLoadSceneHandler(std::function<bool(const std::string&)> handler);
 	// Returns the image the player sees right now (the game view, without editor overlays), or
 	// nullopt when nothing has been drawn yet.

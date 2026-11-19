@@ -121,6 +121,7 @@ namespace Bellows {
 		m_ScriptDebugger.SetStopCallback([this](const ForgeScript::DebugStop&) { m_DebugStopPending = true; });
 		m_ScriptDebugger.Connect(ScriptEngine::GetForgeScriptRuntime());
 
+		Scripting::SetStartedFromEditor(true);
 		ScriptEngine::SetQuitHandler([this](int exitCode)
 		{
 			// Games quitting during play mode just stop playing; automation can quit the editor.
@@ -165,6 +166,7 @@ namespace Bellows {
 		ScriptEngine::SetQuitHandler(nullptr);
 		ScriptEngine::SetLoadSceneHandler(nullptr);
 		ScriptEngine::SetScreenshotHandler(nullptr);
+		Scripting::SetStartedFromEditor(false);
 		ScriptEngine::SetContextScene(nullptr);
 		m_ScriptDebugger.Connect(nullptr);
 		m_ScriptDebugger.SetStopCallback(nullptr);

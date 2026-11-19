@@ -492,6 +492,12 @@
 			"doc": "Quits the game (stops play mode in the editor)"
 		},
 		{
+			"name": "started_from_editor",
+			"params": [],
+			"returns": "bool",
+			"doc": "True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"
+		},
+		{
 			"name": "play_sound",
 			"params": [
 				{

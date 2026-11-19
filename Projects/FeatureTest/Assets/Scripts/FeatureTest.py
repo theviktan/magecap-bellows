@@ -6,6 +6,7 @@ triggers need simulated time), logs every check and finally logs "FEATURE TEST P
 runs), the game quits afterwards with exit code 0 (pass) or 1 (fail).
 """
 
+import importlib
 import math
 import os
 import pathlib
@@ -607,6 +608,12 @@ class FeatureTest(bellows.Script):
         folder = bellows.user_folder()
         self.check(os.path.isabs(folder) and folder.endswith(os.path.join("Games", "Feature Test")), f"user_folder ({folder})")
         self.check(bellows.log_folder() == os.path.join(folder, "Logs"), f"log_folder ({bellows.log_folder()})")
+        try:
+            importlib.import_module("bellows.editor")  # Only the editor has it
+            in_editor = True
+        except ImportError:
+            in_editor = False
+        self.check(bellows.started_from_editor() == in_editor, f"started_from_editor ({bellows.started_from_editor()}, in the editor: {in_editor})")
         path = bellows.save_screenshot("FeatureTest/shot.png", 320)
         self.check(path == os.path.join(folder, "FeatureTest", "shot.png"), f"save_screenshot returns the full path ({path})")
         with open(path, "rb") as file:
