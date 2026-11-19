@@ -27,6 +27,20 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Choosing by one value (ForgeScript Roadmap item 11):
+- `match weapon`, then lines `is "sword" then ...`, `is "bow", "crossbow" then ...` (any one of them),
+  `is above 100 then ...`, and `otherwise ...`, closed by `end`. The value is worked out once and the
+  first choice that fits runs. Each `is` takes everything an `if`'s `is` does (above, at least,
+  between, in, empty, not).
+- `match` is not reserved: it only starts a match at the start of a statement when the next line
+  starts with `is`, which was always a mistake before. So `set match to 3`, a function or phrase
+  called `match`, and `match` as a property keep their meaning.
+- New messages: "This 'match' is missing its 'end'.", "Put 'otherwise' last in a 'match', after every
+  'is'.", and a line starting with `is` elsewhere now says "A line can't start with 'is' here. Each
+  'is' choice goes inside a 'match', like: match weapon".
+- The language server pairs a match with its `end` (outline, variables), `help match` explains it,
+  and the VS Code extension (1.2.0) colors `match` and indents its choices.
+
 Menus and HUDs (Phase 2 step 2.6, ForgeScript side):
 - In MageCap Bellows: `show (widget)`, `hide (widget)`, `enable (widget)`, `disable (widget)` and
   `focus (widget)`, over Entity's `visible`, `interactable` and `focus()`. A new guide chapter,

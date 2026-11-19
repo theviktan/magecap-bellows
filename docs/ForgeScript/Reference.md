@@ -15,6 +15,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Multiply / divide | `multiply speed by 2`, `divide damage by 4` |
 | Show a value | `say "Hello"`, `print(a, b, c)` |
 | If | `if x is 1 then ... else if ... else ... end` (`otherwise` = `else`) |
+| Match | `match weapon` / `is "sword" then ...` / `is "bow", "crossbow" then ...` / `is above 100 then ...` / `otherwise ...` / `end`: the first choice that fits runs; each `is` works like an `if`'s |
 | Repeat | `repeat 3 times ... end`, `repeat forever ... end` |
 | Count | `for i from 1 to 10 [by 2] do ... end` |
 | Each | `for each item [, position] in list do ... end` (maps: `key, value`) |
@@ -101,7 +102,7 @@ These cannot be used as variable or function names (they can be used as property
 
 `add` `and` `by` `catch` `constant` `contains` `divide` `do` `each` `else` `end` `extends` `fail` `false` `for` `from` `function` `if` `in` `is` `kind` `multiply` `my` `new` `no` `not` `nothing` `of` `or` `otherwise` `parent` `phrase` `repeat` `return` `self` `set` `skip` `start` `stop` `take` `then` `to` `trigger` `true` `try` `until` `use` `wait` `when` `while` `with` `yes`
 
-Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`, `most`, `than`, `empty`, `a`, `an` and `as` only have a special meaning in their own spot, so you can still use them as names.
+Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`, `most`, `than`, `empty`, `match`, `a`, `an` and `as` only have a special meaning in their own spot, so you can still use them as names.
 
 ## Scope rules
 

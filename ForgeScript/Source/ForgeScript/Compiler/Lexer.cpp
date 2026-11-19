@@ -157,6 +157,30 @@ namespace ForgeScript {
 
 	}
 
+	bool MatchOpensBlock(const std::vector<Token>& tokens, size_t index)
+	{
+		if (index >= tokens.size() || tokens[index].Type != TokenType::Identifier || tokens[index].Lexeme != "match")
+			return false;
+		if (index > 0)
+		{
+			switch (tokens[index - 1].Type)
+			{
+				case TokenType::Newline: case TokenType::Then: case TokenType::Do:
+				case TokenType::Else: case TokenType::Otherwise:
+					break;
+				default:
+					return false;
+			}
+		}
+		// The lexer keeps no newlines inside brackets, so the header ends at the next newline.
+		size_t i = index + 1;
+		if (i >= tokens.size() || tokens[i].Type == TokenType::Newline || tokens[i].Type == TokenType::Eof)
+			return false;
+		while (i < tokens.size() && tokens[i].Type != TokenType::Newline && tokens[i].Type != TokenType::Eof)
+			i++;
+		return i + 1 < tokens.size() && tokens[i].Type == TokenType::Newline && tokens[i + 1].Type == TokenType::Is;
+	}
+
 	bool IfPicksAValue(const std::vector<Token>& tokens, size_t index)
 	{
 		if (index == 0 || index > tokens.size() || !EndsValue(tokens[index - 1]))

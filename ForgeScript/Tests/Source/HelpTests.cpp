@@ -91,7 +91,8 @@ TEST_CASE("HelpOnlyDescribesThingsThatExist")
 		CHECK_FALSE(entry.Signature.empty());
 		switch (entry.EntryKind)
 		{
-			case HelpEntry::Kind::Keyword: CHECK(contains(keywords, entry.Name)); break;
+			// 'match' is not reserved, but it opens a block (see MatchOpensBlock), so it has its own help.
+			case HelpEntry::Kind::Keyword: CHECK((contains(keywords, entry.Name) || entry.Name == "match")); break;
 			case HelpEntry::Kind::Function: CHECK(contains(globals, entry.Name)); break;
 			case HelpEntry::Kind::Phrase: CHECK(contains(phrases, entry.Name)); break;
 			case HelpEntry::Kind::Method:
