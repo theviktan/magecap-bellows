@@ -136,13 +136,22 @@ TEST_CASE("ForgeScript hot reload keeps the old version when the new one has mis
 	h.Start({ first, second });
 
 	h.Write("Scripts/Guard.forge", "when update with delta\n\tset to 5\n\tsay 1 + * 2\nend\n");
+	std::vector<std::string> sent;
+	const Scripting::ScriptEventListenerID listener = Scripting::AddScriptEventListener(
+		[&sent](const std::string& name, const Scripting::ScriptValueList& values, const Scripting::ScriptEventDelivery&)
+		{
+			if (name == "script error" && values.size() == 6)
+				sent.push_back(std::get<std::string>(values[1].Data) + ":" + std::to_string(static_cast<int>(std::get<double>(values[2].Data))));
+		});
 	CHECK_FALSE(h.Runtime.Reload("Scripts/Guard.forge"));
+	Scripting::RemoveScriptEventListener(listener);
 
-	// Each mistake is reported once, not once per entity, with its file and line.
+	// Each mistake is reported once, not once per entity, with its file and line, and sent to 'script error'.
 	INFO(h.AllErrors());
 	REQUIRE_EQ(h.Errors.size(), static_cast<size_t>(2));
 	CHECK_EQ(h.Errors[0].rfind("Scripts/Guard.forge line 2: ", 0), 0u);
 	CHECK_EQ(h.Errors[1].rfind("Scripts/Guard.forge line 3: ", 0), 0u);
+	CHECK_EQ(sent, std::vector<std::string>{ "Scripts/Guard.forge:2", "Scripts/Guard.forge:3" });
 
 	first.SetName("reset");
 	h.Frames(1);
