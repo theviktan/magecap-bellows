@@ -65,7 +65,7 @@ Only `false` and `nothing` are false. Positions start at **1**; negative positio
 
 Text escapes: `\n` `\t` `\r` `\"` `\\` `\{` `\}` `\0`.
 
-Long text: `"""` ... `"""`, over any number of lines. `"` needs no escape; `{ }` and escapes work. The line break after the opening `"""`, a last line holding only the closing `"""`, and the indentation every line shares are left out. It ends at the last three quotes of a run, so `"""a "b""""` is `a "b"`.
+Long text: `"""` ... `"""`, over any number of lines. `"` needs no escape; `{ }` and escapes work. The line break after the opening `"""`, a last line holding only the closing `"""`, and the indentation every line shares are left out, and every line ends with a plain `\n` (also in files with Windows line endings). It ends at the last three quotes of a run, so `"""a "b""""` is `a "b"`.
 
 ## Built-in functions
 

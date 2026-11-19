@@ -146,6 +146,12 @@ TEST_CASE("LexerLongText")
 	CHECK(partTokens[5].Type == TokenType::String);
 	CHECK_EQ(partTokens[5].Text, std::string(""));
 
+	// Files saved with Windows line ends give the same text.
+	Lexer windows("set a to \"\"\"\r\n\tone\r\n\ttwo\r\n\t\"\"\"\r\n");
+	std::vector<Token> windowsTokens = windows.Tokenize();
+	REQUIRE(windowsTokens.size() >= 4);
+	CHECK_EQ(windowsTokens[3].Text, std::string("one\ntwo"));
+
 	// A missing end is one clear mistake, not a cascade.
 	Lexer open("say \"\"\"never closed\nsay 1\n");
 	std::vector<Token> openTokens = open.Tokenize();

@@ -522,8 +522,8 @@ namespace ForgeScript {
 	// """long text""" can hold " and "" without escapes and runs until the next """ (the last three of a
 	// longer run of quotes, so text may end with a quote). When the opening """ ends its line, that line
 	// break isn't part of the text, and neither is the line holding only the closing """. The spaces and
-	// tabs that every line starts with (the indentation from the code around it) are removed. Escapes and
-	// "{ }" work as in other text.
+	// tabs that every line starts with (the indentation from the code around it) are removed, and line
+	// ends are always a plain new line ("\r\n" becomes "\n"). Escapes and "{ }" work as in other text.
 	Token Lexer::LexLongText()
 	{
 		const size_t open = m_Current;
@@ -721,6 +721,9 @@ namespace ForgeScript {
 				return token;
 			}
 			char c = Advance();
+			// Long text ends every line with a plain new line, also in files saved with Windows line ends.
+			if (longText && c == '\r' && Peek() == '\n' && m_Current < longText->ContentEnd)
+				continue;
 			if (longText && c == '\n')
 			{
 				text += c;

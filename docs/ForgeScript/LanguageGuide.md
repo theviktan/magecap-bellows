@@ -188,6 +188,7 @@ That says three lines: `Welcome, Ron!`, `The old mill is "haunted", they say.` a
 - When the opening `"""` ends its line, that line break isn't part of the text, and neither is the last line when it holds only the closing `"""`.
 - `{ }` and the special characters work as in other text. To end the text with a quote, write it right before the closing quotes: `"""He said "hi""""` is `He said "hi"`.
 - `"""like this"""` on one line works too.
+- Each line ends with a plain new line, also in scripts saved with Windows line endings.
 
 **Useful text tools:**
 
