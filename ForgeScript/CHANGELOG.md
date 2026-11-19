@@ -27,6 +27,10 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+For hosts:
+- `ScriptError::Frames`: an uncaught error's call stack as data (file, line, function, repeats),
+  innermost first, beside the text `Trace`. Errors that go on after `finally` code keep theirs.
+
 Default values (ForgeScript Roadmap item 8):
 - `function attack(target, damage is 10)`: calls may leave out values that have a default. Each
   default is worked out at the call (so `bag is []` is a new list each time), can use the values
