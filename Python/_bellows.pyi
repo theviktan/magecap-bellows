@@ -330,6 +330,10 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['UIImage']) -> UIImage | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['UILayout']) -> UILayout | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UIScroll']) -> UIScroll | None: ...
+    @typing.overload
     def get_component(self, component: type[_Component]) -> _Component | None: ...
     @typing.overload
     def get_component(self, component: str) -> typing.Any: ...
@@ -373,6 +377,10 @@ class Entity:
     def add_component(self, component: typing.Literal['UIRect']) -> UIRect: ...
     @typing.overload
     def add_component(self, component: typing.Literal['UIImage']) -> UIImage: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UILayout']) -> UILayout: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIScroll']) -> UIScroll: ...
     @typing.overload
     def add_component(self, component: type[_Component]) -> _Component: ...
     @typing.overload
@@ -909,9 +917,48 @@ class UIImage:
     @border_color.setter
     def border_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
     @property
+    def slice_border(self) -> list[float]:
+        """9-slice: the texture's edges [left, top, right, bottom] in texture pixels keep their size and only the middle stretches; 0 stretches all"""
+    @slice_border.setter
+    def slice_border(self, value: typing.Sequence[float]) -> None: ...
+    @property
     def visible(self) -> bool: ...
     @visible.setter
     def visible(self, value: bool) -> None: ...
+
+
+class UILayout:
+    """Places the entity's children that have a UIRect: one under another, side by side, or in a grid"""
+    @property
+    def direction(self) -> str:
+        """'vertical', 'horizontal' or 'grid'"""
+    @direction.setter
+    def direction(self, value: str) -> None: ...
+    @property
+    def spacing(self) -> float:
+        """Reference pixels between children"""
+    @spacing.setter
+    def spacing(self, value: float) -> None: ...
+    @property
+    def padding(self) -> list[float]:
+        """Space inside the edges: [left, top, right, bottom] in reference pixels"""
+    @padding.setter
+    def padding(self, value: typing.Sequence[float]) -> None: ...
+    @property
+    def main_alignment(self) -> str:
+        """Where the children sit along the direction when none fills: 'start', 'center' or 'end'"""
+    @main_alignment.setter
+    def main_alignment(self, value: str) -> None: ...
+    @property
+    def cross_alignment(self) -> str:
+        """Where a child that doesn't fill sits across the direction: 'start', 'center' or 'end'"""
+    @cross_alignment.setter
+    def cross_alignment(self, value: str) -> None: ...
+    @property
+    def columns(self) -> int:
+        """Columns of a grid"""
+    @columns.setter
+    def columns(self, value: int) -> None: ...
 
 
 class UIRect:
@@ -962,6 +1009,16 @@ class UIRect:
     @interactable.setter
     def interactable(self, value: bool) -> None: ...
     @property
+    def width_sizing(self) -> str:
+        """Inside a UILayout: 'fixed' keeps its own width, 'fill' shares the space left over"""
+    @width_sizing.setter
+    def width_sizing(self, value: str) -> None: ...
+    @property
+    def height_sizing(self) -> str:
+        """Inside a UILayout: 'fixed' keeps its own height, 'fill' shares the space left over"""
+    @height_sizing.setter
+    def height_sizing(self, value: str) -> None: ...
+    @property
     def focusable(self) -> bool:
         """Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer"""
     @focusable.setter
@@ -983,6 +1040,38 @@ class UIRect:
     @property
     def screen_size(self) -> Vec3:
         """The size on screen in pixels, as of the last frame drawn (z unused)"""
+
+
+class UIScroll:
+    """Scrolls and clips the entity's children; the mouse wheel scrolls it, and focus scrolls hidden UI into view"""
+    @property
+    def horizontal(self) -> bool: ...
+    @horizontal.setter
+    def horizontal(self, value: bool) -> None: ...
+    @property
+    def vertical(self) -> bool: ...
+    @vertical.setter
+    def vertical(self, value: bool) -> None: ...
+    @property
+    def scroll_position(self) -> Vec3:
+        """How far the content is scrolled, in reference pixels (kept in range when the UI is laid out; z unused)"""
+    @scroll_position.setter
+    def scroll_position(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def wheel_speed(self) -> float:
+        """Reference pixels per wheel notch"""
+    @wheel_speed.setter
+    def wheel_speed(self, value: float) -> None: ...
+    @property
+    def show_scrollbars(self) -> bool: ...
+    @show_scrollbars.setter
+    def show_scrollbars(self, value: bool) -> None: ...
+    @property
+    def content_size(self) -> Vec3:
+        """The size of what it holds, in reference pixels, as of the last frame drawn (z unused)"""
+    @property
+    def viewport_size(self) -> Vec3:
+        """The size of the part in view, in reference pixels, as of the last frame drawn (z unused)"""
 
 
 class Vec2:

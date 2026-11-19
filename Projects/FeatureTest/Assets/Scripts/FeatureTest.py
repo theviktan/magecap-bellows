@@ -394,13 +394,38 @@ class FeatureTest(bellows.Script):
         self.check(image.texture == "Textures/GroundTiles.png" and close(image.color, (0.1, 0.2, 0.3, 0.5)), "UIImage properties")
         self.check(close(image.corner_radius, 0.0) and close(image.border_width, 3.0) and close(image.border_color, (1.0, 0.5, 0.0, 1.0)),
                    "UIImage corners (no negative radius) and border")
+        self.check(image.slice_border == [0.0, 0.0, 0.0, 0.0], "UIImage slice_border default")
+        image.slice_border = [4, 6, 4, -2]
+        self.check(close(image.slice_border, (4.0, 6.0, 4.0, 0.0)), "UIImage slice_border (no negative edges)")
+        self.check(raises(lambda: setattr(image, "slice_border", [1, 2, 3]), ValueError), "slice_border needs 4 numbers")
+        self.check(rect.width_sizing == "fixed" and rect.height_sizing == "fixed", "UIRect sizing defaults")
+        rect.width_sizing = "fill"
+        self.check(rect.width_sizing == "fill", "UIRect.width_sizing")
+        self.check(raises(lambda: setattr(rect, "height_sizing", "stretch"), ValueError), "UIRect rejects unknown sizings")
+
+        layout = entity.add_component(bellows.UILayout)
+        self.check(layout.direction == "vertical" and close(layout.spacing, 8.0) and layout.columns == 2, "UILayout defaults")
+        layout.direction, layout.spacing, layout.padding = "grid", 12.0, [10, 20, 10, 20]
+        layout.main_alignment, layout.cross_alignment, layout.columns = "center", "end", 0
+        self.check(layout.direction == "grid" and close(layout.padding, (10.0, 20.0, 10.0, 20.0)), "UILayout properties")
+        self.check(layout.main_alignment == "center" and layout.cross_alignment == "end" and layout.columns == 1,
+                   "UILayout alignments and columns (at least 1)")
+        self.check(raises(lambda: setattr(layout, "direction", "diagonal"), ValueError), "UILayout rejects unknown directions")
+        self.check(raises(lambda: setattr(layout, "main_alignment", "middle"), ValueError), "UILayout rejects unknown alignments")
+
+        scroll = entity.add_component(bellows.UIScroll)
+        self.check(scroll.vertical and not scroll.horizontal and scroll.show_scrollbars and close(scroll.wheel_speed, 60.0), "UIScroll defaults")
+        scroll.horizontal, scroll.scroll_position, scroll.wheel_speed = True, Vec3(-5.0, 40.0, 0.0), 30.0
+        self.check(scroll.horizontal and close(scroll.scroll_position, (0.0, 40.0, 0.0)) and close(scroll.wheel_speed, 30.0), "UIScroll properties")
+        self.check(isinstance(scroll.content_size, Vec3) and isinstance(scroll.viewport_size, Vec3), "UIScroll content and viewport sizes")
 
         script = entity.add_component(bellows.ScriptComponent)
         script.path, script.class_name = "Scripts/Spinner.py", "Spinner"
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner", "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage"]
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
+                    "UILayout", "UIScroll"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
             entity.remove_component(name)

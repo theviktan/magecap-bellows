@@ -45,6 +45,51 @@ namespace Bellows {
 	// its size changes. "Position" is where the pivot sits relative to the anchors and "size" is the
 	// offsets' span (the whole size when the anchors are equal; the size beyond the stretched part
 	// otherwise), both in reference pixels.
+	// --- Layout containers -------------------------------------------------------------------------
+
+	// How a layout container places its children: one under another, side by side, or in a grid that
+	// fills each row left to right.
+	enum class UILayoutDirection : uint8_t { Vertical = 0, Horizontal, Grid };
+	// Where children sit along an axis when they don't fill it.
+	enum class UIAlignment : uint8_t { Start = 0, Center, End };
+	// A child's size along one axis in a layout: its own size, or a share of the space left over.
+	enum class UISizing : uint8_t { Fixed = 0, Fill };
+
+	const char* UILayoutDirectionToString(UILayoutDirection direction);
+	UILayoutDirection UILayoutDirectionFromString(std::string_view text);	// Unknown text: Vertical
+	bool IsUILayoutDirectionName(std::string_view text);
+	const char* UIAlignmentToString(UIAlignment alignment);
+	UIAlignment UIAlignmentFromString(std::string_view text);				// Unknown text: Start
+	bool IsUIAlignmentName(std::string_view text);
+	const char* UISizingToString(UISizing sizing);
+	UISizing UISizingFromString(std::string_view text);						// Unknown text: Fixed
+	bool IsUISizingName(std::string_view text);
+
+	struct UILayoutSettings
+	{
+		UILayoutDirection Direction = UILayoutDirection::Vertical;
+		float Spacing = 0.0f;						// Between children, reference pixels
+		glm::vec4 Padding { 0.0f };					// Left, top, right, bottom, reference pixels
+		UIAlignment MainAlignment = UIAlignment::Start;		// Along the direction (rows of a grid: across)
+		UIAlignment CrossAlignment = UIAlignment::Start;	// Across it, for children that don't fill
+		int Columns = 2;							// Grid only
+	};
+
+	struct UILayoutItem
+	{
+		glm::vec2 Size { 0.0f };					// Its own size in reference pixels (for Fixed axes)
+		UISizing Width = UISizing::Fixed;
+		UISizing Height = UISizing::Fixed;
+	};
+
+	// The screen rectangle of each item, in order, inside 'area' (screen pixels; 'scale' screen pixels
+	// per reference pixel). Vertical and horizontal layouts share what the fixed children leave among
+	// the filling ones, equally; a grid gives every column the same width and every row the height of
+	// its tallest child. 'contentSize' receives the size everything takes, padding included, in screen
+	// pixels (for scrolling).
+	std::vector<UIRectangle> ArrangeUILayout(const UILayoutSettings& settings, const UIRectangle& area,
+		const std::vector<UILayoutItem>& items, float scale, glm::vec2* contentSize = nullptr);
+
 	enum class UINavigationDirection : uint8_t { Up = 0, Down, Left, Right };
 
 	// The rectangle keyboard or gamepad navigation moves to from 'from' in 'direction': the nearest one

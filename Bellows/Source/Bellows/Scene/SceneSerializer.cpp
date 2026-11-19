@@ -265,6 +265,11 @@ namespace Bellows {
 				JsonRead(*it, "Visible", component.Visible);
 				JsonRead(*it, "Interactable", component.Interactable);
 				JsonRead(*it, "Focusable", component.Focusable);
+				std::string widthSizing = UISizingToString(component.WidthSizing), heightSizing = UISizingToString(component.HeightSizing);
+				JsonRead(*it, "WidthSizing", widthSizing);
+				JsonRead(*it, "HeightSizing", heightSizing);
+				component.WidthSizing = UISizingFromString(widthSizing);
+				component.HeightSizing = UISizingFromString(heightSizing);
 			}
 
 			if (auto it = json.find("UIImage"); it != json.end())
@@ -275,7 +280,34 @@ namespace Bellows {
 				JsonRead(*it, "CornerRadius", component.CornerRadius);
 				JsonRead(*it, "BorderWidth", component.BorderWidth);
 				JsonRead(*it, "BorderColor", component.BorderColor);
+				JsonRead(*it, "SliceBorder", component.SliceBorder);
 				JsonRead(*it, "Visible", component.Visible);
+			}
+
+			if (auto it = json.find("UILayout"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UILayoutComponent>();
+				std::string direction = UILayoutDirectionToString(component.Direction);
+				std::string mainAlignment = UIAlignmentToString(component.MainAlignment), crossAlignment = UIAlignmentToString(component.CrossAlignment);
+				JsonRead(*it, "Direction", direction);
+				JsonRead(*it, "Spacing", component.Spacing);
+				JsonRead(*it, "Padding", component.Padding);
+				JsonRead(*it, "MainAlignment", mainAlignment);
+				JsonRead(*it, "CrossAlignment", crossAlignment);
+				JsonRead(*it, "Columns", component.Columns);
+				component.Direction = UILayoutDirectionFromString(direction);
+				component.MainAlignment = UIAlignmentFromString(mainAlignment);
+				component.CrossAlignment = UIAlignmentFromString(crossAlignment);
+			}
+
+			if (auto it = json.find("UIScroll"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<UIScrollComponent>();
+				JsonRead(*it, "Horizontal", component.Horizontal);
+				JsonRead(*it, "Vertical", component.Vertical);
+				JsonRead(*it, "ScrollPosition", component.ScrollPosition);
+				JsonRead(*it, "WheelSpeed", component.WheelSpeed);
+				JsonRead(*it, "ShowScrollbars", component.ShowScrollbars);
 			}
 
 			if (auto it = json.find("Prefab"); it != json.end())
@@ -476,6 +508,8 @@ namespace Bellows {
 			j["Visible"] = c->Visible;
 			j["Interactable"] = c->Interactable;
 			j["Focusable"] = c->Focusable;
+			j["WidthSizing"] = UISizingToString(c->WidthSizing);
+			j["HeightSizing"] = UISizingToString(c->HeightSizing);
 		}
 
 		if (const auto* c = entity.TryGetComponent<UIImageComponent>())
@@ -486,7 +520,29 @@ namespace Bellows {
 			j["CornerRadius"] = c->CornerRadius;
 			j["BorderWidth"] = c->BorderWidth;
 			j["BorderColor"] = c->BorderColor;
+			j["SliceBorder"] = c->SliceBorder;
 			j["Visible"] = c->Visible;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UILayoutComponent>())
+		{
+			Json& j = json["UILayout"];
+			j["Direction"] = UILayoutDirectionToString(c->Direction);
+			j["Spacing"] = c->Spacing;
+			j["Padding"] = c->Padding;
+			j["MainAlignment"] = UIAlignmentToString(c->MainAlignment);
+			j["CrossAlignment"] = UIAlignmentToString(c->CrossAlignment);
+			j["Columns"] = c->Columns;
+		}
+
+		if (const auto* c = entity.TryGetComponent<UIScrollComponent>())
+		{
+			Json& j = json["UIScroll"];
+			j["Horizontal"] = c->Horizontal;
+			j["Vertical"] = c->Vertical;
+			j["ScrollPosition"] = c->ScrollPosition;
+			j["WheelSpeed"] = c->WheelSpeed;
+			j["ShowScrollbars"] = c->ShowScrollbars;
 		}
 
 		if (const auto* c = entity.TryGetComponent<PrefabComponent>())

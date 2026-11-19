@@ -98,6 +98,7 @@ namespace {
 		rect.Visible = false;
 		rect.Interactable = false;
 		rect.Focusable = true;
+		rect.WidthSizing = UISizing::Fill;
 		auto& image = entity.AddComponent<UIImageComponent>();
 		image.TexturePath = "Textures/Panel.png";
 		image.Color = glm::vec4(0.1f, 0.2f, 0.3f, 0.9f);
@@ -105,6 +106,20 @@ namespace {
 		image.BorderWidth = 3.0f;
 		image.BorderColor = glm::vec4(0.96f, 0.53f, 0.23f, 1.0f);
 		image.Visible = false;
+		image.SliceBorder = glm::vec4(8.0f, 6.0f, 8.0f, 10.0f);
+		auto& layout = entity.AddComponent<UILayoutComponent>();
+		layout.Direction = UILayoutDirection::Grid;
+		layout.Spacing = 12.0f;
+		layout.Padding = glm::vec4(1.0f, 2.0f, 3.0f, 4.0f);
+		layout.MainAlignment = UIAlignment::End;
+		layout.CrossAlignment = UIAlignment::Center;
+		layout.Columns = 4;
+		auto& scroll = entity.AddComponent<UIScrollComponent>();
+		scroll.Horizontal = true;
+		scroll.Vertical = false;
+		scroll.ScrollPosition = glm::vec2(30.0f, 0.0f);
+		scroll.WheelSpeed = 90.0f;
+		scroll.ShowScrollbars = false;
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
 
@@ -281,6 +296,8 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK_FALSE(rect.Visible);
 	CHECK_FALSE(rect.Interactable);
 	CHECK(rect.Focusable);
+	CHECK(rect.WidthSizing == UISizing::Fill);
+	CHECK(rect.HeightSizing == UISizing::Fixed);
 	const UIImageComponent& image = loadedChild.GetComponent<UIImageComponent>();
 	CHECK(image.TexturePath == "Textures/Panel.png");
 	CHECK(image.Color == glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
@@ -288,6 +305,20 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(image.BorderWidth == doctest::Approx(3.0f));
 	CHECK(image.BorderColor == glm::vec4(0.96f, 0.53f, 0.23f, 1.0f));
 	CHECK_FALSE(image.Visible);
+	CHECK(image.SliceBorder == glm::vec4(8.0f, 6.0f, 8.0f, 10.0f));
+	const UILayoutComponent& layout = loadedChild.GetComponent<UILayoutComponent>();
+	CHECK(layout.Direction == UILayoutDirection::Grid);
+	CHECK(layout.Spacing == doctest::Approx(12.0f));
+	CHECK(layout.Padding == glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+	CHECK(layout.MainAlignment == UIAlignment::End);
+	CHECK(layout.CrossAlignment == UIAlignment::Center);
+	CHECK(layout.Columns == 4);
+	const UIScrollComponent& scroll = loadedChild.GetComponent<UIScrollComponent>();
+	CHECK(scroll.Horizontal);
+	CHECK_FALSE(scroll.Vertical);
+	CHECK(scroll.ScrollPosition == glm::vec2(30.0f, 0.0f));
+	CHECK(scroll.WheelSpeed == doctest::Approx(90.0f));
+	CHECK_FALSE(scroll.ShowScrollbars);
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")

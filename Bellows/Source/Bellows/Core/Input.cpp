@@ -256,6 +256,11 @@ namespace Bellows {
 		return s_State.Capture;
 	}
 
+	void Input::InjectScroll(const glm::vec2& offset)
+	{
+		s_State.ScrollDelta += offset;
+	}
+
 	void Input::ResetState()
 	{
 		for (size_t i = 0; i < MaxKeyCode; i++)

@@ -76,6 +76,7 @@ namespace Bellows {
 		static void InjectMouseButton(MouseButton button, bool down);
 		static void InjectGamepadButton(GamepadButton button, bool down);
 		static void InjectMousePosition(const glm::vec2& viewportPosition);
+		static void InjectScroll(const glm::vec2& offset);	// Wheel notches, like a scroll event (+y away from the user)
 
 		// Set by the scene's UI each frame before scripts run; cleared when play stops.
 		static void SetCapture(const InputCapture& capture);

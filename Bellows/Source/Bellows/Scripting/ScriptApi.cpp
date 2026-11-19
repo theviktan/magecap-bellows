@@ -234,6 +234,8 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<UICanvasComponent>("UICanvas"),
 			MakeComponentInfo<UIRectComponent>("UIRect"),
 			MakeComponentInfo<UIImageComponent>("UIImage"),
+			MakeComponentInfo<UILayoutComponent>("UILayout"),
+			MakeComponentInfo<UIScrollComponent>("UIScroll"),
 		};
 		return s_Infos;
 	}
@@ -275,6 +277,8 @@ namespace Bellows::Scripting {
 		if (type == typeid(UICanvasComponent)) return "UICanvas";
 		if (type == typeid(UIRectComponent)) return "UIRect";
 		if (type == typeid(UIImageComponent)) return "UIImage";
+		if (type == typeid(UILayoutComponent)) return "UILayout";
+		if (type == typeid(UIScrollComponent)) return "UIScroll";
 		return "Unknown";
 	}
 
