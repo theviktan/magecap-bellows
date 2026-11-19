@@ -1773,6 +1773,50 @@ namespace ForgeScript {
 
 	}
 
+	namespace {
+
+		// The parameters' names in a signature label: "attack(target, damage is 10)" gives target, damage;
+		// "play(path: text = \"\")" gives path.
+		std::vector<std::string> ParameterNames(const std::string& label)
+		{
+			std::vector<std::string> names;
+			const size_t open = label.find('(');
+			if (open == std::string::npos)
+				return names;
+			int depth = 0;
+			bool quoted = false;
+			bool atStart = true;
+			for (size_t i = open + 1; i < label.size(); i++)
+			{
+				const char c = label[i];
+				if (c == '"')
+					quoted = !quoted;
+				if (quoted)
+					continue;
+				if (depth == 0 && atStart && (std::isalpha(static_cast<unsigned char>(c)) || c == '_'))
+				{
+					size_t end = i;
+					while (end < label.size() && (std::isalnum(static_cast<unsigned char>(label[end])) || label[end] == '_'))
+						end++;
+					names.push_back(label.substr(i, end - i));
+					atStart = false;
+					i = end - 1;
+					continue;
+				}
+				if (c == '(' || c == '[' || c == '{')
+					depth++;
+				else if ((c == ')' || c == ']' || c == '}') && depth > 0)
+					depth--;
+				else if (c == ')' && depth == 0)
+					break;
+				else if (c == ',' && depth == 0)
+					atStart = true;
+			}
+			return names;
+		}
+
+	}
+
 	Json LanguageServer::SignatureHelp(const Json& params)
 	{
 		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
@@ -1791,6 +1835,7 @@ namespace ForgeScript {
 			char Open;
 			size_t Position;
 			int Commas;
+			size_t ValueStart; // where the value being typed starts: after the '(' or the last ','
 		};
 		std::vector<Bracket> brackets;
 		bool quoted = false;
@@ -1804,11 +1849,14 @@ namespace ForgeScript {
 			if (c == '#')
 				break;
 			if (c == '(' || c == '[' || c == '{')
-				brackets.push_back({ c, i, 0 });
+				brackets.push_back({ c, i, 0, i + 1 });
 			else if ((c == ')' || c == ']' || c == '}') && !brackets.empty())
 				brackets.pop_back();
 			else if (c == ',' && !brackets.empty())
+			{
 				brackets.back().Commas++;
+				brackets.back().ValueStart = i + 1;
+			}
 		}
 		if (quoted)
 			return Json();
@@ -1936,8 +1984,27 @@ namespace ForgeScript {
 			}
 			signatures.Add(std::move(signature));
 		}
+		// A named value ("damage: 25") is for the parameter with that name, wherever it is in the list.
+		int active = call->Commas;
+		size_t start = call->ValueStart;
+		while (start < offset && line[start] == ' ')
+			start++;
+		size_t end = start;
+		while (end < offset && IsWordChar(line[end]))
+			end++;
+		size_t colon = end;
+		while (colon < offset && line[colon] == ' ')
+			colon++;
+		if (end > start && colon < offset && line[colon] == ':')
+		{
+			const std::string named(line.substr(start, end - start));
+			const std::vector<std::string> parameters = ParameterNames(found[0].first);
+			auto it = std::find(parameters.begin(), parameters.end(), named);
+			if (it != parameters.end())
+				active = static_cast<int>(it - parameters.begin());
+		}
 		Json result;
-		result.Set("signatures", std::move(signatures)).Set("activeSignature", 0).Set("activeParameter", call->Commas);
+		result.Set("signatures", std::move(signatures)).Set("activeSignature", 0).Set("activeParameter", active);
 		return result;
 	}
 

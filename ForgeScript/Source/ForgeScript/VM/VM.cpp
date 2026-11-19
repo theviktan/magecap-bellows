@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <utility>
 
 namespace ForgeScript {
 
@@ -1101,9 +1102,10 @@ namespace ForgeScript {
 	bool VM::CallClosure(Task* task, Closure* closure, size_t argCount, uint8_t flags)
 	{
 		Function* fn = closure->Fn;
+		List* names = std::exchange(task->PendingNames, nullptr);
 		const int given = static_cast<int>(argCount);
 		const int fewest = fn->DefaultIps.empty() ? fn->Arity : fn->MinArity;
-		if (given < fewest || given > fn->Arity)
+		if (!names && (given < fewest || given > fn->Arity))
 		{
 			const std::string needs = fewest == fn->Arity ? ValueCount(fn->Arity)
 				: std::to_string(fewest) + " to " + ValueCount(fn->Arity);
@@ -1111,6 +1113,8 @@ namespace ForgeScript {
 		}
 		if (task->Frames.size() >= m_Config.MaxCallDepth)
 			return Fail("Too many functions calling each other (is a function calling itself forever?).");
+		if (names)
+			return CallWithNames(task, closure, argCount, flags, names);
 
 		// Values left out get their defaults: their places are made here, and the call starts at the
 		// code that fills in the first one left out.
@@ -1125,7 +1129,77 @@ namespace ForgeScript {
 		CallFrame frame;
 		frame.Function = closure;
 		frame.Ip = start;
+		// The values with defaults that this call gave are the first (given - fewest) of them.
+		if (!fn->DefaultIps.empty())
+		{
+			const int count = given - fewest;
+			frame.Given = count >= 64 ? ~uint64_t(0) : (uint64_t(1) << count) - 1;
+		}
 		frame.Base = task->Stack.size() - static_cast<size_t>(fn->Arity) - 1;
+		frame.Flags = flags;
+		task->Frames.push_back(frame);
+		return true;
+	}
+
+	// A call whose last values are named: they go to the parameters with those names. A parameter left
+	// out gets its default (its default code runs; the others' is skipped), or the call fails.
+	bool VM::CallWithNames(Task* task, Closure* closure, size_t argCount, uint8_t flags, List* names)
+	{
+		Function* fn = closure->Fn;
+		const size_t named = names->Items.size();
+		const size_t positional = argCount - named;
+		const size_t arity = static_cast<size_t>(fn->Arity);
+		const size_t fewest = fn->DefaultIps.empty() ? arity : static_cast<size_t>(fn->MinArity);
+		const std::string label = "'" + FunctionLabel(fn) + "'";
+		if (positional > arity)
+			return Fail(label + " needs at most " + ValueCount(fn->Arity) + ", but was given " + ValueCount(static_cast<int>(positional)) + " before the named ones.");
+
+		std::vector<Value> values(arity);
+		std::vector<bool> given(arity, false);
+		const size_t base = task->Stack.size() - argCount;
+		for (size_t i = 0; i < positional; i++)
+		{
+			values[i] = task->Stack[base + i];
+			given[i] = true;
+		}
+		for (size_t i = 0; i < named; i++)
+		{
+			const std::string& name = As<String>(names->Items[i])->Text;
+			auto found = std::find(fn->ParamNames.begin(), fn->ParamNames.end(), name);
+			if (found == fn->ParamNames.end())
+			{
+				std::vector<std::string_view> candidates(fn->ParamNames.begin(), fn->ParamNames.end());
+				return Fail(label + " has no value called '" + name + "'." + DidYouMean(name, candidates));
+			}
+			const size_t index = static_cast<size_t>(found - fn->ParamNames.begin());
+			if (given[index])
+				return Fail(label + " was given '" + name + "' twice.");
+			values[index] = task->Stack[base + positional + i];
+			given[index] = true;
+		}
+		size_t firstMissing = arity;
+		for (size_t i = 0; i < arity; i++)
+		{
+			if (given[i])
+				continue;
+			if (i < fewest)
+				return Fail(label + " needs a value for '" + fn->ParamNames[i] + "'.");
+			if (firstMissing == arity)
+				firstMissing = i;
+		}
+
+		task->Stack.resize(base);
+		task->Stack.insert(task->Stack.end(), values.begin(), values.end());
+		CallFrame frame;
+		frame.Function = closure;
+		frame.Ip = fn->DefaultIps.empty() ? 0 : fn->DefaultIps[(firstMissing == arity ? arity : firstMissing) - fewest];
+		frame.Given = 0;
+		for (size_t i = fewest; i < arity; i++)
+		{
+			if (given[i])
+				frame.Given |= uint64_t(1) << (i - fewest);
+		}
+		frame.Base = task->Stack.size() - arity - 1;
 		frame.Flags = flags;
 		task->Frames.push_back(frame);
 		return true;
@@ -1133,6 +1207,8 @@ namespace ForgeScript {
 
 	bool VM::CallNative(Task* task, NativeFunction* native, size_t argCount, const Value& self)
 	{
+		if (std::exchange(task->PendingNames, nullptr))
+			return Fail("'" + native->Name + "' is built in, so its values can't be named. Give them in order.");
 		if (native->Arity != AnyArity && static_cast<int>(argCount) != native->Arity)
 		{
 			return Fail("'" + native->Name + "' needs " + ValueCount(native->Arity) + ", but was given " +
@@ -2141,6 +2217,7 @@ namespace ForgeScript {
 	// 'where' is given when the error is raised again after finally code, to keep where it first happened.
 	bool VM::ThrowValue(Task* task, const Value& error, const Value* where)
 	{
+		task->PendingNames = nullptr;
 		if (!task->Handlers.empty())
 		{
 			TryHandler handler = task->Handlers.back();
@@ -2698,6 +2775,7 @@ namespace ForgeScript {
 					uint8_t count = FORGESCRIPT_READ_BYTE();
 					size_t calleeIndex = stack.size() - 1 - count;
 					Task* spawned = NewTask(frame->Function->Fn->Owner);
+					spawned->PendingNames = std::exchange(task->PendingNames, nullptr);
 					spawned->Stack.assign(stack.begin() + static_cast<std::ptrdiff_t>(calleeIndex), stack.end());
 					stack.resize(calleeIndex);
 					m_PendingTasks.push_back(spawned);
@@ -2842,6 +2920,17 @@ namespace ForgeScript {
 					handler.CatchIp = frame->Ip + offset;
 					handler.Finally = op == OpCode::TryFinally;
 					task->Handlers.push_back(handler);
+					break;
+				}
+				case OpCode::NamedArgs:
+					task->PendingNames = As<List>(FORGESCRIPT_READ_CONSTANT());
+					break;
+				case OpCode::SkipIfGiven:
+				{
+					const uint8_t index = FORGESCRIPT_READ_BYTE();
+					const uint16_t offset = FORGESCRIPT_READ_U16();
+					if ((frame->Given >> index) & 1)
+						frame->Ip += offset;
 					break;
 				}
 				case OpCode::Rethrow:

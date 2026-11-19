@@ -572,6 +572,24 @@ attack("dragon", 50)     # dragon takes 50
 - Giving `nothing` is giving a value: `attack("goblin", nothing)` sets `damage` to `nothing`, not 10.
 - Defaults work for functions in kinds (including `setup`, so `new Hero("Ron")` can leave out a level), and for functions written as values: `function(x, times is 2) return x * times end`.
 
+### Naming the values in a call
+
+When a function takes several values, you can name them in the call, after the others: the name, a colon, then the value.
+
+```forge
+function attack(target, damage is 10, crit is 2)
+	...
+end
+
+attack(goblin, crit: 5)              # damage stays 10, crit is 5
+attack(target: goblin, damage: 25)   # any order once they're named
+```
+
+- Named values come after the ones given in order: `attack(goblin, crit: 5)`, not `attack(crit: 5, goblin)`.
+- A value you skip gets its default, even when a later one is named. A value without a default must be given, in order or by name.
+- The names are the function's own parameter names. A misspelled one gets a "Did you mean" hint.
+- It works for your functions, functions in kinds (and `new`), function values and `start`. Built-in functions such as `max` take their values in order.
+
 ### Variables inside functions
 
 A variable you `set` inside a function belongs to that function and disappears when it finishes, **unless** the script already has a variable with that name:

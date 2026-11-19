@@ -1456,6 +1456,7 @@ namespace ForgeScript {
 			}
 			if (params.size() > 255)
 				ErrorAt(opener, "A function can take at most 255 values.");
+			fn->ParamNames = params;
 			DefaultValues(fn, params, defaults);
 
 			// Every name this function assigns with "set" becomes one of its own variables,
@@ -1561,10 +1562,18 @@ namespace ForgeScript {
 				return;
 
 			fn->MinArity = static_cast<int>(first);
+			if (params.size() - first > 64)
+				Error("A function can have at most 64 values with defaults.");
 			std::vector<Local>& locals = m_State->Locals;
 			for (size_t i = first; i < params.size(); i++)
 			{
 				fn->DefaultIps.push_back(CurrentChunk().Size());
+				// A call that names its values may give a later one and leave this one out.
+				EmitOp(OpCode::SkipIfGiven);
+				EmitByte(static_cast<uint8_t>(i - first));
+				EmitByte(0xff);
+				EmitByte(0xff);
+				const size_t skip = CurrentChunk().Size() - 2;
 				// Slot 0 holds the function (or self), so parameter i lives in slot i + 1.
 				std::vector<std::string> later;
 				for (size_t j = i; j < params.size(); j++)
@@ -1583,6 +1592,7 @@ namespace ForgeScript {
 				EmitOp(OpCode::SetLocal);
 				EmitByte(static_cast<uint8_t>(i + 1));
 				EmitOp(OpCode::Pop);
+				PatchJump(skip);
 			}
 			fn->DefaultIps.push_back(CurrentChunk().Size());
 		}
@@ -2735,14 +2745,31 @@ namespace ForgeScript {
 			}
 		}
 
+		// The values of a call. Values can be named, after the others: attack(goblin, damage: 25). Names
+		// are matched to the function's parameters when it runs (NamedArgs, just before the call).
 		uint8_t ArgumentList()
 		{
 			PushStopWords(nullptr);
 			int count = 0;
+			std::vector<std::string> names;
 			if (!Check(TokenType::RightParen))
 			{
 				do
 				{
+					if (Check(TokenType::Identifier) && Peek(1).Type == TokenType::Colon)
+					{
+						const Token nameToken = Current();
+						std::string name(nameToken.Lexeme);
+						if (std::find(names.begin(), names.end(), name) != names.end())
+							ErrorAt(nameToken, "'" + name + "' is named twice in this call.");
+						names.push_back(std::move(name));
+						Advance();
+						Advance();
+					}
+					else if (!names.empty())
+					{
+						ErrorAtCurrent("Put the named values after the others, like: attack(goblin, damage: 25)");
+					}
 					Expression();
 					if (count == 255)
 						Error("A function can take at most 255 values.");
@@ -2751,6 +2778,15 @@ namespace ForgeScript {
 			}
 			PopStopWords();
 			Consume(TokenType::RightParen, "Expected ')' after the values.");
+			if (!names.empty())
+			{
+				Value list = m_VM.MakeList();
+				// Interned names, so they compare by pointer like other names.
+				for (const std::string& name : names)
+					As<List>(list)->Items.push_back(Value::FromObject(m_VM.Intern(name)));
+				EmitOp(OpCode::NamedArgs);
+				EmitU16(MakeConstant(list));
+			}
 			return static_cast<uint8_t>(count);
 		}
 

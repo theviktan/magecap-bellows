@@ -369,3 +369,11 @@ TEST_CASE("DefaultValuesWorkOutAtEachCall")
 	CHECK_EQ(Output("function f(a is 5)\n\treturn a\nend\nsay f(nothing)\n"), std::string("nothing\n"));
 	CHECK_CONTAINS(Output("function f(a, b is 1)\nend\ntry\n\tf()\ncatch p\n\tsay p\nend\n"), "needs 1 to 2 values, but was given 0 values");
 }
+
+TEST_CASE("CompileErrorsInNamedValues")
+{
+	CHECK_CONTAINS(CompileFails("function f(a, b)\nend\nf(a: 1, 2)\n").Message, "Put the named values after the others");
+	CHECK_CONTAINS(CompileFails("function f(a, b)\nend\nf(a: 1, a: 2)\n").Message, "'a' is named twice in this call.");
+	// A map in a call is still a map.
+	CHECK_EQ(Output("function f(m)\n\treturn m.size\nend\nsay f({a: 1, b: 2})\n"), std::string("2\n"));
+}

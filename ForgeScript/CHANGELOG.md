@@ -27,6 +27,15 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Naming the values in a call (ForgeScript Roadmap item 9):
+- `attack(goblin, crit: 5)`: values can be named after the ones given in order. A skipped value
+  gets its default even when a later one is named. Works for script functions, kinds (and `new`),
+  function values and `start`; built-in functions refuse names with a clear message.
+- Mistakes name the value: "'attack' has no value called 'dmg'.", "'attack' needs a value for
+  'target'.", "'attack' was given 'target' twice."
+- Signature help highlights the parameter a named value is for. Before, `name:` in a call was always
+  a mistake, so no script changes meaning.
+
 Default values (ForgeScript Roadmap item 8):
 - `function attack(target, damage is 10)`: calls may leave out values that have a default. Each
   default is worked out at the call (so `bag is []` is a new list each time), can use the values
