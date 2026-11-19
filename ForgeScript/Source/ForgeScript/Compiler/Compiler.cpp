@@ -344,9 +344,11 @@ namespace ForgeScript {
 
 			switch (token.Type)
 			{
-				// The 'if' of 'else if' continues the open 'if' and shares its 'end'.
+				// The 'if' of 'else if' continues the open 'if' and shares its 'end', and an 'if' that picks
+				// one of two values has no 'end'.
 				case TokenType::If:
-					return !(i > 0 && (tokens[i - 1].Type == TokenType::Else || tokens[i - 1].Type == TokenType::Otherwise));
+					return !(i > 0 && (tokens[i - 1].Type == TokenType::Else || tokens[i - 1].Type == TokenType::Otherwise)) &&
+						!IfPicksAValue(tokens, i);
 				case TokenType::While: case TokenType::Repeat: case TokenType::For:
 				case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 					return true;
@@ -1848,7 +1850,8 @@ namespace ForgeScript {
 			Advance();
 			m_NoInvoke = true;
 			m_LastCallPos = static_cast<size_t>(-1);
-			Expression();
+			// A single call, so not 'start a() if x otherwise b()': only one of those calls could become a start.
+			OrExpression();
 			m_NoInvoke = false;
 			std::vector<uint8_t>& code = CurrentChunk().GetCode();
 			if (m_LastCallPos == static_cast<size_t>(-1) || m_LastCallPos + 2 != code.size())
@@ -2014,7 +2017,30 @@ namespace ForgeScript {
 
 		// ------------------------------------------------------------------ Expressions
 
-		void Expression() { OrExpression(); }
+		// 'value if test otherwise other' picks one of two values. The first value only runs when the
+		// test is true, so "widget.name if widget otherwise ..." never reads a name from nothing: its
+		// code, compiled before the 'if' was seen, moves after the test. It binds looser than 'or' and
+		// groups to the right, so a chain reads in order: "a" if x otherwise "b" if y otherwise "c".
+		void Expression()
+		{
+			const size_t start = CurrentChunk().Size();
+			OrExpression();
+			if (!Check(TokenType::If) || !IfPicksAValue(m_Tokens, m_Pos))
+				return;
+			Advance();
+			const Chunk::Piece value = CurrentChunk().Cut(start);
+			OrExpression();
+			if (!Match(TokenType::Otherwise) && !Match(TokenType::Else))
+				ErrorAtCurrent("Say which value to use when it isn't true, like: set size to \"big\" if x > 3 otherwise \"small\"");
+			const size_t otherwise = EmitJump(OpCode::JumpIfFalse);
+			EmitOp(OpCode::Pop);
+			CurrentChunk().Paste(value);
+			const size_t done = EmitJump(OpCode::Jump);
+			PatchJump(otherwise);
+			EmitOp(OpCode::Pop);
+			Expression();
+			PatchJump(done);
+		}
 
 		void OrExpression()
 		{

@@ -17,9 +17,10 @@ namespace ForgeScript {
 
 		switch (tokens[i].Type)
 		{
-			// The 'if' of 'else if' continues the open 'if' and shares its 'end'.
+			// The 'if' of 'else if' continues the open 'if' and shares its 'end', and an 'if' that picks
+			// one of two values has no 'end'.
 			case TokenType::If:
-				return previous != TokenType::Else && previous != TokenType::Otherwise;
+				return previous != TokenType::Else && previous != TokenType::Otherwise && !IfPicksAValue(tokens, i);
 			case TokenType::While: case TokenType::Repeat: case TokenType::For:
 			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 				return true;

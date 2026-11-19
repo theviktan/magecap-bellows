@@ -150,6 +150,31 @@ namespace ForgeScript {
 		int GetLine(size_t offset) const { return offset < m_Lines.size() ? m_Lines[offset] : 0; }
 		size_t Size() const { return m_Code.size(); }
 
+		// Code cut out of a chunk with its line numbers, to be put back further on (the compiler moves
+		// a value after the test in 'value if test otherwise other'). Jumps are relative, so the code
+		// works wherever it lands.
+		struct Piece
+		{
+			std::vector<uint8_t> Code;
+			std::vector<int> Lines;
+		};
+
+		Piece Cut(size_t offset)
+		{
+			Piece piece;
+			piece.Code.assign(m_Code.begin() + static_cast<std::ptrdiff_t>(offset), m_Code.end());
+			piece.Lines.assign(m_Lines.begin() + static_cast<std::ptrdiff_t>(offset), m_Lines.end());
+			m_Code.resize(offset);
+			m_Lines.resize(offset);
+			return piece;
+		}
+
+		void Paste(const Piece& piece)
+		{
+			m_Code.insert(m_Code.end(), piece.Code.begin(), piece.Code.end());
+			m_Lines.insert(m_Lines.end(), piece.Lines.begin(), piece.Lines.end());
+		}
+
 	private:
 		std::vector<uint8_t> m_Code;
 		std::vector<int> m_Lines;

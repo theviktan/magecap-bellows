@@ -102,7 +102,8 @@ namespace ForgeScript {
 
 	std::vector<Token> Lexer::Tokenize()
 	{
-		std::vector<Token> tokens;
+		std::vector<Token>& tokens = m_Tokens;
+		tokens.clear();
 		while (true)
 		{
 			Token token = NextToken();
@@ -127,7 +128,100 @@ namespace ForgeScript {
 			if (done)
 				break;
 		}
-		return tokens;
+		return std::move(m_Tokens);
+	}
+
+	namespace {
+
+		bool EndsValue(const Token& token)
+		{
+			switch (token.Type)
+			{
+				case TokenType::Identifier: case TokenType::Number: case TokenType::String:
+				case TokenType::RightParen: case TokenType::RightBracket: case TokenType::RightBrace:
+				case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No:
+				case TokenType::Nothing: case TokenType::Self:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		// Text with "{ }" in it is an Interpolation token (the text up to "{"), the expression's tokens,
+		// and then a String or another Interpolation for the text after "}". Those later parts start
+		// with "}", which is how they are told apart from ordinary text.
+		bool StartsAfterInterpolation(const Token& token)
+		{
+			return !token.Lexeme.empty() && token.Lexeme.front() == '}';
+		}
+
+	}
+
+	bool IfPicksAValue(const std::vector<Token>& tokens, size_t index)
+	{
+		if (index == 0 || index > tokens.size() || !EndsValue(tokens[index - 1]))
+			return false;
+
+		// Walk back over the current statement, skipping anything inside brackets, to find what it is.
+		int depth = 0;
+		for (size_t k = index; k > 0; k--)
+		{
+			const Token& token = tokens[k - 1];
+			switch (token.Type)
+			{
+				case TokenType::RightParen: case TokenType::RightBracket: case TokenType::RightBrace:
+					depth++;
+					continue;
+				case TokenType::String:
+					if (StartsAfterInterpolation(token))
+						depth++;
+					continue;
+				case TokenType::Interpolation:
+					// "}text{" closes one "{ }" and opens the next, so it leaves the depth unchanged,
+					// unless the 'if' is inside the "{ }" that it opens.
+					if (StartsAfterInterpolation(token))
+					{
+						if (depth == 0)
+							return true;
+						continue;
+					}
+					[[fallthrough]];
+				case TokenType::LeftParen: case TokenType::LeftBracket: case TokenType::LeftBrace:
+					if (depth == 0)
+						return true; // Inside brackets or "{ }": always a value.
+					depth--;
+					// 'function name(...)' or 'function(...)': the 'if' follows a function's parameters.
+					if (depth == 0 && token.Type == TokenType::LeftParen && k >= 2)
+					{
+						const Token& before = tokens[k - 2];
+						if (before.Type == TokenType::Function ||
+							(before.Type == TokenType::Identifier && k >= 3 && tokens[k - 3].Type == TokenType::Function))
+							return false;
+					}
+					continue;
+				default:
+					break;
+			}
+			if (depth > 0)
+				continue;
+			switch (token.Type)
+			{
+				// The start of a statement: what came after it is not a block's header.
+				case TokenType::Newline: case TokenType::Then: case TokenType::Do:
+				case TokenType::Else: case TokenType::Otherwise: case TokenType::Return:
+					return true;
+				case TokenType::For: case TokenType::While: case TokenType::Repeat: case TokenType::If:
+				case TokenType::When: case TokenType::Catch: case TokenType::Phrase:
+					return false;
+				case TokenType::Until:
+					if (k >= 2 && tokens[k - 2].Type == TokenType::Wait)
+						continue;
+					return false;
+				default:
+					continue;
+			}
+		}
+		return true;
 	}
 
 	std::vector<std::string> Lexer::GetKeywords()
@@ -348,9 +442,11 @@ namespace ForgeScript {
 
 		switch (type)
 		{
-			// The 'if' of 'else if' continues the open 'if' and shares its 'end'.
+			// The 'if' of 'else if' continues the open 'if' and shares its 'end', and an 'if' that picks
+			// one of two values has no 'end'.
 			case TokenType::If:
-				return m_PreviousType != TokenType::Else && m_PreviousType != TokenType::Otherwise;
+				return m_PreviousType != TokenType::Else && m_PreviousType != TokenType::Otherwise &&
+					!IfPicksAValue(m_Tokens, m_Tokens.size());
 			case TokenType::While: case TokenType::Repeat: case TokenType::For:
 			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 				return true;

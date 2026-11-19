@@ -221,3 +221,46 @@ TEST_CASE("CompileErrorsInWhenWithAName")
 	CHECK_CONTAINS(CompileFails("when \"Start\" is\nend\n").Message, "when \"Start\" is clicked");
 	CompilesFine("when \"Start\" is clicked\nend\nwhen \"Player Name\" is submitted with text\n\tsay text\nend\n");
 }
+
+TEST_CASE("InlineIfIsNotAPlainScriptVariable")
+{
+	// The Inspector only shows plain values; a value picked by a test depends on the script running.
+	std::vector<ScriptVariable> variables = FindScriptVariables("set size to \"big\" if wide otherwise \"small\"\nset speed to 3\n");
+	REQUIRE(variables.size() == 1);
+	CHECK(variables[0].Name == "speed");
+}
+
+TEST_CASE("CompileErrorsInInlineIf")
+{
+	CHECK_CONTAINS(CompileFails("say 1 if true\n").Message, "Say which value to use when it isn't true");
+	CHECK_CONTAINS(CompileFails("say 1 if true otherwise\n").Message, "Expected a value");
+	CHECK_CONTAINS(CompileFails("say 1 if otherwise 2\n").Message, "Expected a value");
+	// 'start' takes one call, so it can't pick between two.
+	CHECK_CONTAINS(CompileFails("function a()\nend\nstart a() if yes otherwise a()\n").Message, "found 'if'");
+	CompilesFine("say 1 if true otherwise 2\nsay 1 if true else 2\nif true then say 1 if false otherwise 2 end\n");
+}
+
+TEST_CASE("InlineIfKeepsBlockHeadersWorking")
+{
+	// Everything here compiled before the inline 'if' existed and must mean the same thing now.
+	CompilesFine("for each i in [1] if true then say i end end\n");
+	CompilesFine("for i from 1 to 2 if true then say i end end\n");
+	CompilesFine("while false if true then say 1 end end\n");
+	CompilesFine("until true if true then say 1 end end\n");
+	CompilesFine("repeat 2 times if true then say 1 end end\n");
+	CompilesFine("try\n\tfail \"x\"\ncatch problem if true then say problem end end\n");
+	CompilesFine("if true if true then say 1 end end\n");
+	CompilesFine("function f(a)\n\tif a then return 1 end\n\treturn 2\nend\n");
+}
+
+TEST_CASE("InlineIfDoesNotHideLaterScriptVariables")
+{
+	// A block header followed by an 'if' block still nests what follows until its 'end'.
+	std::vector<ScriptVariable> variables = FindScriptVariables(
+		"for each i in [1] if true then\n\tset inner to 1\nend end\n"
+		"set picked to [1 if true otherwise 2]\n"
+		"set label to \"{1 if true otherwise 2}\"\n"
+		"set speed to 3\n");
+	REQUIRE(variables.size() == 1);
+	CHECK(variables[0].Name == "speed");
+}

@@ -256,6 +256,22 @@ if not is_alive then say "Respawning..." end
 
 `or` is also handy for default values: `set name to saved_name or "Player"` gives "Player" when `saved_name` is nothing.
 
+### Picking one of two values
+
+When only a value changes, put the `if` after it: the value, `if`, the test, `otherwise`, then the other value.
+
+```forge
+set size to "big" if width > 100 otherwise "small"
+say "You win!" if score >= 100 otherwise "Keep going"
+set speed to 8 if is_running otherwise 3
+```
+
+- Only the picked value is worked out, so `target.name if target otherwise "no one"` is safe even when `target` is nothing.
+- You can chain them, and they read in order: `"A" if score >= 90 otherwise "B" if score >= 80 otherwise "C"`.
+- `otherwise` is required: a value with only an `if` after it is a mistake, since ForgeScript wouldn't know what to use when the test is false.
+- It works anywhere a value goes: inside text (`"You are {"fine" if health > 5 otherwise "low"}."`), lists, maps and function calls. For whole blocks of code, use the `if ... then ... end` statement above.
+- On the first line of a block, before its `then` or `do`, an `if` still starts an `if` block, just as it always has: `for each enemy in enemies if enemy.awake then ... end end` checks each enemy. Put a picked value on its own line inside the block instead.
+
 ---
 
 ## 6. Loops

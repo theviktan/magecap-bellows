@@ -48,12 +48,13 @@ Everything in the language on one page. For explanations and examples, see the [
 | Empty | `x is empty`, `x is not empty` |
 | Type | `x is a number` / `text` / `boolean` / `list` / `map` / `function` / `vector` / `object` / `kind`, `x is a Enemy`, `x is an Enemy` |
 | Logic | `and`, `or`, `not` |
+| Pick a value | `"big" if x > 3 otherwise "small"` (only the picked value runs; chains: `a if p otherwise b if q otherwise c`; `else` works too) |
 | Property | `player.health`, `player's health`, `my health` (= `self.health`) |
 | Index | `list[1]`, `list[-1]`, `map["key"]`, `text[1]` |
 | Call | `f(1, 2)`, `object.method()`, `length of list` (= `length(list)`) |
 | Parent method | `parent.setup(name)` inside a kind |
 
-Precedence from loosest to tightest: `or` → `and` → `not` → comparisons → `+ -` → `* / %` → unary `-` → `^` → `of` → `.` `[ ]` `( )`.
+Precedence from loosest to tightest: `... if ... otherwise ...` → `or` → `and` → `not` → comparisons → `+ -` → `* / %` → unary `-` → `^` → `of` → `.` `[ ]` `( )`.
 
 ## Values
 
