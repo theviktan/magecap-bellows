@@ -471,6 +471,28 @@ namespace ForgeScript {
 		}
 
 		// Collects the names a scope assigns with "set NAME to ...", skipping nested functions.
+		// The names of "set x, y to ...", read from the first name: two or more names with commas between
+		// them, or empty.
+		std::vector<std::string> UnpackNames(size_t first) const
+		{
+			std::vector<std::string> names;
+			size_t i = first;
+			while (i < m_Tokens.size() && m_Tokens[i].Type == TokenType::Identifier)
+			{
+				names.emplace_back(m_Tokens[i].Lexeme);
+				if (i + 1 < m_Tokens.size() && m_Tokens[i + 1].Type == TokenType::Comma)
+				{
+					i += 2;
+					continue;
+				}
+				break;
+			}
+			// Two or more names: the statement is meant to take a value apart (a missing 'to' is reported there).
+			if (names.size() < 2)
+				names.clear();
+			return names;
+		}
+
 		void ScanScope(size_t start, bool isScript, std::vector<std::string>& outNames) const
 		{
 			int depth = 0;
@@ -513,6 +535,12 @@ namespace ForgeScript {
 					(m_Tokens[i + 2].Type == TokenType::To || m_Tokens[i + 2].Type == TokenType::Is))
 				{
 					outNames.emplace_back(m_Tokens[i + 1].Lexeme);
+				}
+				else if (!afterMember && token.Type == TokenType::Set)
+				{
+					// set x, y to ...: each name is set, so each is a variable here.
+					std::vector<std::string> names = UnpackNames(i + 1);
+					outNames.insert(outNames.end(), names.begin(), names.end());
 				}
 				i++;
 			}
@@ -1123,9 +1151,55 @@ namespace ForgeScript {
 			EmitOp(OpCode::Pop);
 		}
 
+		// set x, y to position: takes a list (or a vector) apart, one item per name. The value is worked
+		// out first, so "set a, b to [b, a]" swaps them. Before, a comma after the name was always a mistake.
+		void UnpackStatement(const std::vector<std::string>& names)
+		{
+			for (size_t i = 0; i < names.size(); i++)
+			{
+				for (size_t j = 0; j < i; j++)
+				{
+					if (names[i] == names[j])
+						ErrorAtCurrent("'" + names[i] + "' is named twice; give each value its own name.");
+				}
+				Advance(); // the name
+				if (i + 1 < names.size())
+					Advance(); // ,
+			}
+			Consume(TokenType::To, "Expected 'to' after the names, like: set x, y to position");
+			Expression();
+			if (names.size() > 255)
+				Error("At most 255 values can be taken apart at once.");
+			EmitOp(OpCode::Unpack);
+			EmitByte(static_cast<uint8_t>(names.size()));
+			// The items are on the stack in order, so the last name takes the top one.
+			for (size_t i = names.size(); i > 0; i--)
+			{
+				const std::string& name = names[i - 1];
+				const bool scriptVariable = m_State->Kind == ScopeKind::Script && ResolveLocal(m_State, name) == -1;
+				Target target;
+				if (scriptVariable)
+				{
+					target.Type = TargetType::Global;
+					target.Name = NameConstant(name);
+				}
+				else
+				{
+					target = ResolveName(name);
+				}
+				EmitSet(target);
+				EmitOp(OpCode::Pop);
+			}
+		}
+
 		void SetStatement()
 		{
 			Advance(); // set
+			if (std::vector<std::string> names = UnpackNames(m_Pos); !names.empty())
+			{
+				UnpackStatement(names);
+				return;
+			}
 			if (m_State->Kind == ScopeKind::Script && Check(TokenType::Identifier) && Peek(1).Type == TokenType::To)
 			{
 				std::string name(Current().Lexeme);

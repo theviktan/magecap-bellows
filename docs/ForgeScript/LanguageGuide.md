@@ -415,6 +415,18 @@ say items.length                # 2
 say length of items             # 2
 ```
 
+**Taking a list apart.** When a list holds a few values that belong together, give each its own name in one line:
+
+```forge
+set entry to ["Ron", 99]
+set name, score to entry        # name is "Ron", score is 99
+
+set x, y, z to player.position  # a vector gives x, y and z (or just x and y)
+set a, b to [b, a]              # the list is made first, so this swaps a and b
+```
+
+There must be exactly one name for each item: `set a, b to [1, 2, 3]` says "There are 2 names but the list has 3 items." The names follow the usual rules of `set`: inside a function they're the function's own variables.
+
 **Everything a list can do:**
 
 | Function | What it does |

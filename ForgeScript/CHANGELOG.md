@@ -37,6 +37,11 @@ Menus and HUDs (Phase 2 step 2.6, ForgeScript side):
   Yielding goes by the first word, so every phrase starting with that word yields too. The API
   description marks such phrases (`"yields_to_calls": true`), and the language server reads it.
 
+Taking a list apart (ForgeScript Roadmap item 10):
+- `set name, score to entry`: one name per item, exactly; a vector gives x, y (and z). The value
+  is worked out first, so `set a, b to [b, a]` swaps. The names follow the usual rules of `set`.
+  The language server lists each name. Before, a comma after the name was always a mistake.
+
 Naming the values in a call (ForgeScript Roadmap item 9):
 - `attack(goblin, crit: 5)`: values can be named after the ones given in order. A skipped value
   gets its default even when a later one is named. Works for script functions, kinds (and `new`),

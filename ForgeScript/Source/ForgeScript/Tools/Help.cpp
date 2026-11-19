@@ -72,7 +72,7 @@ namespace ForgeScript {
 				Keyword("repeat", "repeat 3 times ... end, repeat forever ... end", "Runs a block a number of times, or until stop."),
 				Keyword("return", "return value", "Ends a function and gives back a value."),
 				Keyword("self", "self.position", "The object or entity this code belongs to."),
-				Keyword("set", "set name to value", "Makes or changes a variable, property or list item."),
+				Keyword("set", "set name to value, set x, y to list", "Makes or changes a variable, property or list item. With several names it takes a list (or a vector) apart, one item per name."),
 				Keyword("skip", "skip", "Jumps to the next round of the loop."),
 				Keyword("start", "start patrol()", "Runs a function as its own task, so it can wait while the rest of the game goes on."),
 				Keyword("stop", "stop", "Leaves the loop right away."),
