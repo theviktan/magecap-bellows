@@ -20,18 +20,38 @@
 			]
 		},
 		"strings": {
-			"name": "string.quoted.double.forge",
-			"begin": "\"",
-			"end": "\"",
 			"patterns": [
-				{ "name": "constant.character.escape.forge", "match": "\\\\[ntr0\"\\\\{}]" },
 				{
-					"name": "meta.interpolation.forge",
-					"begin": "\\{",
-					"end": "\\}",
-					"beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.forge" } },
-					"endCaptures": { "0": { "name": "punctuation.section.interpolation.end.forge" } },
-					"patterns": [{ "include": "$self" }]
+					"name": "string.quoted.triple.forge",
+					"begin": "\"\"\"",
+					"end": "\"\"\"(?!\")",
+					"patterns": [
+						{ "name": "constant.character.escape.forge", "match": "\\\\[ntr0\"\\\\{}]" },
+						{
+							"name": "meta.interpolation.forge",
+							"begin": "\\{",
+							"end": "\\}",
+							"beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.forge" } },
+							"endCaptures": { "0": { "name": "punctuation.section.interpolation.end.forge" } },
+							"patterns": [{ "include": "$self" }]
+						}
+					]
+				},
+				{
+					"name": "string.quoted.double.forge",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [
+						{ "name": "constant.character.escape.forge", "match": "\\\\[ntr0\"\\\\{}]" },
+						{
+							"name": "meta.interpolation.forge",
+							"begin": "\\{",
+							"end": "\\}",
+							"beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.forge" } },
+							"endCaptures": { "0": { "name": "punctuation.section.interpolation.end.forge" } },
+							"patterns": [{ "include": "$self" }]
+						}
+					]
 				}
 			]
 		},

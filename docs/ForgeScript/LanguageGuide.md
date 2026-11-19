@@ -167,6 +167,28 @@ To write a real `{` or `}` in text, put a backslash before it: `"\{"`.
 
 **Special characters:** `\n` (new line), `\t` (tab), `\"` (a quote), `\\` (a backslash).
 
+### Long text
+
+For text over several lines, like dialogue, help pages or a quest description, use three quotes:
+
+```forge
+function show_quest(hero)
+	say """
+		Welcome, {hero}!
+		The old mill is "haunted", they say.
+		Bring back 3 lanterns.
+		"""
+end
+```
+
+That says three lines: `Welcome, Ron!`, `The old mill is "haunted", they say.` and `Bring back 3 lanterns.`
+
+- Quotes inside need no backslash: `"haunted"` stays as it is.
+- The indentation your code needs is removed. ForgeScript finds the spaces and tabs every line starts with and takes them off, so the text above starts at the left edge. A line indented further keeps the extra.
+- When the opening `"""` ends its line, that line break isn't part of the text, and neither is the last line when it holds only the closing `"""`.
+- `{ }` and the special characters work as in other text. To end the text with a quote, write it right before the closing quotes: `"""He said "hi""""` is `He said "hi"`.
+- `"""like this"""` on one line works too.
+
 **Useful text tools:**
 
 ```forge

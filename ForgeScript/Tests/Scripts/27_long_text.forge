@@ -1,0 +1,51 @@
+# """long text""" runs over lines, holds quotes, and loses the indentation its lines share.
+set hero to "Ron"
+set quest to """
+	Welcome, {hero}!
+	The old mill is "haunted", they say.
+	  (This line keeps two extra spaces.)
+
+	Bring back 3 lanterns.
+	"""
+say quest
+# expect: Welcome, Ron!
+# expect: The old mill is "haunted", they say.
+# expect:   (This line keeps two extra spaces.)
+# expect:
+# expect: Bring back 3 lanterns.
+say quest.split("\n").length                            # expect: 5
+
+# Inside a function the deeper indentation goes too.
+function letter()
+	return """
+		Dear player,
+		thank you.
+		"""
+end
+say letter()
+# expect: Dear player,
+# expect: thank you.
+
+# On one line, ending with a quote, and with "" inside.
+say """one line"""                                      # expect: one line
+say """He said "hi""""                                  # expect: He said "hi"
+say """two "" quotes"""                                 # expect: two "" quotes
+say """""".length                                       # expect: 0
+
+# { } and escapes work, including long text inside { }.
+say """{1 + 2} and {"""x""" + "y"} \{kept\}\tafter tab"""     # expect: 3 and xy {kept}	after tab
+say ["""a""", """b"""].length                           # expect: 2
+
+# When the opening quotes have words after them, the first line keeps its place.
+set note to """Line A
+    Line B
+    """
+say note
+# expect: Line A
+# expect: Line B
+
+# Long text is ordinary text.
+say quest.starts_with("Welcome")                        # expect: true
+say length("""
+	x
+	""")                                                    # expect: 1
