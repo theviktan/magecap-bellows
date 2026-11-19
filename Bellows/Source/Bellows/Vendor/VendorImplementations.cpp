@@ -18,8 +18,14 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
+// miniaudio decodes Ogg Vorbis only through stb_vorbis: its declarations come before miniaudio and
+// its implementation after it.
+#define STB_VORBIS_HEADER_ONLY
+#include <stb_vorbis.c>
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
+#undef STB_VORBIS_HEADER_ONLY
+#include <stb_vorbis.c>
 
 // Glyph outlines, kerning and atlas packing for game text (Text/Font.cpp); Dear ImGui keeps its own
 // private copies. The packer comes first, or stb_truetype declares a stand-in for it.

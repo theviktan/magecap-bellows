@@ -78,6 +78,38 @@ TEST_CASE("Audio sources play through the (null) audio engine")
 	AssetManager::SetAssetDirectory({});
 }
 
+TEST_CASE("Audio clips decode from every supported format")
+{
+	// .wav is written here; .ogg is a checked-in 0.3 second tone (Ogg Vorbis needs an encoder).
+	const std::filesystem::path wav = BellowsTests::GetTestOutputDirectory() / "Formats" / "Tone.wav";
+	WriteSineWav(wav, 0.3f, 440.0f);
+	const std::filesystem::path ogg = BellowsTests::GetSourceDirectory() / "BellowsTests" / "Data" / "Tone.ogg";
+	REQUIRE(FileSystem::Exists(ogg));
+
+	for (const std::filesystem::path& path : { wav, ogg })
+	{
+		CAPTURE(path.filename().string());
+		ma_decoder decoder;
+		REQUIRE(ma_decoder_init_file(path.string().c_str(), nullptr, &decoder) == MA_SUCCESS);
+		ma_uint64 frames = 0;
+		CHECK(ma_decoder_get_length_in_pcm_frames(&decoder, &frames) == MA_SUCCESS);
+		CHECK(frames > 0);
+		float samples[256] = {};
+		ma_uint64 read = 0;
+		CHECK(ma_decoder_read_pcm_frames(&decoder, samples, 64, &read) == MA_SUCCESS);
+		CHECK(read == 64);
+		ma_decoder_uninit(&decoder);
+	}
+
+	// And through the engine, the way an Audio Source loads it.
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "OggProject";
+	REQUIRE(FileSystem::CreateDirectories(assets / "Audio"));
+	std::filesystem::copy_file(ogg, assets / "Audio" / "Tone.ogg", std::filesystem::copy_options::overwrite_existing);
+	AssetManager::SetAssetDirectory(assets);
+	CHECK(AudioEngine::PlayOneShot("Audio/Tone.ogg", 0.5f));
+	AssetManager::SetAssetDirectory({});
+}
+
 TEST_CASE("Audio buses set volumes for groups of sounds")
 {
 	REQUIRE(AudioEngine::IsInitialized());
