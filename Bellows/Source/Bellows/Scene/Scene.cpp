@@ -484,6 +484,42 @@ namespace Bellows {
 		m_FrameCount++;
 	}
 
+	const TextLayout* Scene::UpdateTextLayout(TextComponent& text)
+	{
+		if (!text.RuntimeFont || text.LoadedFontPath != text.FontPath)
+		{
+			text.RuntimeFont = AssetManager::GetFont(text.FontPath);
+			text.LoadedFontPath = text.FontPath;
+			text.RuntimeLayoutKey = 0;
+		}
+		if (!text.RuntimeFont)
+			return nullptr;
+
+		// Lay the text out again only when something that shapes it changed.
+		uint64_t key = std::hash<std::string>()(text.Text);
+		const auto combine = [&key](uint64_t value) { key ^= value + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2); };
+		combine(std::hash<const void*>()(text.RuntimeFont.get()));
+		for (float value : { text.Size, text.BoxSize.x, text.BoxSize.y, text.LineSpacing })
+			combine(std::hash<float>()(value));
+		combine((static_cast<uint64_t>(text.Alignment) << 24) | (static_cast<uint64_t>(text.VerticalAlignment) << 16)
+			| (static_cast<uint64_t>(text.Overflow) << 8) | (text.Wrap ? 1u : 0u));
+		key |= 1;	// 0 means "not laid out yet"
+		if (key != text.RuntimeLayoutKey)
+		{
+			TextLayoutSettings settings;
+			settings.Size = std::max(text.Size, 0.0f);
+			settings.LineSpacing = text.LineSpacing;
+			settings.BoxSize = glm::max(text.BoxSize, glm::vec2(0.0f));
+			settings.Wrap = text.Wrap;
+			settings.Alignment = text.Alignment;
+			settings.VerticalAlignment = text.VerticalAlignment;
+			settings.Overflow = text.Overflow;
+			text.RuntimeLayout = LayoutText(*text.RuntimeFont, text.Text, settings);
+			text.RuntimeLayoutKey = key;
+		}
+		return &text.RuntimeLayout;
+	}
+
 	void Scene::OnUpdateEditor(Timestep timestep)
 	{
 		UpdateRuntimeCaches();
@@ -677,6 +713,41 @@ namespace Bellows {
 			Entity entity(handle, this);
 			renderer.SubmitMesh(meshRenderer.RuntimeMesh, GetWorldTransform(entity), entity.GetRenderID(),
 				meshRenderer.RuntimeMaterial, meshRenderer.CastShadows);
+		}
+
+		// World text: centered on its entity in the entity's XY plane, or turned toward the camera.
+		const glm::mat3 cameraRotation = glm::mat3(glm::inverse(camera.View));
+		auto texts = m_Registry.view<TextComponent>();
+		for (entt::entity handle : texts)
+		{
+			TextComponent& text = texts.get<TextComponent>(handle);
+			if (!text.Visible || text.Text.empty())
+				continue;
+			const TextLayout* layout = UpdateTextLayout(text);
+			if (!layout)
+				continue;
+
+			Entity entity(handle, this);
+			glm::mat4 world = GetWorldTransform(entity);
+			if (text.FaceCamera)
+			{
+				const glm::vec3 scale(glm::length(glm::vec3(world[0])), glm::length(glm::vec3(world[1])), glm::length(glm::vec3(world[2])));
+				glm::mat4 facing = glm::mat4(cameraRotation);
+				facing[3] = world[3];
+				world = glm::scale(facing, scale);
+			}
+			// The layout's box (y down) becomes a box centered on the entity with y up.
+			const glm::vec2 box(text.BoxSize.x > 0.0f ? text.BoxSize.x : layout->Size.x, text.BoxSize.y > 0.0f ? text.BoxSize.y : layout->Size.y);
+			const glm::mat4 boxToLocal = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, 1.0f))
+				* glm::translate(glm::mat4(1.0f), glm::vec3(-box.x * 0.5f, -box.y * 0.5f, 0.0f));
+
+			TextStyle style;
+			style.Color = text.Color;
+			style.OutlineColor = text.OutlineColor;
+			style.OutlineWidth = text.OutlineWidth;
+			const glm::vec4 clip(0.0f, 0.0f, box.x, box.y);
+			const bool clipped = text.Overflow == TextOverflow::Clip && text.BoxSize.x > 0.0f && text.BoxSize.y > 0.0f;
+			renderer.SubmitText(text.RuntimeFont, *layout, world * boxToLocal, style, entity.GetRenderID(), clipped ? &clip : nullptr);
 		}
 
 		if (submitExtras)

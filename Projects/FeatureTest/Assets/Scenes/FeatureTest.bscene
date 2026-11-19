@@ -33,7 +33,7 @@
 	},
 	"Entities": [
 		{
-			"ID": 16614593513225419558,
+			"ID": 6628454999644398364,
 			"Name": "Main Camera",
 			"Parent": 0,
 			"Transform": {
@@ -71,7 +71,7 @@
 			}
 		},
 		{
-			"ID": 15319893621257847522,
+			"ID": 16370281966140037382,
 			"Name": "Sun",
 			"Parent": 0,
 			"Transform": {
@@ -102,7 +102,7 @@
 			}
 		},
 		{
-			"ID": 13818699363960952666,
+			"ID": 8062787649571602710,
 			"Name": "Sky",
 			"Parent": 0,
 			"Transform": {
@@ -149,7 +149,7 @@
 			}
 		},
 		{
-			"ID": 13239809072409788232,
+			"ID": 2832404176034829522,
 			"Name": "Ground",
 			"Parent": 0,
 			"Transform": {
@@ -203,7 +203,7 @@
 			}
 		},
 		{
-			"ID": 4309112612711016624,
+			"ID": 16156911648780891151,
 			"Name": "Pedestal 1",
 			"Parent": 0,
 			"Transform": {
@@ -248,7 +248,7 @@
 			}
 		},
 		{
-			"ID": 1818984637196432587,
+			"ID": 10831564329279932426,
 			"Name": "Sphere 1",
 			"Parent": 0,
 			"Transform": {
@@ -276,7 +276,7 @@
 			}
 		},
 		{
-			"ID": 3153223087301713789,
+			"ID": 569372869757065128,
 			"Name": "Pedestal 2",
 			"Parent": 0,
 			"Transform": {
@@ -321,7 +321,7 @@
 			}
 		},
 		{
-			"ID": 10606537693520537905,
+			"ID": 83769064307956384,
 			"Name": "Sphere 2",
 			"Parent": 0,
 			"Transform": {
@@ -349,7 +349,7 @@
 			}
 		},
 		{
-			"ID": 14905074137146403455,
+			"ID": 12373046433186277159,
 			"Name": "Pedestal 3",
 			"Parent": 0,
 			"Transform": {
@@ -394,7 +394,7 @@
 			}
 		},
 		{
-			"ID": 9254979041265583940,
+			"ID": 16224783505216811306,
 			"Name": "Sphere 3",
 			"Parent": 0,
 			"Transform": {
@@ -422,7 +422,7 @@
 			}
 		},
 		{
-			"ID": 6859124888455592723,
+			"ID": 5688350334876321433,
 			"Name": "Pedestal 4",
 			"Parent": 0,
 			"Transform": {
@@ -467,7 +467,7 @@
 			}
 		},
 		{
-			"ID": 7494797174520051685,
+			"ID": 12416465513882909449,
 			"Name": "Sphere 4",
 			"Parent": 0,
 			"Transform": {
@@ -495,7 +495,7 @@
 			}
 		},
 		{
-			"ID": 10514333379736974795,
+			"ID": 552048453345251528,
 			"Name": "Pedestal 5",
 			"Parent": 0,
 			"Transform": {
@@ -540,7 +540,7 @@
 			}
 		},
 		{
-			"ID": 1562037722385934332,
+			"ID": 12804180279913998451,
 			"Name": "Sphere 5",
 			"Parent": 0,
 			"Transform": {
@@ -568,7 +568,7 @@
 			}
 		},
 		{
-			"ID": 18132994184276502181,
+			"ID": 5833513975494141976,
 			"Name": "Bottle Plinth",
 			"Parent": 0,
 			"Transform": {
@@ -622,7 +622,7 @@
 			}
 		},
 		{
-			"ID": 4239711527108377302,
+			"ID": 13918698824977680691,
 			"Name": "Water Bottle",
 			"Parent": 0,
 			"Transform": {
@@ -660,7 +660,7 @@
 			}
 		},
 		{
-			"ID": 339563479714742645,
+			"ID": 18239049913674327436,
 			"Name": "Lantern",
 			"Parent": 0,
 			"Transform": {
@@ -688,7 +688,7 @@
 			}
 		},
 		{
-			"ID": 15112290317709029021,
+			"ID": 12579107481350486256,
 			"Name": "Spot Light",
 			"Parent": 0,
 			"Transform": {
@@ -721,7 +721,7 @@
 			}
 		},
 		{
-			"ID": 11971385321930972818,
+			"ID": 13434326476296038487,
 			"Name": "Orbiting Light 1",
 			"Parent": 0,
 			"Transform": {
@@ -788,7 +788,7 @@
 			}
 		},
 		{
-			"ID": 10231100392570585832,
+			"ID": 8448239761749205663,
 			"Name": "Orbiting Light 2",
 			"Parent": 0,
 			"Transform": {
@@ -855,7 +855,7 @@
 			}
 		},
 		{
-			"ID": 14973869099210189169,
+			"ID": 1267029298237970971,
 			"Name": "Orbiting Light 3",
 			"Parent": 0,
 			"Transform": {
@@ -922,7 +922,7 @@
 			}
 		},
 		{
-			"ID": 15236225641677044248,
+			"ID": 5450461843696015506,
 			"Name": "Crate 0-0",
 			"Parent": 0,
 			"Transform": {
@@ -976,7 +976,7 @@
 			}
 		},
 		{
-			"ID": 15073815228981512733,
+			"ID": 14321799598679590034,
 			"Name": "Crate 0-1",
 			"Parent": 0,
 			"Transform": {
@@ -1030,7 +1030,7 @@
 			}
 		},
 		{
-			"ID": 12370930718427303316,
+			"ID": 7551008731782246368,
 			"Name": "Crate 0-2",
 			"Parent": 0,
 			"Transform": {
@@ -1084,7 +1084,7 @@
 			}
 		},
 		{
-			"ID": 3985525166853310292,
+			"ID": 7304842387103698436,
 			"Name": "Crate 1-0",
 			"Parent": 0,
 			"Transform": {
@@ -1138,7 +1138,7 @@
 			}
 		},
 		{
-			"ID": 8074623463805417483,
+			"ID": 3844646378961633491,
 			"Name": "Crate 1-1",
 			"Parent": 0,
 			"Transform": {
@@ -1192,7 +1192,7 @@
 			}
 		},
 		{
-			"ID": 3440631665089652360,
+			"ID": 7753343591903243363,
 			"Name": "Crate 2-0",
 			"Parent": 0,
 			"Transform": {
@@ -1246,7 +1246,7 @@
 			}
 		},
 		{
-			"ID": 6805392161340998351,
+			"ID": 6982755535440184844,
 			"Name": "Cannon",
 			"Parent": 0,
 			"Transform": {
@@ -1282,9 +1282,9 @@
 			}
 		},
 		{
-			"ID": 12654307172175490945,
+			"ID": 6318806595234486426,
 			"Name": "Barrel",
-			"Parent": 6805392161340998351,
+			"Parent": 6982755535440184844,
 			"Transform": {
 				"Translation": [
 					0.0,
@@ -1310,7 +1310,7 @@
 			}
 		},
 		{
-			"ID": 1304372908004509716,
+			"ID": 4152603284733388448,
 			"Name": "Cannon Base",
 			"Parent": 0,
 			"Transform": {
@@ -1338,7 +1338,7 @@
 			}
 		},
 		{
-			"ID": 14260201770318517546,
+			"ID": 7973710585617979700,
 			"Name": "Ramp",
 			"Parent": 0,
 			"Transform": {
@@ -1383,7 +1383,7 @@
 			}
 		},
 		{
-			"ID": 3087195529588731674,
+			"ID": 11087780507847337443,
 			"Name": "Capsule Buddy",
 			"Parent": 0,
 			"Transform": {
@@ -1434,7 +1434,7 @@
 			}
 		},
 		{
-			"ID": 6105291896303259873,
+			"ID": 18143290074235871749,
 			"Name": "Trigger Zone",
 			"Parent": 0,
 			"Transform": {
@@ -1493,7 +1493,7 @@
 			}
 		},
 		{
-			"ID": 2638673343552249253,
+			"ID": 1562013487456334000,
 			"Name": "Speaker",
 			"Parent": 0,
 			"Transform": {
@@ -1527,11 +1527,114 @@
 				"PlayOnStart": false,
 				"Spatial": true,
 				"MinDistance": 1.0,
-				"MaxDistance": 50.0
+				"MaxDistance": 50.0,
+				"Bus": "Effects"
 			}
 		},
 		{
-			"ID": 17907233666255374928,
+			"ID": 4026482653147370382,
+			"Name": "Title",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					3.200000047683716,
+					-3.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"Text": {
+				"Text": "MageCap Bellows",
+				"Font": "",
+				"Size": 0.699999988079071,
+				"Color": [
+					1.0,
+					0.8600000143051147,
+					0.550000011920929,
+					1.0
+				],
+				"Alignment": "center",
+				"VerticalAlignment": "middle",
+				"BoxSize": [
+					0.0,
+					0.0
+				],
+				"Wrap": true,
+				"Overflow": "visible",
+				"LineSpacing": 1.0,
+				"OutlineWidth": 0.03999999910593033,
+				"OutlineColor": [
+					0.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"FaceCamera": false,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 12693313524732792616,
+			"Name": "Speaker Label",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					0.0,
+					1.2000000476837158,
+					4.5
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"Text": {
+				"Text": "Speaker",
+				"Font": "",
+				"Size": 0.30000001192092896,
+				"Color": [
+					1.0,
+					1.0,
+					1.0,
+					1.0
+				],
+				"Alignment": "center",
+				"VerticalAlignment": "middle",
+				"BoxSize": [
+					0.0,
+					0.0
+				],
+				"Wrap": true,
+				"Overflow": "visible",
+				"LineSpacing": 1.0,
+				"OutlineWidth": 0.0,
+				"OutlineColor": [
+					0.0,
+					0.0,
+					0.0,
+					1.0
+				],
+				"FaceCamera": true,
+				"Visible": true
+			}
+		},
+		{
+			"ID": 7210747830330255045,
 			"Name": "Test Runner",
 			"Parent": 0,
 			"Transform": {
@@ -1558,7 +1661,7 @@
 			}
 		},
 		{
-			"ID": 8488875794122625523,
+			"ID": 6368002674520987999,
 			"Name": "ForgeScript Test Runner",
 			"Parent": 0,
 			"Transform": {

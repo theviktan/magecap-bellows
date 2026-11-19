@@ -123,6 +123,15 @@ namespace Bellows::UI {
 		return changed;
 	}
 
+	bool PropertyMultiline(const char* label, std::string& value, int lines, const char* tooltip)
+	{
+		BeginRow(label, tooltip);
+		const float height = ImGui::GetTextLineHeight() * static_cast<float>(std::max(lines, 1)) + ImGui::GetStyle().FramePadding.y * 2.0f;
+		const bool changed = ImGui::InputTextMultiline("##value", &value, ImVec2(-1.0f, height));
+		EndRow();
+		return changed;
+	}
+
 	bool PropertySlider(const char* label, float& value, float min, float max, const char* format, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
@@ -469,6 +478,7 @@ namespace Bellows::UI {
 			case AssetType::Environment:	return ICON_MOUNTAIN;
 			case AssetType::Audio:			return ICON_MUSIC;
 			case AssetType::Script:			return ICON_FILE_CODE;
+			case AssetType::Font:			return ICON_FILE_TYPE;
 			default:						return ICON_FILE;
 		}
 	}
@@ -485,6 +495,7 @@ namespace Bellows::UI {
 			case AssetType::Environment:	return IM_COL32(240, 200, 90, 255);
 			case AssetType::Audio:			return IM_COL32(170, 140, 245, 255);
 			case AssetType::Script:			return IM_COL32(120, 210, 230, 255);
+			case AssetType::Font:			return IM_COL32(235, 225, 200, 255);
 			default:						return Theme::TextMuted;
 		}
 	}

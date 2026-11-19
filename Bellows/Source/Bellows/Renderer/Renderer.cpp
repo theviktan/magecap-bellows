@@ -4,6 +4,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Renderer/RenderDevice.h"
+#include "Bellows/Renderer/ShaderInterop.h"
 
 #include <glm/gtc/packing.hpp>
 
@@ -23,6 +24,7 @@ namespace Bellows {
 			nvrhi::BindingLayoutHandle PostProcessLayout;
 			nvrhi::BindingLayoutHandle ComputeLayout;
 			nvrhi::BindingLayoutHandle LineLayout;
+			nvrhi::BindingLayoutHandle TextLayout;
 
 			nvrhi::SamplerHandle LinearClamp;
 			nvrhi::SamplerHandle LinearWrap;
@@ -129,9 +131,19 @@ namespace Bellows {
 				desc.addItem(nvrhi::BindingLayoutItem::PushConstants(c_PushConstantSlot, 64));
 				s_Data->LineLayout = device->createBindingLayout(desc);
 			}
+			{
+				nvrhi::BindingLayoutDesc desc;
+				desc.visibility = nvrhi::ShaderType::All;
+				desc.bindingOffsets = c_NoBindingOffsets;
+				desc.setRegisterSpaceAndDescriptorSet(0);
+				desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0));
+				desc.addItem(nvrhi::BindingLayoutItem::Sampler(1));
+				desc.addItem(nvrhi::BindingLayoutItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::TextData)));
+				s_Data->TextLayout = device->createBindingLayout(desc);
+			}
 
 			return s_Data->SceneLayout && s_Data->MaterialLayout && s_Data->ShadowLayout
-				&& s_Data->PostProcessLayout && s_Data->ComputeLayout && s_Data->LineLayout;
+				&& s_Data->PostProcessLayout && s_Data->ComputeLayout && s_Data->LineLayout && s_Data->TextLayout;
 		}
 
 		void CreateSamplers()
@@ -354,6 +366,7 @@ namespace Bellows {
 	nvrhi::IBindingLayout* Renderer::GetPostProcessBindingLayout() { return s_Data->PostProcessLayout; }
 	nvrhi::IBindingLayout* Renderer::GetComputeBindingLayout() { return s_Data->ComputeLayout; }
 	nvrhi::IBindingLayout* Renderer::GetLineBindingLayout() { return s_Data->LineLayout; }
+	nvrhi::IBindingLayout* Renderer::GetTextBindingLayout() { return s_Data->TextLayout; }
 
 	nvrhi::ISampler* Renderer::GetLinearClampSampler() { return s_Data->LinearClamp; }
 	nvrhi::ISampler* Renderer::GetLinearWrapSampler() { return s_Data->LinearWrap; }

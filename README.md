@@ -19,6 +19,8 @@ can drive end to end.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.
+* **Text**: crisp world-space text from any .ttf/.otf font (multi-channel signed distance fields),
+  with wrapping, alignment, clipping, ellipsis, outlines and camera-facing labels.
 * **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics and audio. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).

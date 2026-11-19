@@ -374,6 +374,39 @@ namespace Bellows {
 			}
 		});
 
+		DrawComponent<TextComponent>(m_Editor, entity, ICON_TYPE, "Text", [](TextComponent& c)
+		{
+			if (UI::BeginPropertyGrid("Text"))
+			{
+				UI::PropertyMultiline("Text", c.Text);
+				UI::PropertyAsset("Font", c.FontPath, AssetType::Font, "A .ttf or .otf font; empty uses the built-in font (Inter)");
+				UI::Property("Size", c.Size, 0.01f, 0.0f, 1000.0f, "%.2f", "The height of one em, in meters (a line is about 1.2 em)");
+				UI::PropertyColor("Color", c.Color);
+				static const char* const c_Alignments[] = { "Left", "Center", "Right" };
+				int alignment = static_cast<int>(c.Alignment);
+				if (UI::PropertyCombo("Alignment", alignment, c_Alignments, 3))
+					c.Alignment = static_cast<TextAlignment>(alignment);
+				static const char* const c_VerticalAlignments[] = { "Top", "Middle", "Bottom" };
+				int verticalAlignment = static_cast<int>(c.VerticalAlignment);
+				if (UI::PropertyCombo("Vertical Alignment", verticalAlignment, c_VerticalAlignments, 3))
+					c.VerticalAlignment = static_cast<TextVerticalAlignment>(verticalAlignment);
+				if (UI::PropertyVec2("Box Size", c.BoxSize, 0.01f, "Width and height of the text's box, in meters; 0 sizes it to the text"))
+					c.BoxSize = glm::max(c.BoxSize, glm::vec2(0.0f));
+				UI::Property("Wrap", c.Wrap, "Wrap lines at the box's width");
+				static const char* const c_Overflows[] = { "Visible", "Clip", "Ellipsis" };
+				int overflow = static_cast<int>(c.Overflow);
+				if (UI::PropertyCombo("Overflow", overflow, c_Overflows, 3, "Text past the box: drawn anyway, cut at the box, or ended with \"...\""))
+					c.Overflow = static_cast<TextOverflow>(overflow);
+				UI::Property("Line Spacing", c.LineSpacing, 0.01f, 0.0f, 10.0f, "%.2f");
+				UI::PropertySlider("Outline Width", c.OutlineWidth, 0.0f, 0.1f, "%.3f", "In ems");
+				if (c.OutlineWidth > 0.0f)
+					UI::PropertyColor("Outline Color", c.OutlineColor);
+				UI::Property("Face Camera", c.FaceCamera, "Always turned toward the camera, like a name over a character");
+				UI::Property("Visible", c.Visible);
+				UI::EndPropertyGrid();
+			}
+		});
+
 		DrawComponent<AudioListenerComponent>(m_Editor, entity, ICON_MUSIC, "Audio Listener", [](AudioListenerComponent& c)
 		{
 			if (UI::BeginPropertyGrid("AudioListener"))
@@ -609,6 +642,7 @@ namespace Bellows {
 		entry.operator()<ScriptComponent>(ICON_FILE_CODE, "Script", "Behavior");
 		entry.operator()<AudioSourceComponent>(ICON_VOLUME_2, "Audio Source", "Audio");
 		entry.operator()<AudioListenerComponent>(ICON_MUSIC, "Audio Listener", "Audio");
+		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
 	}
 
 }

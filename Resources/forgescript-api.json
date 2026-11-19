@@ -1319,6 +1319,103 @@
 			]
 		},
 		{
+			"name": "Text",
+			"doc": "Text drawn crisp at any size: in the world (centered on its entity) or, under a UI canvas, on screen",
+			"members": [
+				{
+					"name": "text",
+					"kind": "property",
+					"type": "str",
+					"doc": ""
+				},
+				{
+					"name": "font",
+					"kind": "property",
+					"type": "str",
+					"doc": "A .ttf or .otf in the assets; empty for the built-in font (Inter)"
+				},
+				{
+					"name": "size",
+					"kind": "property",
+					"type": "float",
+					"doc": "The height of one em, in meters for world text"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": ""
+				},
+				{
+					"name": "alignment",
+					"kind": "property",
+					"type": "str",
+					"doc": "'left', 'center' or 'right'"
+				},
+				{
+					"name": "vertical_alignment",
+					"kind": "property",
+					"type": "str",
+					"doc": "'top', 'middle' or 'bottom'"
+				},
+				{
+					"name": "box_size",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "The box the text sits in (x width, y height; z unused); 0 sizes it to the text"
+				},
+				{
+					"name": "wrap",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Wrap lines at the box's width"
+				},
+				{
+					"name": "overflow",
+					"kind": "property",
+					"type": "str",
+					"doc": "What text past the box does: 'visible', 'clip' or 'ellipsis'"
+				},
+				{
+					"name": "line_spacing",
+					"kind": "property",
+					"type": "float",
+					"doc": "A multiple of the font's line height"
+				},
+				{
+					"name": "outline_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "In ems, 0 to 0.1"
+				},
+				{
+					"name": "outline_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": ""
+				},
+				{
+					"name": "face_camera",
+					"kind": "property",
+					"type": "bool",
+					"doc": "World text always turned toward the camera"
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "measured_size",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "The size the text takes up (x width, y height), for fitting boxes and backgrounds to it"
+				}
+			]
+		},
+		{
 			"name": "Entity",
 			"doc": "A handle to an entity in a scene",
 			"members": [

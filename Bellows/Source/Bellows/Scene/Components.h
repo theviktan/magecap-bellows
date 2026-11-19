@@ -5,6 +5,8 @@
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Scene/ScriptField.h"
+#include "Bellows/Text/Font.h"
+#include "Bellows/Text/TextLayout.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -227,6 +229,33 @@ namespace Bellows {
 		bool Active = true;
 	};
 
+	// Text drawn with a font's distance-field atlas, crisp at any size. In the world, the text's box is
+	// centered on the entity, lies in its XY plane (readable from +Z) and follows its transform, or
+	// turns to face the camera.
+	struct TextComponent
+	{
+		std::string Text = "Text";
+		std::string FontPath;			// A .ttf or .otf in the assets; empty = the built-in Inter
+		float Size = 0.5f;				// One em, in meters (the height of a line is about 1.2 em)
+		glm::vec4 Color { 1.0f };		// sRGB, with alpha
+		TextAlignment Alignment = TextAlignment::Center;
+		TextVerticalAlignment VerticalAlignment = TextVerticalAlignment::Middle;
+		glm::vec2 BoxSize { 0.0f };		// Meters; 0 = sized to the text (no wrapping in that direction)
+		bool Wrap = true;
+		TextOverflow Overflow = TextOverflow::Visible;
+		float LineSpacing = 1.0f;		// A multiple of the font's line height
+		float OutlineWidth = 0.0f;		// Ems, up to 0.1
+		glm::vec4 OutlineColor { 0.0f, 0.0f, 0.0f, 1.0f };
+		bool FaceCamera = false;		// Always turned toward the camera (a label over a character's head)
+		bool Visible = true;
+
+		// Runtime cache (not serialized)
+		Ref<Font> RuntimeFont;
+		std::string LoadedFontPath;
+		TextLayout RuntimeLayout;
+		uint64_t RuntimeLayoutKey = 0;
+	};
+
 	// Marks an entity instantiated from a prefab file.
 	struct PrefabComponent
 	{
@@ -242,7 +271,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, PrefabComponent>;
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, PrefabComponent>;
 
 	const char* RigidBodyTypeToString(RigidBodyType type);
 	RigidBodyType RigidBodyTypeFromString(std::string_view text);

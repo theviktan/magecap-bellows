@@ -83,6 +83,13 @@ namespace Bellows::ShaderInterop {
 		glm::uvec4 Flags;		// alpha mode, texture bits
 	};
 
+	// Push constants of the text passes (Text.vert, Text.frag, TextID.frag).
+	struct TextData
+	{
+		glm::mat4 ViewProjection;
+		glm::vec4 Params;		// distance range in atlas pixels, unused, unused, unused
+	};
+
 	enum MaterialTextureBits : uint32_t
 	{
 		TextureAlbedo = 1u << 0,
@@ -100,5 +107,6 @@ namespace Bellows::ShaderInterop {
 	static_assert(sizeof(ObjectData) == 128, "ObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(ShadowObjectData) == 128, "ShadowObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(MaterialData) == 80, "MaterialData layout mismatch");
+	static_assert(sizeof(TextData) == 80, "TextData layout mismatch");
 
 }

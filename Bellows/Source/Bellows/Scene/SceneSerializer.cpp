@@ -217,6 +217,31 @@ namespace Bellows {
 				JsonRead(*it, "Active", component.Active);
 			}
 
+			if (auto it = json.find("Text"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<TextComponent>();
+				JsonRead(*it, "Text", component.Text);
+				JsonRead(*it, "Font", component.FontPath);
+				JsonRead(*it, "Size", component.Size);
+				JsonRead(*it, "Color", component.Color);
+				std::string alignment = TextAlignmentToString(component.Alignment);
+				JsonRead(*it, "Alignment", alignment);
+				component.Alignment = TextAlignmentFromString(alignment);
+				std::string verticalAlignment = TextVerticalAlignmentToString(component.VerticalAlignment);
+				JsonRead(*it, "VerticalAlignment", verticalAlignment);
+				component.VerticalAlignment = TextVerticalAlignmentFromString(verticalAlignment);
+				JsonRead(*it, "BoxSize", component.BoxSize);
+				JsonRead(*it, "Wrap", component.Wrap);
+				std::string overflow = TextOverflowToString(component.Overflow);
+				JsonRead(*it, "Overflow", overflow);
+				component.Overflow = TextOverflowFromString(overflow);
+				JsonRead(*it, "LineSpacing", component.LineSpacing);
+				JsonRead(*it, "OutlineWidth", component.OutlineWidth);
+				JsonRead(*it, "OutlineColor", component.OutlineColor);
+				JsonRead(*it, "FaceCamera", component.FaceCamera);
+				JsonRead(*it, "Visible", component.Visible);
+			}
+
 			if (auto it = json.find("Prefab"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<PrefabComponent>();
@@ -374,6 +399,25 @@ namespace Bellows {
 
 		if (const auto* c = entity.TryGetComponent<AudioListenerComponent>())
 			json["AudioListener"]["Active"] = c->Active;
+
+		if (const auto* c = entity.TryGetComponent<TextComponent>())
+		{
+			Json& j = json["Text"];
+			j["Text"] = c->Text;
+			j["Font"] = c->FontPath;
+			j["Size"] = c->Size;
+			j["Color"] = c->Color;
+			j["Alignment"] = TextAlignmentToString(c->Alignment);
+			j["VerticalAlignment"] = TextVerticalAlignmentToString(c->VerticalAlignment);
+			j["BoxSize"] = c->BoxSize;
+			j["Wrap"] = c->Wrap;
+			j["Overflow"] = TextOverflowToString(c->Overflow);
+			j["LineSpacing"] = c->LineSpacing;
+			j["OutlineWidth"] = c->OutlineWidth;
+			j["OutlineColor"] = c->OutlineColor;
+			j["FaceCamera"] = c->FaceCamera;
+			j["Visible"] = c->Visible;
+		}
 
 		if (const auto* c = entity.TryGetComponent<PrefabComponent>())
 			json["Prefab"]["Prefab"] = c->PrefabPath;

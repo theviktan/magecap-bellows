@@ -23,6 +23,8 @@ namespace Bellows::UI {
 	bool Property(const char* label, uint32_t& value, uint32_t min, uint32_t max, const char* tooltip = nullptr);
 	bool Property(const char* label, bool& value, const char* tooltip = nullptr);
 	bool Property(const char* label, std::string& value, const char* tooltip = nullptr);
+	// A few lines of text (Enter starts a new line).
+	bool PropertyMultiline(const char* label, std::string& value, int lines = 3, const char* tooltip = nullptr);
 	bool PropertySlider(const char* label, float& value, float min, float max, const char* format = "%.2f", const char* tooltip = nullptr);
 	// Radians stored, degrees shown.
 	bool PropertyAngle(const char* label, float& radians, float minDegrees = 0.0f, float maxDegrees = 0.0f, const char* tooltip = nullptr);

@@ -176,6 +176,63 @@ namespace Bellows {
 		return codepoint;
 	}
 
+	const char* TextAlignmentToString(TextAlignment alignment)
+	{
+		switch (alignment)
+		{
+			case TextAlignment::Center: return "center";
+			case TextAlignment::Right: return "right";
+			default: return "left";
+		}
+	}
+
+	TextAlignment TextAlignmentFromString(std::string_view text)
+	{
+		if (text == "center")
+			return TextAlignment::Center;
+		if (text == "right")
+			return TextAlignment::Right;
+		return TextAlignment::Left;
+	}
+
+	const char* TextVerticalAlignmentToString(TextVerticalAlignment alignment)
+	{
+		switch (alignment)
+		{
+			case TextVerticalAlignment::Middle: return "middle";
+			case TextVerticalAlignment::Bottom: return "bottom";
+			default: return "top";
+		}
+	}
+
+	TextVerticalAlignment TextVerticalAlignmentFromString(std::string_view text)
+	{
+		if (text == "middle")
+			return TextVerticalAlignment::Middle;
+		if (text == "bottom")
+			return TextVerticalAlignment::Bottom;
+		return TextVerticalAlignment::Top;
+	}
+
+	const char* TextOverflowToString(TextOverflow overflow)
+	{
+		switch (overflow)
+		{
+			case TextOverflow::Clip: return "clip";
+			case TextOverflow::Ellipsis: return "ellipsis";
+			default: return "visible";
+		}
+	}
+
+	TextOverflow TextOverflowFromString(std::string_view text)
+	{
+		if (text == "clip")
+			return TextOverflow::Clip;
+		if (text == "ellipsis")
+			return TextOverflow::Ellipsis;
+		return TextOverflow::Visible;
+	}
+
 	TextLayout LayoutText(const Font& font, std::string_view text, const TextLayoutSettings& settings)
 	{
 		TextLayout layout;

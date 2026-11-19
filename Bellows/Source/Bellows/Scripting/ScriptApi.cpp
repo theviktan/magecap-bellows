@@ -230,6 +230,7 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<ScriptComponent>("Script"),
 			MakeComponentInfo<AudioSourceComponent>("AudioSource"),
 			MakeComponentInfo<AudioListenerComponent>("AudioListener"),
+			MakeComponentInfo<TextComponent>("Text"),
 		};
 		return s_Infos;
 	}
@@ -267,6 +268,7 @@ namespace Bellows::Scripting {
 		if (type == typeid(ScriptComponent)) return "Script";
 		if (type == typeid(AudioSourceComponent)) return "AudioSource";
 		if (type == typeid(AudioListenerComponent)) return "AudioListener";
+		if (type == typeid(TextComponent)) return "Text";
 		return "Unknown";
 	}
 

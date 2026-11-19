@@ -150,6 +150,9 @@ def check_programs(package: pathlib.Path, scratch: pathlib.Path, failures: Failu
     failures.check(result.returncode == 0 and export_result.is_file(), "the packaged editor could not export a game")
     if result.returncode == 0 and export_result.is_file():
         game = pathlib.Path(export_result.read_text(encoding="utf-8"))
+        for name in ("Inter-Regular.ttf", "OFL.txt"):
+            failures.check((export_folder / "Resources" / "Fonts" / "Inter" / name).is_file(),
+                           f"the exported game is missing the built-in font file {name}")
         result = run([game, "--headless", "--width", "320", "--height", "180", "--frames", "30"], export_folder, environment)
         failures.check(result.returncode == 0, "the game exported by the packaged editor did not run")
 

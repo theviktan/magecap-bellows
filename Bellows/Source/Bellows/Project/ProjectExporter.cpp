@@ -193,7 +193,7 @@ namespace Bellows {
 			return fail("The runtime executable was not found next to the editor (" + runtime.string() + ")");
 
 		// Start from a clean folder so no stale files ship.
-		for (const char* folder : { "Assets", "Shaders", "Python", ScriptEngine::BundledRuntimeFolder })
+		for (const char* folder : { "Assets", "Resources", "Shaders", "Python", ScriptEngine::BundledRuntimeFolder })
 			std::filesystem::remove_all(output / folder, error);
 		if (!FileSystem::CreateDirectories(output))
 			return fail("Could not create '" + output.string() + "'");
@@ -217,6 +217,10 @@ namespace Bellows {
 			return fail("Could not copy shaders");
 		if (!CopyFiltered(engineDirectory / "Python", output / "Python", noExclusions, result.TotalBytes))
 			return fail("Could not copy the bellows Python package");
+		// Text components with no font use the built-in one; its license (OFL.txt) is in the same folder.
+		const std::filesystem::path builtinFont = std::filesystem::path("Resources") / "Fonts" / "Inter";
+		if (!CopyFiltered(engineDirectory / builtinFont, output / builtinFont, noExclusions, result.TotalBytes))
+			return fail("Could not copy the built-in font");
 
 		// Open-source license notices travel with every build of the game.
 		if (const std::filesystem::path notices = engineDirectory / "ThirdPartyNotices.md"; FileSystem::Exists(notices))

@@ -27,6 +27,7 @@ namespace Bellows {
 			if (entity.HasComponent<PrefabComponent>()) return ICON_PACKAGE;
 			if (entity.HasComponent<MeshRendererComponent>()) return ICON_BOX;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
+			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
 			if (entity.HasComponent<ScriptComponent>()) return ICON_FILE_CODE;
 			if (entity.HasComponent<RigidBodyComponent>()) return ICON_ATOM;
 			return ICON_CIRCLE;
@@ -410,6 +411,12 @@ namespace Bellows {
 		{
 			create("Audio Source").AddComponent<AudioSourceComponent>();
 			m_Editor.CommitChange("Create audio source");
+		}
+
+		if (ImGui::MenuItem(ICON_TYPE "  Text"))
+		{
+			create("Text").AddComponent<TextComponent>();
+			m_Editor.CommitChange("Create text");
 		}
 	}
 
