@@ -63,6 +63,13 @@ namespace ForgeScript {
 			int TryDepth = 0;
 		};
 
+		// Where a parameter's default value is written: tokens [Start, End), or both 0 when it has none.
+		struct DefaultValue
+		{
+			size_t Start = 0;
+			size_t End = 0;
+		};
+
 		// A 'try' with a 'finally' whose try or catch section is being compiled. Leaving it early (return,
 		// stop, skip) runs a copy of its finally code first.
 		struct FinallyContext
@@ -1423,7 +1430,7 @@ namespace ForgeScript {
 
 		// Compiles a parameter list and body into a function and emits a closure for it.
 		void FunctionBody(const std::string& name, ScopeKind kind, const std::vector<std::string>& params, const Token& opener, const char* what,
-			const std::string& eventSource = {})
+			const std::string& eventSource = {}, const std::vector<DefaultValue>& defaults = {})
 		{
 			Function* fn = m_VM.NewFunction();
 			fn->Name = m_VM.Intern(name);
@@ -1449,6 +1456,7 @@ namespace ForgeScript {
 			}
 			if (params.size() > 255)
 				ErrorAt(opener, "A function can take at most 255 values.");
+			DefaultValues(fn, params, defaults);
 
 			// Every name this function assigns with "set" becomes one of its own variables,
 			// unless it already belongs to the whole script or to an outer function.
@@ -1482,19 +1490,101 @@ namespace ForgeScript {
 			}
 		}
 
-		std::vector<std::string> ParameterList()
+		// The names in "(a, b is 10)". A default value ('is' and a value) is only noted here; FunctionBody
+		// compiles it inside the function, so it is worked out at each call that leaves the value out.
+		std::vector<std::string> ParameterList(std::vector<DefaultValue>* defaults = nullptr)
 		{
 			std::vector<std::string> params;
 			Consume(TokenType::LeftParen, "Expected '(' after the function name, like: function heal(amount)");
 			if (!Check(TokenType::RightParen))
 			{
+				std::string firstWithDefault;
 				do
 				{
+					const Token& nameToken = Current();
 					params.push_back(ConsumeName("Expected a parameter name."));
+					DefaultValue value;
+					if (Check(TokenType::Equal))
+						ErrorAtCurrent("Use 'is' for a default value, like: function attack(target, damage is 10)");
+					if (Match(TokenType::Is))
+					{
+						value.Start = m_Pos;
+						int depth = 0;
+						while (!Check(TokenType::Eof) && !(depth == 0 && (Check(TokenType::Comma) || Check(TokenType::RightParen))))
+						{
+							const TokenType type = Current().Type;
+							const bool afterBrace = !Current().Lexeme.empty() && Current().Lexeme.front() == '}';
+							if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace ||
+								(type == TokenType::Interpolation && !afterBrace))
+								depth++;
+							else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
+								(type == TokenType::String && afterBrace))
+								depth--;
+							Advance();
+						}
+						value.End = m_Pos;
+						if (value.End == value.Start)
+							ErrorAt(nameToken, "Write the default value after 'is', like: damage is 10");
+						if (firstWithDefault.empty())
+							firstWithDefault = params.back();
+					}
+					else if (!firstWithDefault.empty())
+					{
+						ErrorAt(nameToken, "Give '" + params.back() + "' a default value too, or put it before '" + firstWithDefault +
+							"': values with defaults come last.");
+					}
+					if (value.Start && !defaults)
+						ErrorAt(nameToken, "Default values can't be used here.");
+					if (defaults)
+						defaults->push_back(value);
 				} while (Match(TokenType::Comma));
 			}
 			Consume(TokenType::RightParen, "Expected ')' after the parameters.");
 			return params;
+		}
+
+		// The code that fills in default values, at the start of the function. A call that leaves values
+		// out starts at the first one it left out (Function::DefaultIps); each default is worked out, in
+		// order, seeing only the values before it, then the body runs. A call with every value skips it all.
+		void DefaultValues(Function* fn, const std::vector<std::string>& params, const std::vector<DefaultValue>& defaults)
+		{
+			size_t first = params.size();
+			for (size_t i = 0; i < defaults.size(); i++)
+			{
+				if (defaults[i].Start)
+				{
+					first = i;
+					break;
+				}
+			}
+			if (first == params.size())
+				return;
+
+			fn->MinArity = static_cast<int>(first);
+			std::vector<Local>& locals = m_State->Locals;
+			for (size_t i = first; i < params.size(); i++)
+			{
+				fn->DefaultIps.push_back(CurrentChunk().Size());
+				// Slot 0 holds the function (or self), so parameter i lives in slot i + 1.
+				std::vector<std::string> later;
+				for (size_t j = i; j < params.size(); j++)
+				{
+					later.push_back(std::move(locals[j + 1].Name));
+					locals[j + 1].Name.clear();
+				}
+				const size_t position = m_Pos;
+				m_Pos = defaults[i].Start;
+				Expression();
+				if (m_Pos != defaults[i].End)
+					ErrorAtCurrent("Expected ',' or ')' after the default value.");
+				m_Pos = position;
+				for (size_t j = i; j < params.size(); j++)
+					locals[j + 1].Name = std::move(later[j - i]);
+				EmitOp(OpCode::SetLocal);
+				EmitByte(static_cast<uint8_t>(i + 1));
+				EmitOp(OpCode::Pop);
+			}
+			fn->DefaultIps.push_back(CurrentChunk().Size());
 		}
 
 		// Stores the value on top of the stack under a name (script variable or local variable).
@@ -1541,8 +1631,9 @@ namespace ForgeScript {
 				slot = AddLocal(name);
 			}
 
-			std::vector<std::string> params = ParameterList();
-			FunctionBody(name, ScopeKind::Function, params, opener, "function");
+			std::vector<DefaultValue> defaults;
+			std::vector<std::string> params = ParameterList(&defaults);
+			FunctionBody(name, ScopeKind::Function, params, opener, "function", {}, defaults);
 
 			if (isLocal)
 			{
@@ -1560,8 +1651,9 @@ namespace ForgeScript {
 		void LambdaExpression()
 		{
 			Token opener = Previous();
-			std::vector<std::string> params = ParameterList();
-			FunctionBody("function", ScopeKind::Function, params, opener, "function");
+			std::vector<DefaultValue> defaults;
+			std::vector<std::string> params = ParameterList(&defaults);
+			FunctionBody("function", ScopeKind::Function, params, opener, "function", {}, defaults);
 		}
 
 		void PhraseStatement()
@@ -1655,8 +1747,9 @@ namespace ForgeScript {
 					Token methodOpener = Current();
 					Advance();
 					std::string methodName = ConsumeMemberName();
-					std::vector<std::string> params = ParameterList();
-					FunctionBody(methodName, ScopeKind::Method, params, methodOpener, "function");
+					std::vector<DefaultValue> defaults;
+			std::vector<std::string> params = ParameterList(&defaults);
+					FunctionBody(methodName, ScopeKind::Method, params, methodOpener, "function", {}, defaults);
 					EmitWithName(OpCode::Method, methodName);
 				}
 				else

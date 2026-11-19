@@ -417,13 +417,48 @@ namespace ForgeScript {
 				size_t j = i + 2;
 				if (j < tokens.size() && tokens[j].Type == TokenType::LeftParen)
 				{
-					for (j++; j < tokens.size() && tokens[j].Type != TokenType::RightParen && tokens[j].Type != TokenType::Newline &&
-						tokens[j].Type != TokenType::Eof; j++)
+					// A parameter is the name after '(' or ','; a default value ("damage is 10") runs to the
+					// next ',' or ')' outside brackets and shows in the label as written.
+					int brackets = 0;
+					bool expectName = true;
+					size_t defaultStart = 0;
+					auto endDefault = [&](size_t end)
 					{
-						if (tokens[j].Type == TokenType::Identifier)
+						if (defaultStart && end > defaultStart)
+						{
+							const char* first = tokens[defaultStart].Lexeme.data();
+							const char* last = tokens[end - 1].Lexeme.data() + tokens[end - 1].Lexeme.size();
+							params += " is " + std::string(first, static_cast<size_t>(last - first));
+						}
+						defaultStart = 0;
+					};
+					for (j++; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+					{
+						const TokenType type = tokens[j].Type;
+						const bool afterBrace = !tokens[j].Lexeme.empty() && tokens[j].Lexeme.front() == '}';
+						if (brackets == 0 && (type == TokenType::RightParen || type == TokenType::Comma))
+						{
+							endDefault(j);
+							if (type == TokenType::RightParen)
+								break;
+							expectName = true;
+							continue;
+						}
+						if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace ||
+							(type == TokenType::Interpolation && !afterBrace))
+							brackets++;
+						else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
+							(type == TokenType::String && afterBrace))
+							brackets--;
+						if (expectName && type == TokenType::Identifier)
 						{
 							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
 							add(Kind::Parameter, tokens[j], std::string(tokens[j].Lexeme), std::string(tokens[j].Lexeme), "", std::string(name.Lexeme));
+							expectName = false;
+						}
+						else if (brackets == 0 && type == TokenType::Is && !defaultStart)
+						{
+							defaultStart = j + 1;
 						}
 					}
 				}

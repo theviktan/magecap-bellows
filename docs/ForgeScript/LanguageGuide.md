@@ -549,9 +549,28 @@ say damage_after_armor(30, 12)     # 18
 **Good to know:**
 
 - You can call a function from anywhere in the script, even above the line that defines it.
-- A function must be given exactly the number of values it asks for.
+- A function must be given the number of values it asks for, except values with a default (below).
 - A function with no `return` gives back `nothing`.
 - `length of items` means `length(items)`. Any function that takes one value can be called with `of`: `sqrt of 16`, `abs of -3`.
+
+### Default values
+
+Give a value a default with `is`, and calls may leave it out:
+
+```forge
+function attack(target, damage is 10)
+	say "{target} takes {damage}"
+end
+
+attack("goblin")         # goblin takes 10
+attack("dragon", 50)     # dragon takes 50
+```
+
+- Values with defaults come after the ones without: `function f(a, b is 1)`, not `function f(a is 1, b)`.
+- The default is worked out each time a call leaves the value out, so `bag is []` gives every call its own new list. (In Python, that list would be shared between calls; in ForgeScript it is not.)
+- A default can use the values before it and the script's variables: `function hit(damage, crit is damage * 2)`.
+- Giving `nothing` is giving a value: `attack("goblin", nothing)` sets `damage` to `nothing`, not 10.
+- Defaults work for functions in kinds (including `setup`, so `new Hero("Ron")` can leave out a level), and for functions written as values: `function(x, times is 2) return x * times end`.
 
 ### Variables inside functions
 

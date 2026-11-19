@@ -349,3 +349,23 @@ TEST_CASE("AnErrorThroughFinallyIsReportedWhereItHappened")
 	REQUIRE(error.Trace.size() == 2);
 	CHECK_CONTAINS(error.Trace[0], "'deep'");
 }
+
+TEST_CASE("CompileErrorsInDefaultValues")
+{
+	CHECK_CONTAINS(CompileFails("function f(a is 1, b)\nend\n").Message, "Give 'b' a default value too, or put it before 'a'");
+	CHECK_CONTAINS(CompileFails("function f(a = 1)\nend\n").Message, "Use 'is' for a default value");
+	CHECK_CONTAINS(CompileFails("function f(a is)\nend\n").Message, "Write the default value after 'is'");
+	CHECK_CONTAINS(CompileFails("function f(a is 1 2)\nend\n").Message, "Expected ',' or ')' after the default value.");
+	// Events and phrases name their values differently, so they have no defaults.
+	CompilesFine("function f(a, b is a + 1, c is [b])\n\treturn c\nend\nset g to function(x is 1) return x end\n");
+}
+
+TEST_CASE("DefaultValuesWorkOutAtEachCall")
+{
+	CHECK_EQ(Output("function f(a, b is a * 2)\n\treturn \"{a} {b}\"\nend\nsay f(1)\nsay f(1, 5)\n"), std::string("1 2\n1 5\n"));
+	// A new list each time, unlike Python, where the same list is shared between calls.
+	CHECK_EQ(Output("function f(x, bag is [])\n\tadd x to bag\n\treturn bag\nend\nsay f(1)\nsay f(2)\n"), std::string("[1]\n[2]\n"));
+	// Giving 'nothing' is giving a value: the default is only for values left out.
+	CHECK_EQ(Output("function f(a is 5)\n\treturn a\nend\nsay f(nothing)\n"), std::string("nothing\n"));
+	CHECK_CONTAINS(Output("function f(a, b is 1)\nend\ntry\n\tf()\ncatch p\n\tsay p\nend\n"), "needs 1 to 2 values, but was given 0 values");
+}

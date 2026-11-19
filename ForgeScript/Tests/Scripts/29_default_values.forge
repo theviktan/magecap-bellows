@@ -1,0 +1,61 @@
+# A parameter with 'is' has a default value, used when a call leaves it out.
+function attack(target, damage is 10, crit is damage * 2)
+	say "{target}: {damage}, crit {crit}"
+end
+attack("goblin")                                        # expect: goblin: 10, crit 20
+attack("orc", 25)                                       # expect: orc: 25, crit 50
+attack("troll", 5, 99)                                  # expect: troll: 5, crit 99
+
+# The default is worked out at each call, so every call gets its own new list.
+function add_item(item, bag is [])
+	add item to bag
+	return bag
+end
+say add_item("a")                                       # expect: ["a"]
+say add_item("b")                                       # expect: ["b"]
+
+# Defaults can read the script's variables as they are at the time of the call.
+set base to 3
+function speed(extra is base + 1)
+	return extra
+end
+say speed()                                             # expect: 4
+set base to 7
+say speed()                                             # expect: 8
+
+# In kinds, for 'new' and for functions written as values.
+kind Hero
+	function setup(name, level is 1)
+		set my name to name
+		set my level to level
+	end
+	function greet(greeting is "Hello")
+		return "{greeting}, {my name} (level {my level})"
+	end
+end
+set hero to new Hero("Ron")
+say hero.greet()                                        # expect: Hello, Ron (level 1)
+say hero.greet("Hi")                                    # expect: Hi, Ron (level 1)
+say new Hero("Ada", 5).greet()                          # expect: Hello, Ada (level 5)
+set double to function(x, times is 2) return x * times end
+say double(4)                                           # expect: 8
+say [1, 2].map(function(x, bonus is 10) return x + bonus end)   # expect: [11, 12]
+
+# Giving nothing is giving a value; the default is only for values left out.
+function shout(text is "hey")
+	return text
+end
+say shout(nothing)                                      # expect: nothing
+say shout()                                             # expect: hey
+
+# Too few or too many values say how many it takes.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() attack() end)                 # expect: 'attack' needs 1 to 3 values, but was given 0 values.
+say problem_of(function() attack(1, 2, 3, 4) end)       # expect: 'attack' needs 1 to 3 values, but was given 4 values.

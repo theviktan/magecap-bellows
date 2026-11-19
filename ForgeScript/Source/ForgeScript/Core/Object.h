@@ -108,6 +108,11 @@ namespace ForgeScript {
 	{
 		ForgeScript::Chunk Chunk;
 		int Arity = 0;
+		// With default values: the fewest values a call may give, and where a call that gives k values
+		// starts (DefaultIps[k - MinArity]; the last entry is for a call that gives them all). Empty
+		// when no parameter has a default.
+		int MinArity = 0;
+		std::vector<size_t> DefaultIps;
 		int UpvalueCount = 0;
 		String* Name = nullptr;
 		Module* Owner = nullptr;
