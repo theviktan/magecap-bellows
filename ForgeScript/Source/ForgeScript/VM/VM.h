@@ -194,8 +194,11 @@ namespace ForgeScript {
 		void SetGlobal(Module* module, const std::string& name, Value value);
 		bool HasHandler(Module* module, const std::string& event);
 
-		// Runs every "when <event>" handler in the module. Returns false if one of them failed.
-		bool Emit(Module* module, const std::string& event, const std::vector<Value>& values = {});
+		// Runs every "when <event>" handler in the module. Returns false if one of them failed. 'source' is
+		// the name of the entity that raised the event, for handlers written 'when "Start" is clicked':
+		// those run only when it matches their name, ignoring letter case, and never for an event
+		// without a source.
+		bool Emit(Module* module, const std::string& event, const std::vector<Value>& values = {}, const std::string& source = {});
 		// Sends an event to every loaded module.
 		void EmitAll(const std::string& event, const std::vector<Value>& values = {});
 

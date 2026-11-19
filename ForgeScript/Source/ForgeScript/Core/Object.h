@@ -115,6 +115,9 @@ namespace ForgeScript {
 		size_t BodyIp = 0; // Where the code written in the body starts, after the set-up of its variables.
 		std::vector<LocalName> LocalNames;
 		std::vector<std::string> UpvalueNames; // One per upvalue, in order.
+		// For a handler written 'when "Start" is clicked': the name of the entity whose event it runs for
+		// (compared ignoring letter case). Empty for every other function.
+		std::string EventSource;
 
 		Function() : Object(ObjectType::Function) {}
 	};

@@ -387,43 +387,75 @@ namespace Bellows::Scripting {
 		std::erase_if(s_EventListeners, [id](const EventListenerSlot& slot) { return slot.ID == id; });
 	}
 
-	void EmitScriptEvent(const std::string& name, const ScriptValueList& values, ScriptEventListenerID skip)
-	{
-		if (s_EventDepth >= c_MaxEventDepth)
+	namespace {
+
+		// Counts one more event against the limits and holds one level of nesting while it lives.
+		struct EventNesting
 		{
-			throw ScriptValueError("The event '" + name + "' was sent from inside " + std::to_string(c_MaxEventDepth) +
-				" other events; scripts that answer each other's events need a way to stop");
-		}
-		if (s_EventDepth == 0)
-			s_EventsInDispatch = 0;
-		if (++s_EventsInDispatch > c_MaxEventsPerDispatch)
-		{
-			throw ScriptValueError("The event '" + name + "' is one of more than " + std::to_string(c_MaxEventsPerDispatch) +
-				" events sent while handling a single event; scripts that answer each other's events need a way to stop");
-		}
+			explicit EventNesting(const std::string& name)
+			{
+				if (s_EventDepth >= c_MaxEventDepth)
+				{
+					throw ScriptValueError("The event '" + name + "' was sent from inside " + std::to_string(c_MaxEventDepth) +
+						" other events; scripts that answer each other's events need a way to stop");
+				}
+				if (s_EventDepth == 0)
+					s_EventsInDispatch = 0;
+				if (++s_EventsInDispatch > c_MaxEventsPerDispatch)
+				{
+					throw ScriptValueError("The event '" + name + "' is one of more than " + std::to_string(c_MaxEventsPerDispatch) +
+						" events sent while handling a single event; scripts that answer each other's events need a way to stop");
+				}
+				s_EventDepth++;
+			}
+			~EventNesting() { s_EventDepth--; }
+			EventNesting(const EventNesting&) = delete;
+			EventNesting& operator=(const EventNesting&) = delete;
+		};
 
 		// Listeners may be added or removed while handling the event (a script that stops play mode),
-		// so deliver to the ones present now and skip any that are gone by their turn.
-		std::vector<ScriptEventListenerID> ids;
-		for (const EventListenerSlot& slot : s_EventListeners)
+		// so this delivers to the ones present when it starts and skips any that are gone by their turn.
+		void DeliverToListeners(const std::string& name, const ScriptValueList& values, const ScriptEventDelivery& delivery,
+			ScriptEventListenerID skip)
 		{
-			if (slot.ID != skip)
-				ids.push_back(slot.ID);
+			std::vector<ScriptEventListenerID> ids;
+			for (const EventListenerSlot& slot : s_EventListeners)
+			{
+				if (slot.ID != skip)
+					ids.push_back(slot.ID);
+			}
+			for (ScriptEventListenerID id : ids)
+			{
+				auto it = std::find_if(s_EventListeners.begin(), s_EventListeners.end(), [id](const EventListenerSlot& slot) { return slot.ID == id; });
+				if (it == s_EventListeners.end())
+					continue;
+				// Copy it: the listener may remove itself while running.
+				const ScriptEventListener listener = it->Listener;
+				listener(name, values, delivery);
+			}
 		}
 
-		struct DepthGuard
+	}
+
+	void EmitScriptEvent(const std::string& name, const ScriptValueList& values, ScriptEventListenerID skip)
+	{
+		EventNesting nesting(name);
+		DeliverToListeners(name, values, ScriptEventDelivery(), skip);
+	}
+
+	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values)
+	{
+		EventNesting nesting(name);
+		ScriptEventDelivery delivery;
+		delivery.Source = source;
+		for (Entity entity = source.TryResolve(); entity; )
 		{
-			DepthGuard() { s_EventDepth++; }
-			~DepthGuard() { s_EventDepth--; }
-		} depth;
-		for (ScriptEventListenerID id : ids)
-		{
-			auto it = std::find_if(s_EventListeners.begin(), s_EventListeners.end(), [id](const EventListenerSlot& slot) { return slot.ID == id; });
-			if (it == s_EventListeners.end())
-				continue;
-			// Copy it: the listener may remove itself while running.
-			const ScriptEventListener listener = it->Listener;
-			listener(name, values);
+			const ScriptEntity target(entity);
+			delivery.Target = target;
+			DeliverToListeners(name, values, delivery, 0);
+			// A handler may have destroyed the entity, or the whole scene with it (stopping play).
+			const Entity still = target.TryResolve();
+			entity = still ? still.GetParent() : Entity();
 		}
 	}
 

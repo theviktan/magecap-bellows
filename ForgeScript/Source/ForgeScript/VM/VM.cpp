@@ -34,6 +34,14 @@ namespace ForgeScript {
 				names.push_back(NameText(entry.first));
 		}
 
+		// Compares names the way people type them: "start" matches "Start". Letters outside A-Z are
+		// compared exactly.
+		bool SameTextIgnoringCase(std::string_view a, std::string_view b)
+		{
+			auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
+			return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [&](char x, char y) { return lower(x) == lower(y); });
+		}
+
 		// A kind's own functions and those it inherits.
 		void AddKindMethods(std::vector<std::string_view>& names, const Kind* kind)
 		{
@@ -531,14 +539,20 @@ namespace ForgeScript {
 		return RunInModule(module, source, fileName);
 	}
 
-	bool VM::Emit(Module* module, const std::string& event, const std::vector<Value>& values)
+	bool VM::Emit(Module* module, const std::string& event, const std::vector<Value>& values, const std::string& source)
 	{
 		auto it = module->Handlers.find(Intern(event));
 		if (it == module->Handlers.end() || it->second.empty())
 			return true;
 
 		// Create every task before running any, so all of them hold the values safely.
-		std::vector<Closure*> handlers = it->second;
+		std::vector<Closure*> handlers;
+		for (Closure* handler : it->second)
+		{
+			const std::string& wanted = handler->Fn->EventSource;
+			if (wanted.empty() || (!source.empty() && SameTextIgnoringCase(wanted, source)))
+				handlers.push_back(handler);
+		}
 		std::vector<Task*> tasks;
 		const size_t depth = m_RunningTasks.empty() ? 0 : m_RunningTasks.back()->EventDepth + 1;
 		for (Closure* handler : handlers)
