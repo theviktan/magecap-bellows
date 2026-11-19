@@ -213,7 +213,7 @@ instance), `cast_shadows`, `visible`.
 ### `Text`
 Text drawn in the world, crisp at any distance (multi-channel signed distance field fonts).
 * `text` (UTF-8; `"\n"` starts a new line), `font` (`.ttf` or `.otf`; empty = the built-in Inter),
-  `size` (height of one em in meters; a line is about 1.2 em), `color` (`Vec4`, alpha included).
+  `size` (height of one em in meters, or reference pixels under a UI canvas; a line is about 1.2 em), `color` (`Vec4`, alpha included).
 * `alignment` (`"left"`, `"center"`, `"right"`), `vertical_alignment` (`"top"`, `"middle"`,
   `"bottom"`), `line_spacing` (1 = normal).
 * `box_size` (`Vec3`; x is the width and y the height in meters, z is unused; 0 sizes the box to
@@ -232,6 +232,42 @@ label = entity.add_component("Text")
 label.text = "Score: 0"
 label.size = 0.4
 label.outline_width = 0.04
+```
+
+### Screen UI (`UICanvas`, `UIRect`, `UIImage`)
+A screen UI is a `UICanvas` entity with UI entities under it. It is drawn over the game at the
+screen's resolution, after tonemapping and anti-aliasing, so it is never blurred or bloomed, and
+screenshots include it. A canvas covers the whole screen whatever its own parent is. A `Text` under a
+canvas is screen text: its `size` is in reference pixels and its box is the entity's `UIRect`.
+
+* `UICanvas`: `reference_size` (the screen size the UI is designed for, default 1920 × 1080; x and y
+  of a `Vec3`), `scale_mode` (`"fit_height"`, `"fit_width"`, `"expand"` (default: the whole
+  reference area fits), `"constant_pixels"`), `sort_order` (higher draws on top), `visible`, and
+  `scale` (read-only: screen pixels per reference pixel right now).
+* `UIRect`: where the entity sits inside its parent's rectangle, like Godot's anchors and offsets.
+  `anchor_min` and `anchor_max` are fractions of the parent ((0, 0) top-left, (1, 1) bottom-right);
+  equal anchors pin a fixed-size rect to that point, different anchors stretch it with the parent.
+  `offset_min` and `offset_max` move the anchored corners, in reference pixels (y points down).
+  `pivot` is the point that stays put when the size changes; `position` (the pivot relative to the
+  anchors) and `size` move and resize the rect through the offsets. `visible` (hidden rects hide
+  everything under them), `interactable`, and read-only `screen_position` and `screen_size` (pixels,
+  as of the last frame drawn). An entity without a `UIRect` fills its parent's rect.
+* `UIImage`: a filled rectangle: `texture` (empty = plain color), `color` (multiplies the
+  texture), `corner_radius` and `border_width` (reference pixels; the border is inside the rect),
+  `border_color`, `visible`.
+
+Unknown scale modes raise `ValueError`. Python vectors for UI use x and y; z is ignored.
+
+```python
+hud = bellows.create_entity("HUD")
+hud.add_component("UICanvas")
+score = bellows.create_entity("Score", parent=hud)
+rect = score.add_component("UIRect")
+rect.anchor_min = rect.anchor_max = Vec3(1.0, 0.0, 0.0)   # the top-right corner
+rect.pivot = Vec3(1.0, 0.0, 0.0)
+rect.position, rect.size = Vec3(-24.0, 24.0, 0.0), Vec3(300.0, 60.0, 0.0)
+label = score.add_component("Text")
+label.text, label.size, label.alignment = "Score: 0", 32.0, "right"
 ```
 
 ### Physics

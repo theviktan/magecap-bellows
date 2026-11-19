@@ -25,6 +25,7 @@
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Text/TextLayout.h"
+#include "Bellows/UI/UILayout.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -82,6 +83,16 @@ namespace Bellows::Scripting {
 				throw ScriptValueError("Unknown text overflow '" + name + "'. Overflows: visible, clip, ellipsis");
 			return TextOverflowFromString(name);
 		}
+
+		inline UIScaleMode RequireUIScaleMode(const std::string& name)
+		{
+			if (!IsUIScaleModeName(name))
+				throw ScriptValueError("Unknown UI scale mode '" + name + "'. Scale modes: fit_height, fit_width, expand, constant_pixels");
+			return UIScaleModeFromString(name);
+		}
+
+		// Script vectors are 3D; UI positions and sizes use x and y.
+		inline glm::vec3 ToScriptVector(const glm::vec2& value) { return glm::vec3(value, 0.0f); }
 
 		// Assigns (or clears) one texture slot of a material from an asset path.
 		inline void SetMaterialTexture(Material& material, const std::optional<std::string>& value, std::string& pathSlot,
@@ -396,7 +407,7 @@ namespace Bellows::Scripting {
 		text.Property("font", [](const TextRef& r) { return r.Get().FontPath; }, [](const TextRef& r, const std::string& v) { r.Get().FontPath = v; },
 			"A .ttf or .otf in the assets; empty for the built-in font (Inter)");
 		text.Property("size", [](const TextRef& r) { return r.Get().Size; }, [](const TextRef& r, float v) { r.Get().Size = std::max(v, 0.0f); },
-			"The height of one em, in meters for world text");
+			"The height of one em: meters for world text, reference pixels for screen text under a UI canvas");
 		text.Property("color", [](const TextRef& r) { return ColorValue { r.Get().Color }; }, [](const TextRef& r, const ColorValue& v) { r.Get().Color = v.Value; }, "");
 		text.Property("alignment", [](const TextRef& r) { return std::string(TextAlignmentToString(r.Get().Alignment)); },
 			[](const TextRef& r, const std::string& v) { r.Get().Alignment = Detail::RequireTextAlignment(v); }, "'left', 'center' or 'right'");
@@ -418,11 +429,72 @@ namespace Bellows::Scripting {
 		text.Property("face_camera", [](const TextRef& r) { return r.Get().FaceCamera; }, [](const TextRef& r, bool v) { r.Get().FaceCamera = v; },
 			"World text always turned toward the camera");
 		text.Property("visible", [](const TextRef& r) { return r.Get().Visible; }, [](const TextRef& r, bool v) { r.Get().Visible = v; }, "");
-		text.ReadOnly("measured_size", [](const TextRef& r)
+		text.ReadOnly("measured_size", [](const TextRef& r) { return glm::vec3(Scene::MeasureTextSize(r.Get()), 0.0f); },
+			"The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it");
+
+		// --- UI -----------------------------------------------------------------
+		auto canvas = api.template Class<UICanvasRef>("UICanvas",
+			"The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game");
+		canvas.Property("reference_size", [](const UICanvasRef& r) { return Detail::ToScriptVector(r.Get().ReferenceSize); },
+			[](const UICanvasRef& r, const glm::vec3& v) { r.Get().ReferenceSize = glm::max(glm::vec2(v), glm::vec2(1.0f)); },
+			"The screen size the UI is designed for, in reference pixels (x width, y height; z unused)");
+		canvas.Property("scale_mode", [](const UICanvasRef& r) { return std::string(UIScaleModeToString(r.Get().ScaleMode)); },
+			[](const UICanvasRef& r, const std::string& v) { r.Get().ScaleMode = Detail::RequireUIScaleMode(v); },
+			"'fit_height', 'fit_width', 'expand' (the whole reference area fits) or 'constant_pixels'");
+		canvas.Property("sort_order", [](const UICanvasRef& r) { return r.Get().SortOrder; }, [](const UICanvasRef& r, int v) { r.Get().SortOrder = v; },
+			"Canvases with a higher sort order draw on top");
+		canvas.Property("visible", [](const UICanvasRef& r) { return r.Get().Visible; }, [](const UICanvasRef& r, bool v) { r.Get().Visible = v; }, "");
+		canvas.ReadOnly("scale", [](const UICanvasRef& r)
 			{
-				const TextLayout* layout = Scene::UpdateTextLayout(r.Get());
-				return glm::vec3(layout ? layout->Size : glm::vec2(0.0f), 0.0f);
-			}, "The size the text takes up (x width, y height), for fitting boxes and backgrounds to it");
+				const UICanvasComponent& c = r.Get();
+				const Scene* scene = r.GetEntity().GetScene();
+				const glm::vec2 screen(static_cast<float>(scene->GetViewportWidth()), static_cast<float>(scene->GetViewportHeight()));
+				return ComputeUIScale(c.ReferenceSize, c.ScaleMode, screen);
+			}, "Screen pixels per reference pixel at the current screen size");
+
+		auto rect = api.template Class<UIRectRef>("UIRect",
+			"Where a UI entity sits inside its parent: anchors are fractions of the parent ((0, 0) top-left, (1, 1) bottom-right), "
+			"offsets are reference pixels from the anchored corners");
+		rect.Property("anchor_min", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().AnchorMin); },
+			[](const UIRectRef& r, const glm::vec3& v) { r.Get().AnchorMin = glm::clamp(glm::vec2(v), 0.0f, 1.0f); },
+			"The parent's point the top-left corner follows (z unused)");
+		rect.Property("anchor_max", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().AnchorMax); },
+			[](const UIRectRef& r, const glm::vec3& v) { r.Get().AnchorMax = glm::clamp(glm::vec2(v), 0.0f, 1.0f); },
+			"The parent's point the bottom-right corner follows; different anchors stretch with the parent (z unused)");
+		rect.Property("pivot", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().Pivot); },
+			[](const UIRectRef& r, const glm::vec3& v) { r.Get().Pivot = glm::clamp(glm::vec2(v), 0.0f, 1.0f); },
+			"The point of the rect that stays put when its size changes ((0, 0) top-left, (1, 1) bottom-right; z unused)");
+		rect.Property("offset_min", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().OffsetMin); },
+			[](const UIRectRef& r, const glm::vec3& v) { r.Get().OffsetMin = glm::vec2(v); }, "The top-left corner's distance from anchor_min (z unused)");
+		rect.Property("offset_max", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().OffsetMax); },
+			[](const UIRectRef& r, const glm::vec3& v) { r.Get().OffsetMax = glm::vec2(v); }, "The bottom-right corner's distance from anchor_max (z unused)");
+		rect.Property("position", [](const UIRectRef& r) { const UIRectComponent& c = r.Get(); return Detail::ToScriptVector(GetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax)); },
+			[](const UIRectRef& r, const glm::vec3& v) { UIRectComponent& c = r.Get(); SetUIRectPosition(c.Pivot, c.OffsetMin, c.OffsetMax, glm::vec2(v)); },
+			"Where the pivot sits relative to the anchors, in reference pixels (moves both offsets; z unused)");
+		rect.Property("size", [](const UIRectRef& r) { const UIRectComponent& c = r.Get(); return Detail::ToScriptVector(GetUIRectSize(c.OffsetMin, c.OffsetMax)); },
+			[](const UIRectRef& r, const glm::vec3& v) { UIRectComponent& c = r.Get(); SetUIRectSize(c.Pivot, c.OffsetMin, c.OffsetMax, glm::vec2(v)); },
+			"The size in reference pixels, keeping the pivot in place (with stretching anchors, the size beyond the stretched part; z unused)");
+		rect.Property("visible", [](const UIRectRef& r) { return r.Get().Visible; }, [](const UIRectRef& r, bool v) { r.Get().Visible = v; },
+			"Hidden rects hide everything under them too");
+		rect.Property("interactable", [](const UIRectRef& r) { return r.Get().Interactable; }, [](const UIRectRef& r, bool v) { r.Get().Interactable = v; },
+			"Whether the pointer and keyboard can use it");
+		rect.ReadOnly("screen_position", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().RuntimeRect.Min); },
+			"The top-left corner on screen, in pixels from the screen's top-left, as of the last frame drawn (z unused)");
+		rect.ReadOnly("screen_size", [](const UIRectRef& r) { return Detail::ToScriptVector(r.Get().RuntimeRect.GetSize()); },
+			"The size on screen in pixels, as of the last frame drawn (z unused)");
+
+		auto image = api.template Class<UIImageRef>("UIImage", "A filled rectangle with optional rounded corners, border and texture, sized by the entity's UIRect");
+		image.Property("texture", [](const UIImageRef& r) { return r.Get().TexturePath; }, [](const UIImageRef& r, const std::string& v) { r.Get().TexturePath = v; },
+			"An image in the assets stretched over the rect; empty draws a plain color");
+		image.Property("color", [](const UIImageRef& r) { return ColorValue { r.Get().Color }; }, [](const UIImageRef& r, const ColorValue& v) { r.Get().Color = v.Value; },
+			"Multiplies the texture");
+		image.Property("corner_radius", [](const UIImageRef& r) { return r.Get().CornerRadius; },
+			[](const UIImageRef& r, float v) { r.Get().CornerRadius = std::max(v, 0.0f); }, "In reference pixels");
+		image.Property("border_width", [](const UIImageRef& r) { return r.Get().BorderWidth; },
+			[](const UIImageRef& r, float v) { r.Get().BorderWidth = std::max(v, 0.0f); }, "In reference pixels, drawn inside the rect");
+		image.Property("border_color", [](const UIImageRef& r) { return ColorValue { r.Get().BorderColor }; },
+			[](const UIImageRef& r, const ColorValue& v) { r.Get().BorderColor = v.Value; }, "");
+		image.Property("visible", [](const UIImageRef& r) { return r.Get().Visible; }, [](const UIImageRef& r, bool v) { r.Get().Visible = v; }, "");
 
 		// --- Entity -----------------------------------------------------------
 		auto entity = api.template Class<ScriptEntity>("Entity", "A handle to an entity in a scene");

@@ -223,6 +223,18 @@ namespace Bellows {
 		};
 		m_TextInputLayout = device->createInputLayout(textAttributes, 6, textVS);
 
+		nvrhi::ShaderHandle uiVS = Renderer::GetShader("UI.vert");
+		const nvrhi::VertexAttributeDesc uiAttributes[] = {
+			nvrhi::VertexAttributeDesc().setName("POSITION").setFormat(nvrhi::Format::RG32_FLOAT).setOffset(offsetof(UIVertex, Position)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("TEXCOORD").setFormat(nvrhi::Format::RG32_FLOAT).setOffset(offsetof(UIVertex, TexCoord)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("COLOR").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(UIVertex, Color)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("COLOR2").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(UIVertex, Color2)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("SHAPE").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(UIVertex, Shape)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("PARAMS").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(UIVertex, Params)).setElementStride(sizeof(UIVertex)),
+			nvrhi::VertexAttributeDesc().setName("ENTITY_ID").setFormat(nvrhi::Format::R32_UINT).setOffset(offsetof(UIVertex, EntityID)).setElementStride(sizeof(UIVertex)),
+		};
+		m_UIInputLayout = device->createInputLayout(uiAttributes, 7, uiVS);
+
 		auto createMeshPipeline = [&](nvrhi::IShader* vs, nvrhi::IShader* ps, nvrhi::IBindingLayout* passLayout, const nvrhi::FramebufferInfo& info,
 			const nvrhi::RenderState& state)
 		{
@@ -356,6 +368,23 @@ namespace Bellows {
 			m_TextIDPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_EntityIDFormat).setDepthFormat(c_DepthFormat));
 		}
 
+		// Screen UI: on top of everything, so no depth at all.
+		{
+			nvrhi::GraphicsPipelineDesc desc;
+			desc.VS = uiVS;
+			desc.PS = Renderer::GetShader("UI.frag");
+			desc.inputLayout = m_UIInputLayout;
+			desc.bindingLayouts = { Renderer::GetTextBindingLayout() };
+			desc.renderState.rasterState.setCullNone().setScissorEnable(true);
+			desc.renderState.depthStencilState.setDepthTestEnable(false).setDepthWriteEnable(false);
+			desc.renderState.blendState.targets[0] = alphaBlend;
+			m_UIPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_LDRFormat));
+
+			desc.PS = Renderer::GetShader("UIID.frag");
+			desc.renderState.blendState.targets[0] = nvrhi::BlendState::RenderTarget();
+			m_UIIDPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_EntityIDFormat));
+		}
+
 		nvrhi::BindingSetDesc lineSetDesc;
 		lineSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(glm::mat4)));
 		m_LineSet = device->createBindingSet(lineSetDesc, Renderer::GetLineBindingLayout());
@@ -363,7 +392,7 @@ namespace Bellows {
 		BW_CORE_VERIFY(m_ShadowPipeline && m_PrepassPipeline && m_OpaquePipeline && m_TransparentPipeline && m_SkyboxPipeline
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
-			&& m_TextPipeline && m_TextIDPipeline,
+			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline,
 			"SceneRenderer: failed to create one or more pipelines");
 	}
 
@@ -432,6 +461,7 @@ namespace Bellows {
 		m_FinalFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_FinalTexture));
 		m_FinalDepthFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_FinalTexture).setDepthAttachment(m_DepthTexture));
 		m_EntityIDDepthFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_EntityIDTexture).setDepthAttachment(m_DepthTexture));
+		m_EntityIDFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_EntityIDTexture));
 	}
 
 	void SceneRenderer::CreateShadowMap()
@@ -565,10 +595,15 @@ namespace Bellows {
 		m_LineVertices.clear();
 		m_TextVertices.clear();
 		m_TextDraws.clear();
+		m_UIVertices.clear();
+		m_UIDraws.clear();
 		m_FrameMeshes.clear();
 		m_FrameMaterials.clear();
 		m_SceneBounds = AABB();
 		m_Statistics = {};
+
+		// Forget textures nothing but this renderer holds any more (a font or image no longer used).
+		std::erase_if(m_TextureSets, [](const auto& entry) { return entry.second.Owner.use_count() <= 1; });
 	}
 
 	void SceneRenderer::SetEnvironment(const EnvironmentSettings& environment)
@@ -954,6 +989,8 @@ namespace Bellows {
 		RenderTonemap(commandList);
 		RenderText(commandList);
 		RenderOverlays(commandList);
+		RenderUI(commandList);
+		RenderSelectionOutline(commandList);
 
 		commandList->close();
 		Renderer::GetDevice()->executeCommandList(commandList);
@@ -1219,18 +1256,23 @@ namespace Bellows {
 			m_TextDraws.push_back(std::move(draw));
 	}
 
-	nvrhi::IBindingSet* SceneRenderer::GetTextBindingSet(const Ref<Font>& font)
+	nvrhi::IBindingSet* SceneRenderer::GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner)
 	{
-		auto it = m_TextSets.find(font.get());
-		if (it != m_TextSets.end())
+		auto it = m_TextureSets.find(texture);
+		if (it != m_TextureSets.end())
 			return it->second.Set;
 
 		nvrhi::BindingSetDesc desc;
-		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, font->GetAtlasTexture()->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, texture));
 		desc.addItem(nvrhi::BindingSetItem::Sampler(1, Renderer::GetLinearClampSampler()));
 		desc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::TextData)));
-		TextBinding binding { font, Renderer::GetDevice()->createBindingSet(desc, Renderer::GetTextBindingLayout()) };
-		return m_TextSets.emplace(font.get(), std::move(binding)).first->second.Set;
+		TextureBinding binding { std::move(owner), Renderer::GetDevice()->createBindingSet(desc, Renderer::GetTextBindingLayout()) };
+		return m_TextureSets.emplace(texture, std::move(binding)).first->second.Set;
+	}
+
+	nvrhi::IBindingSet* SceneRenderer::GetTextBindingSet(const Ref<Font>& font)
+	{
+		return GetTextureBindingSet(font->GetAtlasTexture()->GetHandle(), font);
 	}
 
 	void SceneRenderer::RenderText(nvrhi::ICommandList* commandList)
@@ -1316,7 +1358,11 @@ namespace Bellows {
 			commandList->setPushConstants(&viewProjection, sizeof(viewProjection));
 			commandList->draw(nvrhi::DrawArguments().setVertexCount(static_cast<uint32_t>(m_LineVertices.size())));
 		}
+	}
 
+	void SceneRenderer::RenderSelectionOutline(nvrhi::ICommandList* commandList)
+	{
+		// Last, so selected UI (drawn into the entity ID image too) gets its outline on top.
 		if (m_Settings.ShowSelectionOutline && !m_SelectedEntities.empty())
 		{
 			OutlineConstants outline {};
@@ -1327,6 +1373,140 @@ namespace Bellows {
 				outline.SelectedIDs[i / 4][static_cast<int>(i % 4)] = m_SelectedEntities[i];
 			commandList->writeBuffer(m_OutlineConstants, &outline, sizeof(outline));
 			DrawFullscreen(commandList, m_OutlinePipeline, m_FinalFramebuffer, m_OutlineSet, m_ViewportWidth, m_ViewportHeight);
+		}
+	}
+
+	void SceneRenderer::AddUIQuad(nvrhi::IBindingSet* set, float distanceRange, const glm::vec4* clipRect, const UIVertex (&corners)[4])
+	{
+		glm::ivec4 scissor(0, 0, static_cast<int>(m_ViewportWidth), static_cast<int>(m_ViewportHeight));
+		if (clipRect)
+		{
+			// Whole pixels the clip rectangle touches, inside the viewport.
+			scissor = glm::ivec4(
+				std::max(scissor.x, static_cast<int>(std::floor(clipRect->x))), std::max(scissor.y, static_cast<int>(std::floor(clipRect->y))),
+				std::min(scissor.z, static_cast<int>(std::ceil(clipRect->z))), std::min(scissor.w, static_cast<int>(std::ceil(clipRect->w))));
+			if (scissor.x >= scissor.z || scissor.y >= scissor.w)
+				return;
+		}
+
+		// Consecutive quads with the same texture, range and clip share one draw.
+		if (m_UIDraws.empty() || m_UIDraws.back().Set != set || m_UIDraws.back().DistanceRange != distanceRange
+			|| m_UIDraws.back().Scissor != scissor)
+		{
+			UIDraw draw;
+			draw.Set = set;
+			draw.DistanceRange = distanceRange;
+			draw.Scissor = scissor;
+			draw.FirstVertex = static_cast<uint32_t>(m_UIVertices.size());
+			m_UIDraws.push_back(draw);
+		}
+		for (int index : { 0, 1, 2, 0, 2, 3 })
+			m_UIVertices.push_back(corners[index]);
+		m_UIDraws.back().VertexCount += 6;
+	}
+
+	void SceneRenderer::SubmitUIRect(const glm::vec2& min, const glm::vec2& max, const UIRectStyle& style, const Ref<Texture2D>& texture,
+		uint32_t entityID, const glm::vec4* clipRect)
+	{
+		if (!m_Settings.ShowUI || max.x <= min.x || max.y <= min.y)
+			return;
+		const bool hasBorder = style.BorderWidth > 0.0f && style.BorderColor.a > 0.0f;
+		if (style.Color.a <= 0.0f && !hasBorder)
+			return;
+
+		// Created here, before EndScene opens the frame's command list.
+		const Ref<Texture2D>& image = texture ? texture : Renderer::GetWhiteTexture();
+		nvrhi::IBindingSet* set = GetTextureBindingSet(image->GetHandle(), image);
+
+		const glm::vec2 center = (min + max) * 0.5f;
+		const glm::vec2 halfSize = (max - min) * 0.5f;
+		const glm::vec4 params(std::max(style.CornerRadius, 0.0f), hasBorder ? style.BorderWidth : 0.0f, 0.0f, 0.0f);
+		UIVertex corners[4];
+		const glm::vec2 positions[4] = { min, { max.x, min.y }, max, { min.x, max.y } };
+		const glm::vec2 texCoords[4] = { { 0.0f, 0.0f }, { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f } };
+		for (int i = 0; i < 4; i++)
+		{
+			corners[i].Position = positions[i];
+			corners[i].TexCoord = texCoords[i];
+			corners[i].Color = style.Color;
+			corners[i].Color2 = style.BorderColor;
+			corners[i].Shape = glm::vec4(positions[i] - center, halfSize);
+			corners[i].Params = params;
+			corners[i].EntityID = entityID;
+		}
+		AddUIQuad(set, 0.0f, clipRect, corners);
+	}
+
+	void SceneRenderer::SubmitUIText(const Ref<Font>& font, const TextLayout& layout, const glm::vec2& origin, const TextStyle& style,
+		uint32_t entityID, const glm::vec4* clipRect)
+	{
+		if (!m_Settings.ShowUI || !font || layout.Quads.empty())
+			return;
+		nvrhi::IBindingSet* set = GetTextBindingSet(font);
+		const float outlineWidth = std::clamp(style.OutlineWidth * font->GetGlyphSize() / font->GetDistanceRange(), 0.0f, 0.49f);
+		const glm::vec4 params(0.0f, 0.0f, outlineWidth, 1.0f);
+		for (const TextGlyphQuad& glyph : layout.Quads)
+		{
+			const glm::vec2 min = origin + glyph.Min, max = origin + glyph.Max;
+			const glm::vec2 positions[4] = { min, { max.x, min.y }, max, { min.x, max.y } };
+			const glm::vec2 texCoords[4] = { glyph.UVMin, { glyph.UVMax.x, glyph.UVMin.y }, glyph.UVMax, { glyph.UVMin.x, glyph.UVMax.y } };
+			UIVertex corners[4];
+			for (int i = 0; i < 4; i++)
+			{
+				corners[i].Position = positions[i];
+				corners[i].TexCoord = texCoords[i];
+				corners[i].Color = style.Color;
+				corners[i].Color2 = style.OutlineColor;
+				corners[i].Shape = glm::vec4(0.0f);
+				corners[i].Params = params;
+				corners[i].EntityID = entityID;
+			}
+			AddUIQuad(set, font->GetDistanceRange(), clipRect, corners);
+		}
+	}
+
+	void SceneRenderer::RenderUI(nvrhi::ICommandList* commandList)
+	{
+		if (m_UIDraws.empty())
+			return;
+
+		if (m_UIVertices.size() > m_UIVertexCapacity)
+		{
+			m_UIVertexCapacity = std::max<size_t>(m_UIVertices.size() * 2, 6 * 1024);
+			m_UIVertexBuffer = Renderer::GetDevice()->createBuffer(nvrhi::BufferDesc()
+				.setByteSize(m_UIVertexCapacity * sizeof(UIVertex))
+				.setIsVertexBuffer(true)
+				.setInitialState(nvrhi::ResourceStates::VertexBuffer)
+				.setKeepInitialState(true)
+				.setDebugName("UIVertices"));
+		}
+		commandList->writeBuffer(m_UIVertexBuffer, m_UIVertices.data(), m_UIVertices.size() * sizeof(UIVertex));
+
+		// Pixels to clip space: x right, y down from the top-left, Y-up clip space.
+		const float width = static_cast<float>(m_ViewportWidth), height = static_cast<float>(m_ViewportHeight);
+		ShaderInterop::TextData constants;
+		constants.ViewProjection = glm::mat4(1.0f);
+		constants.ViewProjection[0][0] = 2.0f / width;
+		constants.ViewProjection[1][1] = -2.0f / height;
+		constants.ViewProjection[3] = glm::vec4(-1.0f, 1.0f, 0.0f, 1.0f);
+		for (const auto& [pipeline, framebuffer] : { std::pair(m_UIPipeline.Get(), m_FinalFramebuffer.Get()),
+			std::pair(m_UIIDPipeline.Get(), m_EntityIDFramebuffer.Get()) })
+		{
+			for (const UIDraw& draw : m_UIDraws)
+			{
+				nvrhi::GraphicsState state;
+				state.pipeline = pipeline;
+				state.framebuffer = framebuffer;
+				state.viewport.addViewport(nvrhi::Viewport(width, height));
+				state.viewport.addScissorRect(nvrhi::Rect(draw.Scissor.x, draw.Scissor.z, draw.Scissor.y, draw.Scissor.w));
+				state.bindings = { draw.Set };
+				state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_UIVertexBuffer).setSlot(0).setOffset(0) };
+				commandList->setGraphicsState(state);
+				constants.Params = glm::vec4(draw.DistanceRange, 0.0f, 0.0f, 0.0f);
+				commandList->setPushConstants(&constants, sizeof(constants));
+				commandList->draw(nvrhi::DrawArguments().setVertexCount(draw.VertexCount).setStartVertexLocation(draw.FirstVertex));
+				m_Statistics.DrawCalls++;
+			}
 		}
 	}
 

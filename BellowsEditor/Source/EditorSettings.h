@@ -35,6 +35,7 @@ namespace Bellows {
 		uint16_t AgentServerPort = 7420;
 		float UIScale = 0.0f;						// 0 = follow the monitor
 		bool ShowGrid = true;
+		bool ShowUI = true;							// Game UI over the editor's 3D view (always shown through the game camera)
 		float CameraSpeed = 6.0f;
 		EditorPanelVisibility Panels;
 		bool ShowContentFolderTree = true;

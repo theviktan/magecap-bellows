@@ -484,37 +484,64 @@ namespace Bellows {
 		m_FrameCount++;
 	}
 
+	namespace {
+
+		// Loads (or reloads) the text's font; false when no font can be loaded.
+		bool EnsureTextFont(TextComponent& text)
+		{
+			if (!text.RuntimeFont || text.LoadedFontPath != text.FontPath)
+			{
+				text.RuntimeFont = AssetManager::GetFont(text.FontPath);
+				text.LoadedFontPath = text.FontPath;
+				text.RuntimeLayoutKey = 0;
+			}
+			return text.RuntimeFont != nullptr;
+		}
+
+		TextLayoutSettings MakeTextLayoutSettings(const TextComponent& text, float size, const glm::vec2& boxSize)
+		{
+			TextLayoutSettings settings;
+			settings.Size = std::max(size, 0.0f);
+			settings.LineSpacing = text.LineSpacing;
+			settings.BoxSize = glm::max(boxSize, glm::vec2(0.0f));
+			settings.Wrap = text.Wrap;
+			settings.Alignment = text.Alignment;
+			settings.VerticalAlignment = text.VerticalAlignment;
+			settings.Overflow = text.Overflow;
+			return settings;
+		}
+
+	}
+
 	const TextLayout* Scene::UpdateTextLayout(TextComponent& text)
 	{
-		if (!text.RuntimeFont || text.LoadedFontPath != text.FontPath)
-		{
-			text.RuntimeFont = AssetManager::GetFont(text.FontPath);
-			text.LoadedFontPath = text.FontPath;
-			text.RuntimeLayoutKey = 0;
-		}
-		if (!text.RuntimeFont)
+		return LayoutTextComponent(text, text.Size, text.BoxSize);
+	}
+
+	glm::vec2 Scene::MeasureTextSize(TextComponent& text)
+	{
+		if (!EnsureTextFont(text))
+			return glm::vec2(0.0f);
+		return MeasureText(*text.RuntimeFont, text.Text, MakeTextLayoutSettings(text, text.Size, glm::vec2(text.BoxSize.x, 0.0f)));
+	}
+
+	const TextLayout* Scene::LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize)
+	{
+		if (!EnsureTextFont(text))
 			return nullptr;
 
 		// Lay the text out again only when something that shapes it changed.
 		uint64_t key = std::hash<std::string>()(text.Text);
 		const auto combine = [&key](uint64_t value) { key ^= value + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2); };
 		combine(std::hash<const void*>()(text.RuntimeFont.get()));
-		for (float value : { text.Size, text.BoxSize.x, text.BoxSize.y, text.LineSpacing })
+		for (float value : { size, boxSize.x, boxSize.y, text.LineSpacing })
 			combine(std::hash<float>()(value));
 		combine((static_cast<uint64_t>(text.Alignment) << 24) | (static_cast<uint64_t>(text.VerticalAlignment) << 16)
 			| (static_cast<uint64_t>(text.Overflow) << 8) | (text.Wrap ? 1u : 0u));
 		key |= 1;	// 0 means "not laid out yet"
 		if (key != text.RuntimeLayoutKey)
 		{
-			TextLayoutSettings settings;
-			settings.Size = std::max(text.Size, 0.0f);
-			settings.LineSpacing = text.LineSpacing;
-			settings.BoxSize = glm::max(text.BoxSize, glm::vec2(0.0f));
-			settings.Wrap = text.Wrap;
-			settings.Alignment = text.Alignment;
-			settings.VerticalAlignment = text.VerticalAlignment;
-			settings.Overflow = text.Overflow;
-			text.RuntimeLayout = LayoutText(*text.RuntimeFont, text.Text, settings);
+			text.RuntimeLayout = LayoutText(*text.RuntimeFont, text.Text, MakeTextLayoutSettings(text, size, boxSize));
 			text.RuntimeLayoutKey = key;
 		}
 		return &text.RuntimeLayout;
@@ -638,14 +665,17 @@ namespace Bellows {
 		SceneRendererSettings& settings = renderer.GetSettings();
 		const bool showGrid = settings.ShowGrid;
 		const bool showOutline = settings.ShowSelectionOutline;
+		const bool showUI = settings.ShowUI;
 		const float gridCellSize = settings.GridCellSize;
 		const glm::vec4 outlineColor = settings.OutlineColor;
 		settings = m_Settings.Rendering;
 		settings.ShowGrid = showGrid;
 		settings.ShowSelectionOutline = showOutline;
+		settings.ShowUI = showUI;
 		settings.GridCellSize = gridCellSize;
 		settings.OutlineColor = outlineColor;
 
+		UpdateUILayout(glm::vec2(static_cast<float>(renderer.GetViewportWidth()), static_cast<float>(renderer.GetViewportHeight())));
 		renderer.BeginScene(camera);
 
 		EnvironmentSettings environment;
@@ -721,7 +751,7 @@ namespace Bellows {
 		for (entt::entity handle : texts)
 		{
 			TextComponent& text = texts.get<TextComponent>(handle);
-			if (!text.Visible || text.Text.empty())
+			if (!text.Visible || text.Text.empty() || m_UIEntities.contains(handle))
 				continue;
 			const TextLayout* layout = UpdateTextLayout(text);
 			if (!layout)
@@ -750,9 +780,153 @@ namespace Bellows {
 			renderer.SubmitText(text.RuntimeFont, *layout, world * boxToLocal, style, entity.GetRenderID(), clipped ? &clip : nullptr);
 		}
 
+		SubmitUI(renderer);
+
 		if (submitExtras)
 			submitExtras(renderer);
 		renderer.EndScene();
+	}
+
+	namespace {
+
+		// Where an entity sits in the hierarchy: its index among the roots, then among each parent's
+		// children down to it. Comparing these orders entities as the hierarchy panel lists them.
+		std::vector<size_t> GetHierarchyPath(Entity entity, const std::vector<UUID>& roots)
+		{
+			std::vector<size_t> path;
+			for (Entity current = entity; current;)
+			{
+				const UUID id = current.GetUUID();
+				Entity parent = current.GetParent();
+				const std::vector<UUID>& siblings = parent ? parent.GetComponent<RelationshipComponent>().Children : roots;
+				path.push_back(static_cast<size_t>(std::find(siblings.begin(), siblings.end(), id) - siblings.begin()));
+				current = parent;
+			}
+			std::reverse(path.begin(), path.end());
+			return path;
+		}
+
+	}
+
+	void Scene::UpdateUILayout(const glm::vec2& screenSize)
+	{
+		m_UIElements.clear();
+		m_UIEntities.clear();
+
+		// Canvases draw by SortOrder, and in hierarchy order where the sort orders are equal.
+		struct CanvasEntry
+		{
+			entt::entity Handle;
+			int SortOrder;
+			std::vector<size_t> Path;
+		};
+		std::vector<CanvasEntry> canvases;
+		auto canvasView = m_Registry.view<UICanvasComponent>();
+		for (entt::entity handle : canvasView)
+			canvases.push_back({ handle, canvasView.get<UICanvasComponent>(handle).SortOrder, GetHierarchyPath(Entity(handle, this), m_RootEntities) });
+		std::sort(canvases.begin(), canvases.end(), [](const CanvasEntry& a, const CanvasEntry& b)
+		{
+			return a.SortOrder != b.SortOrder ? a.SortOrder < b.SortOrder : a.Path < b.Path;
+		});
+
+		const UIRectangle screen { glm::vec2(0.0f), glm::max(screenSize, glm::vec2(0.0f)) };
+		std::function<void(entt::entity, const UIRectangle&, float, bool)> visit =
+			[&](entt::entity handle, const UIRectangle& parentRect, float scale, bool visible)
+		{
+			m_UIEntities.insert(handle);
+			UIRectangle rect = parentRect;
+			if (auto* ui = m_Registry.try_get<UIRectComponent>(handle))
+			{
+				rect = ResolveUIRect(ui->AnchorMin, ui->AnchorMax, ui->OffsetMin, ui->OffsetMax, parentRect, scale);
+				ui->RuntimeRect = rect;
+				visible = visible && ui->Visible;
+			}
+			if (visible)
+				m_UIElements.push_back({ handle, rect, scale });
+			for (UUID childID : m_Registry.get<RelationshipComponent>(handle).Children)
+			{
+				// A canvas below starts a UI of its own.
+				auto it = m_EntityMap.find(childID);
+				if (it != m_EntityMap.end() && !m_Registry.all_of<UICanvasComponent>(it->second))
+					visit(it->second, rect, scale, visible);
+			}
+		};
+
+		for (const CanvasEntry& entry : canvases)
+		{
+			const UICanvasComponent& canvas = m_Registry.get<UICanvasComponent>(entry.Handle);
+			const float scale = ComputeUIScale(canvas.ReferenceSize, canvas.ScaleMode, screen.GetSize());
+			m_UIEntities.insert(entry.Handle);
+			if (canvas.Visible)
+				m_UIElements.push_back({ entry.Handle, screen, scale });
+			for (UUID childID : m_Registry.get<RelationshipComponent>(entry.Handle).Children)
+			{
+				auto it = m_EntityMap.find(childID);
+				if (it != m_EntityMap.end() && !m_Registry.all_of<UICanvasComponent>(it->second))
+					visit(it->second, screen, scale, canvas.Visible);
+			}
+		}
+	}
+
+	bool Scene::IsUIEntity(Entity entity) const
+	{
+		return entity && m_UIEntities.contains(static_cast<entt::entity>(entity));
+	}
+
+	std::vector<Entity> Scene::GetVisibleUIEntities()
+	{
+		std::vector<Entity> entities;
+		entities.reserve(m_UIElements.size());
+		for (const UIElement& element : m_UIElements)
+			entities.emplace_back(element.Handle, this);
+		return entities;
+	}
+
+	bool Scene::IsInsideUICanvas(Entity entity)
+	{
+		for (Entity current = entity; current; current = current.GetParent())
+		{
+			if (current.HasComponent<UICanvasComponent>())
+				return true;
+		}
+		return false;
+	}
+
+	void Scene::SubmitUI(SceneRenderer& renderer)
+	{
+		for (const UIElement& element : m_UIElements)
+		{
+			Entity entity(element.Handle, this);
+			if (auto* image = m_Registry.try_get<UIImageComponent>(element.Handle); image && image->Visible)
+			{
+				if (image->LoadedTexturePath != image->TexturePath)
+				{
+					// UI is drawn into the finished (sRGB) image, so image pixels are used as they are.
+					image->RuntimeTexture = image->TexturePath.empty() ? nullptr : AssetManager::GetTexture(image->TexturePath, TextureColorSpace::Linear);
+					image->LoadedTexturePath = image->TexturePath;
+				}
+				UIRectStyle style;
+				style.Color = image->Color;
+				style.CornerRadius = image->CornerRadius * element.Scale;
+				style.BorderWidth = image->BorderWidth * element.Scale;
+				style.BorderColor = image->BorderColor;
+				renderer.SubmitUIRect(element.Rect.Min, element.Rect.Max, style, image->RuntimeTexture, entity.GetRenderID());
+			}
+
+			if (auto* text = m_Registry.try_get<TextComponent>(element.Handle); text && text->Visible && !text->Text.empty())
+			{
+				const TextLayout* layout = LayoutTextComponent(*text, text->Size * element.Scale, element.Rect.GetSize());
+				if (!layout)
+					continue;
+				TextStyle style;
+				style.Color = text->Color;
+				style.OutlineColor = text->OutlineColor;
+				style.OutlineWidth = text->OutlineWidth;
+				const glm::vec4 clip(element.Rect.Min, element.Rect.Max);
+				renderer.SubmitUIText(text->RuntimeFont, *layout, element.Rect.Min, style, entity.GetRenderID(),
+					text->Overflow == TextOverflow::Clip ? &clip : nullptr);
+			}
+		}
 	}
 
 }

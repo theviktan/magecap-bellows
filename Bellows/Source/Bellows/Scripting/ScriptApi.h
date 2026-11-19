@@ -204,11 +204,14 @@ namespace Bellows::Scripting {
 	using AudioSourceRef = ComponentRef<AudioSourceComponent>;
 	using AudioListenerRef = ComponentRef<AudioListenerComponent>;
 	using TextRef = ComponentRef<TextComponent>;
+	using UICanvasRef = ComponentRef<UICanvasComponent>;
+	using UIRectRef = ComponentRef<UIRectComponent>;
+	using UIImageRef = ComponentRef<UIImageComponent>;
 
 	// Any component handle (what get_component and add_component return).
 	using ComponentHandle = std::variant<TransformRef, MeshRendererRef, CameraRef, DirectionalLightRef, PointLightRef,
 		SpotLightRef, SkyLightRef, RigidBodyRef, BoxColliderRef, SphereColliderRef, CapsuleColliderRef, MeshColliderRef,
-		ScriptRef, AudioSourceRef, AudioListenerRef, TextRef>;
+		ScriptRef, AudioSourceRef, AudioListenerRef, TextRef, UICanvasRef, UIRectRef, UIImageRef>;
 
 	struct ComponentInfo
 	{

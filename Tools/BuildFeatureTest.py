@@ -229,6 +229,24 @@ speaker_label = create("Speaker Label", position=(0.0, 1.2, 4.5))
 label_text = speaker_label.add_component(bellows.Text)
 label_text.text, label_text.size, label_text.face_camera = "Speaker", 0.3, True
 
+# Screen UI: a panel in the top-left corner with a title, over the game
+hud = create("HUD")
+hud.add_component(bellows.UICanvas)
+hud_panel = create("HUD Panel", parent=hud)
+panel_rect = hud_panel.add_component(bellows.UIRect)
+panel_rect.anchor_min = panel_rect.anchor_max = Vec3(0.0, 0.0, 0.0)
+panel_rect.offset_min, panel_rect.offset_max = Vec3(24.0, 24.0, 0.0), Vec3(504.0, 100.0, 0.0)
+panel_image = hud_panel.add_component(bellows.UIImage)
+panel_image.color, panel_image.corner_radius = Vec4(0.09, 0.09, 0.16, 0.85), 14.0
+panel_image.border_width, panel_image.border_color = 2.0, Vec4(0.96, 0.53, 0.23, 1.0)
+hud_title = create("HUD Title", parent=hud_panel)
+title_rect = hud_title.add_component(bellows.UIRect)
+title_rect.anchor_min, title_rect.anchor_max = Vec3(0.0, 0.0, 0.0), Vec3(1.0, 1.0, 0.0)
+title_rect.offset_min, title_rect.offset_max = Vec3(22.0, 0.0, 0.0), Vec3(-22.0, 0.0, 0.0)
+hud_text = hud_title.add_component(bellows.Text)
+hud_text.text, hud_text.size, hud_text.alignment = "FeatureTest: every component", 30.0, "left"
+hud_text.color = Vec4(0.94, 0.95, 0.98, 1.0)
+
 # The scripting API tests: FeatureTest.forge runs first, then FeatureTest.py checks its result.
 runner = create("Test Runner")
 add_script(runner, "Scripts/FeatureTest.py")

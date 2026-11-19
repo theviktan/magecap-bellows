@@ -155,7 +155,7 @@ TEST_CASE("ForgeScript reports engine errors clearly and can catch them")
 		"errors.forge");
 
 	CHECK_EQ(h.Output, std::string(
-		"Unknown component 'NotAComponent'. Valid components: Transform, MeshRenderer, Camera, DirectionalLight, PointLight, SpotLight, SkyLight, RigidBody, BoxCollider, SphereCollider, CapsuleCollider, MeshCollider, Script, AudioSource, AudioListener, Text\n"
+		"Unknown component 'NotAComponent'. Valid components: Transform, MeshRenderer, Camera, DirectionalLight, PointLight, SpotLight, SkyLight, RigidBody, BoxCollider, SphereCollider, CapsuleCollider, MeshCollider, Script, AudioSource, AudioListener, Text, UICanvas, UIRect, UIImage\n"
 		"The Transform component cannot be removed\n"
 		"Material 'Materials/Missing.bmat' could not be loaded\n"
 		"Prefab 'Prefabs/Missing.bprefab' could not be instantiated\n"

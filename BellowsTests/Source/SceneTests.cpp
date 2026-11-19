@@ -82,6 +82,27 @@ namespace {
 		text.OutlineColor = glm::vec4(0.0f, 0.0f, 0.2f, 1.0f);
 		text.FaceCamera = true;
 		text.Visible = false;
+
+		auto& canvas = entity.AddComponent<UICanvasComponent>();
+		canvas.ReferenceSize = glm::vec2(1280.0f, 720.0f);
+		canvas.ScaleMode = UIScaleMode::FitWidth;
+		canvas.SortOrder = -3;
+		canvas.Visible = false;
+		auto& rect = entity.AddComponent<UIRectComponent>();
+		rect.AnchorMin = glm::vec2(0.0f, 1.0f);
+		rect.AnchorMax = glm::vec2(1.0f, 1.0f);
+		rect.Pivot = glm::vec2(0.25f, 1.0f);
+		rect.OffsetMin = glm::vec2(12.0f, -80.0f);
+		rect.OffsetMax = glm::vec2(-12.0f, -8.0f);
+		rect.Visible = false;
+		rect.Interactable = false;
+		auto& image = entity.AddComponent<UIImageComponent>();
+		image.TexturePath = "Textures/Panel.png";
+		image.Color = glm::vec4(0.1f, 0.2f, 0.3f, 0.9f);
+		image.CornerRadius = 14.0f;
+		image.BorderWidth = 3.0f;
+		image.BorderColor = glm::vec4(0.96f, 0.53f, 0.23f, 1.0f);
+		image.Visible = false;
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
 
@@ -242,6 +263,27 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(text.OutlineColor == glm::vec4(0.0f, 0.0f, 0.2f, 1.0f));
 	CHECK(text.FaceCamera);
 	CHECK_FALSE(text.Visible);
+
+	const UICanvasComponent& canvas = loadedChild.GetComponent<UICanvasComponent>();
+	CHECK(canvas.ReferenceSize == glm::vec2(1280.0f, 720.0f));
+	CHECK(canvas.ScaleMode == UIScaleMode::FitWidth);
+	CHECK(canvas.SortOrder == -3);
+	CHECK_FALSE(canvas.Visible);
+	const UIRectComponent& rect = loadedChild.GetComponent<UIRectComponent>();
+	CHECK(rect.AnchorMin == glm::vec2(0.0f, 1.0f));
+	CHECK(rect.AnchorMax == glm::vec2(1.0f, 1.0f));
+	CHECK(rect.Pivot == glm::vec2(0.25f, 1.0f));
+	CHECK(rect.OffsetMin == glm::vec2(12.0f, -80.0f));
+	CHECK(rect.OffsetMax == glm::vec2(-12.0f, -8.0f));
+	CHECK_FALSE(rect.Visible);
+	CHECK_FALSE(rect.Interactable);
+	const UIImageComponent& image = loadedChild.GetComponent<UIImageComponent>();
+	CHECK(image.TexturePath == "Textures/Panel.png");
+	CHECK(image.Color == glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
+	CHECK(image.CornerRadius == doctest::Approx(14.0f));
+	CHECK(image.BorderWidth == doctest::Approx(3.0f));
+	CHECK(image.BorderColor == glm::vec4(0.96f, 0.53f, 0.23f, 1.0f));
+	CHECK_FALSE(image.Visible);
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")
