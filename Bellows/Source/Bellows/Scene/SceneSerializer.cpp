@@ -252,6 +252,7 @@ namespace Bellows {
 				JsonRead(*it, "SortOrder", component.SortOrder);
 				JsonRead(*it, "Visible", component.Visible);
 				JsonRead(*it, "Modal", component.Modal);
+				JsonRead(*it, "Theme", component.Theme);
 			}
 
 			if (auto it = json.find("UIRect"); it != json.end())
@@ -265,6 +266,7 @@ namespace Bellows {
 				JsonRead(*it, "Visible", component.Visible);
 				JsonRead(*it, "Interactable", component.Interactable);
 				JsonRead(*it, "Focusable", component.Focusable);
+				JsonRead(*it, "StyleClass", component.StyleClass);
 				std::string widthSizing = UISizingToString(component.WidthSizing), heightSizing = UISizingToString(component.HeightSizing);
 				JsonRead(*it, "WidthSizing", widthSizing);
 				JsonRead(*it, "HeightSizing", heightSizing);
@@ -533,6 +535,8 @@ namespace Bellows {
 			j["SortOrder"] = c->SortOrder;
 			j["Visible"] = c->Visible;
 			j["Modal"] = c->Modal;
+			if (!c->Theme.empty())
+				j["Theme"] = c->Theme;
 		}
 
 		if (const auto* c = entity.TryGetComponent<UIRectComponent>())
@@ -546,6 +550,8 @@ namespace Bellows {
 			j["Visible"] = c->Visible;
 			j["Interactable"] = c->Interactable;
 			j["Focusable"] = c->Focusable;
+			if (!c->StyleClass.empty())
+				j["StyleClass"] = c->StyleClass;
 			j["WidthSizing"] = UISizingToString(c->WidthSizing);
 			j["HeightSizing"] = UISizingToString(c->HeightSizing);
 		}

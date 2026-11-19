@@ -326,6 +326,35 @@ entity's `Text` as its label. The editor's **Create > UI** menu makes each one r
   - Each edit raises `changed (text, entity)`. Enter raises `submitted (text, entity)` and keeps
     focus; in a multi-line field Enter starts a new line and Ctrl+Enter submits.
 
+**Themes.** Widgets draw their own parts (check boxes, slider tracks and knobs, dropdown backgrounds,
+arrows and lists, the focus ring, text selections) in their canvas's theme:
+* `UICanvas.theme`: the `.btheme` asset to use; `""` (or `"Builtin/MageCap.btheme"`) is the built-in
+  MageCap look (navy, slate, off-white, an orange accent). Name the built-in theme to keep a UI looking
+  the same whatever theme a game uses elsewhere.
+* `UIRect.style_class`: one of the theme's named styles, like `"primary"` or `"danger"`; `""` or a name
+  the theme doesn't have uses its plain style.
+* A `.btheme` file is JSON and lists only what it changes from the built-in theme. Colors are
+  `"#RRGGBB"`, `"#RRGGBBAA"` or `[r, g, b, a]` from 0 to 1. Keys:
+  - `Font`, `TextSize`, `TextColor`, `Accent` (focus ring, toggle check, slider fill, selection),
+    `AccentLight` (a dragged knob, the selected dropdown option), `FocusRingWidth`, `FocusRingGap`.
+  - `Panel`, `Button`, `Toggle`, `Slider`, `Dropdown`, `DropdownList` and `TextInput`, each with
+    `CornerRadius` and states `Normal`, `Hover`, `Pressed`, `Focused` and `Disabled`, each with
+    `Background`, `Border`, `BorderWidth` and `Text`. `Normal` sets every state first, so list only the
+    states that differ after it. A slider's track is its `Background` and its knob its `Text` with its
+    `Border`; a dropdown list's highlighted row is its `Hover` background.
+  - `Classes`: `{ "danger": { "Toggle": { ... } } }`, each starting from the theme's own styles.
+  Wrong values are reported in the Console and keep the built-in value. A theme that can't be read
+  draws with the built-in one. Edited themes are picked up when reloaded (Content panel, or
+  `bellows.editor.reload_asset`).
+
+```json
+{
+	"Accent": "#00C8FF",
+	"Toggle": { "CornerRadius": 2, "Normal": { "Background": "#101820", "Border": "#00C8FF" } },
+	"Classes": { "danger": { "Dropdown": { "Normal": { "Background": "#B03030" } } } }
+}
+```
+
 `Entity.value` is the shortcut: a toggle's `on` (`True`/`False`), a slider's `value`, a dropdown's
 `selected`, or a text input's text (kept to what typing could enter: one line unless multi-line, at
 most `max_length` characters), read or set, checked and snapped the same way. An entity with none of them raises

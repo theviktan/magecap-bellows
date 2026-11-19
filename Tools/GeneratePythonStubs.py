@@ -162,6 +162,9 @@ def _docstring(text, indent):
     if not text:
         return ""
     text = text.replace('"""', "'''").replace("\\", "\\\\")
+    # A quote right before the closing quotes would end the string early.
+    if text.endswith('"'):
+        text = text[:-1] + '\\"'
     return f'{indent}"""{text}"""\n'
 
 

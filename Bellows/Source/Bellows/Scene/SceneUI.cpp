@@ -37,6 +37,7 @@ namespace Bellows {
 		m_UIElements.clear();
 		m_UIElementIndex.clear();
 		m_UIEntities.clear();
+		m_UICanvasThemes.clear();
 		m_UIModalCanvas = entt::null;
 
 		// Canvases draw by SortOrder, and in hierarchy order where the sort orders are equal.
@@ -182,6 +183,8 @@ namespace Bellows {
 			state.Scale = ComputeUIScale(canvas.ReferenceSize, canvas.ScaleMode, screen.GetSize());
 			state.Visible = canvas.Visible;
 			m_UIEntities.insert(entry.Handle);
+			if (canvas.Visible)
+				m_UICanvasThemes[entry.Handle] = AssetManager::GetUITheme(canvas.Theme);
 			const size_t index = m_UIElements.size();
 			if (canvas.Visible)
 			{
@@ -304,54 +307,57 @@ namespace Bellows {
 
 	namespace {
 
-		void SubmitToggleBox(SceneRenderer& renderer, const UIRectangle& rect, bool on, float scale, uint32_t entityID, const glm::vec4& clip)
+		void SubmitToggleBox(SceneRenderer& renderer, const UIRectangle& rect, bool on, const UIWidgetStyle& style, const UIStateStyle& state,
+			const glm::vec4& accent, float scale, uint32_t entityID, const glm::vec4& clip)
 		{
 			const UIRectangle box = ComputeUIToggleBox(rect, scale);
 			UIRectStyle frame;
-			frame.Color = UIColors::Navy;
-			frame.CornerRadius = 5.0f * scale;
-			frame.BorderWidth = 2.0f * scale;
-			frame.BorderColor = UIColors::OffWhite;
+			frame.Color = state.Background;
+			frame.CornerRadius = style.CornerRadius * scale;
+			frame.BorderWidth = state.BorderWidth * scale;
+			frame.BorderColor = state.Border;
 			renderer.SubmitUIRect(box.Min, box.Max, frame, nullptr, entityID, &clip);
 			if (on)
 			{
 				const float inset = std::max(box.GetSize().x * 0.25f, 4.0f * scale);
 				UIRectStyle check;
-				check.Color = UIColors::Accent;
-				check.CornerRadius = 2.0f * scale;
+				check.Color = accent;
+				check.CornerRadius = std::max(style.CornerRadius - 3.0f, 0.0f) * scale;
 				renderer.SubmitUIRect(box.Min + inset, box.Max - inset, check, nullptr, entityID, &clip);
 			}
 		}
 
-		void SubmitSlider(SceneRenderer& renderer, const UIRectangle& rect, const UISliderComponent& slider, bool active, float scale,
-			uint32_t entityID, const glm::vec4& clip)
+		// The track is the state's background, the fill the accent, the knob the state's text color with its border.
+		void SubmitSlider(SceneRenderer& renderer, const UIRectangle& rect, const UISliderComponent& slider, const UIStateStyle& state,
+			const glm::vec4& accent, float scale, uint32_t entityID, const glm::vec4& clip)
 		{
 			const UISliderGeometry geometry = ComputeUISliderGeometry(rect, slider.Value, slider.Min, slider.Max, scale);
 			const float halfTrack = geometry.Track.GetSize().y * 0.5f;
 			UIRectStyle track;
-			track.Color = UIColors::Slate;
+			track.Color = state.Background;
 			track.CornerRadius = halfTrack;
 			renderer.SubmitUIRect(geometry.Track.Min, geometry.Track.Max, track, nullptr, entityID, &clip);
 			UIRectStyle fill = track;
-			fill.Color = UIColors::Accent;
+			fill.Color = accent;
 			renderer.SubmitUIRect(geometry.Track.Min, glm::vec2(geometry.Knob.x, geometry.Track.Max.y), fill, nullptr, entityID, &clip);
 			UIRectStyle knob;
-			knob.Color = active ? UIColors::AccentLight : UIColors::OffWhite;
+			knob.Color = state.Text;
 			knob.CornerRadius = geometry.KnobRadius;
-			knob.BorderWidth = 2.0f * scale;
-			knob.BorderColor = UIColors::Accent;
+			knob.BorderWidth = state.BorderWidth * scale;
+			knob.BorderColor = state.Border;
 			renderer.SubmitUIRect(geometry.Knob - geometry.KnobRadius, geometry.Knob + geometry.KnobRadius, knob, nullptr, entityID, &clip);
 		}
 
 		// A downward-pointing arrow at the right of a dropdown, built from shrinking bars.
-		void SubmitDropdownArrow(SceneRenderer& renderer, const UIRectangle& rect, bool open, float scale, uint32_t entityID, const glm::vec4& clip)
+		void SubmitDropdownArrow(SceneRenderer& renderer, const UIRectangle& rect, bool open, const glm::vec4& color, float scale,
+			uint32_t entityID, const glm::vec4& clip)
 		{
 			const float size = std::min(rect.GetSize().y * 0.3f, 12.0f * scale);
 			const glm::vec2 center(rect.Max.x - std::min(rect.GetSize().y, 48.0f * scale) * 0.5f, (rect.Min.y + rect.Max.y) * 0.5f);
 			constexpr int c_Rows = 5;
 			const float rowHeight = size / static_cast<float>(c_Rows);
 			UIRectStyle style;
-			style.Color = UIColors::OffWhite;
+			style.Color = color;
 			for (int i = 0; i < c_Rows; i++)
 			{
 				const int widthIndex = open ? i : c_Rows - 1 - i;
@@ -361,17 +367,46 @@ namespace Bellows {
 			}
 		}
 
-		void SubmitFocusRing(SceneRenderer& renderer, const UIRectangle& rect, float cornerRadius, float scale, const glm::vec4& clip)
+		void SubmitFocusRing(SceneRenderer& renderer, const UIRectangle& rect, float cornerRadius, const UITheme& theme, float scale, const glm::vec4& clip)
 		{
-			const float gap = 3.0f * scale;
+			if (theme.FocusRingWidth <= 0.0f)
+				return;
+			const float gap = theme.FocusRingGap * scale;
 			UIRectStyle ring;
 			ring.Color = glm::vec4(0.0f);
 			ring.CornerRadius = cornerRadius + gap;
-			ring.BorderWidth = 2.0f * scale;
-			ring.BorderColor = UIColors::Accent;
+			ring.BorderWidth = theme.FocusRingWidth * scale;
+			ring.BorderColor = theme.Accent;
 			renderer.SubmitUIRect(rect.Min - gap, rect.Max + gap, ring, nullptr, 0, &clip);
 		}
 
+	}
+
+	const UITheme& Scene::GetUITheme(const UIElement& element) const
+	{
+		auto it = m_UICanvasThemes.find(element.Canvas);
+		return it != m_UICanvasThemes.end() ? *it->second : GetDefaultUITheme();
+	}
+
+	UIWidgetState Scene::GetUIWidgetState(const UIElement& element) const
+	{
+		const UUID id = m_Registry.get<IDComponent>(element.Handle).ID;
+		if (!element.Interactable)
+			return UIWidgetState::Disabled;
+		if (m_UIPressed == id || m_UIOpenDropdown == id)
+			return UIWidgetState::Pressed;
+		if (m_UIHovered == id)
+			return UIWidgetState::Hover;
+		if (m_UIFocused == id)
+			return UIWidgetState::Focused;
+		return UIWidgetState::Normal;
+	}
+
+	const std::string& Scene::GetUIStyleClass(const UIElement& element) const
+	{
+		static const std::string c_None;
+		const auto* rect = m_Registry.try_get<UIRectComponent>(element.Handle);
+		return rect ? rect->StyleClass : c_None;
 	}
 
 	void Scene::SubmitUI(SceneRenderer& renderer)
@@ -396,6 +431,9 @@ namespace Bellows {
 			Entity entity(element.Handle, this);
 			const UUID id = entity.GetUUID();
 			const glm::vec4 clip(element.Clip.Min, element.Clip.Max);
+			const UITheme& theme = GetUITheme(element);
+			const std::string& styleClass = GetUIStyleClass(element);
+			const UIWidgetState widgetState = GetUIWidgetState(element);
 			const auto* button = m_Registry.try_get<UIButtonComponent>(element.Handle);
 			auto* dropdown = m_Registry.try_get<UIDropdownComponent>(element.Handle);
 			const UIImageComponent* imageForRing = m_Registry.try_get<UIImageComponent>(element.Handle);
@@ -403,18 +441,20 @@ namespace Bellows {
 			{
 				// A button (or a dropdown, with the button's colors) shows its state through its image.
 				glm::vec4 color = image->Color;
-				if (button || dropdown)
+				if (button)
 				{
-					static const UIButtonComponent c_DropdownColors;
-					const UIButtonComponent& colors = button ? *button : c_DropdownColors;
 					if (!element.Interactable)
-						color = colors.DisabledColor;
-					else if (m_UIPressed == id || m_UIOpenDropdown == id)
-						color = colors.PressedColor;
+						color = button->DisabledColor;
+					else if (m_UIPressed == id)
+						color = button->PressedColor;
 					else if (m_UIHovered == id)
-						color = colors.HoverColor;
+						color = button->HoverColor;
 					else
-						color = colors.NormalColor;
+						color = button->NormalColor;
+				}
+				else if (dropdown)
+				{
+					color = theme.Get(UIThemeWidget::Dropdown, styleClass).Get(widgetState).Background;
 				}
 				if (image->LoadedTexturePath != image->TexturePath)
 				{
@@ -443,14 +483,17 @@ namespace Bellows {
 			UIRectangle labelArea = element.Rect;
 			if (const auto* toggle = m_Registry.try_get<UIToggleComponent>(element.Handle))
 			{
-				SubmitToggleBox(renderer, element.Rect, toggle->On, element.Scale, entity.GetRenderID(), clip);
+				const UIWidgetStyle& style = theme.Get(UIThemeWidget::Toggle, styleClass);
+				SubmitToggleBox(renderer, element.Rect, toggle->On, style, style.Get(widgetState), theme.Accent, element.Scale, entity.GetRenderID(), clip);
 				labelArea = ComputeUIToggleLabelArea(element.Rect, element.Scale);
 			}
 			if (const auto* slider = m_Registry.try_get<UISliderComponent>(element.Handle))
-				SubmitSlider(renderer, element.Rect, *slider, m_UIPressed == id, element.Scale, entity.GetRenderID(), clip);
+				SubmitSlider(renderer, element.Rect, *slider, theme.Get(UIThemeWidget::Slider, styleClass).Get(widgetState), theme.Accent,
+					element.Scale, entity.GetRenderID(), clip);
 			if (dropdown)
 			{
-				SubmitDropdownArrow(renderer, element.Rect, m_UIOpenDropdown == id, element.Scale, entity.GetRenderID(), clip);
+				SubmitDropdownArrow(renderer, element.Rect, m_UIOpenDropdown == id, theme.Get(UIThemeWidget::Dropdown, styleClass).Get(widgetState).Text,
+					element.Scale, entity.GetRenderID(), clip);
 				labelArea = ComputeUIDropdownLabelArea(element.Rect, element.Scale);
 				// The dropdown's Text shows its selected option.
 				auto* label = m_Registry.try_get<TextComponent>(element.Handle);
@@ -476,7 +519,7 @@ namespace Bellows {
 
 			// Keyboard and gamepad focus shows as a ring around the focused UI.
 			if (m_UIFocused == id)
-				SubmitFocusRing(renderer, element.Rect, imageForRing ? imageForRing->CornerRadius * element.Scale : 0.0f, element.Scale, clip);
+				SubmitFocusRing(renderer, element.Rect, imageForRing ? imageForRing->CornerRadius * element.Scale : 0.0f, theme, element.Scale, clip);
 
 			if (const auto* scroll = m_Registry.try_get<UIScrollComponent>(element.Handle); scroll && scroll->ShowScrollbars)
 				pendingScrollbars.push_back(elementIndex);
@@ -499,11 +542,14 @@ namespace Bellows {
 		const UIRectangle list = ComputeUIDropdownList(element->Rect, count, screen);
 		const glm::vec4 clip(glm::vec2(0.0f), screen);
 		const uint32_t entityID = entity.GetRenderID();
+		const UITheme& theme = GetUITheme(*element);
+		const UIWidgetStyle& listStyle = theme.Get(UIThemeWidget::DropdownList, GetUIStyleClass(*element));
+		const UIStateStyle& normal = listStyle.Get(UIWidgetState::Normal);
 		UIRectStyle background;
-		background.Color = UIColors::Navy;
-		background.CornerRadius = 8.0f * element->Scale;
-		background.BorderWidth = 1.0f * element->Scale;
-		background.BorderColor = UIColors::Slate;
+		background.Color = normal.Background;
+		background.CornerRadius = listStyle.CornerRadius * element->Scale;
+		background.BorderWidth = normal.BorderWidth * element->Scale;
+		background.BorderColor = normal.Border;
 		renderer.SubmitUIRect(list.Min, list.Max, background, nullptr, entityID, &clip);
 
 		const TextComponent* label = entity.TryGetComponent<TextComponent>();
@@ -516,8 +562,8 @@ namespace Bellows {
 			if (static_cast<int>(i) == m_UIDropdownHighlight)
 			{
 				UIRectStyle highlight;
-				highlight.Color = UIColors::Slate;
-				highlight.CornerRadius = 6.0f * element->Scale;
+				highlight.Color = listStyle.Get(UIWidgetState::Hover).Background;
+				highlight.CornerRadius = std::max(listStyle.CornerRadius - 2.0f, 0.0f) * element->Scale;
 				const float inset = 3.0f * element->Scale;
 				renderer.SubmitUIRect(row.Min + inset, row.Max - inset, highlight, nullptr, entityID, &clip);
 			}
@@ -533,7 +579,7 @@ namespace Bellows {
 			settings.Overflow = TextOverflow::Ellipsis;
 			const TextLayout layout = LayoutText(*font, dropdown->Options[i], settings);
 			TextStyle style;
-			style.Color = static_cast<int>(i) == dropdown->Selected ? UIColors::AccentLight : (label ? label->Color : UIColors::OffWhite);
+			style.Color = static_cast<int>(i) == dropdown->Selected ? theme.AccentLight : (label ? label->Color : normal.Text);
 			renderer.SubmitUIText(font, layout, area.Min, style, entityID, &clip);
 		}
 	}

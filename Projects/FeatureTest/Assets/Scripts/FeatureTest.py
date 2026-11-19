@@ -387,6 +387,10 @@ class FeatureTest(bellows.Script):
         self.check(close(rect.offset_min, (20.0, -100.0, 0.0)) and close(rect.offset_max, (20.0, -20.0, 0.0)), "UIRect.position moves both offsets")
         rect.visible, rect.interactable = False, False
         self.check(not rect.visible and not rect.interactable, "UIRect visibility")
+        self.check(canvas.theme == "" and rect.style_class == "", "UICanvas.theme and UIRect.style_class default to the plain built-in look")
+        canvas.theme, rect.style_class = "Builtin/MageCap.btheme", "primary"
+        self.check(canvas.theme == "Builtin/MageCap.btheme" and rect.style_class == "primary", "UICanvas.theme and UIRect.style_class")
+        canvas.theme, rect.style_class = "", ""
 
         image = entity.add_component(bellows.UIImage)
         image.texture, image.color, image.corner_radius = "Textures/GroundTiles.png", (0.1, 0.2, 0.3, 0.5), -4.0

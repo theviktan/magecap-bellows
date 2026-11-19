@@ -279,6 +279,8 @@ namespace Bellows {
 		// While a modal canvas is shown, every key, gamepad button and pointer press goes to it: the game
 		// and the UI under it get nothing (a pause menu, a dialog).
 		bool Modal = false;
+		// The .btheme asset its UI is drawn with; empty is the built-in "Builtin/MageCap.btheme".
+		std::string Theme;
 	};
 
 	// Where a UI entity sits inside its parent's rectangle (the canvas's screen for the top level).
@@ -294,6 +296,7 @@ namespace Bellows {
 		bool Visible = true;
 		bool Interactable = true;				// Off: the pointer and focus pass it by, and everything under it
 		bool Focusable = false;					// Can take keyboard and gamepad focus (widgets are by default)
+		std::string StyleClass;					// A named style of the canvas's theme ("primary"); empty for the plain one
 		// Inside a UILayoutComponent: keep the size from the offsets, or share the space left over. The
 		// layout places the rect and ignores its anchors and offsets otherwise.
 		UISizing WidthSizing = UISizing::Fixed;

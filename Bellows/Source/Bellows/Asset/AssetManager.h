@@ -6,6 +6,7 @@
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/Texture.h"
 #include "Bellows/Text/Font.h"
+#include "Bellows/UI/UITheme.h"
 
 #include <filesystem>
 #include <string>
@@ -25,6 +26,7 @@ namespace Bellows {
 		Audio,			// .wav .mp3 .flac .ogg
 		Script,			// .py
 		Font,			// .ttf .otf
+		Theme,			// .btheme
 	};
 
 	const char* AssetTypeToString(AssetType type);
@@ -57,6 +59,9 @@ namespace Bellows {
 		// Resources/Fonts next to the programs and in exported games). Fonts load without a GPU.
 		static Ref<Font> GetFont(const std::string& assetPath);
 		static std::filesystem::path GetDefaultFontFile();
+		// A UI theme (.btheme). Empty or "Builtin/MageCap.btheme" is the built-in default; a theme that
+		// can't be loaded is reported once and the default is used. Never null.
+		static Ref<const UITheme> GetUITheme(const std::string& assetPath);
 
 		// Registers an in-memory material under a path (e.g. materials created by scripts at runtime).
 		static void RegisterMaterial(const std::string& assetPath, const Ref<Material>& material);

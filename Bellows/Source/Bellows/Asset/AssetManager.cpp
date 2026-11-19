@@ -19,6 +19,7 @@ namespace Bellows {
 			std::unordered_map<std::string, Ref<Texture2D>> Textures;
 			std::unordered_map<std::string, Ref<Environment>> Environments;
 			std::unordered_map<std::string, Ref<Font>> Fonts;
+			std::unordered_map<std::string, Ref<const UITheme>> Themes;
 			std::unordered_set<std::string> ReportedMissing;
 		};
 
@@ -58,6 +59,7 @@ namespace Bellows {
 			case AssetType::Audio:			return "Audio";
 			case AssetType::Script:			return "Script";
 			case AssetType::Font:			return "Font";
+			case AssetType::Theme:			return "Theme";
 		}
 		return "None";
 	}
@@ -115,6 +117,7 @@ namespace Bellows {
 		if (extension == ".wav" || extension == ".mp3" || extension == ".flac" || extension == ".ogg") return AssetType::Audio;
 		if (extension == ".forge" || extension == ".py") return AssetType::Script;
 		if (extension == ".ttf" || extension == ".otf") return AssetType::Font;
+		if (extension == ".btheme") return AssetType::Theme;
 		return AssetType::None;
 	}
 
@@ -365,10 +368,32 @@ namespace Bellows {
 		return font;
 	}
 
+	Ref<const UITheme> AssetManager::GetUITheme(const std::string& assetPath)
+	{
+		static const Ref<const UITheme> c_Default = CreateRef<const UITheme>(GetDefaultUITheme());
+		if (assetPath.empty() || assetPath == c_DefaultUIThemePath)
+			return c_Default;
+
+		AssetCache& cache = GetCache();
+		if (auto it = cache.Themes.find(assetPath); it != cache.Themes.end())
+			return it->second;
+		std::string error;
+		std::optional<UITheme> theme = LoadUITheme(GetAbsolutePath(assetPath), &error);
+		if (!theme)
+		{
+			BW_CORE_WARN("{}", error);
+			ReportMissing(assetPath, "Theme");
+		}
+		Ref<const UITheme> result = theme ? CreateRef<const UITheme>(std::move(*theme)) : c_Default;
+		cache.Themes[assetPath] = result;
+		return result;
+	}
+
 	void AssetManager::Invalidate(const std::string& assetPath)
 	{
 		AssetCache& cache = GetCache();
 		cache.Fonts.erase(assetPath);
+		cache.Themes.erase(assetPath);
 		cache.Meshes.erase(assetPath);
 		cache.Materials.erase(assetPath);
 		cache.Environments.erase(assetPath);
@@ -385,6 +410,7 @@ namespace Bellows {
 		cache.Textures.clear();
 		cache.Environments.clear();
 		cache.Fonts.clear();
+		cache.Themes.clear();
 		cache.ReportedMissing.clear();
 	}
 

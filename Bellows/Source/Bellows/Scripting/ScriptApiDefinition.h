@@ -585,6 +585,8 @@ namespace Bellows::Scripting {
 		canvas.Property("visible", [](const UICanvasRef& r) { return r.Get().Visible; }, [](const UICanvasRef& r, bool v) { r.Get().Visible = v; }, "");
 		canvas.Property("modal", [](const UICanvasRef& r) { return r.Get().Modal; }, [](const UICanvasRef& r, bool v) { r.Get().Modal = v; },
 			"While shown, it takes every key, button and click: the game and other UI get nothing (pause menus, dialogs)");
+		canvas.Property("theme", [](const UICanvasRef& r) { return r.Get().Theme; }, [](const UICanvasRef& r, const std::string& v) { r.Get().Theme = v; },
+			"The .btheme asset its UI is drawn with; \"\" is the built-in one, Builtin/MageCap.btheme");
 		canvas.ReadOnly("scale", [](const UICanvasRef& r)
 			{
 				const UICanvasComponent& c = r.Get();
@@ -627,6 +629,8 @@ namespace Bellows::Scripting {
 			"Inside a UILayout: 'fixed' keeps its own height, 'fill' shares the space left over");
 		rect.Property("focusable", [](const UIRectRef& r) { return r.Get().Focusable; }, [](const UIRectRef& r, bool v) { r.Get().Focusable = v; },
 			"Can take keyboard and gamepad focus (Tab, arrows, d-pad); it also stops the pointer");
+		rect.Property("style_class", [](const UIRectRef& r) { return r.Get().StyleClass; }, [](const UIRectRef& r, const std::string& v) { r.Get().StyleClass = v; },
+			"A named style of its canvas's theme (\"primary\", \"danger\"); \"\" for the theme's plain style");
 		rect.ReadOnly("hovered", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIHovered() == e; },
 			"True while the pointer is over it (and it is what the pointer would use)");
 		rect.ReadOnly("pressed", [](const UIRectRef& r) { Entity e = r.GetEntity(); r.Get(); return e.GetScene()->GetUIPressed() == e; },

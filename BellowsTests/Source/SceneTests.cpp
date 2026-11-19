@@ -89,6 +89,7 @@ namespace {
 		canvas.SortOrder = -3;
 		canvas.Visible = false;
 		canvas.Modal = true;
+		canvas.Theme = "Themes/Night.btheme";
 		auto& rect = entity.AddComponent<UIRectComponent>();
 		rect.AnchorMin = glm::vec2(0.0f, 1.0f);
 		rect.AnchorMax = glm::vec2(1.0f, 1.0f);
@@ -98,6 +99,7 @@ namespace {
 		rect.Visible = false;
 		rect.Interactable = false;
 		rect.Focusable = true;
+		rect.StyleClass = "danger";
 		rect.WidthSizing = UISizing::Fill;
 		auto& image = entity.AddComponent<UIImageComponent>();
 		image.TexturePath = "Textures/Panel.png";
@@ -304,6 +306,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(canvas.SortOrder == -3);
 	CHECK_FALSE(canvas.Visible);
 	CHECK(canvas.Modal);
+	CHECK(canvas.Theme == "Themes/Night.btheme");
 	const UIRectComponent& rect = loadedChild.GetComponent<UIRectComponent>();
 	CHECK(rect.AnchorMin == glm::vec2(0.0f, 1.0f));
 	CHECK(rect.AnchorMax == glm::vec2(1.0f, 1.0f));
@@ -313,6 +316,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK_FALSE(rect.Visible);
 	CHECK_FALSE(rect.Interactable);
 	CHECK(rect.Focusable);
+	CHECK(rect.StyleClass == "danger");
 	CHECK(rect.WidthSizing == UISizing::Fill);
 	CHECK(rect.HeightSizing == UISizing::Fixed);
 	const UIImageComponent& image = loadedChild.GetComponent<UIImageComponent>();
