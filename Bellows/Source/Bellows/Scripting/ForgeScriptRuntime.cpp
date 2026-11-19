@@ -4,9 +4,11 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
+#include "Bellows/Scripting/ScriptApi.h"
 
 #include "ForgeScript/Compiler/ScriptVariables.h"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -39,6 +41,37 @@ namespace Bellows::Scripting {
 			if (line > 0)
 				text += " line " + std::to_string(line);
 			return text + ": " + message;
+		}
+
+		// A script's place for the 'script error' event: its asset path, with forward slashes.
+		std::string ReportedPath(std::string path)
+		{
+			std::replace(path.begin(), path.end(), '\\', '/');
+			return path;
+		}
+
+		// Sends a ForgeScript error to the 'script error' event, as Python's errors are. A function calling
+		// itself is one frame with a count in ForgeScript; the event lists each call, up to a limit, so a
+		// runaway recursion can't make the stack huge.
+		void SendScriptError(const std::string& message, const std::string& file, int line, const std::vector<ForgeScript::StackFrame>& frames)
+		{
+			constexpr size_t c_MaxStack = 64;
+			Scripting::ScriptErrorReport report;
+			report.Message = message;
+			report.File = ReportedPath(file);
+			report.Line = line;
+			report.Language = "forgescript";
+			for (const ForgeScript::StackFrame& frame : frames)
+			{
+				std::string place = ReportedPath(frame.File) + ":" + std::to_string(frame.Line);
+				if (!frame.Function.empty())
+					place += " in " + frame.Function;
+				for (int i = 0; i < frame.Repeats && report.Stack.size() < c_MaxStack; i++)
+					report.Stack.push_back(place);
+			}
+			if (report.Stack.empty())
+				report.Stack.push_back(report.File + ":" + std::to_string(line));
+			Scripting::ReportScriptError(report);
 		}
 
 		std::string Describe(const ForgeScript::ScriptError& error)
@@ -115,7 +148,11 @@ namespace Bellows::Scripting {
 		config.InstructionLimit = c_InstructionLimit;
 		Scope<ForgeScript::VM> vm = CreateScope<ForgeScript::VM>(config);
 		vm->SetPrintHandler([](const std::string& text) { BW_INFO("{}", text); });
-		vm->SetErrorHandler([this](const ForgeScript::ScriptError& error) { m_Reporter("ForgeScript", Describe(error)); });
+		vm->SetErrorHandler([this](const ForgeScript::ScriptError& error)
+		{
+			m_Reporter("ForgeScript", Describe(error));
+			SendScriptError(error.Message, error.File, error.Line, error.Frames);
+		});
 		InstallModuleLoader(*vm);
 		RegisterForgeScriptApi(*vm);
 		vm->SetDebugHandler(m_DebugHandler);
@@ -332,7 +369,10 @@ namespace Bellows::Scripting {
 				// A script with mistakes keeps running as it was; report each mistake once, not per entity.
 				const std::vector<ForgeScript::CompileError> mistakes = m_VM->FindMistakes(source, instance.ScriptPath);
 				for (const ForgeScript::CompileError& mistake : mistakes)
+				{
 					m_Reporter("ForgeScript", Describe(mistake.File, mistake.Line, mistake.Message));
+					SendScriptError(mistake.Message, mistake.File, mistake.Line, {});
+				}
 				ok = mistakes.empty();
 			}
 			usable[instance.ScriptPath] = ok;
