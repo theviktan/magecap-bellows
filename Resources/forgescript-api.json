@@ -385,6 +385,65 @@
 			"doc": "The game's own writable folder for saves, screenshots and reports"
 		},
 		{
+			"name": "save_data",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				},
+				{
+					"name": "value",
+					"type": "Value"
+				}
+			],
+			"returns": "bool",
+			"doc": "Saves a value (nothing, true/false, numbers, text, vectors, lists and maps) as user_folder()/Saves/<name>.json; false when it can't be written"
+		},
+		{
+			"name": "load_data",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				},
+				{
+					"name": "default",
+					"type": "Value",
+					"default": null
+				}
+			],
+			"returns": "Value",
+			"doc": "The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)"
+		},
+		{
+			"name": "has_data",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "True when a value is saved under the name"
+		},
+		{
+			"name": "delete_data",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				}
+			],
+			"returns": "bool",
+			"doc": "Deletes the value saved under the name; false when there was none"
+		},
+		{
+			"name": "real_time",
+			"params": [],
+			"returns": "float",
+			"doc": "Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()"
+		},
+		{
 			"name": "quit",
 			"params": [
 				{

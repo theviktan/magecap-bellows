@@ -61,6 +61,25 @@ namespace pybind11::detail {
 		}
 	};
 
+	// Any value the engine can pass between languages (save_data's value): None, bool, numbers, str,
+	// Vec3, Entity, and lists and dicts (with str keys) of these.
+	template<>
+	struct type_caster<Bellows::Scripting::ScriptValue>
+	{
+		PYBIND11_TYPE_CASTER(Bellows::Scripting::ScriptValue, const_name("typing.Any"));
+
+		bool load(handle source, bool)
+		{
+			value = Bellows::Scripting::ScriptValueFromPython(source);
+			return true;
+		}
+
+		static handle cast(const Bellows::Scripting::ScriptValue& data, return_value_policy, handle)
+		{
+			return Bellows::Scripting::ScriptValueToPython(data).release();
+		}
+	};
+
 	// A key: a bellows.Key, a key name ("W", "space") or a key code.
 	template<>
 	struct type_caster<Bellows::Scripting::KeyArg>
@@ -316,12 +335,12 @@ namespace Bellows::Scripting {
 			for (const auto& [key, item] : value.cast<py::dict>())
 			{
 				if (!py::isinstance<py::str>(key))
-					throw ScriptValueError("Event values that are dicts need text keys, not " + PythonTypeName(key));
+					throw ScriptValueError("Dicts sent to the engine need text keys, not " + PythonTypeName(key));
 				map.emplace_back(key.cast<std::string>(), ScriptValueFromPython(item));
 			}
 			return map;
 		}
-		throw ScriptValueError("Event values can be None, bool, numbers, str, Vec3, Entity, lists and dicts, not " + PythonTypeName(value));
+		throw ScriptValueError("Values sent to the engine can be None, bool, numbers, str, Vec3, Entity, lists and dicts, not " + PythonTypeName(value));
 	}
 
 	// -------------------------------------------------------------------------

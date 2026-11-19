@@ -10,6 +10,7 @@ import math
 import os
 import pathlib
 import struct
+import time
 import traceback
 
 import bellows
@@ -105,6 +106,7 @@ class FeatureTest(bellows.Script):
         self.test_camera_projection()
         self.test_audio()
         self.test_screenshots()
+        self.test_saved_data()
         self.test_events()
         yield from self.test_destruction()
         yield from self.test_prefabs()
@@ -494,6 +496,21 @@ class FeatureTest(bellows.Script):
         with open(jpeg, "rb") as file:
             self.check(file.read(2) == b"\xff\xd8", "save_screenshot writes JPEG for .jpg")
         self.check(raises(lambda: bellows.save_screenshot("shot.gif"), ValueError), "save_screenshot rejects other formats")
+
+    def test_saved_data(self):
+        bellows.delete_data("Feature Test Python")
+        self.check(bellows.load_data("Feature Test Python", 7) == 7, "load_data's default")
+        progress = {"credits": 12.5, "ships": ["Comet", "Nova"], "spawn": bellows.Vec3(1, 2, 3), "docked": True, "captain": None}
+        self.check(bellows.save_data("Feature Test Python", progress) and bellows.has_data("Feature Test Python"), "save_data and has_data")
+        path = os.path.join(bellows.user_folder(), "Saves", "Feature Test Python.json")
+        self.check(os.path.isfile(path), f"saves go to user_folder()/Saves ({path})")
+        loaded = bellows.load_data("Feature Test Python")
+        self.check(loaded == progress and isinstance(loaded["spawn"], bellows.Vec3), f"load_data gives back what was saved ({loaded})")
+        self.check(raises(lambda: bellows.save_data("Feature Test Python", [self.entity]), ValueError), "entities can't be saved")
+        self.check(raises(lambda: bellows.save_data("../escape", 1), ValueError), "save names stay in the Saves folder")
+        self.check(raises(lambda: bellows.save_data("x", object()), ValueError), "values Python can't save are refused")
+        self.check(bellows.delete_data("Feature Test Python") and not bellows.has_data("Feature Test Python"), "delete_data")
+        self.check(abs(bellows.real_time() - time.time()) < 5, "real_time is seconds since 1970")
 
     def test_events(self):
         bellows.emit("feature test", 1, "two", [3], {"four": 4.0}, self.entity)

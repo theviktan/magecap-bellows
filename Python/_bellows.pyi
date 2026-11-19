@@ -918,6 +918,9 @@ def clamp(value: float, low: float, high: float) -> float: ...
 def create_entity(name: str = 'Entity', parent: Entity | None = None) -> Entity:
     """Creates an entity in the active scene"""
 
+def delete_data(name: str) -> bool:
+    """Deletes the value saved under the name; false when there was none"""
+
 def delta_time() -> float:
     """Seconds since the previous frame"""
 
@@ -944,6 +947,9 @@ def get_entity(id: int) -> Entity | None: ...
 def get_gravity() -> Vec3: ...
 
 def get_master_volume() -> float: ...
+
+def has_data(name: str) -> bool:
+    """True when a value is saved under the name"""
 
 def instantiate(prefab: str, position: Vec3 | typing.Sequence[float] | None = None, parent: Entity | None = None) -> Entity:
     """Spawns a .bprefab and returns its root entity"""
@@ -987,6 +993,9 @@ def is_playing() -> bool: ...
 
 def lerp(a: float, b: float, t: float) -> float: ...
 
+def load_data(name: str, default: typing.Any = None) -> typing.Any:
+    """The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)"""
+
 def load_scene(path: str) -> bool:
     """Switches to another scene at the end of the frame"""
 
@@ -1013,6 +1022,12 @@ def quit(exit_code: int = 0) -> None:
 
 def raycast(origin: Vec3 | typing.Sequence[float], direction: Vec3 | typing.Sequence[float], max_distance: float = 1000.0) -> RaycastHit | None:
     """Casts a ray against physics colliders (play mode); returns RaycastHit or None"""
+
+def real_time() -> float:
+    """Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()"""
+
+def save_data(name: str, value: typing.Any) -> bool:
+    """Saves a value (nothing, true/false, numbers, text, vectors, lists and maps) as user_folder()/Saves/<name>.json; false when it can't be written"""
 
 def save_screenshot(path: str = '', max_width: int = 1920) -> str:
     """Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; "" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()"""

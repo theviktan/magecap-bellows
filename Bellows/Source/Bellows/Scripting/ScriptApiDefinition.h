@@ -553,6 +553,19 @@ namespace Bellows::Scripting {
 			Arg("path", std::string()), Arg("max_width", 1920));
 		api.Function("user_folder", []() { return GetUserFolder().string(); },
 			"The game's own writable folder for saves, screenshots and reports");
+
+		// --- Saved data ---------------------------------------------------------
+		api.Function("save_data", [](const std::string& name, const ScriptValue& value) { return SaveData(name, value); },
+			"Saves a value (nothing, true/false, numbers, text, vectors, lists and maps) as user_folder()/Saves/<name>.json; false when it can't be written",
+			Arg("name"), Arg("value"));
+		api.Function("load_data", [](const std::string& name, const ScriptValue& fallback) { return LoadData(name, fallback); },
+			"The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)",
+			Arg("name"), Arg("default", ScriptValue()));
+		api.Function("has_data", [](const std::string& name) { return HasData(name); }, "True when a value is saved under the name", Arg("name"));
+		api.Function("delete_data", [](const std::string& name) { return DeleteData(name); },
+			"Deletes the value saved under the name; false when there was none", Arg("name"));
+		api.Function("real_time", []() { return GetRealTime(); },
+			"Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()");
 		api.Function("quit", [](int exitCode) { RequestQuit(exitCode); }, "Quits the game (stops play mode in the editor)", Arg("exit_code", 0));
 
 		// --- Audio ------------------------------------------------------------

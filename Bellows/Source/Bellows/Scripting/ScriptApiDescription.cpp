@@ -107,6 +107,7 @@ namespace Bellows::Scripting {
 			else if constexpr (std::is_same_v<U, MouseButtonArg>) return "MouseButton | str";
 			else if constexpr (std::is_same_v<U, ComponentName>) return "str";
 			else if constexpr (std::is_same_v<U, ComponentHandle>) return "Component";
+			else if constexpr (std::is_same_v<U, ScriptValue>) return "Value";
 			else if constexpr (IsOptional<U>::value) return TypeName<typename U::value_type>(classes) + " | None";
 			else if constexpr (IsVector<U>::value) return "list[" + TypeName<typename U::value_type>(classes) + "]";
 			else if constexpr (IsVariant<U>::value) return VariantNames<U>::Get(classes);
