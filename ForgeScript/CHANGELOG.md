@@ -27,6 +27,13 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Game math and data, like GDScript's and Python's:
+- `move_toward(from, to, step)` (numbers or vectors), `inverse_lerp`, `remap`, `smoothstep`,
+  `wrap`, `snapped`, and `random_seed(n)` for repeatable random numbers.
+- `range(from, to [, step])` (both ends included, like `for i from 1 to 5`), `zip(first, second)`,
+  `map.merge(other)`, `list.remove_where(function)`, `text.reverse()`.
+- `to_json(value)` and `from_json(text)`, with errors that say what JSON can't hold.
+
 ## 1.3.0 (2026-11-17)
 
 Error messages:

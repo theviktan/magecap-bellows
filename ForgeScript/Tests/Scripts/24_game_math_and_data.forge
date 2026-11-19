@@ -1,0 +1,83 @@
+# Game math, like GDScript's: steady movement, ranges, easing, wrapping and grids.
+say move_toward(0, 10, 3)                   # expect: 3
+say move_toward(9, 10, 3)                   # expect: 10
+say move_toward(10, 0, 4)                   # expect: 6
+say move_toward(5, 5, 1)                    # expect: 5
+say move_toward(vector(0, 0, 0), vector(10, 0, 0), 4)   # expect: (4, 0, 0)
+say move_toward(vector(0, 0, 0), vector(3, 4, 0), 10)   # expect: (3, 4, 0)
+say inverse_lerp(0, 10, 5)                  # expect: 0.5
+say inverse_lerp(10, 20, 25)                # expect: 1.5
+say remap(5, 0, 10, 0, 100)                 # expect: 50
+say remap(0.5, 0, 1, 100, 200)              # expect: 150
+say smoothstep(0, 1, 0.5)                   # expect: 0.5
+say smoothstep(0, 1, -1)                    # expect: 0
+say smoothstep(0, 1, 2)                     # expect: 1
+say smoothstep(0, 10, 2.5)                  # expect: 0.15625
+say smoothstep(3, 3, 5)                     # expect: 1
+say wrap(370, 0, 360)                       # expect: 10
+say wrap(-10, 0, 360)                       # expect: 350
+say wrap(360, 0, 360)                       # expect: 0
+say wrap(5, 1, 5)                           # expect: 1
+say wrap(7, 3, 3)                           # expect: 3
+say snapped(17, 5)                          # expect: 15
+say snapped(18, 5)                          # expect: 20
+say snapped(0.37, 0.25)                     # expect: 0.25
+say snapped(4.2, 0)                         # expect: 4.2
+
+# The same seed gives the same numbers.
+random_seed(42)
+set first to [random(100), random(100), random(100)]
+random_seed(42)
+set again to [random(100), random(100), random(100)]
+say first is again                          # expect: true
+
+# Lists of numbers, pairs, merging, removing.
+say range(1, 5)                             # expect: [1, 2, 3, 4, 5]
+say range(5, 1)                             # expect: [5, 4, 3, 2, 1]
+say range(0, 100, 25)                       # expect: [0, 25, 50, 75, 100]
+say range(0, 1, 0.25)                       # expect: [0, 0.25, 0.5, 0.75, 1]
+say range(0, 10, 3)                         # expect: [0, 3, 6, 9]
+say range(3, 3)                             # expect: [3]
+say zip(["a", "b", "c"], [1, 2])            # expect: [["a", 1], ["b", 2]]
+for each pair in zip(["sword", "bow"], [10, 4]) do
+	say "{pair[1]}: {pair[2]}"              # expect: sword: 10
+end                                         # expect: bow: 4
+set settings to { volume: 0.5, music: true }
+say settings.merge({ volume: 0.8, hard: false })   # expect: {"volume": 0.8, "music": true, "hard": false}
+say settings.volume                         # expect: 0.8
+set enemies to [3, 0, 5, 0]
+say enemies.remove_where(function(health) return health is 0 end)  # expect: 2
+say enemies                                 # expect: [3, 5]
+say "café".reverse()                        # expect: éfac
+say "".reverse().length                     # expect: 0
+
+# JSON text and back.
+set save to { name: "Starfall", credits: 1250, ships: ["Comet", "Nova"], docked: true, captain: nothing }
+set json to to_json(save)
+say json                                    # expect: {"name":"Starfall","credits":1250,"ships":["Comet","Nova"],"docked":true,"captain":null}
+say from_json(json) is save                 # expect: true
+say from_json("[1, 2.5, \"three\", \{\"four\": [false]\}]")    # expect: [1, 2.5, "three", {"four": [false]}]
+say to_json("say \"hi\"\n")                 # expect: "say \"hi\"\n"
+
+# Mistakes say what to write instead.
+function problem_of(action)
+	try
+		action()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() move_toward(0, 10, -1) end)        # expect: move_toward needs a step of 0 or more, but got -1.
+say problem_of(function() inverse_lerp(4, 4, 1) end)         # expect: inverse_lerp needs two different numbers to measure between, but got 4 twice.
+say problem_of(function() remap(1, 2, 2, 0, 1) end)          # expect: remap needs a range with two different ends to map from, but got 2 twice.
+say problem_of(function() wrap(5, 10, 0) end)                # expect: wrap needs the low end first, like: wrap(angle, 0, 360)
+say problem_of(function() range(1) end)                      # expect: range needs where to start and where to end, like: range(1, 5), or range(0, 100, 10)
+say problem_of(function() range(1, 5, 0) end)                # expect: range needs a step above 0, but got 0. It counts down by itself when the end is smaller.
+say problem_of(function() range(1, 1e9) end)                 # expect: range would make more than 10,000,000 numbers.
+say problem_of(function() [1].remove_where(1) end)           # expect: remove_where needs a function that answers yes or no for each item, like: enemies.remove_where(function(enemy) return enemy.health is 0 end)
+say problem_of(function() to_json(vector(1, 2, 3)) end)      # expect: to_json can't write a vector: JSON has none. Write a list instead, like: [v.x, v.y, v.z]
+say problem_of(function() to_json({ [1]: 2 }) end)           # expect: to_json needs map keys that are text, but one is number.
+say problem_of(function() to_json(infinity) end)             # expect: to_json can't write infinity: JSON only has finite numbers.
+say problem_of(function() to_json(function() end) end)       # expect: to_json can only write nothing, true/false, numbers, text, lists and maps, not function.
+say problem_of(function() from_json("\{\"a\": \}") end).starts_with("from_json can't read this text as JSON: ")   # expect: true
