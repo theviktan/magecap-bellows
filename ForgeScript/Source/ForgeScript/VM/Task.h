@@ -20,6 +20,8 @@ namespace ForgeScript {
 		size_t Ip = 0;
 		size_t Base = 0; // Stack index of slot 0 (the function itself or "self").
 		uint8_t Flags = FrameNone;
+		// Which values with defaults the call gave (bit i: the i-th of them), so their default code is skipped.
+		uint64_t Given = ~uint64_t(0);
 		int DebugLine = 0; // The line the debugger last saw this frame on (only kept while debugging).
 	};
 
@@ -59,6 +61,9 @@ namespace ForgeScript {
 		std::vector<Value> Stack;
 		std::vector<CallFrame> Frames;
 		std::vector<TryHandler> Handlers;
+		// Names for the last values of the next call, set by NamedArgs just before it (kept alive by the
+		// function's constants). Taken by the call, and cleared by any error.
+		List* PendingNames = nullptr;
 		Upvalue* OpenUpvalues = nullptr;
 
 		TaskState State = TaskState::Ready;

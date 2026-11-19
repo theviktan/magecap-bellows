@@ -1,0 +1,53 @@
+# Values in a call can be named, after the others: name, a colon, then the value.
+function attack(target, damage is 10, crit is 2)
+	return "{target} {damage} {crit}"
+end
+say attack("goblin", damage: 25)                        # expect: goblin 25 2
+say attack("orc", crit: 5)                              # expect: orc 10 5
+say attack(target: "troll", crit: 9, damage: 1)         # expect: troll 1 9
+say attack("imp", 3, crit: 7)                           # expect: imp 3 7
+say attack("rat", 4)                                    # expect: rat 4 2
+
+# A skipped value gets its default even when a later one is named, and defaults see the values before them.
+function hit(base, bonus is base * 2, label is "hit")
+	return "{label}: {base + bonus}"
+end
+say hit(5, label: "strong hit")                         # expect: strong hit: 15
+
+# In kinds, for 'new', for function values and for 'start'.
+kind Hero
+	function setup(name, level is 1, title is "Squire")
+		set my name to name
+		set my level to level
+		set my title to title
+	end
+	function describe(prefix is "", suffix is "!")
+		return prefix + "{my title} {my name}, level {my level}" + suffix
+	end
+end
+set hero to new Hero("Ron", title: "Knight")
+say hero.describe(suffix: "?")                          # expect: Knight Ron, level 1?
+set join to function(a, b is "B") return a + b end
+say join(b: "x", a: "y")                                # expect: yx
+function later(n is 1)
+	wait 0.01
+	say "later {n}"
+end
+start later(n: 4)
+wait 0.05
+# expect: later 4
+
+# Mistakes say which value is wrong.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() attack("x", dmg: 1) end)      # expect: 'attack' has no value called 'dmg'.
+say problem_of(function() attack(damage: 1) end)        # expect: 'attack' needs a value for 'target'.
+say problem_of(function() attack("a", target: "b") end) # expect: 'attack' was given 'target' twice.
+say problem_of(function() max(1, b: 2) end)             # expect: 'max' is built in, so its values can't be named. Give them in order.
+say problem_of(function() attack("a", tagret: 1) end)   # expect: 'attack' has no value called 'tagret'. Did you mean 'target'?

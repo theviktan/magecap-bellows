@@ -894,4 +894,10 @@ TEST_CASE("LanguageServerShowsDefaultValues")
 	REQUIRE_FALSE(help.IsNull());
 	CHECK_EQ(help.Get("signatures").AsArray().at(0).GetString("label"), std::string("walk(steps, speed is 2)"));
 	CHECK_EQ(help.Get("activeParameter").AsNumber(), 1.0);
+
+	// A named value is for the parameter with that name, wherever it is in the list.
+	session.Open("file:///tmp/named.forge", "function walk(steps, speed is 2, style is \"slow\")\nend\nwalk(3, style: \n");
+	const Json named = session.At("textDocument/signatureHelp", "file:///tmp/named.forge", 2, 15);
+	REQUIRE_FALSE(named.IsNull());
+	CHECK_EQ(named.Get("activeParameter").AsNumber(), 2.0);
 }

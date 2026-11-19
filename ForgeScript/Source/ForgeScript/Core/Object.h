@@ -113,6 +113,7 @@ namespace ForgeScript {
 		// when no parameter has a default.
 		int MinArity = 0;
 		std::vector<size_t> DefaultIps;
+		std::vector<std::string> ParamNames; // For calls that name their values: attack(goblin, damage: 25).
 		int UpvalueCount = 0;
 		String* Name = nullptr;
 		Module* Owner = nullptr;

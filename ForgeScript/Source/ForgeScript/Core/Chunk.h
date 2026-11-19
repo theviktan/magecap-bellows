@@ -101,6 +101,8 @@ namespace ForgeScript {
 		Between,         //                           value low high -> bool (both ends included, either order)
 		TryFinally,      // u16 offset to the finally code; on an error pushes the error and where it happened
 		Rethrow,         //                           error where -> (raises the error again from where it happened)
+		NamedArgs,       // u16 list of names         (the next call's last values go to the parameters with these names)
+		SkipIfGiven,     // u8 default index, u16 offset: skips a default's code when the call gave that value
 	};
 
 	enum class TypeCheck : uint8_t

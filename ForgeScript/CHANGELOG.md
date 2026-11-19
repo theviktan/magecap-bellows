@@ -27,6 +27,14 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Naming the values in a call (ForgeScript Roadmap item 9):
+- `attack(goblin, crit: 5)`: values can be named after the ones given in order. A skipped value
+  gets its default even when a later one is named. Works for script functions, kinds (and `new`),
+  function values and `start`; built-in functions refuse names with a clear message.
+- Mistakes name the value: "'attack' has no value called 'dmg'.", "'attack' needs a value for
+  'target'.", "'attack' was given 'target' twice."
+- Signature help highlights the parameter a named value is for. Before, `name:` in a call was always
+  a mistake, so no script changes meaning.
 For hosts:
 - `ScriptError::Frames`: an uncaught error's call stack as data (file, line, function, repeats),
   innermost first, beside the text `Trace`. Errors that go on after `finally` code keep theirs.

@@ -344,6 +344,7 @@ namespace ForgeScript {
 		// Errors
 		bool RuntimeFailure(Task* task, const std::string& message);
 		bool ThrowValue(Task* task, const Value& error, const Value* where = nullptr);
+		bool CallWithNames(Task* task, Closure* closure, size_t argCount, uint8_t flags, List* names);
 		void ReportFailure(Task* task, const Value& error, const Value* where = nullptr);
 		Value DescribeWhere(Task* task);
 		std::vector<std::string> BuildTrace(Task* task, std::string& outFile, int& outLine, std::vector<StackFrame>* outFrames = nullptr);
