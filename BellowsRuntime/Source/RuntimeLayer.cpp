@@ -8,6 +8,7 @@
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -55,7 +56,10 @@ namespace Bellows {
 	void RuntimeLayer::OnDetach()
 	{
 		if (m_Scene)
+		{
+			Scripting::EmitGameQuitting();
 			m_Scene->OnRuntimeStop();
+		}
 		m_Scene.reset();
 		m_Renderer.reset();
 		m_Blitter.reset();

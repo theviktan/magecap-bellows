@@ -145,6 +145,11 @@ namespace Bellows::Scripting {
 		return Platform::GetUserDataDirectory() / "MageCapBellows" / "Games" / std::filesystem::path(game);
 	}
 
+	std::filesystem::path GetLogFolder()
+	{
+		return GetUserFolder() / "Logs";
+	}
+
 	std::string SaveScreenshot(const std::string& path, int maxWidth)
 	{
 		if (maxWidth < 0)
@@ -453,6 +458,45 @@ namespace Bellows::Scripting {
 	{
 		EventNesting nesting(name);
 		DeliverToListeners(name, values, ScriptEventDelivery(), skip);
+	}
+
+	void ReportScriptError(const ScriptErrorReport& report)
+	{
+		static bool s_Reporting = false;
+		if (s_Reporting)
+			return;
+		struct ReportingScope
+		{
+			ReportingScope() { s_Reporting = true; }
+			~ReportingScope() { s_Reporting = false; }
+		} scope;
+
+		try
+		{
+			ScriptValueList stack;
+			stack.reserve(report.Stack.size());
+			for (const std::string& line : report.Stack)
+				stack.emplace_back(line);
+			EmitScriptEvent("script error", { ScriptValue(report.Message), ScriptValue(report.File),
+				ScriptValue(static_cast<double>(std::max(report.Line, 0))), ScriptValue(std::move(stack)),
+				ScriptValue(report.Language), ScriptValue(report.Name) });
+		}
+		catch (const std::exception& exception)
+		{
+			BW_CORE_ERROR("The 'script error' event could not be sent: {}", exception.what());
+		}
+	}
+
+	void EmitGameQuitting()
+	{
+		try
+		{
+			EmitScriptEvent("game quitting", {});
+		}
+		catch (const std::exception& exception)
+		{
+			BW_CORE_ERROR("The 'game quitting' event could not be sent: {}", exception.what());
+		}
 	}
 
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values)

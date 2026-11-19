@@ -67,6 +67,22 @@ Derive from `bellows.Script`. The engine sets `self.entity` before any callback 
 | `on_event(self, name, *values)` | An event sent by any script with `bellows.emit` (Python) or `trigger` (ForgeScript), this one included. |
 | `on_reload(self)` | After the script's file was saved during play and its new code took over (hot reload, below). |
 
+**Engine events.** Besides the events scripts send each other, the engine sends two to every script,
+in both languages (Python's `on_event`, ForgeScript's `when <name> with ...`):
+
+| Event | Values | When |
+|-------|--------|------|
+| `script error` | `message`, `file`, `line`, `stack`, `language`, `name` | A script raised an error (it is also logged as before). `file` is the script's asset path with forward slashes (`Scripts/player.py`), or just a file name for code outside the assets; `line` is 0 when unknown. `stack` is a list of the calls, innermost first, each `"file:line in function"` or `"file:line"` for code at the top of a file. `language` is `"python"` or `"forgescript"`; `name` is the Python exception's class (`"AttributeError"`), or `""`. An error raised while a `script error` handler runs is only logged, never sent again. |
+| `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too, so it can't tell the two apart). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
+
+```python
+class CrashReporter(bellows.Script):
+    def on_event(self, name, *values):
+        if name == "script error":
+            message, file, line, stack, language, error_name = values
+            bellows.log(f"{error_name or 'Error'} at {file}:{line}: {message}")
+```
+
 **Exposed fields.** Class attributes with a type annotation of `bool`, `int`, `float`, `str`,
 `Vec2`, `Vec3` or `Vec4` appear in the Inspector. Values edited there are saved with the scene and
 assigned to the instance before `on_create`.
@@ -127,6 +143,7 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | `ui_focused()` / `ui_hovered()` / `ui_clear_focus()` | The UI entity with keyboard and gamepad focus / under the pointer (or `None`); takes focus away from the UI. |
 | `save_screenshot(path="", max_width=1920)` | Saves what the player sees (the game camera's image, never editor overlays) and returns the file's full path. PNG, or JPEG (quality 85) for `.jpg`/`.jpeg`. `""` names it `Screenshots/<scene>-<date>-<time>.png`; relative paths are inside `user_folder()`; missing folders are created. A wider image is scaled down to `max_width` (0 keeps the full size). Raises `ValueError` before anything is drawn, for other formats, or when the file can't be written. |
 | `user_folder()` | The game's own writable folder for saves, screenshots and reports: `%APPDATA%\MageCapBellows\Games\<project name>` on Windows, `~/.local/share/MageCapBellows/Games/<project name>` on Linux (`$XDG_DATA_HOME` if set; `BELLOWS_USER_DATA_DIR` overrides the base folder). |
+| `log_folder()` | `user_folder()` plus `Logs`. A game playing in its own window (exported, or started with the editor's Play in a game window) writes its log there as `Game.log`, and keeps the last run's as `Game.previous.log`; lines logged before the project loaded are written to it too. If the old log can't be renamed (another copy of the game has it open), the new lines are added to the end of `Game.log`. Playing inside the editor logs to the Console and the editor's own `Editor.log` instead. |
 | `save_data(name, value)` | Saves `value` as `user_folder()/Saves/<name>.json`, to read back in a later session; returns `False` (with a Console warning) when the file can't be written. `value`: `None`, bools, numbers, `str`, `Vec3`, and lists and dicts with text keys of these; an `Entity` (it only exists while the game plays), infinite numbers and other types raise `ValueError`. The file is written next to the old save and then renamed over it, so a crash never leaves half a save. `name`: 1 to 64 letters, digits, spaces, `-` and `_`, not starting or ending with a space and not a Windows device name (`CON`, `COM1`, ...); others raise `ValueError`. |
 | `load_data(name, default=None)` | The value saved under `name`, or `default` when there is none. A save that can't be read is renamed to `<name>.damaged.json` with a Console warning, and `default` is returned, so a broken save never stops a game. Vectors come back as `Vec3`, numbers as floats. |
 | `has_data(name)` / `delete_data(name)` | Whether a value is saved under `name` / deletes it (`False` when there was none). |

@@ -135,6 +135,12 @@ namespace Bellows {
 			m_StopCallback(stop);
 	}
 
+	void ScriptDebugger::EndSession()
+	{
+		if (ForgeScript::VM* machine = GetMachine())
+			machine->StopDebugging();
+	}
+
 	bool ScriptDebugger::Continue()
 	{
 		ForgeScript::VM* machine = GetMachine();

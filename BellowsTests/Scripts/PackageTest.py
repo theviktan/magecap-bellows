@@ -156,6 +156,17 @@ def check_programs(package: pathlib.Path, scratch: pathlib.Path, failures: Failu
         result = run([game, "--headless", "--width", "320", "--height", "180", "--frames", "30"], export_folder, environment)
         failures.check(result.returncode == 0, "the game exported by the packaged editor did not run")
 
+        # Games log to user_folder()/Logs, keeping the last run's log (the packaged FeatureTest run above
+        # is the same game), and write nothing next to the program.
+        logs = list((scratch / "UserData" / "MageCapBellows" / "Games").glob("*/Logs"))
+        failures.check(len(logs) == 1, f"expected one game log folder in the user data, found {len(logs)}")
+        if len(logs) == 1:
+            game_log = logs[0] / "Game.log"
+            failures.check(game_log.is_file() and "Runtime: playing" in game_log.read_text(encoding="utf-8"),
+                           "Game.log is missing, or lacks the lines logged before it was opened")
+            failures.check((logs[0] / "Game.previous.log").is_file(), "the last run's log was not kept as Game.previous.log")
+        failures.check(not (export_folder / "Game.log").exists(), "the exported game wrote Game.log next to the program")
+
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Package a build and check the package.")

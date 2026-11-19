@@ -33,7 +33,10 @@ namespace {
 		"end\n"                                  // 9
 		"when destroyed\n"                       // 10
 		"\tset my name to \"destroyed\"\n"       // 11
-		"end\n";                                 // 12
+		"end\n"                                  // 12
+		"when game quitting\n"                   // 13
+		"\tset my name to \"quitting\"\n"        // 14
+		"end\n";                                 // 15
 
 	struct DebugSession
 	{
@@ -225,5 +228,27 @@ TEST_CASE("ScriptDebugger keeps its breakpoints across play sessions")
 	session.Start();
 	session.Update();
 	CHECK_FALSE(session.Runtime.IsStopped());
+	CHECK(session.Errors.empty());
+}
+
+TEST_CASE("ScriptDebugger.EndSession lets 'game quitting' run to the end, and keeps the breakpoints")
+{
+	DebugSession session;
+	ScriptDebugger debugger;
+	debugger.Connect(&session.Runtime);
+	debugger.SetBreakpoints(c_Script, { 7, 14 });
+	session.Start();
+	session.Update();
+	REQUIRE(debugger.IsStopped());
+	const uint64_t stops = debugger.GetStopCount();
+
+	// What the editor's Stop does before the scene stops.
+	debugger.EndSession();
+	CHECK_FALSE(debugger.IsStopped());
+	Scripting::EmitGameQuitting();
+	CHECK_FALSE(debugger.IsStopped());
+	CHECK_EQ(debugger.GetStopCount(), stops);
+	CHECK_EQ(session.Stepper.GetName(), std::string("quitting"));
+	CHECK_EQ(debugger.GetBreakpoints(c_Script), std::vector<int> { 7, 14 });
 	CHECK(session.Errors.empty());
 }

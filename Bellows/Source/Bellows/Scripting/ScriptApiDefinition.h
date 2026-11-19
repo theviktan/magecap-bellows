@@ -818,6 +818,8 @@ namespace Bellows::Scripting {
 		api.Function("save_screenshot", [](const std::string& path, int maxWidth) { return SaveScreenshot(path, maxWidth); },
 			"Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; \"\" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()",
 			Arg("path", std::string()), Arg("max_width", 1920));
+		api.Function("log_folder", []() { return GetLogFolder().string(); },
+			"user_folder()/Logs, where a game playing in its own window writes Game.log, and Game.previous.log from its last run (playing inside the editor logs to the editor's Console instead)");
 		api.Function("user_folder", []() { return GetUserFolder().string(); },
 			"The game's own writable folder for saves, screenshots and reports");
 

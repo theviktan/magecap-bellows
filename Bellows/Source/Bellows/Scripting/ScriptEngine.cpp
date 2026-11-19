@@ -73,6 +73,104 @@ namespace Bellows {
 			BW_ERROR("{}: {}", context, message);
 		}
 
+		// The asset path (forward slashes) of a Python file inside the project's assets.
+		std::optional<std::string> AssetPathOf(const std::string& file)
+		{
+			const std::filesystem::path& assets = AssetManager::GetAssetDirectory();
+			const std::filesystem::path path(file);
+			if (assets.empty() || !path.is_absolute())
+				return std::nullopt;
+			const std::filesystem::path relative = path.lexically_normal().lexically_relative(assets.lexically_normal());
+			if (relative.empty() || *relative.begin() == "..")
+				return std::nullopt;
+			return relative.generic_string();
+		}
+
+		// The asset path of a Python file, or its file name when it is outside the assets (the standard
+		// library), so the path never holds a drive letter's ':'.
+		std::string ScriptFileForReport(const std::string& file)
+		{
+			return AssetPathOf(file).value_or(std::filesystem::path(file).filename().string());
+		}
+
+		Scripting::ScriptErrorReport DescribePythonError(const py::error_already_set& exception, const std::string& scriptPath)
+		{
+			Scripting::ScriptErrorReport report;
+			report.Language = "python";
+			report.File = scriptPath;
+			bool foundAssetFrame = false;
+			try
+			{
+				report.Name = py::str(exception.type().attr("__name__"));
+				report.Message = py::str(exception.value());
+
+				auto addFrame = [&](const std::string& filename, int line, const std::string& function)
+				{
+					const std::optional<std::string> assetPath = AssetPathOf(filename);
+					const std::string file = assetPath.value_or(std::filesystem::path(filename).filename().string());
+					report.Stack.push_back(file + ":" + std::to_string(line) + (function.empty() || function == "<module>" ? "" : " in " + function));
+					// The error's place is the innermost call in the project's own scripts.
+					if (!foundAssetFrame && assetPath)
+					{
+						report.File = file;
+						report.Line = line;
+						foundAssetFrame = true;
+					}
+				};
+
+				// A syntax error happens in the file being read, which is not a frame of the traceback.
+				const py::object value = exception.value();
+				if (PyErr_GivenExceptionMatches(exception.type().ptr(), PyExc_SyntaxError) && py::hasattr(value, "filename")
+					&& !value.attr("filename").is_none())
+				{
+					const py::object line = value.attr("lineno");
+					addFrame(py::str(value.attr("filename")), line.is_none() ? 0 : line.cast<int>(), "");
+					report.Message = value.attr("msg").is_none() ? report.Message : std::string(py::str(value.attr("msg")));
+				}
+
+				if (exception.trace())
+				{
+					py::list frames = py::module_::import("traceback").attr("extract_tb")(exception.trace());
+					for (size_t i = frames.size(); i-- > 0; )
+					{
+						const py::object frame = frames[i];
+						const std::string filename = py::str(frame.attr("filename"));
+						// Python's own import machinery: not where anything went wrong.
+						if (filename.rfind("<frozen ", 0) == 0)
+							continue;
+						const py::object line = frame.attr("lineno");
+						addFrame(filename, line.is_none() ? 0 : line.cast<int>(), py::str(frame.attr("name")));
+					}
+				}
+			}
+			catch (const std::exception&)
+			{
+				// Describing the error must never fail its reporting; what is known so far is sent.
+				if (report.Message.empty())
+					report.Message = exception.what();
+			}
+			return report;
+		}
+
+		// Logs a script's error and sends it to the 'script error' event. A Python exception carries its
+		// name, place and stack; any other error is placed at the script it came from.
+		void ReportScriptException(const std::string& context, const std::exception& exception, const std::string& scriptPath)
+		{
+			ReportError(context, exception.what());
+			Scripting::ScriptErrorReport report;
+			if (const auto* python = dynamic_cast<const py::error_already_set*>(&exception))
+			{
+				report = DescribePythonError(*python, scriptPath);
+			}
+			else
+			{
+				report.Message = exception.what();
+				report.File = scriptPath;
+				report.Language = "python";
+			}
+			Scripting::ReportScriptError(report);
+		}
+
 		std::string ModuleNameForPath(const std::string& scriptPath)
 		{
 			std::string name = "bellows_script_";
@@ -187,19 +285,13 @@ namespace Bellows {
 			{
 				instance.Object.attr(method)(std::forward<Args>(args)...);
 			}
-			catch (const py::error_already_set& exception)
-			{
-				instance.ErrorCount++;
-				std::string message = exception.what();
-				ReportError(instance.ClassName + "." + method, message);
-				if (instance.ErrorCount == c_MaxErrorsPerInstance)
-					BW_ERROR("Script '{}' on entity {} raised {} errors and has been disabled", instance.ClassName,
-						static_cast<uint64_t>(uuid), c_MaxErrorsPerInstance);
-			}
 			catch (const std::exception& exception)
 			{
 				instance.ErrorCount++;
-				ReportError(instance.ClassName + "." + method, exception.what());
+				ReportScriptException(instance.ClassName + "." + method, exception, instance.ScriptPath);
+				if (instance.ErrorCount == c_MaxErrorsPerInstance)
+					BW_ERROR("Script '{}' on entity {} raised {} errors and has been disabled", instance.ClassName,
+						static_cast<uint64_t>(uuid), c_MaxErrorsPerInstance);
 			}
 		}
 
@@ -243,7 +335,7 @@ namespace Bellows {
 				}
 				catch (const py::error_already_set& exception)
 				{
-					ReportError("Module '" + name + "' was not reloaded", exception.what());
+					ReportScriptException("Module '" + name + "' was not reloaded", exception, ScriptFileForReport(module.attr("__file__").cast<std::string>()));
 					outFailed = true;
 				}
 			}
@@ -285,7 +377,7 @@ namespace Bellows {
 				}
 				catch (const std::exception& exception)
 				{
-					ReportError("Script '" + path + "' kept its old version", exception.what());
+					ReportScriptException("Script '" + path + "' kept its old version", exception, path);
 					if (previous)
 					{
 						s_Data->Modules[path] = *previous;
@@ -318,7 +410,7 @@ namespace Bellows {
 					}
 					catch (const std::exception& exception)
 					{
-						ReportError("Script '" + path + "' kept its old version", exception.what());
+						ReportScriptException("Script '" + path + "' kept its old version", exception, path);
 						allReloaded = false;
 						continue;
 					}
@@ -417,13 +509,9 @@ namespace Bellows {
 				s_Data->Instances[uuid] = std::move(instance);
 				return true;
 			}
-			catch (const py::error_already_set& exception)
-			{
-				ReportError("Script '" + component.ScriptPath + "' on '" + entity.GetName() + "'", exception.what());
-			}
 			catch (const std::exception& exception)
 			{
-				ReportError("Script '" + component.ScriptPath + "' on '" + entity.GetName() + "'", exception.what());
+				ReportScriptException("Script '" + component.ScriptPath + "' on '" + entity.GetName() + "'", exception, component.ScriptPath);
 			}
 			s_Data->FailedEntities.insert(uuid);
 			return false;
@@ -711,7 +799,7 @@ sys.stderr = _BellowsLogWriter(2)
 		}
 		catch (const std::exception& exception)
 		{
-			ReportError("Reloading '" + scriptPath + "'", exception.what());
+			ReportScriptException("Reloading '" + scriptPath + "'", exception, scriptPath);
 			return false;
 		}
 	}

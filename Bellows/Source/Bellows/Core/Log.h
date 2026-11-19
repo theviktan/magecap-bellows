@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -53,6 +54,13 @@ namespace Bellows {
 		static void Init(const Specification& specification);
 		static void Init();
 		static void Shutdown();
+		// Starts writing to a log file after Init, for programs that only know where it goes once they
+		// have started (a game's log is in its user folder, named after the project). An existing file
+		// at 'path' is first renamed to 'previousPath' (replacing it), so the last run's log survives; if
+		// that fails (another copy of the program has the file open), new lines are added to the end of
+		// 'path' instead. Everything logged since Init is written first. Call it once, at startup, before
+		// other threads log. Returns false when the file cannot be opened.
+		static bool OpenFile(const std::filesystem::path& path, const std::filesystem::path& previousPath);
 		static bool IsInitialized() { return s_CoreLogger != nullptr; }
 
 		static std::shared_ptr<spdlog::logger>& GetCoreLogger();

@@ -559,6 +559,7 @@ class FeatureTest(bellows.Script):
     def test_screenshots(self):
         folder = bellows.user_folder()
         self.check(os.path.isabs(folder) and folder.endswith(os.path.join("Games", "Feature Test")), f"user_folder ({folder})")
+        self.check(bellows.log_folder() == os.path.join(folder, "Logs"), f"log_folder ({bellows.log_folder()})")
         path = bellows.save_screenshot("FeatureTest/shot.png", 320)
         self.check(path == os.path.join(folder, "FeatureTest", "shot.png"), f"save_screenshot returns the full path ({path})")
         with open(path, "rb") as file:
