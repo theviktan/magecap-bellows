@@ -18,6 +18,15 @@ Events raised by one entity (Phase 2's UI events):
 - In MageCap Bellows, events raised by an entity reach its own script first, then each parent's,
   whatever language each script is written in.
 
+Text for players to read, and list helpers:
+- `format_number(x [, decimals])` groups thousands and fixes the decimals, for scores and money:
+  `format_number(1250.5, 2)` is "1,250.50". It never depends on the computer's language settings.
+- `format_time(seconds)` makes a clock for timers: "1:05", and "1:02:03" from an hour on.
+- Text: `pad_start(width [, fill])` and `pad_end(width [, fill])`, counting letters, not bytes:
+  `"7".pad_start(3, "0")` is "007".
+- Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
+  `average()` (the last three give nothing for an empty list).
+
 ## 1.3.0 (2026-11-17)
 
 Error messages:

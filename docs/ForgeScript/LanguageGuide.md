@@ -189,6 +189,16 @@ say text(42) + "!"            # 42!
 
 Text works with every language: `"café".length` is 4.
 
+**Numbers for players to read.** A HUD wants `1,250` and `12.50`, not `1250` and `12.5`:
+
+```forge
+say "Credits: " + format_number(1250)         # Credits: 1,250
+say "Price: $" + format_number(12.5, 2)        # Price: $12.50
+say "Time: " + format_time(65)                 # Time: 1:05 (from an hour on: 1:02:03)
+say "Level " + text(7).pad_start(3, "0")       # Level 007
+say "Name".pad_end(10, ".") + "Score"          # Name......Score
+```
+
 ---
 
 ## 5. Making decisions with `if`
@@ -369,6 +379,9 @@ say length of items             # 2
 | `list.slice(start, end)` | A new list with the items from start to end. |
 | `list.join(separator)` | All items as one text. |
 | `list.sum()` | Total of a list of numbers. |
+| `list.average()`, `list.min()`, `list.max()` | Average, smallest and largest of a list of numbers (nothing when empty). |
+| `list.count(function or value)` | How many items the function says true for, or how many equal the value. |
+| `list.any(function)` / `list.all(function)` | True when the function says true for at least one item / for every item. |
 | `list.map(function)` | New list with the function applied to every item. |
 | `list.filter(function)` | New list with only items where the function says true. |
 | `list.find(function)` | First item where the function says true. |
@@ -382,6 +395,11 @@ say scores.filter(function(s) return s is above 50 end)    # [95, 70]
 set monsters to ["dragon", "rat", "wolf"]
 monsters.sort_by(function(m) return m.length end)
 say monsters                                               # ["rat", "wolf", "dragon"]
+
+set enemy_health to [0, 0, 12]
+if enemy_health.all(function(h) return h is 0 end) then say "You win!" end
+say enemy_health.count(0)                                  # 2
+say scores.average()                                       # 68.333333333333
 ```
 
 Lists are **shared**: `set b to a` makes both names point at the same list. Use `copy(a)` when you need a separate one.
