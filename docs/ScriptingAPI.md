@@ -552,8 +552,16 @@ engine sends these events, which the script handles with `when`:
   | `save screenshot` | `save_screenshot()` |
   | `save screenshot to (path)` | `save_screenshot(path)` |
   | `user folder` | `user_folder()` |
+  | `show (widget)` | `widget.visible = True` |
+  | `hide (widget)` | `widget.visible = False` |
+  | `enable (widget)` | `widget.interactable = True` |
+  | `disable (widget)` | `widget.interactable = False` |
+  | `focus (widget)` | `widget.focus()`, giving back true or false |
 
-  Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works.
+  Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works. The widget
+  phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still
+  ForgeScript's `show` function, which prints the value. A non-entity gets "'hide' needs a UI entity,
+  like: hide find_entity("Pause Menu")".
 
 How values look in ForgeScript:
 
