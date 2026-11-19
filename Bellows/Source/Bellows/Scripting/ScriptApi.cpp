@@ -241,6 +241,11 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<UIImageComponent>("UIImage"),
 			MakeComponentInfo<UILayoutComponent>("UILayout"),
 			MakeComponentInfo<UIScrollComponent>("UIScroll"),
+			MakeComponentInfo<UIButtonComponent>("UIButton"),
+			MakeComponentInfo<UIToggleComponent>("UIToggle"),
+			MakeComponentInfo<UISliderComponent>("UISlider"),
+			MakeComponentInfo<UIDropdownComponent>("UIDropdown"),
+			MakeComponentInfo<UITextInputComponent>("UITextInput"),
 		};
 		return s_Infos;
 	}
@@ -284,6 +289,11 @@ namespace Bellows::Scripting {
 		if (type == typeid(UIImageComponent)) return "UIImage";
 		if (type == typeid(UILayoutComponent)) return "UILayout";
 		if (type == typeid(UIScrollComponent)) return "UIScroll";
+		if (type == typeid(UIButtonComponent)) return "UIButton";
+		if (type == typeid(UIToggleComponent)) return "UIToggle";
+		if (type == typeid(UISliderComponent)) return "UISlider";
+		if (type == typeid(UIDropdownComponent)) return "UIDropdown";
+		if (type == typeid(UITextInputComponent)) return "UITextInput";
 		return "Unknown";
 	}
 

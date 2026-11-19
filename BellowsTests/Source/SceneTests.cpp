@@ -120,6 +120,23 @@ namespace {
 		scroll.ScrollPosition = glm::vec2(30.0f, 0.0f);
 		scroll.WheelSpeed = 90.0f;
 		scroll.ShowScrollbars = false;
+		auto& button = entity.AddComponent<UIButtonComponent>();
+		button.HoverColor = glm::vec4(0.5f, 0.6f, 0.7f, 1.0f);
+		button.DisabledColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.3f);
+		entity.AddComponent<UIToggleComponent>().On = true;
+		auto& slider = entity.AddComponent<UISliderComponent>();
+		slider.Min = -5.0f;
+		slider.Max = 15.0f;
+		slider.Step = 0.5f;
+		slider.Value = 7.5f;
+		auto& dropdown = entity.AddComponent<UIDropdownComponent>();
+		dropdown.Options = { "Low", "Medium", "High \xE2\x98\x85" };
+		dropdown.Selected = 2;
+		auto& textInput = entity.AddComponent<UITextInputComponent>();
+		textInput.Placeholder = "Your name";
+		textInput.MultiLine = true;
+		textInput.Password = true;
+		textInput.MaxLength = 24;
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
 
@@ -319,6 +336,24 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(scroll.ScrollPosition == glm::vec2(30.0f, 0.0f));
 	CHECK(scroll.WheelSpeed == doctest::Approx(90.0f));
 	CHECK_FALSE(scroll.ShowScrollbars);
+	const UIButtonComponent& button = loadedChild.GetComponent<UIButtonComponent>();
+	CHECK(button.HoverColor == glm::vec4(0.5f, 0.6f, 0.7f, 1.0f));
+	CHECK(button.DisabledColor == glm::vec4(0.1f, 0.1f, 0.1f, 0.3f));
+	CHECK(button.NormalColor == UIButtonComponent().NormalColor);
+	CHECK(loadedChild.GetComponent<UIToggleComponent>().On);
+	const UISliderComponent& slider = loadedChild.GetComponent<UISliderComponent>();
+	CHECK(slider.Min == doctest::Approx(-5.0f));
+	CHECK(slider.Max == doctest::Approx(15.0f));
+	CHECK(slider.Step == doctest::Approx(0.5f));
+	CHECK(slider.Value == doctest::Approx(7.5f));
+	const UIDropdownComponent& dropdown = loadedChild.GetComponent<UIDropdownComponent>();
+	CHECK(dropdown.Options == std::vector<std::string> { "Low", "Medium", "High \xE2\x98\x85" });
+	CHECK(dropdown.Selected == 2);
+	const UITextInputComponent& textInput = loadedChild.GetComponent<UITextInputComponent>();
+	CHECK(textInput.Placeholder == "Your name");
+	CHECK(textInput.MultiLine);
+	CHECK(textInput.Password);
+	CHECK(textInput.MaxLength == 24);
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")

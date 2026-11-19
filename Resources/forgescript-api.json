@@ -1663,6 +1663,133 @@
 			]
 		},
 		{
+			"name": "UIButton",
+			"doc": "Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'",
+			"members": [
+				{
+					"name": "normal_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": ""
+				},
+				{
+					"name": "hover_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Under the pointer"
+				},
+				{
+					"name": "pressed_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Held down"
+				},
+				{
+					"name": "disabled_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "When not interactable"
+				}
+			]
+		},
+		{
+			"name": "UIToggle",
+			"doc": "A check box; clicking flips it and raises 'changed' (on, widget)",
+			"members": [
+				{
+					"name": "on",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "UISlider",
+			"doc": "A track with a knob; dragging, clicking or ui_left/ui_right while focused raise 'changed' (value, widget)",
+			"members": [
+				{
+					"name": "min",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "max",
+					"kind": "property",
+					"type": "float",
+					"doc": ""
+				},
+				{
+					"name": "step",
+					"kind": "property",
+					"type": "float",
+					"doc": "Values snap to steps from min; 0 for any value"
+				},
+				{
+					"name": "value",
+					"kind": "property",
+					"type": "float",
+					"doc": "Kept between min and max and snapped to step"
+				}
+			]
+		},
+		{
+			"name": "UIDropdown",
+			"doc": "A button that opens a list of options; picking one raises 'changed' (index, widget), and its Text shows the selection",
+			"members": [
+				{
+					"name": "options",
+					"kind": "property",
+					"type": "list[str]",
+					"doc": "The choices, in order"
+				},
+				{
+					"name": "selected",
+					"kind": "property",
+					"type": "int",
+					"doc": "The selected option's index, or -1 for none"
+				},
+				{
+					"name": "selected_text",
+					"kind": "property",
+					"type": "str",
+					"readonly": true,
+					"doc": "The selected option, or empty"
+				}
+			]
+		},
+		{
+			"name": "UITextInput",
+			"doc": "A field the player types into; its text is the entity's Text. Raises 'changed' (text, widget) as it is edited and 'submitted' (text, widget) on Enter (Ctrl+Enter when multi-line)",
+			"members": [
+				{
+					"name": "placeholder",
+					"kind": "property",
+					"type": "str",
+					"doc": "Shown, dimmed, while the text is empty"
+				},
+				{
+					"name": "multi_line",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Enter starts a new line; Ctrl+Enter submits"
+				},
+				{
+					"name": "password",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Shows a bullet per character, on one line, and can't be copied"
+				},
+				{
+					"name": "max_length",
+					"kind": "property",
+					"type": "int",
+					"doc": "The most characters it takes; 0 for no limit"
+				}
+			]
+		},
+		{
 			"name": "UILayout",
 			"doc": "Places the entity's children that have a UIRect: one under another, side by side, or in a grid",
 			"members": [
@@ -1826,6 +1953,12 @@
 					"kind": "property",
 					"type": "bool",
 					"doc": "Whether the pointer and focus can reach a UI entity and everything under it"
+				},
+				{
+					"name": "value",
+					"kind": "property",
+					"type": "Value",
+					"doc": "A toggle's on/off (true or false), a slider's value, a dropdown's selected index, or a text input's text; setting it raises no 'changed'"
 				},
 				{
 					"name": "focus",

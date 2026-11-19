@@ -289,6 +289,11 @@ class Entity:
         """Whether the pointer and focus can reach a UI entity and everything under it"""
     @interactable.setter
     def interactable(self, value: bool) -> None: ...
+    @property
+    def value(self) -> typing.Any:
+        """A toggle's on/off (true or false), a slider's value, a dropdown's selected index, or a text input's text; setting it raises no 'changed'"""
+    @value.setter
+    def value(self, value: typing.Any) -> None: ...
     def focus(self) -> bool:
         """Gives a UI entity keyboard and gamepad focus; False when it can't take focus (not focusable, hidden, not interactable, or behind a modal canvas)"""
     @property
@@ -351,6 +356,16 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['UIScroll']) -> UIScroll | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['UIButton']) -> UIButton | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UIToggle']) -> UIToggle | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UISlider']) -> UISlider | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UIDropdown']) -> UIDropdown | None: ...
+    @typing.overload
+    def get_component(self, component: typing.Literal['UITextInput']) -> UITextInput | None: ...
+    @typing.overload
     def get_component(self, component: type[_Component]) -> _Component | None: ...
     @typing.overload
     def get_component(self, component: str) -> typing.Any: ...
@@ -398,6 +413,16 @@ class Entity:
     def add_component(self, component: typing.Literal['UILayout']) -> UILayout: ...
     @typing.overload
     def add_component(self, component: typing.Literal['UIScroll']) -> UIScroll: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIButton']) -> UIButton: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIToggle']) -> UIToggle: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UISlider']) -> UISlider: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UIDropdown']) -> UIDropdown: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['UITextInput']) -> UITextInput: ...
     @typing.overload
     def add_component(self, component: type[_Component]) -> _Component: ...
     @typing.overload
@@ -876,6 +901,29 @@ class Transform:
     def up(self) -> Vec3: ...
 
 
+class UIButton:
+    """Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'"""
+    @property
+    def normal_color(self) -> Vec4 | typing.Sequence[float]: ...
+    @normal_color.setter
+    def normal_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def hover_color(self) -> Vec4 | typing.Sequence[float]:
+        """Under the pointer"""
+    @hover_color.setter
+    def hover_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def pressed_color(self) -> Vec4 | typing.Sequence[float]:
+        """Held down"""
+    @pressed_color.setter
+    def pressed_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def disabled_color(self) -> Vec4 | typing.Sequence[float]:
+        """When not interactable"""
+    @disabled_color.setter
+    def disabled_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+
+
 class UICanvas:
     """The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game"""
     @property
@@ -905,6 +953,23 @@ class UICanvas:
     @property
     def scale(self) -> float:
         """Screen pixels per reference pixel at the current screen size"""
+
+
+class UIDropdown:
+    """A button that opens a list of options; picking one raises 'changed' (index, widget), and its Text shows the selection"""
+    @property
+    def options(self) -> list[str]:
+        """The choices, in order"""
+    @options.setter
+    def options(self, value: typing.Sequence[str]) -> None: ...
+    @property
+    def selected(self) -> int:
+        """The selected option's index, or -1 for none"""
+    @selected.setter
+    def selected(self, value: int) -> None: ...
+    @property
+    def selected_text(self) -> str:
+        """The selected option, or empty"""
 
 
 class UIImage:
@@ -1089,6 +1154,60 @@ class UIScroll:
     @property
     def viewport_size(self) -> Vec3:
         """The size of the part in view, in reference pixels, as of the last frame drawn (z unused)"""
+
+
+class UISlider:
+    """A track with a knob; dragging, clicking or ui_left/ui_right while focused raise 'changed' (value, widget)"""
+    @property
+    def min(self) -> float: ...
+    @min.setter
+    def min(self, value: float) -> None: ...
+    @property
+    def max(self) -> float: ...
+    @max.setter
+    def max(self, value: float) -> None: ...
+    @property
+    def step(self) -> float:
+        """Values snap to steps from min; 0 for any value"""
+    @step.setter
+    def step(self, value: float) -> None: ...
+    @property
+    def value(self) -> float:
+        """Kept between min and max and snapped to step"""
+    @value.setter
+    def value(self, value: float) -> None: ...
+
+
+class UITextInput:
+    """A field the player types into; its text is the entity's Text. Raises 'changed' (text, widget) as it is edited and 'submitted' (text, widget) on Enter (Ctrl+Enter when multi-line)"""
+    @property
+    def placeholder(self) -> str:
+        """Shown, dimmed, while the text is empty"""
+    @placeholder.setter
+    def placeholder(self, value: str) -> None: ...
+    @property
+    def multi_line(self) -> bool:
+        """Enter starts a new line; Ctrl+Enter submits"""
+    @multi_line.setter
+    def multi_line(self, value: bool) -> None: ...
+    @property
+    def password(self) -> bool:
+        """Shows a bullet per character, on one line, and can't be copied"""
+    @password.setter
+    def password(self, value: bool) -> None: ...
+    @property
+    def max_length(self) -> int:
+        """The most characters it takes; 0 for no limit"""
+    @max_length.setter
+    def max_length(self, value: int) -> None: ...
+
+
+class UIToggle:
+    """A check box; clicking flips it and raises 'changed' (on, widget)"""
+    @property
+    def on(self) -> bool: ...
+    @on.setter
+    def on(self, value: bool) -> None: ...
 
 
 class Vec2:
