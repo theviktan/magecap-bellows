@@ -1,0 +1,96 @@
+# match picks the first choice that fits a value. Each 'is' works like the 'is' of an 'if'.
+function sound(weapon)
+	match weapon
+	is "sword" then
+		return "slash"
+	is "bow", "crossbow" then          # any one of the values
+		return "twang"
+	otherwise
+		return "thud"
+	end
+end
+say sound("sword")                                      # expect: slash
+say sound("crossbow")                                   # expect: twang
+say sound("hammer")                                     # expect: thud
+
+# Any comparison 'is' allows works: above, below, at least, between, in, empty, not.
+function grade(score)
+	match score
+	is at least 90 then return "A"
+	is between 80 and 89 then return "B"
+	is in [70, 71, 72] then return "C, just"
+	is below 0 then return "impossible"
+	otherwise return "keep going"
+	end
+end
+say grade(95)                                           # expect: A
+say grade(85)                                           # expect: B
+say grade(71)                                           # expect: C, just
+say grade(-1)                                           # expect: impossible
+say grade(50)                                           # expect: keep going
+
+# The value is worked out once, before the choices.
+set calls to 0
+function next_turn()
+	add 1 to calls
+	return calls
+end
+match next_turn()
+is 1 then say "first turn"
+is 2 then say "second turn"
+end
+# expect: first turn
+say calls                                               # expect: 1
+
+# Without 'otherwise', nothing runs when no choice fits.
+match "rain"
+is "sun" then say "hat"
+end
+say "after the match"                                   # expect: after the match
+
+# Lists and text compare by what they hold; 'not' and 'empty' work too.
+set state to "idle"
+match state
+is not "idle" then say "busy"
+is "idle" then say "resting"
+end
+# expect: resting
+match []
+is empty then say "no items"
+end
+# expect: no items
+
+# Matches nest, inside loops and other blocks.
+for each pair in [["red", 1], ["blue", 2]]
+	set color, size to pair
+	match color
+	is "red"
+		match size
+		is 1 then say "small red"
+		otherwise say "big red"
+		end
+	otherwise
+		say "{color} {size}"
+	end
+end
+# expect: small red
+# expect: blue 2
+
+# 'match' is only a word at the start of a match block, so it still works as a name.
+set match to 3
+say match + 1                                           # expect: 4
+function match_score(a, b)
+	return a + b
+end
+say match_score(1, 2)                                   # expect: 3
+
+# 'skip' and 'stop' inside a choice leave the loop as usual.
+set seen to []
+for each n in [1, 2, 3, 4, 5]
+	match n
+	is 2 then skip
+	is 4 then stop
+	end
+	add n to seen
+end
+say seen                                                # expect: [1, 3]

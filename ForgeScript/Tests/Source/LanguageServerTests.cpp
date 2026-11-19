@@ -914,3 +914,21 @@ TEST_CASE("LanguageServerKnowsNamesSetByTakingApart")
 		names.push_back(symbol.Name);
 	CHECK_EQ(names, std::vector<std::string> { "name", "score" });
 }
+
+TEST_CASE("LanguageServerPairsAMatchWithItsEnd")
+{
+	// The match's 'end' must not close the function, or 'after' would look like it's inside it.
+	const std::vector<OutlineItem> outline = FindOutline(
+		"function sound(weapon)\n"
+		"\tmatch weapon\n"
+		"\tis \"sword\" then return \"slash\"\n"
+		"\totherwise return \"thud\"\n"
+		"\tend\n"
+		"end\n"
+		"function after()\n"
+		"end\n");
+	REQUIRE(outline.size() == 2);
+	CHECK(outline[0].Name == "sound");
+	CHECK(outline[0].EndLine == 6);
+	CHECK(outline[1].Name == "after");
+}

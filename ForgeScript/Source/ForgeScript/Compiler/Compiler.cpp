@@ -324,6 +324,9 @@ namespace ForgeScript {
 				case TokenType::End: case TokenType::Else: case TokenType::Otherwise:
 				case TokenType::Catch: case TokenType::Eof:
 					return true;
+				// Inside a match, a line starting with 'is' starts the next choice.
+				case TokenType::Is:
+					return m_MatchDepth > 0;
 				default:
 					return m_FinallyMarkers.count(m_Pos) > 0;
 			}
@@ -377,6 +380,8 @@ namespace ForgeScript {
 				case TokenType::Kind:
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Identifier &&
 						(tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
+				case TokenType::Identifier:
+					return MatchOpensBlock(tokens, i);
 				default:
 					return false;
 			}
@@ -1096,8 +1101,12 @@ namespace ForgeScript {
 					ErrorAtCurrent("This '" + std::string(Current().Lexeme) + "' needs an 'if' before it.");
 				case TokenType::Catch:
 					ErrorAtCurrent("This 'catch' needs a 'try' before it.");
+				case TokenType::Is:
+					ErrorAtCurrent("A line can't start with 'is' here. Each 'is' choice goes inside a 'match', like: match weapon");
 				default:
-					if (TryPhrase(true))
+					if (MatchOpensBlock(m_Tokens, m_Pos))
+						MatchStatement();
+					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else
 						ExpressionStatement();
@@ -1286,6 +1295,69 @@ namespace ForgeScript {
 			ConsumeEnd(opener, "'if'");
 			for (size_t jump : endJumps)
 				PatchJump(jump);
+		}
+
+		// match weapon
+		//     is "sword" then ...
+		//     is "bow", "crossbow" then ...    (any one of the values)
+		//     is above 100 then ...            (any comparison 'is' allows)
+		//     otherwise ...
+		// end
+		// The value is worked out once; the first choice that fits runs, and nothing runs when none fits
+		// and there is no 'otherwise'.
+		void MatchStatement()
+		{
+			Token opener = Current();
+			Advance(); // match
+			BeginScope();
+			Expression();
+			const int subject = AddLocal("");
+			SkipNewlines();
+
+			struct MatchDepth
+			{
+				int& Depth;
+				explicit MatchDepth(int& depth) : Depth(depth) { Depth++; }
+				~MatchDepth() { Depth--; }
+			} inMatch(m_MatchDepth);
+
+			std::vector<size_t> endJumps;
+			while (Check(TokenType::Is))
+			{
+				Advance(); // is
+				std::vector<size_t> fits;
+				while (true)
+				{
+					EmitOp(OpCode::GetLocal);
+					EmitByte(static_cast<uint8_t>(subject));
+					IsTail();
+					if (!Match(TokenType::Comma))
+						break;
+					fits.push_back(EmitJump(OpCode::JumpIfTrue));
+					EmitOp(OpCode::Pop);
+				}
+				for (size_t jump : fits)
+					PatchJump(jump);
+				Match(TokenType::Then);
+
+				size_t skip = EmitJump(OpCode::JumpIfFalse);
+				EmitOp(OpCode::Pop);
+				ScopedBlock();
+				endJumps.push_back(EmitJump(OpCode::Jump));
+				PatchJump(skip);
+				EmitOp(OpCode::Pop);
+			}
+
+			if (Match(TokenType::Otherwise) || Match(TokenType::Else))
+			{
+				ScopedBlock();
+				if (Check(TokenType::Is))
+					ErrorAtCurrent("Put 'otherwise' last in a 'match', after every 'is'.");
+			}
+			ConsumeEnd(opener, "'match'");
+			for (size_t jump : endJumps)
+				PatchJump(jump);
+			EndScope();
 		}
 
 		void PushLoop(size_t continueTarget, bool continueKnown)
@@ -2660,6 +2732,13 @@ namespace ForgeScript {
 		void IsOperator()
 		{
 			Advance(); // is
+			IsTail();
+		}
+
+		// What follows 'is' in a comparison ("above 5", "not empty", "between 1 and 10", "in names", or a
+		// value), with the left side already on the stack. A match's choices use it too.
+		void IsTail()
+		{
 			bool negate = Match(TokenType::Not);
 			OpCode op = OpCode::Equal;
 
@@ -3151,6 +3230,7 @@ namespace ForgeScript {
 		std::unordered_map<std::string, bool> m_NamesMayExist;
 		// The 'finally' tokens that end a try or catch section.
 		std::set<size_t> m_FinallyMarkers;
+		int m_MatchDepth = 0; // open match blocks, where a line starting with 'is' starts the next choice
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.

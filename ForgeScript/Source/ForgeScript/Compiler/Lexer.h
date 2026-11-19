@@ -53,6 +53,12 @@ namespace ForgeScript {
 	// so they agree on where blocks end.
 	bool IfPicksAValue(const std::vector<Token>& tokens, size_t index);
 
+	// Whether the word 'match' at tokens[index] starts a match block ("match weapon", then lines starting
+	// with 'is'). 'match' is not a keyword: it only opens a block at the start of a statement, with a value
+	// after it, when the next line starts with 'is'. No line could start with 'is' before, so any script
+	// that names something 'match' keeps its meaning. The compiler and the tools share this rule.
+	bool MatchOpensBlock(const std::vector<Token>& tokens, size_t index);
+
 	// Turns ForgeScript source code into a list of tokens.
 	// The whole file is tokenized up front so the compiler can look ahead (used for phrases).
 	class Lexer

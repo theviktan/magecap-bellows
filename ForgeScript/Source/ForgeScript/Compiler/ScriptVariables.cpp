@@ -28,6 +28,8 @@ namespace ForgeScript {
 				return previous != TokenType::Wait;
 			case TokenType::Kind:
 				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
+			case TokenType::Identifier:
+				return MatchOpensBlock(tokens, i);
 			default:
 				return false;
 		}

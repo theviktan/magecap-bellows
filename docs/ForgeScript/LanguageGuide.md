@@ -314,6 +314,59 @@ set speed to 8 if is_running otherwise 3
 - It works anywhere a value goes: inside text (`"You are {"fine" if health > 5 otherwise "low"}."`), lists, maps and function calls. For whole blocks of code, use the `if ... then ... end` statement above.
 - On the first line of a block, before its `then` or `do`, an `if` still starts an `if` block, just as it always has: `for each enemy in enemies if enemy.awake then ... end end` checks each enemy. Put a picked value on its own line inside the block instead.
 
+### Choosing by one value with `match`
+
+When you check one value against many choices, `match` saves writing it again in every `else if`:
+
+```forge
+match weapon
+is "sword" then
+	say "Slash!"
+is "bow", "crossbow" then
+	say "Twang!"
+otherwise
+	say "Thud."
+end
+```
+
+Read it as: match the weapon; if it is "sword", slash; if it is "bow" or "crossbow", twang; otherwise, thud. It does exactly what this `if` does:
+
+```forge
+if weapon is "sword" then
+	say "Slash!"
+else if weapon is "bow" or weapon is "crossbow" then
+	say "Twang!"
+otherwise
+	say "Thud."
+end
+```
+
+How it works:
+
+- `match`, then the value, on its own line. Each choice starts a new line with `is`, then the block for it. `then` is optional, as in an `if`, and a short choice fits on one line: `is "sword" then say "Slash!"`.
+- The value is worked out once, before the choices. The first choice that fits runs, and the rest are skipped.
+- Each `is` works like the `is` of an `if`, so every comparison you know works: `is above 100`, `is at least 90`, `is between 80 and 89`, `is in [1, 2, 3]`, `is empty`, `is not "idle"`.
+- Separate values with commas when any one of them should pick the choice: `is "bow", "crossbow"`. Each can be a comparison too: `is below 0, above 100`.
+- `otherwise` comes last and runs when no choice fits. Leave it out and nothing happens then.
+- Like `if weapon is above 100`, a choice that compares text with a number is a mistake. Matching a value that can be either? Put the text choices first, and check the number with `is above` only when it's a number.
+
+`match` is not a reserved word. It only starts a match when it begins a line and the next line starts with `is`. So a variable or function named `match` (`set match to 3`) works as it always has.
+
+A match pairs well with a constant list of states:
+
+```forge
+constant STATES is ["idle", "patrol", "chase"]
+set state to "patrol"
+
+when update with delta
+	match state
+	is "idle" then wait_for_player()
+	is "patrol" then walk_route()
+	is "chase" then run_at_player()
+	end
+end
+```
+
 ---
 
 ## 6. Loops

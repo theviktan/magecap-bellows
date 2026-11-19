@@ -421,6 +421,22 @@ TEST_CASE("ErrorsCarryAStructuredStack")
 		std::string("game.forge:2 in deep\ngame.forge:5\n"));
 }
 
+TEST_CASE("CompileErrorsInMatch")
+{
+	CHECK_CONTAINS(CompileFails("match x\nis 1 then say 1\n").Message, "This 'match' is missing its 'end'.");
+	CHECK_CONTAINS(CompileFails("match x\nis 1 then say 1\notherwise\nsay 2\nis 3 then say 3\nend\n").Message,
+		"Put 'otherwise' last in a 'match', after every 'is'.");
+	CHECK_CONTAINS(CompileFails("is 4 then say 1\n").Message, "Each 'is' choice goes inside a 'match', like: match weapon");
+	// An 'if' left open inside a choice is named, not the match.
+	CHECK_CONTAINS(CompileFails("match x\nis 1 then\nif yes then say 1\nis 2 then say 2\nend\n").Message,
+		"This 'if' is missing its 'end'.");
+	// 'match' opens a block only when the next line starts with 'is': a script's own phrase keeps working.
+	std::vector<ScriptVariable> variables = FindScriptVariables(
+		"function f(x)\n\tmatch x\n\tis 1 then say 1\n\tend\n\tset inside to 2\nend\nset speed to 3\n");
+	REQUIRE(variables.size() == 1);
+	CHECK(variables[0].Name == "speed");
+}
+
 TEST_CASE("CompileErrorsInTakingApart")
 {
 	CHECK_CONTAINS(CompileFails("set a, a to [1, 2]\n").Message, "'a' is named twice");
