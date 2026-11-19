@@ -5,6 +5,7 @@
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/Texture.h"
+#include "Bellows/Text/Font.h"
 
 #include <filesystem>
 #include <string>
@@ -23,6 +24,7 @@ namespace Bellows {
 		Environment,	// .hdr
 		Audio,			// .wav .mp3 .flac .ogg
 		Script,			// .py
+		Font,			// .ttf .otf
 	};
 
 	const char* AssetTypeToString(AssetType type);
@@ -51,6 +53,10 @@ namespace Bellows {
 		static Ref<Material> GetMaterial(const std::string& assetPath);
 		static Ref<Texture2D> GetTexture(const std::string& assetPath, TextureColorSpace colorSpace);
 		static Ref<Environment> GetEnvironment(const std::string& assetPath);
+		// A font with its distance-field atlas. An empty path is the built-in font (Inter, shipped in
+		// Resources/Fonts next to the programs and in exported games). Fonts load without a GPU.
+		static Ref<Font> GetFont(const std::string& assetPath);
+		static std::filesystem::path GetDefaultFontFile();
 
 		// Registers an in-memory material under a path (e.g. materials created by scripts at runtime).
 		static void RegisterMaterial(const std::string& assetPath, const Ref<Material>& material);

@@ -63,6 +63,13 @@ namespace Bellows {
 	// The size LayoutText would give, for sizing boxes to their text.
 	glm::vec2 MeasureText(const Font& font, std::string_view text, const TextLayoutSettings& settings);
 
+	const char* TextAlignmentToString(TextAlignment alignment);
+	TextAlignment TextAlignmentFromString(std::string_view text);	// Unknown text: Left
+	const char* TextVerticalAlignmentToString(TextVerticalAlignment alignment);
+	TextVerticalAlignment TextVerticalAlignmentFromString(std::string_view text);	// Unknown text: Top
+	const char* TextOverflowToString(TextOverflow overflow);
+	TextOverflow TextOverflowFromString(std::string_view text);	// Unknown text: Visible
+
 	// Decodes one UTF-8 character at 'offset' and moves past it; U+FFFD for an invalid sequence.
 	uint32_t DecodeUtf8(std::string_view text, size_t& offset);
 

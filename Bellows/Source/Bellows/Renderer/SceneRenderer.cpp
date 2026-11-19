@@ -212,6 +212,17 @@ namespace Bellows {
 		};
 		m_LineInputLayout = device->createInputLayout(lineAttributes, 2, lineVS);
 
+		nvrhi::ShaderHandle textVS = Renderer::GetShader("Text.vert");
+		const nvrhi::VertexAttributeDesc textAttributes[] = {
+			nvrhi::VertexAttributeDesc().setName("POSITION").setFormat(nvrhi::Format::RGB32_FLOAT).setOffset(offsetof(TextVertex, Position)).setElementStride(sizeof(TextVertex)),
+			nvrhi::VertexAttributeDesc().setName("TEXCOORD").setFormat(nvrhi::Format::RG32_FLOAT).setOffset(offsetof(TextVertex, TexCoord)).setElementStride(sizeof(TextVertex)),
+			nvrhi::VertexAttributeDesc().setName("COLOR").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(TextVertex, Color)).setElementStride(sizeof(TextVertex)),
+			nvrhi::VertexAttributeDesc().setName("OUTLINE_COLOR").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(TextVertex, OutlineColor)).setElementStride(sizeof(TextVertex)),
+			nvrhi::VertexAttributeDesc().setName("OUTLINE_WIDTH").setFormat(nvrhi::Format::R32_FLOAT).setOffset(offsetof(TextVertex, OutlineWidth)).setElementStride(sizeof(TextVertex)),
+			nvrhi::VertexAttributeDesc().setName("ENTITY_ID").setFormat(nvrhi::Format::R32_UINT).setOffset(offsetof(TextVertex, EntityID)).setElementStride(sizeof(TextVertex)),
+		};
+		m_TextInputLayout = device->createInputLayout(textAttributes, 6, textVS);
+
 		auto createMeshPipeline = [&](nvrhi::IShader* vs, nvrhi::IShader* ps, nvrhi::IBindingLayout* passLayout, const nvrhi::FramebufferInfo& info,
 			const nvrhi::RenderState& state)
 		{
@@ -327,13 +338,32 @@ namespace Bellows {
 		shadowSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::ShadowObjectData)));
 		m_ShadowSet = device->createBindingSet(shadowSetDesc, Renderer::GetShadowBindingLayout());
 
+		// Text: blended over the final image, and opaque glyph pixels into the entity ID image. Neither
+		// writes depth, so blocks of text are drawn from far to near.
+		{
+			nvrhi::GraphicsPipelineDesc desc;
+			desc.VS = textVS;
+			desc.PS = Renderer::GetShader("Text.frag");
+			desc.inputLayout = m_TextInputLayout;
+			desc.bindingLayouts = { Renderer::GetTextBindingLayout() };
+			desc.renderState.rasterState.setCullNone().setDepthClipEnable(true);
+			desc.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(nvrhi::ComparisonFunc::LessOrEqual);
+			desc.renderState.blendState.targets[0] = alphaBlend;
+			m_TextPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_LDRFormat).setDepthFormat(c_DepthFormat));
+
+			desc.PS = Renderer::GetShader("TextID.frag");
+			desc.renderState.blendState.targets[0] = nvrhi::BlendState::RenderTarget();
+			m_TextIDPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_EntityIDFormat).setDepthFormat(c_DepthFormat));
+		}
+
 		nvrhi::BindingSetDesc lineSetDesc;
 		lineSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(glm::mat4)));
 		m_LineSet = device->createBindingSet(lineSetDesc, Renderer::GetLineBindingLayout());
 
 		BW_CORE_VERIFY(m_ShadowPipeline && m_PrepassPipeline && m_OpaquePipeline && m_TransparentPipeline && m_SkyboxPipeline
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
-			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline,
+			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
+			&& m_TextPipeline && m_TextIDPipeline,
 			"SceneRenderer: failed to create one or more pipelines");
 	}
 
@@ -401,6 +431,7 @@ namespace Bellows {
 		m_LDRFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_LDRTexture));
 		m_FinalFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_FinalTexture));
 		m_FinalDepthFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_FinalTexture).setDepthAttachment(m_DepthTexture));
+		m_EntityIDDepthFramebuffer = device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_EntityIDTexture).setDepthAttachment(m_DepthTexture));
 	}
 
 	void SceneRenderer::CreateShadowMap()
@@ -532,6 +563,8 @@ namespace Bellows {
 		m_OpaqueDraws.clear();
 		m_TransparentDraws.clear();
 		m_LineVertices.clear();
+		m_TextVertices.clear();
+		m_TextDraws.clear();
 		m_FrameMeshes.clear();
 		m_FrameMaterials.clear();
 		m_SceneBounds = AABB();
@@ -919,6 +952,7 @@ namespace Bellows {
 		RenderTransparent(commandList);
 		RenderBloom(commandList);
 		RenderTonemap(commandList);
+		RenderText(commandList);
 		RenderOverlays(commandList);
 
 		commandList->close();
@@ -1126,6 +1160,119 @@ namespace Bellows {
 		fxaa.Params = glm::vec4(m_Settings.FXAAEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
 		commandList->writeBuffer(m_FXAAConstants, &fxaa, sizeof(fxaa));
 		DrawFullscreen(commandList, m_FXAAPipeline, m_FinalFramebuffer, m_FXAASet, m_ViewportWidth, m_ViewportHeight);
+	}
+
+	void SceneRenderer::SubmitText(const Ref<Font>& font, const TextLayout& layout, const glm::mat4& layoutToWorld, const TextStyle& style,
+		uint32_t entityID, const glm::vec4* clipRect)
+	{
+		if (!font || layout.Quads.empty())
+			return;
+		// The atlas texture is uploaded here, before EndScene opens the frame's command list.
+		GetTextBindingSet(font);
+
+		const float outlineWidth = std::clamp(style.OutlineWidth * font->GetGlyphSize() / font->GetDistanceRange(), 0.0f, 0.49f);
+		TextDraw draw;
+		draw.FontRef = font;
+		draw.FirstVertex = static_cast<uint32_t>(m_TextVertices.size());
+		draw.Distance = glm::length(glm::vec3(layoutToWorld[3]) - m_Camera.Position);
+		for (const TextGlyphQuad& glyph : layout.Quads)
+		{
+			glm::vec2 min = glyph.Min, max = glyph.Max;
+			glm::vec2 uvMin = glyph.UVMin, uvMax = glyph.UVMax;
+			if (clipRect)
+			{
+				// Cut the quad at the clip edges, moving its UVs with it.
+				const glm::vec2 clippedMin = glm::max(min, glm::vec2(clipRect->x, clipRect->y));
+				const glm::vec2 clippedMax = glm::min(max, glm::vec2(clipRect->z, clipRect->w));
+				if (clippedMin.x >= clippedMax.x || clippedMin.y >= clippedMax.y)
+					continue;
+				const glm::vec2 size = max - min;
+				const glm::vec2 uvSize = uvMax - uvMin;
+				const glm::vec2 newUVMin = uvMin + (clippedMin - min) / size * uvSize;
+				const glm::vec2 newUVMax = uvMin + (clippedMax - min) / size * uvSize;
+				min = clippedMin;
+				max = clippedMax;
+				uvMin = newUVMin;
+				uvMax = newUVMax;
+			}
+
+			const auto vertex = [&](float x, float y, float u, float v)
+			{
+				TextVertex result;
+				result.Position = glm::vec3(layoutToWorld * glm::vec4(x, y, 0.0f, 1.0f));
+				result.TexCoord = glm::vec2(u, v);
+				result.Color = style.Color;
+				result.OutlineColor = style.OutlineColor;
+				result.OutlineWidth = outlineWidth;
+				result.EntityID = entityID;
+				m_TextVertices.push_back(result);
+			};
+			vertex(min.x, min.y, uvMin.x, uvMin.y);
+			vertex(max.x, min.y, uvMax.x, uvMin.y);
+			vertex(max.x, max.y, uvMax.x, uvMax.y);
+			vertex(min.x, min.y, uvMin.x, uvMin.y);
+			vertex(max.x, max.y, uvMax.x, uvMax.y);
+			vertex(min.x, max.y, uvMin.x, uvMax.y);
+		}
+		draw.VertexCount = static_cast<uint32_t>(m_TextVertices.size()) - draw.FirstVertex;
+		if (draw.VertexCount > 0)
+			m_TextDraws.push_back(std::move(draw));
+	}
+
+	nvrhi::IBindingSet* SceneRenderer::GetTextBindingSet(const Ref<Font>& font)
+	{
+		auto it = m_TextSets.find(font.get());
+		if (it != m_TextSets.end())
+			return it->second.Set;
+
+		nvrhi::BindingSetDesc desc;
+		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, font->GetAtlasTexture()->GetHandle()));
+		desc.addItem(nvrhi::BindingSetItem::Sampler(1, Renderer::GetLinearClampSampler()));
+		desc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::TextData)));
+		TextBinding binding { font, Renderer::GetDevice()->createBindingSet(desc, Renderer::GetTextBindingLayout()) };
+		return m_TextSets.emplace(font.get(), std::move(binding)).first->second.Set;
+	}
+
+	void SceneRenderer::RenderText(nvrhi::ICommandList* commandList)
+	{
+		if (m_TextDraws.empty())
+			return;
+
+		if (m_TextVertices.size() > m_TextVertexCapacity)
+		{
+			m_TextVertexCapacity = std::max<size_t>(m_TextVertices.size() * 2, 6 * 1024);
+			m_TextVertexBuffer = Renderer::GetDevice()->createBuffer(nvrhi::BufferDesc()
+				.setByteSize(m_TextVertexCapacity * sizeof(TextVertex))
+				.setIsVertexBuffer(true)
+				.setInitialState(nvrhi::ResourceStates::VertexBuffer)
+				.setKeepInitialState(true)
+				.setDebugName("TextVertices"));
+		}
+		commandList->writeBuffer(m_TextVertexBuffer, m_TextVertices.data(), m_TextVertices.size() * sizeof(TextVertex));
+
+		// Without depth writes, nearer text must be drawn last to land on top.
+		std::stable_sort(m_TextDraws.begin(), m_TextDraws.end(), [](const TextDraw& a, const TextDraw& b) { return a.Distance > b.Distance; });
+
+		ShaderInterop::TextData constants;
+		constants.ViewProjection = m_Camera.Projection * m_Camera.View;
+		for (const auto& [pipeline, framebuffer] : { std::pair(m_TextPipeline.Get(), m_FinalDepthFramebuffer.Get()),
+			std::pair(m_TextIDPipeline.Get(), m_EntityIDDepthFramebuffer.Get()) })
+		{
+			for (const TextDraw& draw : m_TextDraws)
+			{
+				nvrhi::GraphicsState state;
+				state.pipeline = pipeline;
+				state.framebuffer = framebuffer;
+				state.viewport.addViewportAndScissorRect(nvrhi::Viewport(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight)));
+				state.bindings = { GetTextBindingSet(draw.FontRef) };
+				state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_TextVertexBuffer).setSlot(0).setOffset(0) };
+				commandList->setGraphicsState(state);
+				constants.Params = glm::vec4(draw.FontRef->GetDistanceRange(), 0.0f, 0.0f, 0.0f);
+				commandList->setPushConstants(&constants, sizeof(constants));
+				commandList->draw(nvrhi::DrawArguments().setVertexCount(draw.VertexCount).setStartVertexLocation(draw.FirstVertex));
+				m_Statistics.DrawCalls++;
+			}
+		}
 	}
 
 	void SceneRenderer::RenderOverlays(nvrhi::ICommandList* commandList)

@@ -3,7 +3,7 @@
 	"Version": 1,
 	"Entities": [
 		{
-			"ID": 9458162180899236820,
+			"ID": 18429143269255727572,
 			"Name": "Ball",
 			"Parent": 0,
 			"Transform": {
@@ -64,7 +64,8 @@
 				"PlayOnStart": false,
 				"Spatial": true,
 				"MinDistance": 1.0,
-				"MaxDistance": 50.0
+				"MaxDistance": 50.0,
+				"Bus": "Effects"
 			}
 		}
 	]

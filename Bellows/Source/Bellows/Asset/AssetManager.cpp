@@ -3,6 +3,7 @@
 
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Core/Platform.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
@@ -17,6 +18,7 @@ namespace Bellows {
 			std::unordered_map<std::string, Ref<Material>> Materials;
 			std::unordered_map<std::string, Ref<Texture2D>> Textures;
 			std::unordered_map<std::string, Ref<Environment>> Environments;
+			std::unordered_map<std::string, Ref<Font>> Fonts;
 			std::unordered_set<std::string> ReportedMissing;
 		};
 
@@ -55,6 +57,7 @@ namespace Bellows {
 			case AssetType::Environment:	return "Environment";
 			case AssetType::Audio:			return "Audio";
 			case AssetType::Script:			return "Script";
+			case AssetType::Font:			return "Font";
 		}
 		return "None";
 	}
@@ -111,6 +114,7 @@ namespace Bellows {
 		if (extension == ".hdr") return AssetType::Environment;
 		if (extension == ".wav" || extension == ".mp3" || extension == ".flac" || extension == ".ogg") return AssetType::Audio;
 		if (extension == ".forge" || extension == ".py") return AssetType::Script;
+		if (extension == ".ttf" || extension == ".otf") return AssetType::Font;
 		return AssetType::None;
 	}
 
@@ -335,9 +339,36 @@ namespace Bellows {
 		return material;
 	}
 
+	std::filesystem::path AssetManager::GetDefaultFontFile()
+	{
+		return Platform::GetExecutableDirectory() / "Resources" / "Fonts" / "Inter" / "Inter-Regular.ttf";
+	}
+
+	Ref<Font> AssetManager::GetFont(const std::string& assetPath)
+	{
+		AssetCache& cache = GetCache();
+		auto it = cache.Fonts.find(assetPath);
+		if (it != cache.Fonts.end())
+			return it->second;
+
+		Ref<Font> font = Font::LoadFromFile(assetPath.empty() ? GetDefaultFontFile() : GetAbsolutePath(assetPath));
+		if (!font)
+		{
+			ReportMissing(assetPath.empty() ? std::string("(built-in font)") : assetPath, "Font");
+			// Fall back to the built-in font, so text stays readable while a font is missing.
+			if (!assetPath.empty())
+				font = GetFont("");
+			if (!font)
+				return nullptr;
+		}
+		cache.Fonts[assetPath] = font;
+		return font;
+	}
+
 	void AssetManager::Invalidate(const std::string& assetPath)
 	{
 		AssetCache& cache = GetCache();
+		cache.Fonts.erase(assetPath);
 		cache.Meshes.erase(assetPath);
 		cache.Materials.erase(assetPath);
 		cache.Environments.erase(assetPath);
@@ -353,6 +384,7 @@ namespace Bellows {
 		cache.Materials.clear();
 		cache.Textures.clear();
 		cache.Environments.clear();
+		cache.Fonts.clear();
 		cache.ReportedMissing.clear();
 	}
 

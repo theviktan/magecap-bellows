@@ -66,6 +66,22 @@ namespace {
 		audio.Loop = true;
 		audio.Bus = "Music";
 		entity.AddComponent<AudioListenerComponent>();
+
+		auto& text = entity.AddComponent<TextComponent>();
+		text.Text = "Hello, w\xC3\xB6rld\nSecond line";
+		text.FontPath = "Fonts/Title.ttf";
+		text.Size = 0.75f;
+		text.Color = glm::vec4(1.0f, 0.5f, 0.25f, 0.8f);
+		text.Alignment = TextAlignment::Right;
+		text.VerticalAlignment = TextVerticalAlignment::Bottom;
+		text.BoxSize = glm::vec2(4.0f, 1.5f);
+		text.Wrap = false;
+		text.Overflow = TextOverflow::Ellipsis;
+		text.LineSpacing = 1.25f;
+		text.OutlineWidth = 0.05f;
+		text.OutlineColor = glm::vec4(0.0f, 0.0f, 0.2f, 1.0f);
+		text.FaceCamera = true;
+		text.Visible = false;
 		entity.AddComponent<PrefabComponent>().PrefabPath = "Prefabs/Hero.bprefab";
 	}
 
@@ -211,6 +227,21 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(std::get<glm::vec3>(script.Fields.at("spawn")) == glm::vec3(1.0f, 2.0f, 3.0f));
 	CHECK(Near(glm::degrees(loadedChild.GetTransform().GetRotationEuler()), { 10.0f, 20.0f, 30.0f }, 1e-3f));
 	CHECK(loadedChild.GetComponent<AudioSourceComponent>().Bus == "Music");
+	const TextComponent& text = loadedChild.GetComponent<TextComponent>();
+	CHECK(text.Text == "Hello, w\xC3\xB6rld\nSecond line");
+	CHECK(text.FontPath == "Fonts/Title.ttf");
+	CHECK(text.Size == doctest::Approx(0.75f));
+	CHECK(text.Color == glm::vec4(1.0f, 0.5f, 0.25f, 0.8f));
+	CHECK(text.Alignment == TextAlignment::Right);
+	CHECK(text.VerticalAlignment == TextVerticalAlignment::Bottom);
+	CHECK(text.BoxSize == glm::vec2(4.0f, 1.5f));
+	CHECK_FALSE(text.Wrap);
+	CHECK(text.Overflow == TextOverflow::Ellipsis);
+	CHECK(text.LineSpacing == doctest::Approx(1.25f));
+	CHECK(text.OutlineWidth == doctest::Approx(0.05f));
+	CHECK(text.OutlineColor == glm::vec4(0.0f, 0.0f, 0.2f, 1.0f));
+	CHECK(text.FaceCamera);
+	CHECK_FALSE(text.Visible);
 }
 
 TEST_CASE("Deserializing rejects malformed scene files")

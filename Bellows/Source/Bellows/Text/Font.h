@@ -25,9 +25,9 @@ namespace Bellows {
 	{
 		// Atlas pixels per em. Text stays sharp at any size; this only sets how fine corners can be.
 		float GlyphSize = 40.0f;
-		// How far the distance field reaches past an outline, in atlas pixels (outlines and soft edges
-		// up to this wide can be drawn from it).
-		float DistanceRange = 4.0f;
+		// How far the distance field reaches across an outline, in atlas pixels. Glyph outlines can be
+		// up to half of it wide: 8 at 40 pixels per em allows 0.1 em.
+		float DistanceRange = 8.0f;
 		// The characters in the atlas. Default: printable ASCII, Latin-1, and common punctuation (quotes,
 		// dashes, the ellipsis, the euro sign).
 		std::vector<CodepointRange> Ranges = DefaultRanges();

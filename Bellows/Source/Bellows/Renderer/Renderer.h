@@ -39,6 +39,7 @@ namespace Bellows {
 		static nvrhi::IBindingLayout* GetPostProcessBindingLayout();	// fullscreen passes
 		static nvrhi::IBindingLayout* GetComputeBindingLayout();		// image-based lighting compute passes
 		static nvrhi::IBindingLayout* GetLineBindingLayout();		// debug lines
+		static nvrhi::IBindingLayout* GetTextBindingLayout();		// text: font atlas, sampler, push constants
 
 		static nvrhi::ISampler* GetLinearClampSampler();
 		static nvrhi::ISampler* GetLinearWrapSampler();

@@ -21,8 +21,10 @@
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/InputNames.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scripting/ScriptApi.h"
+#include "Bellows/Text/TextLayout.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -57,6 +59,28 @@ namespace Bellows::Scripting {
 		{
 			if (!AudioEngine::IsBus(bus))
 				throw ScriptValueError("Unknown audio bus '" + bus + "'. Buses: Master, Music, Effects");
+		}
+
+		// Text settings named in scripts raise ValueError for unknown names.
+		inline TextAlignment RequireTextAlignment(const std::string& name)
+		{
+			if (name != "left" && name != "center" && name != "right")
+				throw ScriptValueError("Unknown text alignment '" + name + "'. Alignments: left, center, right");
+			return TextAlignmentFromString(name);
+		}
+
+		inline TextVerticalAlignment RequireTextVerticalAlignment(const std::string& name)
+		{
+			if (name != "top" && name != "middle" && name != "bottom")
+				throw ScriptValueError("Unknown vertical alignment '" + name + "'. Vertical alignments: top, middle, bottom");
+			return TextVerticalAlignmentFromString(name);
+		}
+
+		inline TextOverflow RequireTextOverflow(const std::string& name)
+		{
+			if (name != "visible" && name != "clip" && name != "ellipsis")
+				throw ScriptValueError("Unknown text overflow '" + name + "'. Overflows: visible, clip, ellipsis");
+			return TextOverflowFromString(name);
 		}
 
 		// Assigns (or clears) one texture slot of a material from an asset path.
@@ -366,6 +390,39 @@ namespace Bellows::Scripting {
 
 		auto audioListener = api.template Class<AudioListenerRef>("AudioListener", "");
 		audioListener.Property("active", [](const AudioListenerRef& r) { return r.Get().Active; }, [](const AudioListenerRef& r, bool v) { r.Get().Active = v; }, "");
+
+		auto text = api.template Class<TextRef>("Text", "Text drawn crisp at any size: in the world (centered on its entity) or, under a UI canvas, on screen");
+		text.Property("text", [](const TextRef& r) { return r.Get().Text; }, [](const TextRef& r, const std::string& v) { r.Get().Text = v; }, "");
+		text.Property("font", [](const TextRef& r) { return r.Get().FontPath; }, [](const TextRef& r, const std::string& v) { r.Get().FontPath = v; },
+			"A .ttf or .otf in the assets; empty for the built-in font (Inter)");
+		text.Property("size", [](const TextRef& r) { return r.Get().Size; }, [](const TextRef& r, float v) { r.Get().Size = std::max(v, 0.0f); },
+			"The height of one em, in meters for world text");
+		text.Property("color", [](const TextRef& r) { return ColorValue { r.Get().Color }; }, [](const TextRef& r, const ColorValue& v) { r.Get().Color = v.Value; }, "");
+		text.Property("alignment", [](const TextRef& r) { return std::string(TextAlignmentToString(r.Get().Alignment)); },
+			[](const TextRef& r, const std::string& v) { r.Get().Alignment = Detail::RequireTextAlignment(v); }, "'left', 'center' or 'right'");
+		text.Property("vertical_alignment", [](const TextRef& r) { return std::string(TextVerticalAlignmentToString(r.Get().VerticalAlignment)); },
+			[](const TextRef& r, const std::string& v) { r.Get().VerticalAlignment = Detail::RequireTextVerticalAlignment(v); }, "'top', 'middle' or 'bottom'");
+		text.Property("box_size", [](const TextRef& r) { return glm::vec3(r.Get().BoxSize, 0.0f); },
+			[](const TextRef& r, const glm::vec3& v) { r.Get().BoxSize = glm::max(glm::vec2(v), glm::vec2(0.0f)); },
+			"The box the text sits in (x width, y height; z unused); 0 sizes it to the text");
+		text.Property("wrap", [](const TextRef& r) { return r.Get().Wrap; }, [](const TextRef& r, bool v) { r.Get().Wrap = v; }, "Wrap lines at the box's width");
+		text.Property("overflow", [](const TextRef& r) { return std::string(TextOverflowToString(r.Get().Overflow)); },
+			[](const TextRef& r, const std::string& v) { r.Get().Overflow = Detail::RequireTextOverflow(v); },
+			"What text past the box does: 'visible', 'clip' or 'ellipsis'");
+		text.Property("line_spacing", [](const TextRef& r) { return r.Get().LineSpacing; },
+			[](const TextRef& r, float v) { r.Get().LineSpacing = std::max(v, 0.0f); }, "A multiple of the font's line height");
+		text.Property("outline_width", [](const TextRef& r) { return r.Get().OutlineWidth; },
+			[](const TextRef& r, float v) { r.Get().OutlineWidth = std::clamp(v, 0.0f, 0.1f); }, "In ems, 0 to 0.1");
+		text.Property("outline_color", [](const TextRef& r) { return ColorValue { r.Get().OutlineColor }; },
+			[](const TextRef& r, const ColorValue& v) { r.Get().OutlineColor = v.Value; }, "");
+		text.Property("face_camera", [](const TextRef& r) { return r.Get().FaceCamera; }, [](const TextRef& r, bool v) { r.Get().FaceCamera = v; },
+			"World text always turned toward the camera");
+		text.Property("visible", [](const TextRef& r) { return r.Get().Visible; }, [](const TextRef& r, bool v) { r.Get().Visible = v; }, "");
+		text.ReadOnly("measured_size", [](const TextRef& r)
+			{
+				const TextLayout* layout = Scene::UpdateTextLayout(r.Get());
+				return glm::vec3(layout ? layout->Size : glm::vec2(0.0f), 0.0f);
+			}, "The size the text takes up (x width, y height), for fitting boxes and backgrounds to it");
 
 		// --- Entity -----------------------------------------------------------
 		auto entity = api.template Class<ScriptEntity>("Entity", "A handle to an entity in a scene");

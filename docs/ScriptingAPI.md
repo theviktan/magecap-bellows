@@ -210,6 +210,30 @@ instance), `cast_shadows`, `visible`.
 * `SkyLight`: `environment` (`.hdr` equirectangular image; empty = procedural sky), `intensity`,
   `rotation` (degrees), `skybox_blur` (0 = sharp background).
 
+### `Text`
+Text drawn in the world, crisp at any distance (multi-channel signed distance field fonts).
+* `text` (UTF-8; `"\n"` starts a new line), `font` (`.ttf` or `.otf`; empty = the built-in Inter),
+  `size` (height of one em in meters; a line is about 1.2 em), `color` (`Vec4`, alpha included).
+* `alignment` (`"left"`, `"center"`, `"right"`), `vertical_alignment` (`"top"`, `"middle"`,
+  `"bottom"`), `line_spacing` (1 = normal).
+* `box_size` (`Vec3`; x is the width and y the height in meters, z is unused; 0 sizes the box to
+  the text), `wrap` (wrap at the box's width), `overflow` (`"visible"`, `"clip"` cuts the text at
+  the box, `"ellipsis"` ends the last line that fits with "...").
+* `outline_width` (in ems, 0 to 0.1; 0 = no outline), `outline_color`.
+* `face_camera` (always turned toward the camera, like a name over a character), `visible`.
+* `measured_size` (read-only `Vec3`): the laid-out text's width and height in meters.
+
+The text is centered on the entity and faces its forward axis (-Z) unless `face_camera` is set; the
+entity's scale and rotation apply. Unknown alignment or overflow names raise `ValueError`. A font
+that can't be loaded logs an error and falls back to the built-in font.
+
+```python
+label = entity.add_component("Text")
+label.text = "Score: 0"
+label.size = 0.4
+label.outline_width = 0.04
+```
+
 ### Physics
 * `RigidBody`: `type` (`"Static"`, `"Dynamic"`, `"Kinematic"`), `mass`, `friction`, `restitution`,
   `linear_damping`, `angular_damping`, `gravity_scale`, `is_trigger`, `lock_rotation_x/y/z`,

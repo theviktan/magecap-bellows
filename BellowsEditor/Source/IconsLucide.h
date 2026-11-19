@@ -120,3 +120,5 @@
 #define ICON_ARROW_DOWN_TO_DOT           "\xee\x91\x8d"	// U+E44D
 #define ICON_ARROW_UP_FROM_DOT           "\xee\x91\x8e"	// U+E44E
 #define ICON_LIST_X                      "\xee\x89\x80"	// U+E240
+#define ICON_TYPE                        "\xee\x86\x98"	// U+E198
+#define ICON_FILE_TYPE                   "\xee\x8c\xa9"	// U+E329

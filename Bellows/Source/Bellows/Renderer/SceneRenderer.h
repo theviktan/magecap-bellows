@@ -6,10 +6,13 @@
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/ShaderInterop.h"
+#include "Bellows/Text/Font.h"
+#include "Bellows/Text/TextLayout.h"
 
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
 
+#include <unordered_map>
 #include <vector>
 
 namespace Bellows {
@@ -112,6 +115,15 @@ namespace Bellows {
 		glm::vec3 AmbientColor { 0.03f, 0.035f, 0.04f };
 	};
 
+	// How a block of text is drawn. Colors are sRGB with alpha; the outline grows the glyphs outward
+	// by OutlineWidth ems (up to half the font's distance range, 0.1 em with the default atlas).
+	struct TextStyle
+	{
+		glm::vec4 Color { 1.0f };
+		glm::vec4 OutlineColor { 0.0f, 0.0f, 0.0f, 1.0f };
+		float OutlineWidth = 0.0f;
+	};
+
 	struct SceneRendererStatistics
 	{
 		uint32_t DrawCalls = 0;
@@ -158,6 +170,13 @@ namespace Bellows {
 		void SubmitWireSphere(const glm::vec3& center, float radius, const glm::vec4& color);
 		void SubmitWireCapsule(const glm::mat4& transform, float radius, float halfHeight, const glm::vec4& color);
 
+		// World text, drawn after tonemapping (its colors show exactly as given), depth-tested against the
+		// scene, and into the entity ID image so it can be picked. 'layoutToWorld' maps the layout's box
+		// space (x right, y down) into the world. A clip rectangle (min xy, max xy in box space) cuts
+		// glyphs at its edges.
+		void SubmitText(const Ref<Font>& font, const TextLayout& layout, const glm::mat4& layoutToWorld, const TextStyle& style,
+			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
+
 		void SetSelectedEntities(const std::vector<uint32_t>& entityIDs);
 
 		// Records and submits all passes.
@@ -189,6 +208,25 @@ namespace Bellows {
 			glm::vec4 Color;
 		};
 
+		struct TextVertex
+		{
+			glm::vec3 Position;
+			glm::vec2 TexCoord;
+			glm::vec4 Color;
+			glm::vec4 OutlineColor;
+			float OutlineWidth;		// In the atlas's distance units (0-0.5)
+			uint32_t EntityID;
+		};
+
+		// One block of text: a run of vertices sharing a font, drawn far to near.
+		struct TextDraw
+		{
+			Ref<Font> FontRef;
+			uint32_t FirstVertex = 0;
+			uint32_t VertexCount = 0;
+			float Distance = 0.0f;
+		};
+
 		void CreatePipelines();
 		void CreateRenderTargets();
 		void CreateShadowMap();
@@ -205,7 +243,9 @@ namespace Bellows {
 		void RenderTransparent(nvrhi::ICommandList* commandList);
 		void RenderBloom(nvrhi::ICommandList* commandList);
 		void RenderTonemap(nvrhi::ICommandList* commandList);
+		void RenderText(nvrhi::ICommandList* commandList);
 		void RenderOverlays(nvrhi::ICommandList* commandList);
+		nvrhi::IBindingSet* GetTextBindingSet(const Ref<Font>& font);
 
 		void DrawFullscreen(nvrhi::ICommandList* commandList, nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* framebuffer,
 			nvrhi::IBindingSet* bindingSet, uint32_t width, uint32_t height);
@@ -235,6 +275,8 @@ namespace Bellows {
 		std::vector<DrawCommand> m_OpaqueDraws;
 		std::vector<DrawCommand> m_TransparentDraws;
 		std::vector<LineVertex> m_LineVertices;
+		std::vector<TextVertex> m_TextVertices;
+		std::vector<TextDraw> m_TextDraws;
 		std::vector<uint32_t> m_SelectedEntities;
 		std::vector<Ref<Mesh>> m_FrameMeshes;			// Keeps submitted meshes alive until the frame is recorded
 		std::vector<Ref<Material>> m_FrameMaterials;
@@ -247,6 +289,7 @@ namespace Bellows {
 		nvrhi::CommandListHandle m_CommandList;
 		nvrhi::InputLayoutHandle m_MeshInputLayout;
 		nvrhi::InputLayoutHandle m_LineInputLayout;
+		nvrhi::InputLayoutHandle m_TextInputLayout;
 
 		// Render targets
 		nvrhi::TextureHandle m_DepthTexture;
@@ -269,6 +312,7 @@ namespace Bellows {
 		nvrhi::FramebufferHandle m_LDRFramebuffer;
 		nvrhi::FramebufferHandle m_FinalFramebuffer;
 		nvrhi::FramebufferHandle m_FinalDepthFramebuffer;
+		nvrhi::FramebufferHandle m_EntityIDDepthFramebuffer;	// Entity IDs + read-only depth (text picking)
 		std::vector<nvrhi::FramebufferHandle> m_BloomFramebuffers;
 		std::vector<nvrhi::FramebufferHandle> m_ShadowFramebuffers;
 
@@ -282,6 +326,7 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_BloomDownsamplePipeline, m_BloomUpsamplePipeline;
 		nvrhi::GraphicsPipelineHandle m_TonemapPipeline, m_FXAAPipeline;
 		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
+		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
 
 		// Constant buffers
 		nvrhi::BufferHandle m_FrameBuffer;
@@ -293,6 +338,8 @@ namespace Bellows {
 		nvrhi::BufferHandle m_GridConstants, m_OutlineConstants;
 		nvrhi::BufferHandle m_LineVertexBuffer;
 		size_t m_LineVertexCapacity = 0;
+		nvrhi::BufferHandle m_TextVertexBuffer;
+		size_t m_TextVertexCapacity = 0;
 
 		// Binding sets
 		nvrhi::BindingSetHandle m_SceneSet;
@@ -303,6 +350,13 @@ namespace Bellows {
 		std::vector<nvrhi::BindingSetHandle> m_BloomDownsampleSets, m_BloomUpsampleSets;
 		nvrhi::BindingSetHandle m_TonemapSet, m_FXAASet;
 		nvrhi::BindingSetHandle m_GridSet, m_OutlineSet;
+		// One per font atlas; the font is kept so its texture outlives the set.
+		struct TextBinding
+		{
+			Ref<Font> FontRef;
+			nvrhi::BindingSetHandle Set;
+		};
+		std::unordered_map<const Font*, TextBinding> m_TextSets;
 	};
 
 }

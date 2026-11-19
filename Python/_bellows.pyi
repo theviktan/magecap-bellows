@@ -322,6 +322,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['AudioListener']) -> AudioListener | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['Text']) -> Text | None: ...
+    @typing.overload
     def get_component(self, component: type[_Component]) -> _Component | None: ...
     @typing.overload
     def get_component(self, component: str) -> typing.Any: ...
@@ -357,6 +359,8 @@ class Entity:
     def add_component(self, component: typing.Literal['AudioSource']) -> AudioSource: ...
     @typing.overload
     def add_component(self, component: typing.Literal['AudioListener']) -> AudioListener: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['Text']) -> Text: ...
     @typing.overload
     def add_component(self, component: type[_Component]) -> _Component: ...
     @typing.overload
@@ -720,6 +724,79 @@ class SpotLight:
         """Degrees"""
     @outer_angle.setter
     def outer_angle(self, value: float) -> None: ...
+
+
+class Text:
+    """Text drawn crisp at any size: in the world (centered on its entity) or, under a UI canvas, on screen"""
+    @property
+    def text(self) -> str: ...
+    @text.setter
+    def text(self, value: str) -> None: ...
+    @property
+    def font(self) -> str:
+        """A .ttf or .otf in the assets; empty for the built-in font (Inter)"""
+    @font.setter
+    def font(self, value: str) -> None: ...
+    @property
+    def size(self) -> float:
+        """The height of one em, in meters for world text"""
+    @size.setter
+    def size(self, value: float) -> None: ...
+    @property
+    def color(self) -> Vec4 | typing.Sequence[float]: ...
+    @color.setter
+    def color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def alignment(self) -> str:
+        """'left', 'center' or 'right'"""
+    @alignment.setter
+    def alignment(self, value: str) -> None: ...
+    @property
+    def vertical_alignment(self) -> str:
+        """'top', 'middle' or 'bottom'"""
+    @vertical_alignment.setter
+    def vertical_alignment(self, value: str) -> None: ...
+    @property
+    def box_size(self) -> Vec3:
+        """The box the text sits in (x width, y height; z unused); 0 sizes it to the text"""
+    @box_size.setter
+    def box_size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def wrap(self) -> bool:
+        """Wrap lines at the box's width"""
+    @wrap.setter
+    def wrap(self, value: bool) -> None: ...
+    @property
+    def overflow(self) -> str:
+        """What text past the box does: 'visible', 'clip' or 'ellipsis'"""
+    @overflow.setter
+    def overflow(self, value: str) -> None: ...
+    @property
+    def line_spacing(self) -> float:
+        """A multiple of the font's line height"""
+    @line_spacing.setter
+    def line_spacing(self, value: float) -> None: ...
+    @property
+    def outline_width(self) -> float:
+        """In ems, 0 to 0.1"""
+    @outline_width.setter
+    def outline_width(self, value: float) -> None: ...
+    @property
+    def outline_color(self) -> Vec4 | typing.Sequence[float]: ...
+    @outline_color.setter
+    def outline_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def face_camera(self) -> bool:
+        """World text always turned toward the camera"""
+    @face_camera.setter
+    def face_camera(self, value: bool) -> None: ...
+    @property
+    def visible(self) -> bool: ...
+    @visible.setter
+    def visible(self, value: bool) -> None: ...
+    @property
+    def measured_size(self) -> Vec3:
+        """The size the text takes up (x width, y height), for fitting boxes and backgrounds to it"""
 
 
 class Transform:

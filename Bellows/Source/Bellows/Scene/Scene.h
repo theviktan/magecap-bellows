@@ -18,6 +18,7 @@ namespace Bellows {
 	class Entity;
 	class PhysicsWorld;
 	class SceneAudio;
+	struct TextComponent;
 
 	struct SceneSettings
 	{
@@ -83,6 +84,8 @@ namespace Bellows {
 
 		// Submits every renderable, light and the environment. Uses 'camera' as the view.
 		// 'submitExtras' runs before the frame is finished (editor overlays, debug lines).
+		// The text's layout, laid out again only when it changed; null when no font could be loaded.
+		static const TextLayout* UpdateTextLayout(TextComponent& text);
 		void OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras = {});
 		// Finds the primary camera entity and builds a RenderCamera for the given aspect ratio.
 		bool GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera);

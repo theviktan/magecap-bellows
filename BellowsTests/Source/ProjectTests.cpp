@@ -168,6 +168,7 @@ class Checker(bellows.Script):
 	const std::filesystem::path scenePath = project->GetAssetDirectory() / project->GetConfig().StartScene;
 	REQUIRE(SceneSerializer::Deserialize(*scene, scenePath));
 	scene->CreateEntity("Checker").AddComponent<ScriptComponent>().ScriptPath = "Scripts/Checker.py";
+	scene->CreateEntity("Title").AddComponent<TextComponent>().Text = "Exported";
 	REQUIRE(SceneSerializer::Serialize(*scene, scenePath));
 
 	ExportOptions options;
@@ -181,6 +182,8 @@ class Checker(bellows.Script):
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Assets" / "Scripts" / "Checker.py"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Shaders" / "PBR.frag.spv"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "ThirdPartyNotices.md"));
+	CHECK(FileSystem::Exists(options.OutputDirectory / "Resources" / "Fonts" / "Inter" / "Inter-Regular.ttf"));
+	CHECK(FileSystem::Exists(options.OutputDirectory / "Resources" / "Fonts" / "Inter" / "OFL.txt"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Python" / "bellows" / "__init__.py"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / ScriptEngine::BundledRuntimeFolder));
 	Project::SetActive(nullptr);

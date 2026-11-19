@@ -220,6 +220,15 @@ speaker = create("Speaker", "Builtin/Cone", IRON, position=(0.0, 0.35, 4.5), sca
 source = speaker.add_component(bellows.AudioSource)
 source.clip, source.spatial, source.volume = "Audio/Chime.wav", True, 0.8
 
+# Text: a title over the PBR showcase and a camera-facing label over the speaker
+title = create("Title", position=(0.0, 3.2, -3.0))
+title_text = title.add_component(bellows.Text)
+title_text.text, title_text.size = "MageCap Bellows", 0.7
+title_text.color, title_text.outline_width = Vec4(1.0, 0.86, 0.55, 1.0), 0.04
+speaker_label = create("Speaker Label", position=(0.0, 1.2, 4.5))
+label_text = speaker_label.add_component(bellows.Text)
+label_text.text, label_text.size, label_text.face_camera = "Speaker", 0.3, True
+
 # The scripting API tests: FeatureTest.forge runs first, then FeatureTest.py checks its result.
 runner = create("Test Runner")
 add_script(runner, "Scripts/FeatureTest.py")
