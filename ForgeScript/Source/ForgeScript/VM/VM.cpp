@@ -2303,6 +2303,9 @@ namespace ForgeScript {
 				}
 				case OpCode::Greater: case OpCode::GreaterEqual: case OpCode::Less: case OpCode::LessEqual:
 				{
+					// "1 < x < 10" compares the first answer (true or false) with 10.
+					if (stack[stack.size() - 2].IsBool() && stack.back().IsNumber())
+						FORGESCRIPT_FAIL(std::string("Cannot compare boolean with number. Only numbers with numbers, or text with text. To check that a value is between two others, write: if x is between 1 and 10"));
 					bool result = false;
 					FORGESCRIPT_CHECK(Compare(task, op, stack[stack.size() - 2], stack.back(), result));
 					stack.pop_back();
@@ -2387,6 +2390,22 @@ namespace ForgeScript {
 						}
 					}
 					stack.back() = Value::FromBool(result);
+					break;
+				}
+				case OpCode::Between:
+				{
+					// Both ends count, and they may come in either order: 5 is between 10 and 1.
+					const Value high = stack.back();
+					const Value low = stack[stack.size() - 2];
+					const Value value = stack[stack.size() - 3];
+					bool swapped = false;
+					FORGESCRIPT_CHECK(Compare(task, OpCode::Greater, low, high, swapped));
+					bool aboveLow = false;
+					bool belowHigh = false;
+					FORGESCRIPT_CHECK(Compare(task, OpCode::GreaterEqual, value, swapped ? high : low, aboveLow));
+					FORGESCRIPT_CHECK(Compare(task, OpCode::LessEqual, value, swapped ? low : high, belowHigh));
+					stack.resize(stack.size() - 2);
+					stack.back() = Value::FromBool(aboveLow && belowHigh);
 					break;
 				}
 				case OpCode::IsEmpty:

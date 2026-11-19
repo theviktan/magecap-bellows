@@ -6,7 +6,9 @@
 #include "ForgeScript/VM/VM.h"
 
 #include <algorithm>
+#include <optional>
 #include <set>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -2110,11 +2112,117 @@ namespace ForgeScript {
 				next.Type != TokenType::And && next.Type != TokenType::Or && next.Type != TokenType::End;
 		}
 
+		// Whether 'is between' here is the range form (x is between 1 and 10) rather than a comparison
+		// with something named 'between', which is what it meant before the range form existed. It is
+		// the range form only where the old meaning could not have been intended: when the low end is a
+		// plain value (a number, text, true, false or nothing, which can never follow a name), or when an
+		// 'and' follows on the same line and nothing called 'between' can exist: no mention of it in this
+		// script, and none in a script it uses without 'as'.
+		bool BetweenIsRange()
+		{
+			if (!CheckWord("between"))
+				return false;
+			const Token& next = Peek(1);
+			if (!CanStartExpression(next))
+				return false;
+
+			// Nothing can follow a name without an operator between them, so this was never a comparison.
+			switch (next.Type)
+			{
+				case TokenType::Number: case TokenType::String: case TokenType::Interpolation:
+				case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No: case TokenType::Nothing:
+					return true;
+				default:
+					break;
+			}
+
+			int depth = 0;
+			bool hasAnd = false;
+			for (size_t i = m_Pos + 1; i < m_Tokens.size() && !hasAnd; i++)
+			{
+				// Text with "{ }" in it: "text{ opens, }text{ closes and reopens, and }text" closes.
+				const TokenType type = m_Tokens[i].Type;
+				const bool afterBrace = !m_Tokens[i].Lexeme.empty() && m_Tokens[i].Lexeme.front() == '}';
+				if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace ||
+					(type == TokenType::Interpolation && !afterBrace))
+					depth++;
+				else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
+					(type == TokenType::String && afterBrace))
+					depth--;
+				if (depth < 0)
+					break;
+				if (depth > 0)
+					continue;
+				if (type == TokenType::And)
+					hasAnd = true;
+				else if (type == TokenType::Newline || type == TokenType::Eof || type == TokenType::Then || type == TokenType::Do ||
+					type == TokenType::Comma || type == TokenType::Or || type == TokenType::Otherwise || type == TokenType::Else)
+					break;
+			}
+			if (!hasAnd)
+				return false;
+
+			// A local or parameter named 'between' is written in this script too, so the scan covers it.
+			if (!m_BetweenMayBeAName.has_value())
+			{
+				std::set<std::string> visited;
+				m_BetweenMayBeAName = MentionsName(m_Tokens, "between", visited);
+			}
+			return !*m_BetweenMayBeAName;
+		}
+
+		// Whether 'name' is written anywhere in these tokens, other than right after 'is' or 'is not',
+		// or in a script they use without 'as' (which brings in its names). A script that can't be found
+		// counts as mentioning it, to be safe.
+		bool MentionsName(const std::vector<Token>& tokens, std::string_view name, std::set<std::string>& visited)
+		{
+			for (size_t i = 0; i < tokens.size(); i++)
+			{
+				const Token& token = tokens[i];
+				if (token.Type == TokenType::Identifier && token.Lexeme == name)
+				{
+					const bool afterIs = i >= 1 && (tokens[i - 1].Type == TokenType::Is ||
+						(tokens[i - 1].Type == TokenType::Not && i >= 2 && tokens[i - 2].Type == TokenType::Is));
+					if (!afterIs)
+						return true;
+				}
+				if (token.Type == TokenType::Use && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::String)
+				{
+					const bool aliased = i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::Identifier && tokens[i + 2].Lexeme == "as";
+					const std::string path = tokens[i + 1].Text;
+					if (aliased || !visited.insert(path).second)
+						continue;
+					std::string resolvedName;
+					std::string source;
+					if (!m_VM.ResolveModuleSource(path, resolvedName, source))
+						return true;
+					Lexer lexer(source);
+					if (MentionsName(lexer.Tokenize(), name, visited))
+						return true;
+				}
+			}
+			return false;
+		}
+
 		void IsOperator()
 		{
 			Advance(); // is
 			bool negate = Match(TokenType::Not);
 			OpCode op = OpCode::Equal;
+
+			if (BetweenIsRange())
+			{
+				Advance(); // between
+				Term();
+				if (!CheckOperator(TokenType::And))
+					ErrorAtCurrent("Expected 'and' between the two ends, like: if x is between 1 and 10");
+				Advance();
+				Term();
+				EmitOp(OpCode::Between);
+				if (negate)
+					EmitOp(OpCode::Not);
+				return;
+			}
 
 			if (MatchWord("above"))
 				op = OpCode::Greater;
@@ -2560,6 +2668,8 @@ namespace ForgeScript {
 		size_t m_ClosingPos = 0;
 		int m_ClosingLine = 0;
 		size_t m_LastCallPos = static_cast<size_t>(-1);
+		// Whether something called 'between' may exist, worked out once when first needed.
+		std::optional<bool> m_BetweenMayBeAName;
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.

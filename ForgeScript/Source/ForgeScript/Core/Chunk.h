@@ -98,6 +98,7 @@ namespace ForgeScript {
 		OnEvent,         // u16 event name            closure ->
 		Trigger,         // u16 event name, u8 argument count
 		Use,             // u16 path constant, u8 bindAll (0 = push module, 1 = copy globals)
+		Between,         //                           value low high -> bool (both ends included, either order)
 	};
 
 	enum class TypeCheck : uint8_t

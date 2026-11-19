@@ -44,6 +44,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Greater | `a is above b`, `a is greater than b`, `a > b` |
 | Less | `a is below b`, `a is less than b`, `a < b` |
 | At least / most | `a is at least b` (`>=`), `a is at most b` (`<=`) |
+| Range | `x is between 1 and 10`, `x is not between 1 and 10` (both ends included, in either order; numbers or text) |
 | Membership | `list contains x`, `x is in list`, `x is not in list` (also maps and text) |
 | Empty | `x is empty`, `x is not empty` |
 | Type | `x is a number` / `text` / `boolean` / `list` / `map` / `function` / `vector` / `object` / `kind`, `x is a Enemy`, `x is an Enemy` |

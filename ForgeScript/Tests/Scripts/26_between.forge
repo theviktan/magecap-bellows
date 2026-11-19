@@ -1,0 +1,45 @@
+# 'x is between low and high' checks a range. Both ends count, in either order.
+set health to 20
+say health is between 1 and 30                          # expect: true
+say health is between 30 and 1                          # expect: true
+say 30 is between 1 and 30                              # expect: true
+say 1 is between 1 and 30                               # expect: true
+say 31 is between 1 and 30                              # expect: false
+say health is not between 1 and 30                      # expect: false
+say -3 is between -5 and 0                              # expect: true
+say 2.5 is between 2 and 3                              # expect: true
+
+# The ends can be any value, and text compares in alphabetical order.
+set low to 10
+set high to 25
+say health is between low and high                      # expect: true
+say health is between (low - 5) and high * 2            # expect: true
+say "m" is between "a" and "z"                          # expect: true
+say "Z" is between "a" and "z"                          # expect: false
+
+# It combines with 'and', 'or', 'not' and the inline 'if'.
+say health is between 1 and 30 and health > 15          # expect: true
+say not health is between 1 and 10                      # expect: true
+say "low" if health is between 1 and 30 otherwise "fine"  # expect: low
+if health is between 1 and 30 then say "Find a potion!" end   # expect: Find a potion!
+
+# The value is worked out only once.
+set rolls to 0
+function roll()
+	add 1 to rolls
+	return 4
+end
+say roll() is between 2 and 5                           # expect: true
+say rolls                                               # expect: 1
+
+# Mistakes have clear messages.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+say problem_of(function() return 5 is between "a" and "z" end)   # expect: Cannot compare number with text. Only numbers with numbers, or text with text.
+say problem_of(function() return 1 < 5 < 10 end)                 # expect: Cannot compare boolean with number. Only numbers with numbers, or text with text. To check that a value is between two others, write: if x is between 1 and 10
