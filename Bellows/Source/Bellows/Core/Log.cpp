@@ -24,6 +24,22 @@ namespace Bellows {
 		using Clock = std::chrono::steady_clock;
 		Clock::time_point s_StartTime = Clock::now();
 
+		constexpr const char* c_FilePattern = "[%T] [%l] %n: %v";
+		bool s_FileOpened = false;
+
+		spdlog::level::level_enum ToSpdlogLevel(LogLevel level)
+		{
+			switch (level)
+			{
+				case LogLevel::Trace:		return spdlog::level::trace;
+				case LogLevel::Info:		return spdlog::level::info;
+				case LogLevel::Warn:		return spdlog::level::warn;
+				case LogLevel::Error:		return spdlog::level::err;
+				case LogLevel::Critical:	return spdlog::level::critical;
+			}
+			return spdlog::level::info;
+		}
+
 		LogLevel ConvertLevel(spdlog::level::level_enum level)
 		{
 			switch (level)
@@ -88,8 +104,9 @@ namespace Bellows {
 			try
 			{
 				auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(specification.LogFilePath, true);
-				fileSink->set_pattern("[%T] [%l] %n: %v");
+				fileSink->set_pattern(c_FilePattern);
 				sharedSinks.push_back(fileSink);
+				s_FileOpened = true;
 			}
 			catch (const spdlog::spdlog_ex& exception)
 			{
@@ -125,6 +142,57 @@ namespace Bellows {
 			s_ClientLogger->flush();
 		s_CoreLogger.reset();
 		s_ClientLogger.reset();
+		s_FileOpened = false;
+	}
+
+	bool Log::OpenFile(const std::filesystem::path& path, const std::filesystem::path& previousPath)
+	{
+		if (!IsInitialized())
+			Init();
+		if (s_FileOpened)
+			return false;
+
+		std::error_code error;
+		std::filesystem::create_directories(path.parent_path(), error);
+		bool kept = false;
+		if (std::filesystem::exists(path, error))
+		{
+			std::filesystem::rename(path, previousPath, error);
+			kept = static_cast<bool>(error);
+		}
+
+		std::shared_ptr<spdlog::sinks::basic_file_sink_mt> fileSink;
+		try
+		{
+			fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), !kept);
+		}
+		catch (const spdlog::spdlog_ex& exception)
+		{
+			BW_CORE_ERROR("Could not open the log file '{}': {}", path.string(), exception.what());
+			return false;
+		}
+		fileSink->set_pattern(c_FilePattern);
+
+		// The lines logged before the file was open, with the times they were logged.
+		const auto systemNow = std::chrono::system_clock::now();
+		const auto steadyNow = Clock::now();
+		for (const LogMessage& entry : GetMessagesSince(0))
+		{
+			const auto loggedAt = s_StartTime + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(entry.TimeSeconds));
+			const auto time = systemNow - std::chrono::duration_cast<std::chrono::system_clock::duration>(steadyNow - loggedAt);
+			const char* name = entry.Source == LogSource::Core ? s_CoreLogger->name().c_str() : s_ClientLogger->name().c_str();
+			spdlog::details::log_msg message(time, spdlog::source_loc(), name, ToSpdlogLevel(entry.Level), entry.Text);
+			fileSink->log(message);
+		}
+		fileSink->flush();
+
+		s_CoreLogger->sinks().insert(s_CoreLogger->sinks().begin(), fileSink);
+		s_ClientLogger->sinks().insert(s_ClientLogger->sinks().begin(), fileSink);
+		s_FileOpened = true;
+		if (kept)
+			BW_CORE_WARN("The last run's log could not be renamed to '{}' (another copy may have it open); adding to '{}'",
+				previousPath.filename().string(), path.filename().string());
+		return true;
 	}
 
 	std::shared_ptr<spdlog::logger>& Log::GetCoreLogger()

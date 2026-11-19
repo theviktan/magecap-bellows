@@ -409,6 +409,12 @@
 			"doc": "Saves what the player sees as a PNG (or JPEG for .jpg) and returns its full path; \"\" names it Screenshots/<scene>-<date>-<time>.png and relative paths are inside user_folder()"
 		},
 		{
+			"name": "log_folder",
+			"params": [],
+			"returns": "str",
+			"doc": "user_folder()/Logs, where a game playing in its own window writes Game.log, and Game.previous.log from its last run (playing inside the editor logs to the editor's Console instead)"
+		},
+		{
 			"name": "user_folder",
 			"params": [],
 			"returns": "str",

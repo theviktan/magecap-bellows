@@ -13,6 +13,7 @@
 #include "Bellows/Core/Application.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 using namespace Bellows;
@@ -21,8 +22,8 @@ int main(int argc, char** argv)
 {
 	const ApplicationCommandLineArgs args = ApplicationCommandLineArgs::FromArgv(argc, argv);
 
+	// The log file opens once the project is known: it goes in the game's user folder (see below).
 	Log::Specification logSpecification;
-	logSpecification.LogFilePath = (Platform::GetExecutableDirectory() / "Game.log").string();
 #ifdef BW_DIST
 	// Shipped games log to Game.log only; headless (automated) runs also print to the console.
 	logSpecification.EnableConsole = args.Has("--headless");
@@ -40,6 +41,11 @@ int main(int argc, char** argv)
 		projectPath = Platform::GetExecutableDirectory();
 
 	Ref<Project> project = Project::Load(projectPath);
+	// user_folder()/Logs is writable even when the game is installed somewhere read-only, and keeps
+	// the last run's log as Game.previous.log for crash reports. Without a project there is no user
+	// folder, so the log goes next to the program.
+	const std::filesystem::path logFolder = project ? Scripting::GetLogFolder() : Platform::GetExecutableDirectory();
+	Log::OpenFile(logFolder / "Game.log", logFolder / "Game.previous.log");
 	if (!project)
 	{
 		BW_CORE_CRITICAL("No project found (looked in '{}')", projectPath.string());
