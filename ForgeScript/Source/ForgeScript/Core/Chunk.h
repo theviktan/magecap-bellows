@@ -103,6 +103,7 @@ namespace ForgeScript {
 		Rethrow,         //                           error where -> (raises the error again from where it happened)
 		NamedArgs,       // u16 list of names         (the next call's last values go to the parameters with these names)
 		SkipIfGiven,     // u8 default index, u16 offset: skips a default's code when the call gave that value
+		Unpack,          // u8 count                  list or vector -> its items, in order (set x, y to ...)
 	};
 
 	enum class TypeCheck : uint8_t

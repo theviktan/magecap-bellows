@@ -420,3 +420,15 @@ TEST_CASE("ErrorsCarryAStructuredStack")
 	CHECK_EQ(Describe(FramesOf("function deep()\n\tfail \"no\"\nend\ntry\n\tdeep()\nfinally\n\tsay 1\nend\n")),
 		std::string("game.forge:2 in deep\ngame.forge:5\n"));
 }
+
+TEST_CASE("CompileErrorsInTakingApart")
+{
+	CHECK_CONTAINS(CompileFails("set a, a to [1, 2]\n").Message, "'a' is named twice");
+	CHECK_CONTAINS(CompileFails("set a, b [1, 2]\n").Message, "Expected 'to' after the names, like: set x, y to position");
+	// A single name is an ordinary 'set', as before.
+	CHECK_CONTAINS(CompileFails("set a 5\n").Message, "Expected 'to' after the name, like: set health to 100");
+	// The Inspector only lists plain values, and still finds the ones after it.
+	std::vector<ScriptVariable> variables = FindScriptVariables("set x, y to [1, 2]\nset speed to 3\n");
+	REQUIRE(variables.size() == 1);
+	CHECK(variables[0].Name == "speed");
+}

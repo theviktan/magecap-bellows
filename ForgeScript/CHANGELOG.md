@@ -27,6 +27,11 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Taking a list apart (ForgeScript Roadmap item 10):
+- `set name, score to entry`: one name per item, exactly; a vector gives x, y (and z). The value
+  is worked out first, so `set a, b to [b, a]` swaps. The names follow the usual rules of `set`.
+  The language server lists each name. Before, a comma after the name was always a mistake.
+
 Naming the values in a call (ForgeScript Roadmap item 9):
 - `attack(goblin, crit: 5)`: values can be named after the ones given in order. A skipped value
   gets its default even when a later one is named. Works for script functions, kinds (and `new`),

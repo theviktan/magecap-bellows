@@ -2953,6 +2953,37 @@ namespace ForgeScript {
 					task->Handlers.push_back(handler);
 					break;
 				}
+				case OpCode::Unpack:
+				{
+					const size_t count = FORGESCRIPT_READ_BYTE();
+					const Value value = stack.back();
+					const bool isList = IsObjectType(value, ObjectType::List);
+					const bool isVector = IsObjectType(value, ObjectType::Vector);
+					if (!isList && !isVector)
+					{
+						FORGESCRIPT_FAIL("Only a list or a vector can be taken apart, like: set x, y to position. This is " +
+							std::string(value.IsNothing() ? "nothing" : "a " + TypeOf(value)) + ".");
+					}
+					if (isVector && count != 2 && count != 3)
+						FORGESCRIPT_FAIL("A vector can be taken apart into 2 names (x, y) or 3 (x, y, z), not " + std::to_string(count) + ".");
+					std::vector<Value> items;
+					if (isList)
+					{
+						items = As<List>(value)->Items;
+					}
+					else
+					{
+						const Vector* vector = As<Vector>(value);
+						items = { Value::FromNumber(vector->X), Value::FromNumber(vector->Y), Value::FromNumber(vector->Z) };
+						items.resize(count);
+					}
+					if (items.size() != count)
+						FORGESCRIPT_FAIL("There are " + std::to_string(count) + " names but the list has " + std::to_string(items.size()) +
+							(items.size() == 1 ? " item." : " items.") + " Give one name for each item.");
+					stack.pop_back();
+					stack.insert(stack.end(), items.begin(), items.end());
+					break;
+				}
 				case OpCode::NamedArgs:
 					task->PendingNames = As<List>(FORGESCRIPT_READ_CONSTANT());
 					break;

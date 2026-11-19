@@ -901,3 +901,12 @@ TEST_CASE("LanguageServerShowsDefaultValues")
 	REQUIRE_FALSE(named.IsNull());
 	CHECK_EQ(named.Get("activeParameter").AsNumber(), 2.0);
 }
+
+TEST_CASE("LanguageServerKnowsNamesSetByTakingApart")
+{
+	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols("set name, score to [\"Ron\", 9]\nsay name\n");
+	std::vector<std::string> names;
+	for (const LanguageServer::Symbol& symbol : symbols)
+		names.push_back(symbol.Name);
+	CHECK_EQ(names, std::vector<std::string> { "name", "score" });
+}

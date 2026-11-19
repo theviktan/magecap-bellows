@@ -17,6 +17,35 @@ namespace ForgeScript {
 
 	namespace {
 
+		// The positions of the names in "set x, y to ...", from the first name; empty when it isn't that.
+		std::vector<size_t> UnpackedNames(const std::vector<Token>& tokens, size_t first)
+		{
+			std::vector<size_t> names;
+			size_t i = first;
+			while (i < tokens.size() && tokens[i].Type == TokenType::Identifier)
+			{
+				names.push_back(i);
+				if (i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Comma)
+				{
+					i += 2;
+					continue;
+				}
+				if (names.size() >= 2 && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::To)
+					return names;
+				break;
+			}
+			return {};
+		}
+
+		// The words of a line from 'start', for a symbol's signature.
+		std::string LineText(const std::vector<Token>& tokens, size_t start)
+		{
+			std::string text;
+			for (size_t j = start; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof && text.size() < 60; j++)
+				text += (text.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
+			return text;
+		}
+
 		// JSON-RPC and LSP error codes.
 		constexpr int c_ParseError = -32700;
 		constexpr int c_InvalidRequest = -32600;
@@ -513,6 +542,16 @@ namespace ForgeScript {
 					for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof && value.size() < 60; j++)
 						value += (value.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
 					add(Kind::Variable, name, std::string(name.Lexeme), "set " + std::string(name.Lexeme) + " to " + value, docAbove(token.Line), owner);
+				}
+			}
+			else if (token.Type == TokenType::Set && !UnpackedNames(tokens, i + 1).empty())
+			{
+				// set x, y to ...: each name is defined by its first 'set'.
+				for (size_t nameIndex : UnpackedNames(tokens, i + 1))
+				{
+					const Token& name = tokens[nameIndex];
+					if (variables.insert(owner + "." + std::string(name.Lexeme)).second)
+						add(Kind::Variable, name, std::string(name.Lexeme), "set " + std::string(name.Lexeme) + " from " + LineText(tokens, i), docAbove(token.Line), owner);
 				}
 			}
 			else if (token.Type == TokenType::Set && i + 3 < tokens.size() && tokens[i + 1].Type == TokenType::My && tokens[i + 2].Type == TokenType::Identifier && !owner.empty())
@@ -1643,6 +1682,15 @@ namespace ForgeScript {
 				if (variables.insert({ parent, std::string(next->Lexeme) }).second)
 					add(Kind::Variable, std::string(next->Lexeme), "set " + std::string(next->Lexeme) + " to " + lineText(i + 3), token, *next,
 						static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && token.Type == TokenType::Set && !UnpackedNames(tokens, i + 1).empty())
+			{
+				for (size_t nameIndex : UnpackedNames(tokens, i + 1))
+				{
+					const Token& name = tokens[nameIndex];
+					if (variables.insert({ parent, std::string(name.Lexeme) }).second)
+						add(Kind::Variable, std::string(name.Lexeme), lineText(i), token, name, static_cast<int>(name.Lexeme.size()), parent);
+				}
 			}
 			else if (listed && !inKind && token.Type == TokenType::Constant && next && next->Type == TokenType::Identifier)
 			{
