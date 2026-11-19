@@ -56,7 +56,7 @@ namespace ForgeScript {
 				Keyword("function", "function name(a, b) ... end", "Defines a function. Without a name it makes a function value: function(x) return x * 2 end."),
 				Keyword("if", "if condition then ... else ... end", "Runs a block only when the condition is true. After a value it picks one of two: \"big\" if x > 3 otherwise \"small\"."),
 				Keyword("in", "for each x in list, x is in list", "Names the list a loop goes through, or tests membership."),
-				Keyword("is", "a is b, x is above 3, x is a number", "Compares values. Lists and maps are equal when they hold the same items."),
+				Keyword("is", "a is b, x is above 3, x is between 1 and 10, x is a number", "Compares values. Lists and maps are equal when they hold the same items. 'between' includes both ends, in either order."),
 				Keyword("kind", "kind Enemy ... end", "Defines a kind of object, with fields and functions; make one with new Enemy()."),
 				Keyword("multiply", "multiply target by n", "Multiplies a variable by a number and keeps the result in it."),
 				Keyword("my", "my health", "A field of the object or entity this script belongs to; the same as self.health."),

@@ -236,6 +236,7 @@ if health is 0 then say "Game over" end
 | `a is below b` / `a is less than b` | `<` |
 | `a is at least b` | `>=` |
 | `a is at most b` | `<=` |
+| `a is between 1 and 10` | from 1 to 10, both ends included |
 | `a is equal to b` | equal |
 | `a is empty` | text, list or map with nothing in it (or nothing itself) |
 | `a is in list` / `list contains a` | membership |
@@ -253,6 +254,23 @@ if not is_alive then say "Respawning..." end
 ```
 
 `and` and `or` stop early: in `a and b`, if `a` is false, `b` is never checked.
+
+### Checking a range
+
+To check that a value lies between two others, say so:
+
+```forge
+if health is between 1 and 30 then say "Find a potion!" end
+if level is not between min_level and max_level then say "Wrong area." end
+set grade to "pass" if score is between 50 and 100 otherwise "fail"
+```
+
+- Both ends count: `10 is between 1 and 10` is true.
+- The ends can come in either order: `5 is between 10 and 1` is true too.
+- It works for text in alphabetical order: `"m" is between "a" and "z"`.
+- Each value is worked out once, so `roll_dice() is between 2 and 5` rolls once.
+- Python lets you write `1 < x < 10`. ForgeScript doesn't: that compares `1 < x` (true or false) with 10, and the error tells you to write `x is between 1 and 10` instead.
+- If your script (or one it brings in with `use`) has its own variable named `between`, `x is between low and high` still compares `x` with that variable, as it did before this form existed. A plain number or text after `between` (`x is between 1 and 10`) is always the range form.
 
 `or` is also handy for default values: `set name to saved_name or "Player"` gives "Player" when `saved_name` is nothing.
 

@@ -27,6 +27,12 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Checking a range (ForgeScript Roadmap item 5):
+- `if x is between 1 and 10`, and `is not between`. Both ends count, in either order, for numbers or
+  text, and the value is worked out once. `between` is not a reserved word: where a script has its
+  own `between`, `x is between low and high` keeps its old meaning.
+- `1 < x < 10` still fails, but its message now says to write `x is between 1 and 10`.
+
 Picking one of two values (ForgeScript Roadmap item 4):
 - `set size to "big" if x > 3 otherwise "small"`. Only the picked value runs, so
   `target.name if target otherwise "no one"` is safe. It binds looser than `or` and chains in

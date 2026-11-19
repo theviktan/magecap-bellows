@@ -18,6 +18,16 @@ namespace {
 		return error;
 	}
 
+	// What a script prints when it runs.
+	std::string Output(const std::string& source)
+	{
+		VM vm;
+		std::string output;
+		vm.SetPrintHandler([&output](const std::string& text) { output += text + "\n"; });
+		vm.RunInModule(vm.CreateModule("test"), source, "test.forge");
+		return output;
+	}
+
 	void CompilesFine(const std::string& source)
 	{
 		VM vm;
@@ -263,4 +273,25 @@ TEST_CASE("InlineIfDoesNotHideLaterScriptVariables")
 		"set speed to 3\n");
 	REQUIRE(variables.size() == 1);
 	CHECK(variables[0].Name == "speed");
+}
+
+TEST_CASE("CompileErrorsInBetween")
+{
+	CHECK_CONTAINS(CompileFails("say 5 is between 1\n").Message, "Expected 'and' between the two ends");
+	CHECK_CONTAINS(CompileFails("say 5 is between 1 or 2\n").Message, "Expected 'and' between the two ends");
+	CHECK_CONTAINS(CompileFails("say 5 is between 1 and\n").Message, "Expected a value");
+}
+
+TEST_CASE("BetweenKeepsItsOldMeaningForAVariableNamedBetween")
+{
+	// Before the range form, 'x is between ...' compared x with something named 'between'.
+	// Where that may be what the script means, it still does.
+	CHECK_EQ(Output("set between to 3\nset x to 3\nsay x is between\nsay x is between and yes\n"), std::string("true\ntrue\n"));
+	CHECK_EQ(Output("set between to 3\nset x to 2\nsay x is between - 1 and yes\n"), std::string("true\n"));
+	CHECK_EQ(Output("function between(a)\n\treturn a\nend\nsay 4 is between(4) and yes\n"), std::string("true\n"));
+	CHECK_EQ(Output("set between to [1, 2]\nsay 2 is between[1] and yes\n"), std::string("false\n"));
+	// A plain number or text after 'between' could never follow a name, so it is always a range.
+	CHECK_EQ(Output("set between to 3\nsay 5 is between 1 and 10\n"), std::string("true\n"));
+	// With no 'between' anywhere, a low end starting with '-', '(' or '[' is a range too.
+	CHECK_EQ(Output("say -3 is between -5 and 0\nsay 5 is between (1 + 1) and [9][1]\n"), std::string("true\ntrue\n"));
 }
