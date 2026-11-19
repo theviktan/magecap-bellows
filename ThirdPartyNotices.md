@@ -22,7 +22,8 @@ Exported games include the runtime libraries marked with *.
 | [ImGuiColorTextEdit](https://github.com/goossens/ImGuiColorTextEdit) | master | Script Editor code editing widget | MIT |
 | [spdlog](https://github.com/gabime/spdlog) * | 1.17.0 | Logging | MIT |
 | [cgltf](https://github.com/jkuhlmann/cgltf) * | 1.15 | glTF loading | MIT |
-| [stb](https://github.com/nothings/stb) * | master | Image loading and writing | MIT / Public domain |
+| [stb](https://github.com/nothings/stb) * | master | Image loading and writing; font outlines and kerning (stb_truetype), atlas packing (stb_rect_pack) | MIT / Public domain |
+| [msdfgen](https://github.com/Chlumsky/msdfgen) * | 1.9.2 (core only) | Multi-channel signed distance fields for crisp text | MIT |
 | [tinyexr](https://github.com/syoyo/tinyexr) * | 3.4.0 | OpenEXR image loading | BSD-3-Clause (includes OpenEXR code, BSD-3-Clause) |
 | [nlohmann/json](https://github.com/nlohmann/json) * | 3.12.0 | Scene, prefab and project files | MIT |
 | [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | master | Native file dialogs in the editor | WTFPL / public domain |

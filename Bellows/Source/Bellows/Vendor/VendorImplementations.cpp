@@ -20,3 +20,11 @@
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio.h>
+
+// Glyph outlines, kerning and atlas packing for game text (Text/Font.cpp); Dear ImGui keeps its own
+// private copies. The packer comes first, or stb_truetype declares a stand-in for it.
+#define STB_RECT_PACK_IMPLEMENTATION
+#include <stb_rect_pack.h>
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include <stb_truetype.h>

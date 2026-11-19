@@ -70,3 +70,7 @@
 	path = vendor/tinyexr
 	url = https://github.com/syoyo/tinyexr
 	shallow = true
+[submodule "vendor/msdfgen"]
+	path = vendor/msdfgen
+	url = https://github.com/Chlumsky/msdfgen
+	shallow = true

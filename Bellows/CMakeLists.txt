@@ -28,6 +28,7 @@ target_link_libraries(Bellows
 		Jolt
 		pybind11::embed
 		ForgeScript
+		BellowsMsdfgen
 		Threads::Threads
 		${CMAKE_DL_LIBS})
 
