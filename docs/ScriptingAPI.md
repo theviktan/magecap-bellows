@@ -188,6 +188,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `translate(delta)`, `rotate(degrees)`, `look_at(target, up=Vec3(0,1,0))` | Movement helpers (`rotate` is in local space). |
 | `transform` | The `Transform` component. |
 | `add_component(c)`, `get_component(c)`, `has_component(c)`, `remove_component(c)`, `components` | `c` is a component class (`bellows.RigidBody`) or name (`"RigidBody"`). `add_component` returns the component (existing or new); `get_component` returns `None` when missing. |
+| `text`, `visible`, `interactable`, `focus()` | Everyday UI shortcuts: `text` is its `Text` component's text; `visible` is its `UIRect`'s (or `UICanvas`'s) visibility; `interactable` is its `UIRect`'s; `focus()` gives it keyboard and gamepad focus and returns `False` when it can't take it. An entity without the component they need raises `RuntimeError` naming the entity. |
 | `script` | The running script instance (play mode), or `None`. |
 
 ## Components

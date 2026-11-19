@@ -1804,6 +1804,31 @@
 					"doc": ""
 				},
 				{
+					"name": "text",
+					"kind": "property",
+					"type": "str",
+					"doc": "Its Text component's text (a label, a button's caption, world text)"
+				},
+				{
+					"name": "visible",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Whether a UI entity (its UIRect, or its UICanvas) is shown; hiding it hides everything under it"
+				},
+				{
+					"name": "interactable",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Whether the pointer and focus can reach a UI entity and everything under it"
+				},
+				{
+					"name": "focus",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": "Gives a UI entity keyboard and gamepad focus; False when it can't take focus (not focusable, hidden, not interactable, or behind a modal canvas)"
+				},
+				{
 					"name": "forward",
 					"kind": "property",
 					"type": "Vec3",

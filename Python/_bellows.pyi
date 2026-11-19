@@ -275,6 +275,23 @@ class Entity:
     @scale.setter
     def scale(self, value: Vec3 | typing.Sequence[float]) -> None: ...
     @property
+    def text(self) -> str:
+        """Its Text component's text (a label, a button's caption, world text)"""
+    @text.setter
+    def text(self, value: str) -> None: ...
+    @property
+    def visible(self) -> bool:
+        """Whether a UI entity (its UIRect, or its UICanvas) is shown; hiding it hides everything under it"""
+    @visible.setter
+    def visible(self, value: bool) -> None: ...
+    @property
+    def interactable(self) -> bool:
+        """Whether the pointer and focus can reach a UI entity and everything under it"""
+    @interactable.setter
+    def interactable(self, value: bool) -> None: ...
+    def focus(self) -> bool:
+        """Gives a UI entity keyboard and gamepad focus; False when it can't take focus (not focusable, hidden, not interactable, or behind a modal canvas)"""
+    @property
     def forward(self) -> Vec3: ...
     @property
     def right(self) -> Vec3: ...

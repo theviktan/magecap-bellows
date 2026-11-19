@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -123,6 +124,29 @@ namespace Bellows::Scripting {
 		inline std::vector<float> ToList(const glm::vec4& value)
 		{
 			return { value.x, value.y, value.z, value.w };
+		}
+
+		// The everyday UI properties on Entity (text, visible, interactable, focus) work on the component
+		// that carries them, and say which entity lacks it otherwise.
+		template<typename T>
+		T& RequireUIComponent(const ScriptEntity& handle, const char* property, const char* needs)
+		{
+			Entity entity = handle.Resolve();
+			T* component = entity.TryGetComponent<T>();
+			if (!component)
+				throw std::runtime_error("Entity '" + entity.GetName() + "' has no " + needs + " for '" + property + "'");
+			return *component;
+		}
+
+		// A UI entity's own visibility: its UIRect's, or its UICanvas's when it is a canvas.
+		inline bool& RequireUIVisible(const ScriptEntity& handle)
+		{
+			Entity entity = handle.Resolve();
+			if (auto* rect = entity.TryGetComponent<UIRectComponent>())
+				return rect->Visible;
+			if (auto* canvas = entity.TryGetComponent<UICanvasComponent>())
+				return canvas->Visible;
+			throw std::runtime_error("Entity '" + entity.GetName() + "' has no UIRect or UICanvas for 'visible'");
 		}
 
 		// Script vectors are 3D; UI positions and sizes use x and y.
@@ -604,6 +628,21 @@ namespace Bellows::Scripting {
 			"Local rotation as Euler angles in degrees");
 		entity.Property("scale", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TransformComponent>().Scale; },
 			[](const ScriptEntity& e, const glm::vec3& v) { e.Resolve().GetComponent<TransformComponent>().Scale = v; }, "");
+		entity.Property("text", [](const ScriptEntity& e) { return Detail::RequireUIComponent<TextComponent>(e, "text", "Text").Text; },
+			[](const ScriptEntity& e, const std::string& v) { Detail::RequireUIComponent<TextComponent>(e, "text", "Text").Text = v; },
+			"Its Text component's text (a label, a button's caption, world text)");
+		entity.Property("visible", [](const ScriptEntity& e) { return Detail::RequireUIVisible(e); },
+			[](const ScriptEntity& e, bool v) { Detail::RequireUIVisible(e) = v; },
+			"Whether a UI entity (its UIRect, or its UICanvas) is shown; hiding it hides everything under it");
+		entity.Property("interactable", [](const ScriptEntity& e) { return Detail::RequireUIComponent<UIRectComponent>(e, "interactable", "UIRect").Interactable; },
+			[](const ScriptEntity& e, bool v) { Detail::RequireUIComponent<UIRectComponent>(e, "interactable", "UIRect").Interactable = v; },
+			"Whether the pointer and focus can reach a UI entity and everything under it");
+		entity.Method("focus", [](const ScriptEntity& e)
+			{
+				Detail::RequireUIComponent<UIRectComponent>(e, "focus", "UIRect");
+				Entity resolved = e.Resolve();
+				return resolved.GetScene()->SetUIFocus(resolved);
+			}, "Gives a UI entity keyboard and gamepad focus; False when it can't take focus (not focusable, hidden, not interactable, or behind a modal canvas)");
 		entity.ReadOnly("forward", [](const ScriptEntity& e) { Entity resolved = e.Resolve(); return glm::normalize(-glm::vec3(resolved.GetScene()->GetWorldTransform(resolved)[2])); }, "");
 		entity.ReadOnly("right", [](const ScriptEntity& e) { Entity resolved = e.Resolve(); return glm::normalize(glm::vec3(resolved.GetScene()->GetWorldTransform(resolved)[0])); }, "");
 		entity.ReadOnly("up", [](const ScriptEntity& e) { Entity resolved = e.Resolve(); return glm::normalize(glm::vec3(resolved.GetScene()->GetWorldTransform(resolved)[1])); }, "");
