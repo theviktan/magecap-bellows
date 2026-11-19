@@ -27,6 +27,13 @@ Text for players to read, and list helpers:
 - Lists: `count(function or value)`, `any(function)`, `all(function)`, `min()`, `max()` and
   `average()` (the last three give nothing for an empty list).
 
+Long text (ForgeScript Roadmap item 6):
+- `"""` ... `"""` for text over several lines, with `"` inside and no escapes. The indentation all
+  its lines share is removed, as are the line break after the opening quotes and a last line holding
+  only the closing ones. `{ }` and escapes work as in other text. Before, `"""` was always a mistake,
+  so no script changes meaning.
+- The VS Code extension (1.2.0) colors long text.
+
 Checking a range (ForgeScript Roadmap item 5):
 - `if x is between 1 and 10`, and `is not between`. Both ends count, in either order, for numbers or
   text, and the value is worked out once. `between` is not a reserved word: where a script has its

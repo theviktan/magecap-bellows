@@ -2,7 +2,7 @@
 	"name": "forgescript",
 	"displayName": "ForgeScript",
 	"description": "Syntax highlighting for the ForgeScript scripting language (.forge files).",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"publisher": "magecap-games",
 	"icon": "icon.png",
 	"engines": { "vscode": "^1.80.0" },

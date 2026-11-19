@@ -295,3 +295,17 @@ TEST_CASE("BetweenKeepsItsOldMeaningForAVariableNamedBetween")
 	// With no 'between' anywhere, a low end starting with '-', '(' or '[' is a range too.
 	CHECK_EQ(Output("say -3 is between -5 and 0\nsay 5 is between (1 + 1) and [9][1]\n"), std::string("true\ntrue\n"));
 }
+
+TEST_CASE("LongTextWorksWithTheOtherForms")
+{
+	// The inline if and 'between' look at text tokens; long text with "{ }" must read the same.
+	CHECK_EQ(Output("say \"\"\"{\"a\" if yes otherwise \"b\"}\"\"\" if yes otherwise \"c\"\n"), std::string("a\n"));
+	CHECK_EQ(Output("say \"\"\"{5}\"\"\".length is between 1 and 2\n"), std::string("true\n"));
+	// The Inspector's scan still finds variables after long text, and long text counts as plain text.
+	std::vector<ScriptVariable> variables = FindScriptVariables("set intro to \"\"\"\n\tHello\n\t\"\"\"\nset speed to 3\n");
+	REQUIRE(variables.size() == 2);
+	CHECK(variables[0].Name == "intro");
+	CHECK_EQ(variables[0].Text, std::string("Hello"));
+	CHECK(variables[1].Name == "speed");
+	CHECK_CONTAINS(CompileFails("say \"\"\"open\n").Message, "missing its closing \"\"\" quotes");
+}

@@ -349,21 +349,22 @@ namespace ForgeScript {
 			case '[': OpenBracket(); return MakeToken(TokenType::LeftBracket);
 			case ']': CloseBracket(); return MakeToken(TokenType::RightBracket);
 			case '{':
-				if (!m_InterpolationDepth.empty())
-					m_InterpolationDepth.back()++;
+				if (!m_Interpolations.empty())
+					m_Interpolations.back().Depth++;
 				OpenBracket();
 				return MakeToken(TokenType::LeftBrace);
 			case '}':
-				if (!m_InterpolationDepth.empty())
+				if (!m_Interpolations.empty())
 				{
-					if (m_InterpolationDepth.back() == 0)
+					if (m_Interpolations.back().Depth == 0)
 					{
 						// This brace closes "{expression}" inside text, so continue reading the text.
-						m_InterpolationDepth.pop_back();
+						const std::optional<LongText> longText = std::move(m_Interpolations.back().Long);
+						m_Interpolations.pop_back();
 						CloseBracket();
-						return LexString();
+						return LexString(longText ? &*longText : nullptr);
 					}
-					m_InterpolationDepth.back()--;
+					m_Interpolations.back().Depth--;
 				}
 				CloseBracket();
 				return MakeToken(TokenType::RightBrace);
@@ -383,7 +384,14 @@ namespace ForgeScript {
 				return MakeError("'!' is not used in ForgeScript. Use 'not' instead, or '!=' for 'is not'.");
 			case '<': return MakeToken(Match('=') ? TokenType::LessEqual : TokenType::Less);
 			case '>': return MakeToken(Match('=') ? TokenType::GreaterEqual : TokenType::Greater);
-			case '"': return LexString();
+			case '"':
+				if (Peek() == '"' && Peek(1) == '"')
+				{
+					Advance();
+					Advance();
+					return LexLongText();
+				}
+				return LexString();
 			case '\'':
 				if ((Peek() == 's' || Peek() == 'S') && !IsWordPart(Peek(1)))
 				{
@@ -511,13 +519,219 @@ namespace ForgeScript {
 		return token;
 	}
 
-	Token Lexer::LexString()
+	// """long text""" can hold " and "" without escapes and runs until the next """ (the last three of a
+	// longer run of quotes, so text may end with a quote). When the opening """ ends its line, that line
+	// break isn't part of the text, and neither is the line holding only the closing """. The spaces and
+	// tabs that every line starts with (the indentation from the code around it) are removed, and line
+	// ends are always a plain new line ("\r\n" becomes "\n"). Escapes and "{ }" work as in other text.
+	Token Lexer::LexLongText()
+	{
+		const size_t open = m_Current;
+		std::vector<size_t> lineStarts;
+		const size_t close = FindLongTextClose(open, &lineStarts);
+		if (close == std::string_view::npos)
+		{
+			while (!IsAtEnd())
+				Advance();
+			return MakeError("This long text is missing its closing \"\"\" quotes.");
+		}
+
+		auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r'; };
+		size_t contentStart = open;
+		while (contentStart < close && isSpace(m_Source[contentStart]))
+			contentStart++;
+		const bool startsOnNewLine = contentStart < close && m_Source[contentStart] == '\n';
+		contentStart = startsOnNewLine ? contentStart + 1 : open;
+
+		size_t contentEnd = close;
+		while (contentEnd > contentStart && isSpace(m_Source[contentEnd - 1]))
+			contentEnd--;
+		if (contentEnd > contentStart && m_Source[contentEnd - 1] == '\n')
+		{
+			contentEnd--;
+			if (contentEnd > contentStart && m_Source[contentEnd - 1] == '\r')
+				contentEnd--; // Windows line ends
+		}
+		else if (contentEnd == contentStart && startsOnNewLine)
+			contentEnd = contentStart;
+		else
+			contentEnd = close;
+
+		// The indentation every line with words on it shares. The first line counts only when it starts
+		// on its own line, after the opening quotes.
+		if (startsOnNewLine)
+			lineStarts.insert(lineStarts.begin(), contentStart);
+		LongText longText;
+		longText.ContentEnd = contentEnd;
+		longText.CloseEnd = close + 3;
+		bool first = true;
+		for (size_t start : lineStarts)
+		{
+			if (start >= contentEnd)
+				break;
+			size_t end = start;
+			while (end < contentEnd && (m_Source[end] == ' ' || m_Source[end] == '\t'))
+				end++;
+			if (end >= contentEnd || m_Source[end] == '\n' || m_Source[end] == '\r')
+				continue; // A blank line says nothing about the indentation.
+			const std::string_view indent = m_Source.substr(start, end - start);
+			if (first)
+				longText.Indent = std::string(indent);
+			else
+			{
+				size_t shared = 0;
+				while (shared < longText.Indent.size() && shared < indent.size() && longText.Indent[shared] == indent[shared])
+					shared++;
+				longText.Indent.resize(shared);
+			}
+			first = false;
+		}
+
+		while (m_Current < contentStart)
+			Advance();
+		if (startsOnNewLine)
+		{
+			for (size_t i = 0; i < longText.Indent.size() && m_Current < contentEnd && Peek() == longText.Indent[i]; i++)
+				Advance();
+		}
+		return LexString(&longText);
+	}
+
+	// The position of the closing """ for long text whose words start at 'position', or npos. Notes
+	// where each line starts (outside any "{ }"), for the indentation.
+	size_t Lexer::FindLongTextClose(size_t position, std::vector<size_t>* lineStarts) const
+	{
+		while (position < m_Source.size())
+		{
+			const char c = m_Source[position];
+			if (c == '\\')
+			{
+				position += 2;
+				continue;
+			}
+			if (c == '{')
+			{
+				position = SkipCode(position + 1);
+				if (position == std::string_view::npos)
+					return position;
+				continue;
+			}
+			if (c == '"')
+			{
+				size_t run = 0;
+				while (position + run < m_Source.size() && m_Source[position + run] == '"')
+					run++;
+				if (run >= 3)
+					return position + run - 3;
+				position += run;
+				continue;
+			}
+			if (c == '\n' && lineStarts)
+				lineStarts->push_back(position + 1);
+			position++;
+		}
+		return std::string_view::npos;
+	}
+
+	// Just after the closing " of text whose words start at 'position', or npos.
+	size_t Lexer::SkipShortText(size_t position) const
+	{
+		while (position < m_Source.size())
+		{
+			const char c = m_Source[position];
+			if (c == '\\')
+				position += 2;
+			else if (c == '{')
+			{
+				position = SkipCode(position + 1);
+				if (position == std::string_view::npos)
+					return position;
+			}
+			else if (c == '"')
+				return position + 1;
+			else
+				position++;
+		}
+		return std::string_view::npos;
+	}
+
+	// Just after the '}' that closes the "{ }" whose code starts at 'position', or npos.
+	size_t Lexer::SkipCode(size_t position) const
+	{
+		int depth = 0;
+		while (position < m_Source.size())
+		{
+			const char c = m_Source[position];
+			if (c == '{')
+				depth++;
+			else if (c == '}')
+			{
+				if (depth == 0)
+					return position + 1;
+				depth--;
+			}
+			else if (c == '"')
+			{
+				if (position + 2 < m_Source.size() && m_Source[position + 1] == '"' && m_Source[position + 2] == '"')
+				{
+					const size_t close = FindLongTextClose(position + 3, nullptr);
+					if (close == std::string_view::npos)
+						return close;
+					position = close + 3;
+				}
+				else
+				{
+					position = SkipShortText(position + 1);
+					if (position == std::string_view::npos)
+						return position;
+				}
+				continue;
+			}
+			else if (c == '#')
+			{
+				// Comments, read the way SkipWhitespaceAndComments reads them.
+				if (position + 1 < m_Source.size() && m_Source[position + 1] == '[')
+				{
+					const size_t end = m_Source.find("]#", position + 2);
+					position = end == std::string_view::npos ? m_Source.size() : end + 2;
+				}
+				else
+				{
+					while (position < m_Source.size() && m_Source[position] != '\n')
+						position++;
+				}
+				continue;
+			}
+			position++;
+		}
+		return std::string_view::npos;
+	}
+
+	Token Lexer::LexString(const LongText* longText)
 	{
 		std::string text;
 		while (!IsAtEnd())
 		{
+			if (longText && m_Current >= longText->ContentEnd)
+			{
+				while (m_Current < longText->CloseEnd)
+					Advance();
+				Token token = MakeToken(TokenType::String);
+				token.Text = std::move(text);
+				return token;
+			}
 			char c = Advance();
-			if (c == '"')
+			// Long text ends every line with a plain new line, also in files saved with Windows line ends.
+			if (longText && c == '\r' && Peek() == '\n' && m_Current < longText->ContentEnd)
+				continue;
+			if (longText && c == '\n')
+			{
+				text += c;
+				for (size_t i = 0; i < longText->Indent.size() && m_Current < longText->ContentEnd && Peek() == longText->Indent[i]; i++)
+					Advance();
+				continue;
+			}
+			if (c == '"' && !longText)
 			{
 				Token token = MakeToken(TokenType::String);
 				token.Text = std::move(text);
@@ -525,7 +739,7 @@ namespace ForgeScript {
 			}
 			if (c == '{')
 			{
-				m_InterpolationDepth.push_back(0);
+				m_Interpolations.push_back({ 0, longText ? std::optional<LongText>(*longText) : std::nullopt });
 				OpenBracket();
 				Token token = MakeToken(TokenType::Interpolation);
 				token.Text = std::move(text);

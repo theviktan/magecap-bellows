@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,7 +69,19 @@ namespace ForgeScript {
 		Token NextToken();
 		Token MakeToken(TokenType type) const;
 		Token MakeError(const std::string& message) const;
-		Token LexString();
+		// Where a """long text""" ends and how much indentation its lines lose, worked out when it opens.
+		struct LongText
+		{
+			size_t ContentEnd = 0; // where its words stop (before a last line that holds only the closing quotes)
+			size_t CloseEnd = 0;   // just after the closing """
+			std::string Indent;    // the leading spaces and tabs every line shares, removed from each
+		};
+
+		Token LexString(const LongText* longText = nullptr);
+		Token LexLongText();
+		size_t FindLongTextClose(size_t position, std::vector<size_t>* lineStarts) const;
+		size_t SkipShortText(size_t position) const;
+		size_t SkipCode(size_t position) const;
 		Token LexNumber();
 		Token LexWord();
 
@@ -92,8 +105,13 @@ namespace ForgeScript {
 		void CloseBracket();
 		bool IsBlockOpenerWord(TokenType type) const;
 
-		// Each entry is the bracket depth inside one open "{ }" interpolation.
-		std::vector<int> m_InterpolationDepth;
+		// Each open "{ }" inside text: the bracket depth inside it, and the long text it belongs to, if any.
+		struct Interpolation
+		{
+			int Depth = 0;
+			std::optional<LongText> Long;
+		};
+		std::vector<Interpolation> m_Interpolations;
 
 		// Inside ( ), [ ] and { } new lines do not end statements, except inside a
 		// "function ... end" written within the brackets, where they do.

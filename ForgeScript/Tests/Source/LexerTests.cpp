@@ -123,3 +123,39 @@ TEST_CASE("LexerInlineIfInsideBracketsHasNoEnd")
 	std::vector<TokenType> block = Types("say [function(x) if x then\nreturn 1\nend end]");
 	CHECK(std::count(block.begin(), block.end(), TokenType::Newline) == 3);
 }
+
+TEST_CASE("LexerLongText")
+{
+	Lexer lexer("set a to \"\"\"\n\tone \"two\"\n\t  three\n\t\"\"\"\nsay a\n");
+	std::vector<Token> tokens = lexer.Tokenize();
+	REQUIRE(tokens.size() >= 6);
+	CHECK(tokens[3].Type == TokenType::String);
+	CHECK_EQ(tokens[3].Text, std::string("one \"two\"\n  three"));
+	// Lines after the text are counted right.
+	CHECK_EQ(std::string(tokens[5].Lexeme), std::string("say"));
+	CHECK_EQ(tokens[5].Line, 5);
+
+	// "{ }" inside long text splits it like other text, and the indentation goes from every part.
+	Lexer parts("say \"\"\"\n    a {1} b\n    c {2}\n    \"\"\"\n");
+	std::vector<Token> partTokens = parts.Tokenize();
+	REQUIRE(partTokens.size() >= 6);
+	CHECK(partTokens[1].Type == TokenType::Interpolation);
+	CHECK_EQ(partTokens[1].Text, std::string("a "));
+	CHECK(partTokens[3].Type == TokenType::Interpolation);
+	CHECK_EQ(partTokens[3].Text, std::string(" b\nc "));
+	CHECK(partTokens[5].Type == TokenType::String);
+	CHECK_EQ(partTokens[5].Text, std::string(""));
+
+	// Files saved with Windows line ends give the same text.
+	Lexer windows("set a to \"\"\"\r\n\tone\r\n\ttwo\r\n\t\"\"\"\r\n");
+	std::vector<Token> windowsTokens = windows.Tokenize();
+	REQUIRE(windowsTokens.size() >= 4);
+	CHECK_EQ(windowsTokens[3].Text, std::string("one\ntwo"));
+
+	// A missing end is one clear mistake, not a cascade.
+	Lexer open("say \"\"\"never closed\nsay 1\n");
+	std::vector<Token> openTokens = open.Tokenize();
+	REQUIRE(openTokens.size() >= 2);
+	CHECK(openTokens[1].Type == TokenType::Error);
+	CHECK_CONTAINS(openTokens[1].Text, "missing its closing \"\"\" quotes");
+}
