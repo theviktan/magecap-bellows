@@ -419,13 +419,41 @@ class FeatureTest(bellows.Script):
         self.check(scroll.horizontal and close(scroll.scroll_position, (0.0, 40.0, 0.0)) and close(scroll.wheel_speed, 30.0), "UIScroll properties")
         self.check(isinstance(scroll.content_size, Vec3) and isinstance(scroll.viewport_size, Vec3), "UIScroll content and viewport sizes")
 
+        button = entity.add_component(bellows.UIButton)
+        self.check(isinstance(button.normal_color, Vec4) and button.disabled_color.w < 1.0, "UIButton defaults")
+        button.hover_color = Vec4(1.0, 0.0, 0.0, 1.0)
+        self.check(close(button.hover_color, (1.0, 0.0, 0.0, 1.0)), "UIButton properties")
+
+        toggle = entity.add_component(bellows.UIToggle)
+        self.check(not toggle.on, "UIToggle defaults")
+        toggle.on = True
+        self.check(toggle.on and entity.value is True, "UIToggle properties and Entity.value")
+
+        slider = entity.add_component(bellows.UISlider)
+        self.check(close(slider.min, 0.0) and close(slider.max, 1.0) and close(slider.step, 0.0) and close(slider.value, 0.0), "UISlider defaults")
+        slider.max, slider.step, slider.value = 10.0, 2.0, 5.2
+        self.check(close(slider.value, 6.0), f"UISlider snaps to its step ({slider.value})")
+        slider.value = 50.0
+        self.check(close(slider.value, 10.0), "UISlider keeps between min and max")
+        slider.step = -1.0
+        self.check(close(slider.step, 0.0), "UISlider steps are never negative")
+
+        dropdown = entity.add_component(bellows.UIDropdown)
+        self.check(dropdown.options == [] and dropdown.selected == 0 and dropdown.selected_text == "", "UIDropdown defaults")
+        dropdown.options = ["Low", "Medium", "High"]
+        dropdown.selected = 2
+        self.check(dropdown.selected_text == "High", "UIDropdown properties")
+        self.check(raises(lambda: setattr(dropdown, "selected", 3), ValueError), "UIDropdown rejects an index past its options")
+        dropdown.options = ["Only"]
+        self.check(dropdown.selected == 0, "UIDropdown keeps its selection inside new options")
+
         script = entity.add_component(bellows.ScriptComponent)
         script.path, script.class_name = "Scripts/Spinner.py", "Spinner"
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner", "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
                     "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
-                    "UILayout", "UIScroll"]
+                    "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
             entity.remove_component(name)
@@ -631,6 +659,28 @@ class FeatureTest(bellows.Script):
             self.check(self.entity.name in str(error) and "Text" in str(error), f"Entity.text names the entity ({error})")
         self.check(raises(lambda: setattr(self.entity, "visible", False), RuntimeError), "Entity.visible needs UI")
         self.check(raises(lambda: self.entity.focus(), RuntimeError), "Entity.focus needs a UIRect")
+
+        # Entity.value reads and sets a widget's value: a toggle's on, a slider's value, a dropdown's index.
+        slider = button.add_component("UISlider")
+        slider.max, slider.step = 100.0, 10.0
+        button.value = 47.0
+        self.check(close(button.value, 50.0) and close(slider.value, 50.0), f"Entity.value sets a slider ({button.value})")
+        self.check(raises(lambda: setattr(button, "value", "loud"), ValueError), "a slider's value is a number")
+        button.remove_component("UISlider")
+        button.add_component("UIDropdown").options = ["Easy", "Hard"]
+        button.value = 1
+        self.check(button.value == 1.0 and button.get_component("UIDropdown").selected_text == "Hard", "Entity.value sets a dropdown")
+        self.check(raises(lambda: setattr(button, "value", 1.5), ValueError), "a dropdown's value is a whole index")
+        button.remove_component("UIDropdown")
+        button.add_component("UIToggle")
+        button.value = True
+        self.check(button.value is True, "Entity.value sets a toggle")
+        self.check(raises(lambda: setattr(button, "value", 1), ValueError), "a toggle's value is true or false")
+        try:
+            self.entity.value
+            self.check(False, "Entity.value needs a widget")
+        except RuntimeError as error:
+            self.check(self.entity.name in str(error) and "UISlider" in str(error), f"Entity.value names the entity ({error})")
         bellows.ui_clear_focus()
         menu.destroy()
 

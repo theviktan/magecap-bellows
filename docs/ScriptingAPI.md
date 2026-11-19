@@ -205,6 +205,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `translate(delta)`, `rotate(degrees)`, `look_at(target, up=Vec3(0,1,0))` | Movement helpers (`rotate` is in local space). |
 | `transform` | The `Transform` component. |
 | `add_component(c)`, `get_component(c)`, `has_component(c)`, `remove_component(c)`, `components` | `c` is a component class (`bellows.RigidBody`) or name (`"RigidBody"`). `add_component` returns the component (existing or new); `get_component` returns `None` when missing. |
+| `value` | A widget's value: a `UIToggle`'s `on`, a `UISlider`'s `value` or a `UIDropdown`'s `selected` (see Widgets). |
 | `text`, `visible`, `interactable`, `focus()` | Everyday UI shortcuts: `text` is its `Text` component's text; `visible` is its `UIRect`'s (or `UICanvas`'s) visibility; `interactable` is its `UIRect`'s; `focus()` gives it keyboard and gamepad focus and returns `False` when it can't take it. An entity without the component they need raises `RuntimeError` naming the entity. |
 | `script` | The running script instance (play mode), or `None`. |
 
@@ -295,6 +296,30 @@ canvas is screen text: its `size` is in reference pixels and its box is the enti
   scrolls the scroll area under the pointer, and keyboard or gamepad focus moving to something out of
   view scrolls it in.
 
+**Widgets.** Add one to an entity with a `UIRect`; each takes the pointer and keyboard and gamepad
+focus, draws its own parts in the MageCap colors (navy, slate, off-white, orange), and uses the
+entity's `Text` as its label. The editor's **Create > UI** menu makes each one ready to use.
+* `UIButton`: colors the entity's `UIImage` by state: `normal_color`, `hover_color`,
+  `pressed_color`, `disabled_color` (when its rect isn't interactable). Clicks raise `clicked` like any
+  UI.
+* `UIToggle`: a check box at the left, its label beside it. `on`. A click or `ui_accept` flips it
+  and raises `changed (on, entity)`.
+* `UISlider`: a track with a knob. `min`, `max`, `step` (values snap to steps from `min`; 0 for any
+  value) and `value` (kept between `min` and `max`, and snapped). Pressing on it, or dragging (even
+  past its ends), moves the knob; while focused, `ui_left`/`ui_right` move it a step (a twentieth of
+  the range when `step` is 0) instead of moving focus. Each change raises `changed (value, entity)`.
+* `UIDropdown`: `options` (a list of text), `selected` (an index, or -1 for none; out of range raises
+  `ValueError`) and read-only `selected_text`. A click or `ui_accept` opens a list of the options, one
+  row each, under it (or above it when there is no room below). The open list takes every input:
+  pointing highlights, a click or `ui_accept` picks, `ui_up`/`ui_down` move, and `ui_cancel` or a click
+  outside closes it. Picking another option raises `changed (index, entity)`. The entity's `Text`
+  always shows the selected option.
+
+`Entity.value` is the shortcut: a toggle's `on` (`True`/`False`), a slider's `value`, or a dropdown's
+`selected`, read or set, checked and snapped the same way. An entity with none of them raises
+`RuntimeError` naming the entity. Setting a value from a script raises no `changed` event (only the
+player's input does).
+
 Unknown scale modes, layout directions, alignments and sizings raise `ValueError`, and so do edge lists
 that aren't 4 numbers. Python vectors for UI use x and y; z is ignored.
 
@@ -320,7 +345,8 @@ gamepad, and the game only sees what the UI leaves it:
 
 UI events are sent to the scripts on the UI entity, then on each of its parents up to the root (through
 entities that are not UI too), with the entity as the last value: `clicked (entity)`, `focused
-(entity)`, `unfocused (entity)`, `cancelled (entity)`. Python receives them in `on_event`:
+(entity)`, `unfocused (entity)`, `cancelled (entity)`, and from widgets `changed (value, entity)`.
+Python receives them in `on_event`:
 
 ```python
 class Menu(bellows.Script):

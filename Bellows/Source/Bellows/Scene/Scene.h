@@ -14,6 +14,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 namespace Bellows {
@@ -177,6 +178,7 @@ namespace Bellows {
 		{
 			std::string Name;
 			UUID Source = 0;
+			std::variant<std::monostate, bool, double> Value;	// Sent before the entity when set ('changed')
 		};
 		enum class UIPointerOwner : uint8_t { None = 0, UI, Game };
 
@@ -184,6 +186,14 @@ namespace Bellows {
 		bool CanTakeUIFocus(UUID id) const;
 		void ChangeUIFocus(UUID id, std::vector<UIEvent>& events);
 		void ScrollUIIntoView(UUID id);
+		bool IsUIWidget(entt::entity handle) const;
+		// What a click or ui_accept does to a widget beyond 'clicked': flips a toggle, opens a dropdown.
+		void ActivateUIWidget(UUID id, std::vector<UIEvent>& events);
+		void SetUISliderValue(UUID id, float value, std::vector<UIEvent>& events);
+		void SelectUIDropdownOption(UUID id, int index, std::vector<UIEvent>& events);
+		// Runs the open dropdown list, which takes every input while it is open.
+		void UpdateUIDropdownList(const glm::vec2& pointer, const glm::vec2& screen, std::vector<UIEvent>& events);
+		void SubmitUIDropdownList(SceneRenderer& renderer);
 		void EmitUIEvents(const std::vector<UIEvent>& events);
 		void ResetUIInput();
 	private:
@@ -206,6 +216,8 @@ namespace Bellows {
 		UUID m_UIPressed = 0;
 		UUID m_UIFocused = 0;
 		UIPointerOwner m_UIPointerOwner = UIPointerOwner::None;	// Who a held pointer press belongs to
+		UUID m_UIOpenDropdown = 0;								// The dropdown whose list is open
+		int m_UIDropdownHighlight = -1;							// The option row the keys or pointer are on
 		InputCapture m_UICapture;
 
 		bool m_IsRunning = false;
