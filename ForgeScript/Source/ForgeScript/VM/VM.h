@@ -17,6 +17,15 @@
 
 namespace ForgeScript {
 
+	// One step of the way to an error: where a function was when it called the next one (or failed).
+	struct StackFrame
+	{
+		std::string File;     // the script's name, as it was loaded
+		int Line = 0;         // 0 when unknown
+		std::string Function; // the function's name, or "" for code at the top of a script
+		int Repeats = 1;      // a function calling itself shows once, with how many times in a row
+	};
+
 	// A runtime error that was not caught by the script, reported to the host.
 	struct ScriptError
 	{
@@ -24,6 +33,7 @@ namespace ForgeScript {
 		std::string File;
 		int Line = 0;
 		std::vector<std::string> Trace; // "in function hurt (enemy.forge line 12)", innermost first.
+		std::vector<StackFrame> Frames; // The same way, as data for tools, innermost first.
 
 		std::string ToString() const;
 	};
@@ -336,7 +346,7 @@ namespace ForgeScript {
 		bool ThrowValue(Task* task, const Value& error, const Value* where = nullptr);
 		void ReportFailure(Task* task, const Value& error, const Value* where = nullptr);
 		Value DescribeWhere(Task* task);
-		std::vector<std::string> BuildTrace(Task* task, std::string& outFile, int& outLine);
+		std::vector<std::string> BuildTrace(Task* task, std::string& outFile, int& outLine, std::vector<StackFrame>* outFrames = nullptr);
 
 		// Garbage collection
 		void MarkValue(const Value& value);
