@@ -71,17 +71,20 @@ Text escapes: `\n` `\t` `\r` `\"` `\\` `\{` `\}` `\0`.
 | Types | `text(x)`, `number(x)` (nothing if not a number), `type(x)`, `length(x)`, `copy(x)`, `assert(condition, message)` |
 | Formatting | `format_number(x [, decimals])` (`"1,250.50"`), `format_time(seconds)` (`"1:05"`, `"1:02:03"`) |
 | Math | `abs`, `floor`, `ceil`, `round(x [, digits])`, `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2(y, x)`, `exp`, `log(x [, base])`, `sign`, `min(...)`, `max(...)`, `clamp(x, low, high)`, `lerp(a, b, t)`, `radians`, `degrees`, `pi`, `infinity` |
-| Random | `random()` (0 to 1), `random(n)` (1 to n), `random(a, b)`, `random number from (a) to (b)`, `random item from (list)` |
+| Game math | `move_toward(from, to, step)` (numbers or vectors), `inverse_lerp(a, b, value)`, `remap(value, from_low, from_high, to_low, to_high)`, `smoothstep(a, b, x)`, `wrap(value, low, high)`, `snapped(value, step)` |
+| Lists of numbers | `range(from, to [, step])` (both ends included, counts down when `to` is smaller), `zip(first, second)` |
+| JSON | `to_json(value)`, `from_json(text)` |
+| Random | `random_seed(n)`, `random()` (0 to 1), `random(n)` (1 to n), `random(a, b)`, `random number from (a) to (b)`, `random item from (list)` |
 | Time | `time()` (seconds since start), `frame()` |
 | Vectors | `vector(x, y [, z])`, `distance(a, b)`, `distance from (a) to (b)` |
 
 ## Methods
 
-**Text:** `length` · `upper()` · `lower()` · `trim()` · `split([separator])` · `contains(x)` · `starts_with(x)` · `ends_with(x)` · `find(x)` · `replace(a, b)` · `slice(start [, end])` · `repeat(n)` · `pad_start(width [, fill])` · `pad_end(width [, fill])` · `characters()` · `is_number()` · `is_empty()`
+**Text:** `length` · `upper()` · `lower()` · `trim()` · `split([separator])` · `contains(x)` · `starts_with(x)` · `ends_with(x)` · `find(x)` · `replace(a, b)` · `slice(start [, end])` · `repeat(n)` · `reverse()` · `pad_start(width [, fill])` · `pad_end(width [, fill])` · `characters()` · `is_number()` · `is_empty()`
 
-**Lists:** `length` · `first` · `last` · `add(x)` · `insert(position, x)` · `remove(x)` · `remove_at(position)` · `pop()` · `clear()` · `contains(x)` · `index_of(x)` · `is_empty()` · `copy()` · `reverse()` · `shuffle()` · `pick()` · `sort()` · `sort_by(f)` · `join([separator])` · `slice(start [, end])` · `sum()` · `average()` · `min()` · `max()` · `count(f or value)` · `any(f)` · `all(f)` · `map(f)` · `filter(f)` · `find(f)` · `each(f)`
+**Lists:** `length` · `first` · `last` · `add(x)` · `insert(position, x)` · `remove(x)` · `remove_at(position)` · `pop()` · `clear()` · `contains(x)` · `index_of(x)` · `is_empty()` · `copy()` · `reverse()` · `shuffle()` · `pick()` · `sort()` · `sort_by(f)` · `join([separator])` · `slice(start [, end])` · `sum()` · `average()` · `min()` · `max()` · `count(f or value)` · `remove_where(f)` · `any(f)` · `all(f)` · `map(f)` · `filter(f)` · `find(f)` · `each(f)`
 
-**Maps:** `length` · `keys()` · `values()` · `has(key)` · `get(key [, default])` · `remove(key)` · `clear()` · `copy()` · `is_empty()`
+**Maps:** `length` · `keys()` · `values()` · `has(key)` · `get(key [, default])` · `merge(other)` · `remove(key)` · `clear()` · `copy()` · `is_empty()`
 
 **Vectors:** `x` · `y` · `z` · `length` · `normalized()` · `dot(v)` · `cross(v)` · `distance_to(v)` · `lerp(v, t)` · `copy()`
 

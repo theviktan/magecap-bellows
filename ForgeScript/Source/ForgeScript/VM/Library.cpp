@@ -1,6 +1,7 @@
 #include "ForgeScript/VM/VM.h"
 
 #include "ForgeScript/Core/Utf8.h"
+#include "ForgeScript/Tools/Json.h"
 
 #include <algorithm>
 #include <charconv>
@@ -422,6 +423,89 @@ namespace ForgeScript {
 				text += std::to_string(minutes) + ":" + twoDigits(rest);
 			return c.GetVM().MakeText(text);
 		});
+		// ------------------------------------------------------------------ Game math (like GDScript's)
+
+		// Moves from 'from' toward 'to' by at most 'step', never past it: a number, or a vector moving in a
+		// straight line. Called every frame, it gives steady movement that stops exactly on the target.
+		RegisterFunction("move_toward", 3, [](CallContext& c)
+		{
+			const double step = c.Number(2);
+			if (step < 0)
+				c.Error("move_toward needs a step of 0 or more, but got " + FormatNumber(step) + ".");
+			if (IsObjectType(c.Arg(0), ObjectType::Vector) || IsObjectType(c.Arg(1), ObjectType::Vector))
+			{
+				Vector* from = c.VectorArg(0);
+				Vector* to = c.VectorArg(1);
+				const double dx = to->X - from->X, dy = to->Y - from->Y, dz = to->Z - from->Z;
+				const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+				if (distance <= step || distance == 0)
+					return c.GetVM().MakeVector(to->X, to->Y, to->Z);
+				const double t = step / distance;
+				return c.GetVM().MakeVector(from->X + dx * t, from->Y + dy * t, from->Z + dz * t);
+			}
+			const double from = c.Number(0);
+			const double to = c.Number(1);
+			if (std::abs(to - from) <= step)
+				return Value::FromNumber(to);
+			return Value::FromNumber(from + (to > from ? step : -step));
+		});
+		// Where 'value' sits between 'a' and 'b': 0 at a, 1 at b (lerp backwards).
+		RegisterFunction("inverse_lerp", 3, [](CallContext& c)
+		{
+			const double a = c.Number(0);
+			const double b = c.Number(1);
+			if (a == b)
+				c.Error("inverse_lerp needs two different numbers to measure between, but got " + FormatNumber(a) + " twice.");
+			return Value::FromNumber((c.Number(2) - a) / (b - a));
+		});
+		// Moves 'value' from one range to another: remap(5, 0, 10, 0, 100) is 50.
+		RegisterFunction("remap", 5, [](CallContext& c)
+		{
+			const double fromLow = c.Number(1);
+			const double fromHigh = c.Number(2);
+			if (fromLow == fromHigh)
+				c.Error("remap needs a range with two different ends to map from, but got " + FormatNumber(fromLow) + " twice.");
+			const double t = (c.Number(0) - fromLow) / (fromHigh - fromLow);
+			const double toLow = c.Number(3);
+			return Value::FromNumber(toLow + (c.Number(4) - toLow) * t);
+		});
+		// 0 before 'a', 1 after 'b', and an S-shaped curve between: an easing that starts and stops gently.
+		RegisterFunction("smoothstep", 3, [](CallContext& c)
+		{
+			const double a = c.Number(0);
+			const double b = c.Number(1);
+			const double x = c.Number(2);
+			if (a == b)
+				return Value::FromNumber(x < a ? 0.0 : 1.0);
+			const double t = std::clamp((x - a) / (b - a), 0.0, 1.0);
+			return Value::FromNumber(t * t * (3.0 - 2.0 * t));
+		});
+		// Keeps 'value' inside low to high by going around, like an angle or a looping index:
+		// wrap(370, 0, 360) is 10. 'high' itself wraps to 'low'.
+		RegisterFunction("wrap", 3, [](CallContext& c)
+		{
+			const double value = c.Number(0);
+			const double low = c.Number(1);
+			const double high = c.Number(2);
+			if (low == high)
+				return Value::FromNumber(low);
+			if (low > high)
+				c.Error("wrap needs the low end first, like: wrap(angle, 0, 360)");
+			const double size = high - low;
+			double wrapped = std::fmod(value - low, size);
+			if (wrapped < 0)
+				wrapped += size;
+			return Value::FromNumber(low + wrapped);
+		});
+		// The nearest multiple of 'step': snapped(17, 5) is 15, for grids. A step of 0 leaves it alone.
+		RegisterFunction("snapped", 2, [](CallContext& c)
+		{
+			const double value = c.Number(0);
+			const double step = c.Number(1);
+			if (step == 0)
+				return Value::FromNumber(value);
+			return Value::FromNumber(std::round(value / step) * step);
+		});
 		RegisterFunction("atan2", 2, [](CallContext& c) { return Value::FromNumber(std::atan2(c.Number(0), c.Number(1))); });
 		RegisterFunction("clamp", 3, [](CallContext& c)
 		{
@@ -471,6 +555,13 @@ namespace ForgeScript {
 		minMax("max", false);
 
 		// ------------------------------------------------------------------ Random numbers
+
+		// The same seed gives the same random numbers every time, for levels made from a seed and for tests.
+		RegisterFunction("random_seed", 1, [](CallContext& c)
+		{
+			c.GetVM().GetRandom().seed(static_cast<uint64_t>(c.Integer(0)));
+			return Value();
+		});
 
 		RegisterFunction("random", AnyArity, [](CallContext& c)
 		{
@@ -781,6 +872,120 @@ namespace ForgeScript {
 			return Value();
 		});
 
+		// The numbers from 'from' to 'to', both included, like 'for i from 1 to 5'. Counts down when
+		// 'to' is smaller; 'step' (always 0 or more) sets the gap.
+		RegisterFunction("range", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() < 2 || c.Count() > 3)
+				c.Error("range needs where to start and where to end, like: range(1, 5), or range(0, 100, 10)");
+			const double from = c.Number(0);
+			const double to = c.Number(1);
+			const double step = c.Count() > 2 ? c.Number(2) : 1.0;
+			if (!(step > 0))
+				c.Error("range needs a step above 0, but got " + FormatNumber(step) + ". It counts down by itself when the end is smaller.");
+			const double count = std::floor(std::abs(to - from) / step + 1e-9) + 1;
+			if (!std::isfinite(count) || count > 10000000)
+				c.Error("range would make more than 10,000,000 numbers.");
+			const double direction = to >= from ? 1.0 : -1.0;
+			std::vector<Value> numbers;
+			numbers.reserve(static_cast<size_t>(count));
+			for (size_t i = 0; i < static_cast<size_t>(count); i++)
+				numbers.push_back(Value::FromNumber(from + direction * step * static_cast<double>(i)));
+			return c.GetVM().MakeList(std::move(numbers));
+		});
+		// Values as JSON text and back, for web services and files other programs read. JSON has no
+		// vectors, functions or objects, so those are refused with what to write instead.
+		RegisterFunction("to_json", 1, [](CallContext& c)
+		{
+			std::function<Json(const Value&, int)> convert = [&](const Value& value, int depth) -> Json
+			{
+				if (depth > 256)
+					c.Error("to_json can't turn lists or maps nested more than 256 deep into JSON.");
+				if (value.IsNothing())
+					return Json(nullptr);
+				if (value.IsBool())
+					return Json(value.AsBool());
+				if (value.IsNumber())
+				{
+					if (!std::isfinite(value.AsNumber()))
+						c.Error("to_json can't write " + FormatNumber(value.AsNumber()) + ": JSON only has finite numbers.");
+					return Json(value.AsNumber());
+				}
+				if (IsObjectType(value, ObjectType::String))
+					return Json(As<String>(value)->Text);
+				if (IsObjectType(value, ObjectType::List))
+				{
+					Json::Array items;
+					for (const Value& item : As<List>(value)->Items)
+						items.push_back(convert(item, depth + 1));
+					return Json(std::move(items));
+				}
+				if (IsObjectType(value, ObjectType::Map))
+				{
+					Json::Object members;
+					for (const Map::Entry& entry : As<Map>(value)->Entries)
+					{
+						if (!IsObjectType(entry.Key, ObjectType::String))
+							c.Error("to_json needs map keys that are text, but one is " + c.GetVM().TypeOf(entry.Key) + ".");
+						members.emplace_back(As<String>(entry.Key)->Text, convert(entry.Item, depth + 1));
+					}
+					return Json(std::move(members));
+				}
+				if (IsObjectType(value, ObjectType::Vector))
+					c.Error("to_json can't write a vector: JSON has none. Write a list instead, like: [v.x, v.y, v.z]");
+				c.Error("to_json can only write nothing, true/false, numbers, text, lists and maps, not " + c.GetVM().TypeOf(value) + ".");
+			};
+			return c.GetVM().MakeText(convert(c.Arg(0), 0).Dump());
+		});
+		RegisterFunction("from_json", 1, [](CallContext& c)
+		{
+			Json json;
+			std::string problem;
+			if (!Json::Parse(c.Text(0), json, problem))
+				c.Error("from_json can't read this text as JSON: " + problem + ".");
+			// The garbage collector only runs between instructions, so the parts made so far are safe while
+			// the whole value is built.
+			VM& vm = c.GetVM();
+			std::function<Value(const Json&)> convert = [&](const Json& item) -> Value
+			{
+				if (item.IsNull())
+					return Value();
+				if (item.IsBool())
+					return Value::FromBool(item.AsBool());
+				if (item.IsNumber())
+					return Value::FromNumber(item.AsNumber());
+				if (item.IsString())
+					return vm.MakeText(item.AsString());
+				if (item.IsArray())
+				{
+					Value list = vm.MakeList();
+					for (const Json& element : item.AsArray())
+						As<List>(list)->Items.push_back(convert(element));
+					return list;
+				}
+				Value map = vm.MakeMap();
+				for (const auto& [key, element] : item.AsObject())
+				{
+					Value keyText = vm.MakeText(key);
+					As<Map>(map)->Set(keyText, convert(element));
+				}
+				return map;
+			};
+			return convert(json);
+		});
+		// Pairs up items by position: zip(["a", "b"], [1, 2]) is [["a", 1], ["b", 2]]. Stops at the
+		// end of the shorter list.
+		RegisterFunction("zip", 2, [](CallContext& c)
+		{
+			VM& vm = c.GetVM();
+			const std::vector<Value> first = c.ListArg(0)->Items;
+			const std::vector<Value> second = c.ListArg(1)->Items;
+			Value result = vm.MakeList();
+			Handle keep(vm, result);
+			for (size_t i = 0; i < std::min(first.size(), second.size()); i++)
+				As<List>(result)->Items.push_back(vm.MakeList({ first[i], second[i] }));
+			return result;
+		});
 		// Asks 'fn' about each item, on a copy of the list kept safe from the garbage collector, so the
 		// function may change the list while it runs. Stops when 'visit' returns false.
 		auto askEach = [selfList](CallContext& c, const Value& fn, const std::function<bool(const Value& item, bool yes)>& visit)
@@ -829,6 +1034,24 @@ namespace ForgeScript {
 			bool every = true;
 			askEach(c, c.Arg(0), [&every](const Value&, bool yes) { every = yes; return yes; });
 			return Value::FromBool(every);
+		});
+		// Removes every item 'fn' says yes to, and gives back how many went. The function is asked about
+		// the list as it was when remove_where started.
+		RegisterMethod(ListMethods, "remove_where", 1, [selfList, askEach, needFunction](CallContext& c)
+		{
+			needFunction(c, "remove_where");
+			std::vector<Value> kept;
+			double removed = 0;
+			askEach(c, c.Arg(0), [&](const Value& item, bool yes)
+			{
+				if (yes)
+					removed++;
+				else
+					kept.push_back(item);
+				return true;
+			});
+			selfList(c)->Items = std::move(kept);
+			return Value::FromNumber(removed);
 		});
 		// The numbers of a list, for min, max and average; an empty list gives nothing back.
 		auto numbersOf = [selfList](CallContext& c, const char* name)
@@ -993,6 +1216,15 @@ namespace ForgeScript {
 				padding += fill;
 			return c.GetVM().MakeText(atStart ? padding + text : text + padding);
 		};
+		// Letter by letter, so "café" becomes "éfac", not broken bytes.
+		RegisterMethod(TextMethods, "reverse", 0, [selfText](CallContext& c)
+		{
+			const std::string& text = selfText(c);
+			std::string reversed;
+			for (size_t i = Utf8::Length(text); i > 0; i--)
+				reversed += Utf8::CharAt(text, i - 1);
+			return c.GetVM().MakeText(reversed);
+		});
 		RegisterMethod(TextMethods, "pad_start", AnyArity, [pad](CallContext& c) { return pad(c, true); });
 		RegisterMethod(TextMethods, "pad_end", AnyArity, [pad](CallContext& c) { return pad(c, false); });
 		RegisterMethod(TextMethods, "characters", 0, [selfText](CallContext& c)
@@ -1040,6 +1272,16 @@ namespace ForgeScript {
 			return c.Arg(1);
 		});
 		RegisterMethod(MapMethods, "remove", 1, [selfMap](CallContext& c) { return Value::FromBool(selfMap(c)->Remove(c.Arg(0))); });
+		// Copies every entry of 'other' into this map, replacing values whose keys are already here, and
+		// gives back this map, like adding a level's settings over the defaults.
+		RegisterMethod(MapMethods, "merge", 1, [selfMap](CallContext& c)
+		{
+			Map* target = selfMap(c);
+			const std::vector<Map::Entry> entries = c.MapArg(0)->Entries;
+			for (const Map::Entry& entry : entries)
+				target->Set(entry.Key, entry.Item);
+			return c.Self();
+		});
 		RegisterMethod(MapMethods, "clear", 0, [selfMap](CallContext& c)
 		{
 			selfMap(c)->Entries.clear();

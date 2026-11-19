@@ -182,6 +182,7 @@ say title contains "Quest"    # true (the same thing, in English)
 say title.replace("Dragon", "Side")     # Side Quest
 say "a,b,c".split(",")        # ["a", "b", "c"]
 say "  padded  ".trim()       # padded
+say "stressed".reverse()      # desserts
 say "42".is_number()          # true
 say number("42") + 1          # 43
 say text(42) + "!"            # 42!
@@ -385,6 +386,7 @@ say length of items             # 2
 | `list.map(function)` | New list with the function applied to every item. |
 | `list.filter(function)` | New list with only items where the function says true. |
 | `list.find(function)` | First item where the function says true. |
+| `list.remove_where(function)` | Remove every item where the function says true; gives back how many went. |
 | `list.each(function)` | Call the function for every item. |
 | `list.copy()` / `copy(list)` | A separate copy. |
 
@@ -431,6 +433,7 @@ Keys can be text, numbers or true/false: `set grid[3] to "wall"`.
 | `map.has(key)` / `map contains key` | True if the key exists. |
 | `map.get(key, default)` | The value, or the default when missing. |
 | `map.remove(key)` | Remove a key. |
+| `map.merge(other)` | Copy every entry of `other` in, replacing values with the same keys. |
 | `map.length` | Number of keys. |
 | `map.clear()`, `map.copy()`, `map.is_empty()` | As for lists. |
 
@@ -442,6 +445,24 @@ say actions.greet("Ron")
 ```
 
 Two maps are equal (`is`) when they have the same keys with equal values, in any order: `{ a: 1, b: 2 } is { b: 2, a: 1 }` is `true`. A list or map used as a **key** means that one particular list or map, not any list with the same items.
+
+**Defaults with `merge`:** start from the defaults and lay the player's choices over them:
+
+```forge
+set settings to { volume: 0.5, music: true }
+settings.merge({ volume: 0.8 })
+say settings                       # {"volume": 0.8, "music": true}
+```
+
+**Maps and lists as JSON text.** Web services and other programs often speak JSON. `to_json` turns nothing, true/false, numbers, text, lists and maps (with text keys) into JSON text, and `from_json` reads it back:
+
+```forge
+set json to to_json({ name: "Starfall", ships: ["Comet"] })
+say json                           # {"name":"Starfall","ships":["Comet"]}
+say from_json(json).ships[1]       # Comet
+```
+
+JSON has no vectors, so write them as lists: `[v.x, v.y, v.z]`. To keep progress between play sessions, use `save_data` instead (chapter 17): it keeps vectors too.
 
 ---
 
@@ -804,6 +825,35 @@ say position.length             # how far from (0, 0, 0)
 | `a.distance_to(b)`, `distance(a, b)`, `distance from a to b` | distance |
 | `a.lerp(b, t)`, `lerp(a, b, t)` | blend from a to b (t from 0 to 1) |
 | `v.copy()` / `copy(v)` | a separate copy |
+
+### Game math
+
+These come from GDScript, and they make movement and animation code short:
+
+```forge
+# Move 3 units a second toward the target, and stop exactly on it.
+when update with delta
+	set my position to move_toward(my position, target, 3 * delta)
+end
+
+say inverse_lerp(0, 10, 5)            # 0.5: where 5 sits between 0 and 10
+say remap(health, 0, 100, 0, 300)     # health as a bar 300 pixels wide
+say smoothstep(0, 1, 0.5)             # 0.5, easing in and out between 0 and 1
+say wrap(370, 0, 360)                 # 10: angles and looping counters
+say snapped(17, 5)                    # 15: lining things up on a grid
+```
+
+| | |
+|---|---|
+| `move_toward(from, to, step)` | from moved toward to by at most step, never past it (numbers or vectors) |
+| `inverse_lerp(a, b, value)` | 0 at a, 1 at b: lerp backwards |
+| `remap(value, from_low, from_high, to_low, to_high)` | value moved from one range to another |
+| `smoothstep(a, b, x)` | 0 before a, 1 after b, a smooth curve between |
+| `wrap(value, low, high)` | goes around: high itself becomes low |
+| `snapped(value, step)` | the nearest multiple of step |
+| `range(from, to, step)` | the list of numbers from from to to, **both included** (unlike Python's `range`), counting down when to is smaller |
+| `zip(first, second)` | two lists paired up by position |
+| `random_seed(n)` | the same random numbers every time for the same n |
 
 **Engine positions:** `set my position.x to 5` works on engine objects too. ForgeScript reads the position, changes `x`, and gives the new position back to the engine automatically.
 
