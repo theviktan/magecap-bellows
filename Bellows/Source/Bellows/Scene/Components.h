@@ -10,6 +10,7 @@
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIStyle.h"
 #include "Bellows/UI/UITextEdit.h"
+#include "Bellows/UI/UITheme.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -254,6 +255,9 @@ namespace Bellows {
 		float OutlineWidth = 0.0f;		// Ems, up to 0.1
 		glm::vec4 OutlineColor { 0.0f, 0.0f, 0.0f, 1.0f };
 		bool FaceCamera = false;		// Always turned toward the camera (a label over a character's head)
+		// Screen text only: take the color from the canvas's theme (its widget's state, or the theme's text
+		// color) instead of Color. The editor's UI templates turn it on.
+		bool ThemeColor = false;
 		bool Visible = true;
 
 		// Runtime cache (not serialized)
@@ -356,13 +360,30 @@ namespace Bellows {
 	// --- Widgets. Each one can take focus and stops the pointer; clicking it (or ui_accept while it has
 	// focus) raises 'clicked'. A widget whose value changes raises 'changed' (value, widget). ---------
 
-	// Colors its UIImage by state: normal, under the pointer, held down, or not interactable.
+	// Colors its UIImage by state: normal, under the pointer, held down, or not interactable. A color it
+	// doesn't set comes from its canvas's theme (the Button style's background for that state).
 	struct UIButtonComponent
 	{
-		glm::vec4 NormalColor = UIColors::NavyLight;
-		glm::vec4 HoverColor = UIColors::Slate;
-		glm::vec4 PressedColor = UIColors::Accent;
-		glm::vec4 DisabledColor { 0.165f, 0.180f, 0.325f, 0.45f };
+		std::optional<glm::vec4> NormalColor;
+		std::optional<glm::vec4> HoverColor;
+		std::optional<glm::vec4> PressedColor;
+		std::optional<glm::vec4> DisabledColor;
+
+		// The color it shows in 'state' with 'style' (its theme's Button style); focus looks like normal
+		// unless the theme says otherwise.
+		glm::vec4 GetColor(UIWidgetState state, const UIWidgetStyle& style) const
+		{
+			const glm::vec4& themed = style.Get(state).Background;
+			switch (state)
+			{
+				case UIWidgetState::Hover:		return HoverColor.value_or(themed);
+				case UIWidgetState::Pressed:	return PressedColor.value_or(themed);
+				case UIWidgetState::Disabled:	return DisabledColor.value_or(themed);
+				case UIWidgetState::Focused:	return NormalColor.value_or(themed);
+				case UIWidgetState::Normal:		break;
+			}
+			return NormalColor.value_or(themed);
+		}
 	};
 
 	// A check box on the left of its rect (the rest is for its label, a Text on the same entity).

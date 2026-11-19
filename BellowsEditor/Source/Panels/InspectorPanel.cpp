@@ -409,6 +409,8 @@ namespace Bellows {
 					UI::PropertyColor("Outline Color", c.OutlineColor);
 				if (!screenText)
 					UI::Property("Face Camera", c.FaceCamera, "Always turned toward the camera, like a name over a character");
+				else
+					UI::Property("Theme Color", c.ThemeColor, "Take the color from the canvas's theme (for its widget's state) instead of Color");
 				UI::Property("Visible", c.Visible);
 				UI::EndPropertyGrid();
 			}
@@ -491,16 +493,33 @@ namespace Bellows {
 			}
 		});
 
-		DrawComponent<UIButtonComponent>(m_Editor, entity, ICON_MOUSE_POINTER_CLICK, "UI Button", [](UIButtonComponent& c)
+		DrawComponent<UIButtonComponent>(m_Editor, entity, ICON_MOUSE_POINTER_CLICK, "UI Button", [entity](UIButtonComponent& c)
 		{
+			// Each color shows what the button uses: its own, or its theme's until it is changed here.
+			Entity owner = entity;
+			const auto* rect = owner.TryGetComponent<UIRectComponent>();
+			const Ref<const UITheme> theme = owner.GetScene()->GetUIThemeFor(owner);
+			const UIWidgetStyle& style = theme->Get(UIThemeWidget::Button, rect ? rect->StyleClass : std::string());
+			const auto colorProperty = [&](const char* label, std::optional<glm::vec4>& color, UIWidgetState state, const char* tooltip)
+			{
+				glm::vec4 value = c.GetColor(state, style);
+				const std::string help = std::string(tooltip) + (color ? "" : ". From the theme until you change it");
+				if (UI::PropertyColor(label, value, false, help.c_str()))
+					color = value;
+			};
 			if (UI::BeginPropertyGrid("UIButton"))
 			{
-				UI::PropertyColor("Normal Color", c.NormalColor, false, "Its UI Image's color when nothing is happening");
-				UI::PropertyColor("Hover Color", c.HoverColor, false, "Under the pointer");
-				UI::PropertyColor("Pressed Color", c.PressedColor, false, "Held down");
-				UI::PropertyColor("Disabled Color", c.DisabledColor, false, "When its UI Rect is not interactable");
+				colorProperty("Normal Color", c.NormalColor, UIWidgetState::Normal, "Its UI Image's color when nothing is happening");
+				colorProperty("Hover Color", c.HoverColor, UIWidgetState::Hover, "Under the pointer");
+				colorProperty("Pressed Color", c.PressedColor, UIWidgetState::Pressed, "Held down");
+				colorProperty("Disabled Color", c.DisabledColor, UIWidgetState::Disabled, "When its UI Rect is not interactable");
 				UI::EndPropertyGrid();
 			}
+			const bool themed = !c.NormalColor && !c.HoverColor && !c.PressedColor && !c.DisabledColor;
+			ImGui::BeginDisabled(themed);
+			if (ImGui::Button(ICON_PALETTE "  Use the Theme's Colors", ImVec2(-FLT_MIN, 0.0f)))
+				c = UIButtonComponent();
+			ImGui::EndDisabled();
 		});
 
 		DrawComponent<UIToggleComponent>(m_Editor, entity, ICON_SQUARE_CHECK, "UI Toggle", [](UIToggleComponent& c)

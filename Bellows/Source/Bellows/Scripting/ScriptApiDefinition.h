@@ -567,6 +567,8 @@ namespace Bellows::Scripting {
 			[](const TextRef& r, const ColorValue& v) { r.Get().OutlineColor = v.Value; }, "");
 		text.Property("face_camera", [](const TextRef& r) { return r.Get().FaceCamera; }, [](const TextRef& r, bool v) { r.Get().FaceCamera = v; },
 			"World text always turned toward the camera");
+		text.Property("theme_color", [](const TextRef& r) { return r.Get().ThemeColor; }, [](const TextRef& r, bool v) { r.Get().ThemeColor = v; },
+			"Screen text takes its color from its canvas's theme (for its widget's state) instead of color");
 		text.Property("visible", [](const TextRef& r) { return r.Get().Visible; }, [](const TextRef& r, bool v) { r.Get().Visible = v; }, "");
 		text.ReadOnly("measured_size", [](const TextRef& r) { return glm::vec3(Scene::MeasureTextSize(r.Get()), 0.0f); },
 			"The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it");
@@ -661,15 +663,24 @@ namespace Bellows::Scripting {
 		image.Property("visible", [](const UIImageRef& r) { return r.Get().Visible; }, [](const UIImageRef& r, bool v) { r.Get().Visible = v; }, "");
 
 		auto button = api.template Class<UIButtonRef>("UIButton",
-			"Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'");
-		button.Property("normal_color", [](const UIButtonRef& r) { return ColorValue { r.Get().NormalColor }; },
-			[](const UIButtonRef& r, const ColorValue& v) { r.Get().NormalColor = v.Value; }, "");
-		button.Property("hover_color", [](const UIButtonRef& r) { return ColorValue { r.Get().HoverColor }; },
+			"Clickable: colors its UIImage by state, from its canvas's theme unless it sets its own; a click (or ui_accept while focused) raises 'clicked'");
+		// Reading a color gives the one the button shows: its own, or its theme's; setting one makes it its own.
+		const auto buttonColor = [](const UIButtonRef& r, UIWidgetState state)
+		{
+			Entity entity = r.GetEntity();
+			const auto* rect = entity.TryGetComponent<UIRectComponent>();
+			const Ref<const UITheme> theme = entity.GetScene()->GetUIThemeFor(entity);
+			return ColorValue { r.Get().GetColor(state, theme->Get(UIThemeWidget::Button, rect ? rect->StyleClass : std::string())) };
+		};
+		button.Property("normal_color", [buttonColor](const UIButtonRef& r) { return buttonColor(r, UIWidgetState::Normal); },
+			[](const UIButtonRef& r, const ColorValue& v) { r.Get().NormalColor = v.Value; }, "Its own once set; otherwise its theme's");
+		button.Property("hover_color", [buttonColor](const UIButtonRef& r) { return buttonColor(r, UIWidgetState::Hover); },
 			[](const UIButtonRef& r, const ColorValue& v) { r.Get().HoverColor = v.Value; }, "Under the pointer");
-		button.Property("pressed_color", [](const UIButtonRef& r) { return ColorValue { r.Get().PressedColor }; },
+		button.Property("pressed_color", [buttonColor](const UIButtonRef& r) { return buttonColor(r, UIWidgetState::Pressed); },
 			[](const UIButtonRef& r, const ColorValue& v) { r.Get().PressedColor = v.Value; }, "Held down");
-		button.Property("disabled_color", [](const UIButtonRef& r) { return ColorValue { r.Get().DisabledColor }; },
+		button.Property("disabled_color", [buttonColor](const UIButtonRef& r) { return buttonColor(r, UIWidgetState::Disabled); },
 			[](const UIButtonRef& r, const ColorValue& v) { r.Get().DisabledColor = v.Value; }, "When not interactable");
+		button.Method("clear_colors", [](const UIButtonRef& r) { r.Get() = UIButtonComponent(); }, "Goes back to its theme's colors for every state");
 
 		auto toggle = api.template Class<UIToggleRef>("UIToggle", "A check box; clicking flips it and raises 'changed' (on, widget)");
 		toggle.Property("on", [](const UIToggleRef& r) { return r.Get().On; }, [](const UIToggleRef& r, bool v) { r.Get().On = v; }, "");

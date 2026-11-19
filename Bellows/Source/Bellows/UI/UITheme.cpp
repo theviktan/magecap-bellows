@@ -24,6 +24,10 @@ namespace Bellows {
 		{
 			using namespace UIColors;
 			const glm::vec4 disabled(0.165f, 0.180f, 0.325f, 0.45f);
+			const glm::vec4 dimText(glm::vec3(OffWhite), 0.5f);
+			// Edges that must be seen on navy (fields, check boxes, dropdowns) are lighter than slate: this one
+			// is 4.1:1 on navy and 3:1 on navy-light (WCAG 2.2 asks 3:1 for the edges of controls).
+			const glm::vec4 edge(0.439f, 0.463f, 0.682f, 1.0f);	// #7076AE
 			UITheme theme;
 			theme.TextColor = OffWhite;
 			theme.Accent = Accent;
@@ -42,13 +46,20 @@ namespace Bellows {
 				style.Get(UIWidgetState::Hover).Background = Slate;
 				style.Get(UIWidgetState::Pressed).Background = Accent;
 				style.Get(UIWidgetState::Disabled).Background = disabled;
-				style.Get(UIWidgetState::Disabled).Text = glm::vec4(glm::vec3(OffWhite), 0.5f);
+				style.Get(UIWidgetState::Disabled).Text = dimText;
+			}
+			UIWidgetStyle& dropdown = theme.Get(UIThemeWidget::Dropdown);
+			for (UIStateStyle& state : dropdown.States)
+			{
+				state.Border = edge;
+				state.BorderWidth = 2.0f;
 			}
 
 			UIWidgetStyle& toggle = theme.Get(UIThemeWidget::Toggle);
 			toggle.CornerRadius = 5.0f;
 			SetAllStates(toggle, { Navy, OffWhite, 2.0f, OffWhite });
 			toggle.Get(UIWidgetState::Disabled).Border = Slate;
+			toggle.Get(UIWidgetState::Disabled).Text = dimText;
 
 			UIWidgetStyle& slider = theme.Get(UIThemeWidget::Slider);
 			SetAllStates(slider, { Slate, Accent, 2.0f, OffWhite });
@@ -62,8 +73,25 @@ namespace Bellows {
 
 			UIWidgetStyle& input = theme.Get(UIThemeWidget::TextInput);
 			input.CornerRadius = 10.0f;
-			SetAllStates(input, { Navy, Slate, 2.0f, OffWhite });
+			SetAllStates(input, { Navy, edge, 2.0f, OffWhite });
 			input.Get(UIWidgetState::Focused).Border = Accent;
+			input.Get(UIWidgetState::Disabled).Border = Slate;
+			input.Get(UIWidgetState::Disabled).Text = dimText;
+
+			// "primary": the accent as background, with navy text (off-white on orange is only 2.2:1).
+			UIWidgetStyle primary = theme.Get(UIThemeWidget::Button);
+			SetAllStates(primary, { Accent, Accent, 0.0f, Navy });
+			primary.Get(UIWidgetState::Hover).Background = AccentLight;
+			primary.Get(UIWidgetState::Pressed).Background = glm::vec4(0.851f, 0.439f, 0.165f, 1.0f);	// #D9702A
+			primary.Get(UIWidgetState::Disabled) = theme.Get(UIThemeWidget::Button).Get(UIWidgetState::Disabled);
+			theme.Classes["primary"][UIThemeWidget::Button] = primary;
+			// "danger": a red that off-white text reads on (6:1 and more).
+			UIWidgetStyle danger = theme.Get(UIThemeWidget::Button);
+			SetAllStates(danger, { glm::vec4(0.659f, 0.196f, 0.196f, 1.0f), Slate, 0.0f, OffWhite });	// #A83232
+			danger.Get(UIWidgetState::Hover).Background = glm::vec4(0.749f, 0.239f, 0.239f, 1.0f);		// #BF3D3D
+			danger.Get(UIWidgetState::Pressed).Background = glm::vec4(0.549f, 0.157f, 0.157f, 1.0f);	// #8C2828
+			danger.Get(UIWidgetState::Disabled) = theme.Get(UIThemeWidget::Button).Get(UIWidgetState::Disabled);
+			theme.Classes["danger"][UIThemeWidget::Button] = danger;
 			return theme;
 		}
 

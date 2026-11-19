@@ -239,6 +239,7 @@ namespace Bellows {
 				JsonRead(*it, "OutlineWidth", component.OutlineWidth);
 				JsonRead(*it, "OutlineColor", component.OutlineColor);
 				JsonRead(*it, "FaceCamera", component.FaceCamera);
+				JsonRead(*it, "ThemeColor", component.ThemeColor);
 				JsonRead(*it, "Visible", component.Visible);
 			}
 
@@ -315,10 +316,16 @@ namespace Bellows {
 			if (auto it = json.find("UIButton"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<UIButtonComponent>();
-				JsonRead(*it, "NormalColor", component.NormalColor);
-				JsonRead(*it, "HoverColor", component.HoverColor);
-				JsonRead(*it, "PressedColor", component.PressedColor);
-				JsonRead(*it, "DisabledColor", component.DisabledColor);
+				// Only the colors a button sets are saved; the others come from the theme.
+				const auto readColor = [&](const char* key, std::optional<glm::vec4>& color)
+				{
+					if (auto value = it->find(key); value != it->end() && value->is_array() && value->size() == 4)
+						color = value->get<glm::vec4>();
+				};
+				readColor("NormalColor", component.NormalColor);
+				readColor("HoverColor", component.HoverColor);
+				readColor("PressedColor", component.PressedColor);
+				readColor("DisabledColor", component.DisabledColor);
 			}
 
 			if (auto it = json.find("UIToggle"); it != json.end())
@@ -524,6 +531,8 @@ namespace Bellows {
 			j["OutlineWidth"] = c->OutlineWidth;
 			j["OutlineColor"] = c->OutlineColor;
 			j["FaceCamera"] = c->FaceCamera;
+			if (c->ThemeColor)
+				j["ThemeColor"] = true;
 			j["Visible"] = c->Visible;
 		}
 
@@ -592,10 +601,16 @@ namespace Bellows {
 		if (const auto* c = entity.TryGetComponent<UIButtonComponent>())
 		{
 			Json& j = json["UIButton"];
-			j["NormalColor"] = c->NormalColor;
-			j["HoverColor"] = c->HoverColor;
-			j["PressedColor"] = c->PressedColor;
-			j["DisabledColor"] = c->DisabledColor;
+			j = Json::object();
+			const auto writeColor = [&](const char* key, const std::optional<glm::vec4>& color)
+			{
+				if (color)
+					j[key] = *color;
+			};
+			writeColor("NormalColor", c->NormalColor);
+			writeColor("HoverColor", c->HoverColor);
+			writeColor("PressedColor", c->PressedColor);
+			writeColor("DisabledColor", c->DisabledColor);
 		}
 
 		if (const auto* c = entity.TryGetComponent<UIToggleComponent>())

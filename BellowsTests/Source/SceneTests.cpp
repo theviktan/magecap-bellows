@@ -343,7 +343,8 @@ TEST_CASE("Scene serialization round-trips every component")
 	const UIButtonComponent& button = loadedChild.GetComponent<UIButtonComponent>();
 	CHECK(button.HoverColor == glm::vec4(0.5f, 0.6f, 0.7f, 1.0f));
 	CHECK(button.DisabledColor == glm::vec4(0.1f, 0.1f, 0.1f, 0.3f));
-	CHECK(button.NormalColor == UIButtonComponent().NormalColor);
+	CHECK_FALSE(button.NormalColor);	// Unset colors stay unset (the theme's)
+	CHECK_FALSE(button.PressedColor);
 	CHECK(loadedChild.GetComponent<UIToggleComponent>().On);
 	const UISliderComponent& slider = loadedChild.GetComponent<UISliderComponent>();
 	CHECK(slider.Min == doctest::Approx(-5.0f));

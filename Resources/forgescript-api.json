@@ -1437,6 +1437,12 @@
 					"doc": "World text always turned toward the camera"
 				},
 				{
+					"name": "theme_color",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Screen text takes its color from its canvas's theme (for its widget's state) instead of color"
+				},
+				{
 					"name": "visible",
 					"kind": "property",
 					"type": "bool",
@@ -1676,13 +1682,13 @@
 		},
 		{
 			"name": "UIButton",
-			"doc": "Clickable: colors its UIImage by state; a click (or ui_accept while focused) raises 'clicked'",
+			"doc": "Clickable: colors its UIImage by state, from its canvas's theme unless it sets its own; a click (or ui_accept while focused) raises 'clicked'",
 			"members": [
 				{
 					"name": "normal_color",
 					"kind": "property",
 					"type": "Vec4 | list[float]",
-					"doc": ""
+					"doc": "Its own once set; otherwise its theme's"
 				},
 				{
 					"name": "hover_color",
@@ -1701,6 +1707,13 @@
 					"kind": "property",
 					"type": "Vec4 | list[float]",
 					"doc": "When not interactable"
+				},
+				{
+					"name": "clear_colors",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Goes back to its theme's colors for every state"
 				}
 			]
 		},

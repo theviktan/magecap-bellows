@@ -270,7 +270,7 @@ namespace Bellows {
 		const auto* text = entity.TryGetComponent<TextComponent>();
 		const std::string& value = text ? text->Text : std::string();
 		const UITheme& theme = GetUITheme(element);
-		const glm::vec4 color = text ? text->Color : theme.TextColor;
+		const glm::vec4 color = text ? GetUITextColor(element, *text) : theme.Get(UIThemeWidget::TextInput, GetUIStyleClass(element)).Get(GetUIWidgetState(element)).Text;
 		const uint32_t entityID = entity.GetRenderID();
 		const UIRectangle areaClip = element.Clip.Intersect(view->Area);
 		const glm::vec4 textClip(areaClip.Min, areaClip.Max);
