@@ -109,6 +109,13 @@ target_include_directories(BellowsTextEditor SYSTEM PUBLIC "${CMAKE_CURRENT_SOUR
 target_link_libraries(BellowsTextEditor PUBLIC BellowsImGui)
 target_compile_features(BellowsTextEditor PUBLIC cxx_std_17)
 
+# --- Multi-channel signed distance fields for text (msdfgen core, MIT) ---------
+# Only the core: glyph outlines come from stb_truetype, so FreeType, Skia and PNG support stay out.
+file(GLOB BELLOWS_MSDFGEN_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/msdfgen/core/*.cpp")
+add_library(BellowsMsdfgen STATIC ${BELLOWS_MSDFGEN_SOURCES})
+target_include_directories(BellowsMsdfgen SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/msdfgen")
+target_compile_features(BellowsMsdfgen PUBLIC cxx_std_11)
+
 # --- Single-header libraries --------------------------------------------------
 add_library(BellowsHeaderLibs INTERFACE)
 target_include_directories(BellowsHeaderLibs SYSTEM INTERFACE
