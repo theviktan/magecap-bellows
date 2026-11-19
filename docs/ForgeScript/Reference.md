@@ -25,6 +25,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
 | New object | `new Enemy("Goblin")`, `new Point` |
 | Event handler | `when hit by damage ... end`, `when key pressed with key and shift ... end` |
+| Event from one entity | `when "Start" is clicked ... end`: runs only when the entity named Start (any letter case) raised the event, like a UI widget's events on their way up to its parents' scripts |
 | Send an event | `trigger hit with 25`, `trigger "game over"` |
 | Wait | `wait 2 seconds`, `wait 250 ms`, `wait 3 frames`, `wait`, `wait until ready` |
 | Run as a task | `start patrol()`, `start guard.patrol(3)` |

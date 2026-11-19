@@ -213,3 +213,11 @@ TEST_CASE("FindScriptVariablesIgnoresBrokenAndEmptyScripts")
 	REQUIRE_EQ(variables.size(), static_cast<size_t>(1));
 	CHECK_EQ(variables[0].Name, std::string("count"));
 }
+
+TEST_CASE("CompileErrorsInWhenWithAName")
+{
+	CHECK_CONTAINS(CompileFails("when \"{name}\" is clicked\nend\n").Message, "must be plain, without { }");
+	CHECK_CONTAINS(CompileFails("when \"\" is clicked\nend\n").Message, "Write the entity's name in the quotes");
+	CHECK_CONTAINS(CompileFails("when \"Start\" is\nend\n").Message, "when \"Start\" is clicked");
+	CompilesFine("when \"Start\" is clicked\nend\nwhen \"Player Name\" is submitted with text\n\tsay text\nend\n");
+}

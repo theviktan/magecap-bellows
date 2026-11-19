@@ -164,15 +164,28 @@ namespace Bellows::Scripting {
 		m_WarnedEvents.clear();
 		m_VM = CreateMachine();
 
-		// Events from other languages (Python's bellows.emit) reach every ForgeScript 'when' handler.
-		m_EventListener = AddScriptEventListener([this](const std::string& event, const ScriptValueList& values)
+		// Broadcasts from other languages (Python's bellows.emit) reach every ForgeScript 'when' handler.
+		// An event for one entity (a UI widget's, on its way up the hierarchy) reaches only that entity's
+		// script, with the name of the entity that raised it for 'when "Start" is clicked'.
+		m_EventListener = AddScriptEventListener([this](const std::string& event, const ScriptValueList& values, const ScriptEventDelivery& delivery)
 		{
 			if (!m_VM)
 				return;
 			std::vector<ForgeScript::Value> converted;
 			for (const ScriptValue& value : values)
 				converted.push_back(FromScriptValue(*m_VM, value));
-			m_VM->EmitAll(event, converted);
+			if (!delivery.Target)
+			{
+				m_VM->EmitAll(event, converted);
+				return;
+			}
+			std::string source;
+			if (delivery.Source)
+			{
+				if (const Entity raisedBy = delivery.Source->TryResolve())
+					source = raisedBy.GetName();
+			}
+			Emit(delivery.Target->ID, event, converted, source);
 		});
 
 		// "trigger name" reaches every script, so entities can talk to each other: ForgeScript scripts get
@@ -371,7 +384,7 @@ namespace Bellows::Scripting {
 		return allReloaded;
 	}
 
-	void ForgeScriptRuntime::Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values)
+	void ForgeScriptRuntime::Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values, const std::string& source)
 	{
 		auto it = m_Instances.find(entity);
 		if (it == m_Instances.end() || it->second.ErrorCount >= c_MaxErrorsPerInstance)
@@ -380,7 +393,7 @@ namespace Bellows::Scripting {
 		// Copy what we need: handlers may create or destroy entities, which changes the instance map.
 		ForgeScript::Module* module = it->second.Module;
 		const std::string scriptPath = it->second.ScriptPath;
-		if (m_VM->Emit(module, event, values))
+		if (m_VM->Emit(module, event, values, source))
 			return;
 
 		auto again = m_Instances.find(entity);

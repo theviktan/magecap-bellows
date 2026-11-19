@@ -1395,10 +1395,12 @@ namespace ForgeScript {
 		}
 
 		// Compiles a parameter list and body into a function and emits a closure for it.
-		void FunctionBody(const std::string& name, ScopeKind kind, const std::vector<std::string>& params, const Token& opener, const char* what)
+		void FunctionBody(const std::string& name, ScopeKind kind, const std::vector<std::string>& params, const Token& opener, const char* what,
+			const std::string& eventSource = {})
 		{
 			Function* fn = m_VM.NewFunction();
 			fn->Name = m_VM.Intern(name);
+			fn->EventSource = eventSource;
 			fn->Owner = m_Module;
 			fn->IsMethod = kind == ScopeKind::Method || kind == ScopeKind::FieldInit;
 			fn->Arity = static_cast<int>(params.size());
@@ -1740,7 +1742,21 @@ namespace ForgeScript {
 		{
 			Token opener = Current();
 			Advance();
-			std::string event = EventName("when game starts");
+			// 'when "Start" is clicked' runs only for the event the entity named "Start" raises. A text
+			// followed by 'is' is never an event name (those are 'when "door opened"'), so this form
+			// changes no script that worked before.
+			std::string source;
+			if (Check(TokenType::Interpolation))
+				ErrorAtCurrent("The text after 'when' must be plain, without { }: an event name, or an entity's name as in when \"Start\" is clicked.");
+			if (Check(TokenType::String) && Peek(1).Type == TokenType::Is)
+			{
+				source = Current().Text;
+				if (source.empty())
+					ErrorAtCurrent("Write the entity's name in the quotes, like: when \"Start\" is clicked");
+				Advance();
+				Advance();
+			}
+			std::string event = EventName(source.empty() ? "when game starts" : "when \"Start\" is clicked");
 			std::vector<std::string> params;
 			if (Match(TokenType::With) || Match(TokenType::By))
 			{
@@ -1750,7 +1766,8 @@ namespace ForgeScript {
 				} while (Match(TokenType::Comma) || Match(TokenType::And));
 			}
 			Match(TokenType::Do);
-			FunctionBody("when " + event, ScopeKind::Event, params, opener, "'when'");
+			FunctionBody(source.empty() ? "when " + event : "when \"" + source + "\" is " + event, ScopeKind::Event, params, opener, "'when'",
+				source);
 			EmitWithName(OpCode::OnEvent, event);
 		}
 

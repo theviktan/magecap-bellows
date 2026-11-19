@@ -104,3 +104,83 @@ TEST_CASE("Python scripts send and receive events, across languages too")
 	AssetManager::SetAssetDirectory({});
 	ScriptEngine::ResetErrorCount();
 }
+
+namespace {
+
+	// A Python script on a button: it writes down that it ran first.
+	const char* c_PythonButton = R"PY(
+import bellows
+
+class Button(bellows.Script):
+    def on_event(self, name, *values):
+        log = bellows.find_entity("Log").children[0]
+        log.name += f"python {self.entity.name} {name} {len(values)}; "
+)PY";
+
+	// A ForgeScript script on the menu above it: it hears its buttons after their own scripts.
+	const char* c_ForgeMenu = R"FORGE(
+when "start" is clicked
+	set log to find_entity("Log").children[1]
+	set log.name to log.name + "forge start; "
+end
+
+when clicked with widget
+	set log to find_entity("Log").children[1]
+	set who to "nothing"
+	if widget then set who to widget.name end
+	set log.name to log.name + "forge any {who}; "
+end
+
+when "Volume" is changed with value, widget
+	set log to find_entity("Log").children[1]
+	set log.name to log.name + "forge volume {value} from {widget.name}; "
+end
+)FORGE";
+
+}
+
+TEST_CASE("UI events reach a widget's own script first, then its parents', across languages")
+{
+	REQUIRE(ScriptEngine::IsInitialized());
+	ScriptEngine::ResetErrorCount();
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "UIEvents";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Button.py", c_PythonButton));
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Menu.forge", c_ForgeMenu));
+	AssetManager::SetAssetDirectory(assets);
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	// The scripts write what ran into the name of the Log's child, in order.
+	Entity log = scene->CreateEntity("Lines");
+	scene->SetParent(log, scene->CreateEntity("Log"));
+	Entity menu = scene->CreateEntity("Menu");
+	menu.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Menu.forge";
+	Entity start = scene->CreateEntity("Start");
+	scene->SetParent(start, menu);
+	start.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Button.py";
+	Entity volume = scene->CreateEntity("Volume");
+	scene->SetParent(volume, menu);
+	scene->OnRuntimeStart();
+	ScriptEngine::SetContextScene(scene.get());
+	scene->OnUpdateRuntime(1.0f / 60.0f);
+
+	using namespace Scripting;
+	log.GetComponent<TagComponent>().Tag = "";
+	EmitScriptEventFrom(ScriptEntity(start), "clicked", { ScriptValue(ScriptEntity(start)) });
+	CHECK_EQ(log.GetName(), std::string("python Start clicked 1; forge start; forge any Start; "));
+
+	// The widget comes last: the value first, then who raised it. A widget without a script still works.
+	log.GetComponent<TagComponent>().Tag = "";
+	EmitScriptEventFrom(ScriptEntity(volume), "changed", { ScriptValue(0.25), ScriptValue(ScriptEntity(volume)) });
+	CHECK_EQ(log.GetName(), std::string("forge volume 0.25 from Volume; "));
+
+	// A broadcast from a script never runs a handler written for one widget.
+	log.GetComponent<TagComponent>().Tag = "";
+	EmitScriptEvent("clicked", {});
+	CHECK_EQ(log.GetName(), std::string("python Start clicked 0; forge any nothing; "));
+	CHECK(ScriptEngine::GetErrorCount() == 0);
+
+	scene->OnRuntimeStop();
+	ScriptEngine::SetContextScene(nullptr);
+	AssetManager::SetAssetDirectory({});
+	ScriptEngine::ResetErrorCount();
+}

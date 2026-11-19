@@ -505,3 +505,47 @@ TEST_CASE("CarryOverVariablesKeepsStateButNotCode")
 	CHECK(h.Errors.empty());
 	CHECK_EQ(h.Output, std::string("5\nnew\n[1, 2]\n3\n9\ntrue\nnew code\n"));
 }
+
+TEST_CASE("WhenWithANameRunsOnlyForThatSource")
+{
+	Harness h;
+	Module* menu = h.Machine.CreateModule("menu.forge");
+	const char* script =
+		"when \"Start\" is clicked\n"
+		"\tsay \"start\"\n"
+		"end\n"
+		"when \"Volume\" is changed with value\n"
+		"\tsay \"volume {value}\"\n"
+		"end\n"
+		"when clicked with widget\n"
+		"\tsay \"any {widget}\"\n"
+		"end\n"
+		"when \"door opened\"\n"
+		"\tsay \"door\"\n"
+		"end\n";
+	REQUIRE(h.Machine.RunInModule(menu, script, "menu.forge").Success);
+
+	// The widget comes last in a UI event's values.
+	CHECK(h.Machine.Emit(menu, "clicked", { h.Machine.MakeText("Start") }, "Start"));
+	CHECK_EQ(h.Output, std::string("start\nany Start\n"));
+
+	h.Output.clear();
+	CHECK(h.Machine.Emit(menu, "clicked", { h.Machine.MakeText("Quit") }, "Quit"));
+	CHECK_EQ(h.Output, std::string("any Quit\n"));
+
+	// Names match ignoring letter case.
+	h.Output.clear();
+	CHECK(h.Machine.Emit(menu, "changed", { Value::FromNumber(0.5), h.Machine.MakeText("volume") }, "volume"));
+	CHECK_EQ(h.Output, std::string("volume 0.5\n"));
+
+	// An event without a source, like a script's 'trigger clicked', never runs a named handler.
+	h.Output.clear();
+	CHECK(h.Machine.Emit(menu, "clicked"));
+	CHECK_EQ(h.Output, std::string("any nothing\n"));
+
+	// A text event name without 'is' after it is still an event name.
+	h.Output.clear();
+	CHECK(h.Machine.Emit(menu, "door opened"));
+	CHECK_EQ(h.Output, std::string("door\n"));
+	CHECK(h.Errors.empty());
+}

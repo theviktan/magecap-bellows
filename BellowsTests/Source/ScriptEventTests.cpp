@@ -37,8 +37,8 @@ namespace {
 TEST_CASE("The script event hub delivers to every listener in order, except the sender")
 {
 	std::vector<std::string> calls;
-	ListenerScope first([&calls](const std::string& name, const ScriptValueList&) { calls.push_back("first " + name); });
-	ListenerScope second([&calls](const std::string& name, const ScriptValueList&) { calls.push_back("second " + name); });
+	ListenerScope first([&calls](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&) { calls.push_back("first " + name); });
+	ListenerScope second([&calls](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&) { calls.push_back("second " + name); });
 
 	EmitScriptEvent("door opened", { ScriptValue(true) });
 	EmitScriptEvent("door closed", {}, first.ID);
@@ -50,13 +50,13 @@ TEST_CASE("Script event listeners may remove themselves and others while an even
 	std::vector<std::string> calls;
 	ScriptEventListenerID later = 0;
 	ScriptEventListenerID self = 0;
-	self = AddScriptEventListener([&](const std::string&, const ScriptValueList&)
+	self = AddScriptEventListener([&](const std::string&, const ScriptValueList&, const ScriptEventDelivery&)
 	{
 		calls.push_back("self");
 		RemoveScriptEventListener(self);
 		RemoveScriptEventListener(later);
 	});
-	later = AddScriptEventListener([&calls](const std::string&, const ScriptValueList&) { calls.push_back("later"); });
+	later = AddScriptEventListener([&calls](const std::string&, const ScriptValueList&, const ScriptEventDelivery&) { calls.push_back("later"); });
 
 	EmitScriptEvent("ping", {});
 	EmitScriptEvent("ping", {});
@@ -66,7 +66,7 @@ TEST_CASE("Script event listeners may remove themselves and others while an even
 TEST_CASE("Script events nested too deep stop with an error")
 {
 	int depth = 0;
-	ListenerScope echo([&depth](const std::string& name, const ScriptValueList&)
+	ListenerScope echo([&depth](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&)
 	{
 		depth++;
 		EmitScriptEvent(name, {});
@@ -76,7 +76,7 @@ TEST_CASE("Script events nested too deep stop with an error")
 
 	// The depth count is back to zero afterwards, so later events work.
 	int calls = 0;
-	ListenerScope counter([&calls](const std::string&, const ScriptValueList&) { calls++; });
+	ListenerScope counter([&calls](const std::string&, const ScriptValueList&, const ScriptEventDelivery&) { calls++; });
 	RemoveScriptEventListener(echo.ID);
 	EmitScriptEvent("after", {});
 	CHECK_EQ(calls, 1);
@@ -86,7 +86,7 @@ TEST_CASE("Script events that multiply stop after 10,000")
 {
 	// Two listeners that each answer by sending the event again: the work doubles at every level.
 	int sent = 0;
-	auto answer = [&sent](const std::string& name, const ScriptValueList&)
+	auto answer = [&sent](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&)
 	{
 		sent++;
 		try
@@ -106,7 +106,7 @@ TEST_CASE("Script events that multiply stop after 10,000")
 	int calls = 0;
 	RemoveScriptEventListener(first.ID);
 	RemoveScriptEventListener(second.ID);
-	ListenerScope counter([&calls](const std::string&, const ScriptValueList&) { calls++; });
+	ListenerScope counter([&calls](const std::string&, const ScriptValueList&, const ScriptEventDelivery&) { calls++; });
 	EmitScriptEvent("calm", {});
 	CHECK_EQ(calls, 1);
 }
@@ -171,7 +171,7 @@ TEST_CASE("ForgeScript events reach other languages and their events reach Forge
 	ForgeScriptRuntime runtime([&errors](const std::string&, const std::string& message) { errors.push_back(message); });
 	std::vector<ReceivedEvent> received;
 	// Stands in for the Python side, which MCBellows connects to the hub the same way.
-	ListenerScope python([&received](const std::string& name, const ScriptValueList& values) { received.push_back({ name, values }); });
+	ListenerScope python([&received](const std::string& name, const ScriptValueList& values, const ScriptEventDelivery&) { received.push_back({ name, values }); });
 
 	Entity door = scene->CreateEntity("Door");
 	door.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Door.forge";
@@ -196,7 +196,7 @@ TEST_CASE("ForgeScript events reach other languages and their events reach Forge
 	// Two languages answering each other forever stop with an error the script can catch: every round
 	// doubles the events, so the limit on events per outer event is what ends it.
 	// Like a real language's listener, it reports its scripts' errors instead of letting them escape.
-	ListenerScope echo([&python](const std::string& name, const ScriptValueList&)
+	ListenerScope echo([&python](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&)
 	{
 		if (name != "ping pong")
 			return;
@@ -218,4 +218,85 @@ TEST_CASE("ForgeScript events reach other languages and their events reach Forge
 	runtime.Stop();
 	AssetManager::SetAssetDirectory({});
 	SetContextScene(nullptr);
+}
+
+TEST_CASE("Events from an entity reach its own scripts, then each parent's, every listener at each")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity menu = scene->CreateEntity("Menu");
+	Entity panel = scene->CreateEntity("Panel");
+	scene->SetParent(panel, menu);
+	Entity button = scene->CreateEntity("Start");
+	scene->SetParent(button, panel);
+
+	std::vector<std::string> calls;
+	auto record = [&calls](const char* listener)
+	{
+		return [&calls, listener](const std::string& name, const ScriptValueList& values, const ScriptEventDelivery& delivery)
+		{
+			const std::string target = delivery.Target ? delivery.Target->Resolve().GetName() : "everyone";
+			const std::string source = delivery.Source ? delivery.Source->Resolve().GetName() : "nobody";
+			calls.push_back(std::string(listener) + " " + name + " at " + target + " from " + source + " with " + std::to_string(values.size()));
+		};
+	};
+	ListenerScope forge(record("first"));
+	ListenerScope python(record("second"));
+
+	EmitScriptEventFrom(ScriptEntity(button), "clicked", { ScriptValue(ScriptEntity(button)) });
+	CHECK_EQ(calls, std::vector<std::string>{
+		"first clicked at Start from Start with 1", "second clicked at Start from Start with 1",
+		"first clicked at Panel from Start with 1", "second clicked at Panel from Start with 1",
+		"first clicked at Menu from Start with 1", "second clicked at Menu from Start with 1" });
+
+	// A broadcast has neither a target nor a source.
+	calls.clear();
+	EmitScriptEvent("cancelled", {});
+	CHECK_EQ(calls, std::vector<std::string>{ "first cancelled at everyone from nobody with 0", "second cancelled at everyone from nobody with 0" });
+
+	// An entity that no longer exists raises nothing.
+	calls.clear();
+	ScriptEntity gone(scene->CreateEntity("Gone"));
+	scene->DestroyEntity(gone.Resolve());
+	CHECK_NOTHROW(EmitScriptEventFrom(gone, "clicked", {}));
+	CHECK(calls.empty());
+}
+
+TEST_CASE("Events going up the hierarchy stop where an entity is destroyed")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity menu = scene->CreateEntity("Menu");
+	Entity button = scene->CreateEntity("Start");
+	scene->SetParent(button, menu);
+
+	// Stands in for a script on the button that closes the whole menu when clicked.
+	std::vector<std::string> reached;
+	ListenerScope closer([&](const std::string&, const ScriptValueList&, const ScriptEventDelivery& delivery)
+	{
+		const Entity target = delivery.Target->Resolve();
+		reached.push_back(target.GetName());
+		if (target == button)
+			scene->DestroyEntity(menu);
+	});
+	ListenerScope after([&reached](const std::string&, const ScriptValueList&, const ScriptEventDelivery&)
+	{
+		// The second listener still hears the button: the walk only ends before the next entity.
+		reached.push_back("after");
+	});
+
+	EmitScriptEventFrom(ScriptEntity(button), "clicked", {});
+	CHECK_EQ(reached, std::vector<std::string>{ "Start", "after" });
+}
+
+TEST_CASE("Events going up the hierarchy that keep raising events stop with an error")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity button = scene->CreateEntity("Start");
+	int depth = 0;
+	ListenerScope echo([&](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&)
+	{
+		depth++;
+		EmitScriptEventFrom(ScriptEntity(button), name, {});
+	});
+	CHECK_THROWS_WITH_AS(EmitScriptEventFrom(ScriptEntity(button), "changed", {}), doctest::Contains("sent from inside 64 other events"), ScriptValueError);
+	CHECK_EQ(depth, 64);
 }

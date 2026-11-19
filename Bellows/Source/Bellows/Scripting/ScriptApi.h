@@ -86,12 +86,24 @@ namespace Bellows::Scripting {
 		bool operator==(const ScriptValue& other) const { return Data == other.Data; }
 	};
 
-	// Receives every script event: ForgeScript's 'trigger door opened with self' and Python's
-	// bellows.emit("door opened", self.entity). Each language registers one listener that hands events
-	// to its scripts (ForgeScript's 'when door opened with who', Python's on_event(self, name, *values)).
-	// A listener must not throw: it reports its own scripts' errors (including a ScriptValueError from an
-	// EmitScriptEvent its scripts called), the same way it reports any other script error.
-	using ScriptEventListener = std::function<void(const std::string& name, const ScriptValueList& values)>;
+	// Who an event goes to. A broadcast (no Target) reaches every script, as 'trigger' and bellows.emit
+	// do. With a Target, a listener hands the event only to the scripts attached to that entity. Source
+	// is the entity that raised the event (a UI widget), or empty: ForgeScript compares its name for
+	// handlers written 'when "Start" is clicked'.
+	struct ScriptEventDelivery
+	{
+		std::optional<ScriptEntity> Target;
+		std::optional<ScriptEntity> Source;
+	};
+
+	// Receives every script event: ForgeScript's 'trigger door opened with self', Python's
+	// bellows.emit("door opened", self.entity), and the engine's UI events. Each language registers one
+	// listener that hands events to its scripts (ForgeScript's 'when door opened with who', Python's
+	// on_event(self, name, *values)). A listener must not throw: it reports its own scripts' errors
+	// (including a ScriptValueError from an EmitScriptEvent its scripts called), the same way it reports
+	// any other script error.
+	using ScriptEventListener = std::function<void(const std::string& name, const ScriptValueList& values,
+		const ScriptEventDelivery& delivery)>;
 	using ScriptEventListenerID = uint64_t;
 
 	ScriptEventListenerID AddScriptEventListener(ScriptEventListener listener);
@@ -102,6 +114,13 @@ namespace Bellows::Scripting {
 	// this throws ScriptValueError instead, so scripts that answer each other's events forever stop
 	// with a clear error.
 	void EmitScriptEvent(const std::string& name, const ScriptValueList& values, ScriptEventListenerID skip = 0);
+	// Delivers an event raised by 'source' (a UI widget's clicked, changed, ...) to the scripts on
+	// 'source', then to those on its parent, and so on up to the root, so one script on a menu hears
+	// all its buttons. At each entity every listener runs in the order they were added, so the order is
+	// by entity first, whatever language each script is in. 'values' go as given (UI events end with
+	// the widget). The walk stops at an entity that no longer exists. The whole walk is one level of
+	// nesting, with the same limits as EmitScriptEvent.
+	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values);
 
 	// The scene that module-level functions (create_entity, find_entity, ...) operate on.
 	void SetContextScene(Scene* scene);
