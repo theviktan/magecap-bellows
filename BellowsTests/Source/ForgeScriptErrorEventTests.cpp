@@ -20,13 +20,18 @@ namespace {
 		std::vector<Scripting::ScriptValueList> Errors;
 		Scripting::ScriptEventListenerID Listener = 0;
 
-		explicit ErrorEventScene(const char* faulty)
+		explicit ErrorEventScene(const char* faulty, const char* watcher = nullptr)
 		{
 			REQUIRE(ScriptEngine::IsInitialized());
 			const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "ForgeScriptErrorEvents";
 			REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Faulty.forge", faulty));
 			AssetManager::SetAssetDirectory(assets);
 			Play->CreateEntity("Faulty").AddComponent<ScriptComponent>().ScriptPath = "Scripts/Faulty.forge";
+			if (watcher)
+			{
+				REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "Watcher.forge", watcher));
+				Play->CreateEntity("Watcher").AddComponent<ScriptComponent>().ScriptPath = "Scripts/Watcher.forge";
+			}
 			Listener = Scripting::AddScriptEventListener([this](const std::string& name, const Scripting::ScriptValueList& values,
 				const Scripting::ScriptEventDelivery&)
 			{
@@ -42,11 +47,12 @@ namespace {
 			ScriptEngine::ResetErrorCount();
 		}
 
-		void Run()
+		void Run(int frames = 1)
 		{
 			Play->OnRuntimeStart();
 			ScriptEngine::SetContextScene(Play.get());
-			Play->OnUpdateRuntime(1.0f / 60.0f);
+			for (int i = 0; i < frames; i++)
+				Play->OnUpdateRuntime(1.0f / 60.0f);
 		}
 	};
 
@@ -102,4 +108,28 @@ TEST_CASE("A ForgeScript script that doesn't compile reaches 'script error' too"
 	CHECK(Number(error[2]) == 1.0);
 	CHECK(Stack(error[3]) == std::vector<std::string>{ "Scripts/Faulty.forge:1" });
 	CHECK(Text(error[4]) == "forgescript");
+}
+
+TEST_CASE("A ForgeScript 'script error' handler that fails is only logged, never sent again")
+{
+	// The watcher hears Faulty's error each frame and fails while handling it; its own failures must not
+	// come back to it as new 'script error' events, or it would loop.
+	ErrorEventScene fixture(
+		"when update with delta\n\tsay [1][5]\nend\n",
+		"set heard to 0\n"
+		"when script error with message, file, line, stack, language, name\n"
+		"\tadd 1 to heard\n"
+		"\tset my name to \"heard {heard} from {file}:{line}\"\n"
+		"\tsay [1][9]\n"
+		"end\n");
+	ScriptEngine::ResetErrorCount();
+	fixture.Run(2);
+
+	// Faulty's two errors were sent; the watcher's two failures were only logged.
+	CHECK(ScriptEngine::GetErrorCount() == 4);
+	REQUIRE(fixture.Errors.size() == 2);
+	for (const Scripting::ScriptValueList& error : fixture.Errors)
+		CHECK(Text(error[1]) == "Scripts/Faulty.forge");
+	// The watcher renamed itself on each error it heard, before failing.
+	CHECK(static_cast<bool>(fixture.Play->FindEntityByName("heard 2 from Scripts/Faulty.forge:2")));
 }
