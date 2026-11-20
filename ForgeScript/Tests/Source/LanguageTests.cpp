@@ -511,3 +511,50 @@ TEST_CASE("WarningsForValuesThatHideBuiltins")
 	}
 	CHECK(Output("set max to 10\nsay max\n") == "10\n");
 }
+
+TEST_CASE("NestingTooDeepIsAMistakeNotACrash")
+{
+	// Audit S-1 and S-2: the parser goes one level down the C++ stack per bracket or block, so deep
+	// nesting must stop with a mistake (and quickly), never overflow the stack.
+	auto repeated = [](const std::string& text, size_t count)
+	{
+		std::string out;
+		out.reserve(text.size() * count);
+		for (size_t i = 0; i < count; i++)
+			out += text;
+		return out;
+	};
+	const char* tooDeep = "This is nested too deeply (more than 256 levels of brackets or blocks).";
+
+	const std::vector<std::string> hostile = {
+		"set x to " + repeated("(", 100000) + "1" + repeated(")", 100000) + "\n",
+		"set x to " + repeated("[", 100000) + "1" + repeated("]", 100000) + "\n",
+		"set x to " + repeated("{a: ", 100000) + "1" + repeated("}", 100000) + "\n",
+		"say " + repeated("f(", 100000) + "1" + repeated(")", 100000) + "\n",
+		"say " + repeated("- ", 100000) + "1\n",
+		"say " + repeated("not ", 100000) + "yes\n",
+		"say " + repeated("2 ^ ", 100000) + "1\n",
+		repeated("if yes then\n", 100000) + "say 1\n" + repeated("end\n", 100000),
+	};
+	for (const std::string& source : hostile)
+	{
+		VM vm;
+		const std::vector<CompileError> mistakes = vm.FindMistakes(source, "deep.forge");
+		REQUIRE(mistakes.size() == 1);
+		CHECK_CONTAINS(mistakes[0].Message, tooDeep);
+		CompileError error;
+		CHECK_FALSE(vm.Check(source, "deep.forge", error));
+		CHECK_CONTAINS(error.Message, tooDeep);
+	}
+
+	// Real code never comes near the limit: 250 levels of each still work.
+	CHECK(Output("set x to " + repeated("(", 250) + "1" + repeated(")", 250) + "\nsay x\n") == "1\n");
+	CHECK(Output("set x to " + repeated("[", 250) + "1" + repeated("]", 250) + "\nsay length(x)\n") == "1\n");
+	CHECK(Output(repeated("if yes then\n", 250) + "say 1\n" + repeated("end\n", 250)) == "1\n");
+
+	// The rest of the script is still checked after a line that is too deep.
+	VM vm;
+	const std::vector<CompileError> mistakes = vm.FindMistakes("set x to " + repeated("(", 1000) + "1" + repeated(")", 1000) + "\nset to 5\n", "deep.forge");
+	REQUIRE(mistakes.size() == 2);
+	CHECK(mistakes[1].Line == 2);
+}

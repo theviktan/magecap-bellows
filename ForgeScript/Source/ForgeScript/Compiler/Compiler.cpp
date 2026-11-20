@@ -205,7 +205,7 @@ namespace ForgeScript {
 				for (const auto& [start, end] : hoisted)
 				{
 					m_Pos = start;
-					RecoverableUnit(script, end, [this] { Statement(); });
+					RecoverableUnit(script, [unitEnd = end] { return unitEnd; }, [this] { Statement(); });
 				}
 
 				m_Pos = 0;
@@ -223,7 +223,7 @@ namespace ForgeScript {
 						continue;
 					}
 					const size_t start = m_Pos;
-					RecoverableUnit(script, EndOfUnit(start), [this] { Statement(); });
+					RecoverableUnit(script, [this, start] { return EndOfUnit(start); }, [this] { Statement(); });
 					SkipNewlines();
 				}
 
@@ -396,8 +396,10 @@ namespace ForgeScript {
 		// inside it is recorded, the compiler's state is put back as it was before the unit, and compiling
 		// continues at 'resume' (the end of the unit, including any block it opens). Skipping whole
 		// statements keeps one mistake from causing more.
-		template<typename Unit>
-		void RecoverableUnit(FunctionState& state, size_t resume, Unit unit)
+		// 'resume' gives where to go on after a mistake. It is only asked then: working it out scans the
+		// rest of the unit, which for every statement of deeply nested blocks would add up quickly.
+		template<typename Resume, typename Unit>
+		void RecoverableUnit(FunctionState& state, Resume resume, Unit unit)
 		{
 			const size_t locals = state.Locals.size();
 			const size_t loops = state.Loops.size();
@@ -425,7 +427,8 @@ namespace ForgeScript {
 				m_StopWords.resize(stopWords);
 				m_NoInvoke = false;
 				// A mistake that knows its block reaches further (a match with no 'is') says where to go on.
-				m_Pos = m_ResumeAfter != c_NoResume ? std::max(resume, m_ResumeAfter) : resume;
+				const size_t next = resume();
+				m_Pos = m_ResumeAfter != c_NoResume ? std::max(next, m_ResumeAfter) : next;
 				m_ResumeAfter = c_NoResume;
 			}
 		}
@@ -1132,11 +1135,12 @@ namespace ForgeScript {
 		// Parses statements until 'end', 'else', 'otherwise', 'catch' or the end of the file.
 		void Block()
 		{
+			Nested nested(*this);
 			SkipNewlines();
 			while (!IsBlockEnd())
 			{
 				const size_t start = m_Pos;
-				RecoverableUnit(*m_State, EndOfUnit(start), [this] { Statement(); });
+				RecoverableUnit(*m_State, [this, start] { return EndOfUnit(start); }, [this] { Statement(); });
 				SkipNewlines();
 			}
 		}
@@ -2695,6 +2699,7 @@ namespace ForgeScript {
 		// groups to the right, so a chain reads in order: "a" if x otherwise "b" if y otherwise "c".
 		void Expression()
 		{
+			Nested nested(*this);
 			const size_t start = CurrentChunk().Size();
 			OrExpression();
 			if (!Check(TokenType::If) || !IfPicksAValue(m_Tokens, m_Pos))
@@ -2744,6 +2749,7 @@ namespace ForgeScript {
 		{
 			if (Match(TokenType::Not))
 			{
+				Nested nested(*this);
 				NotExpression();
 				EmitOp(OpCode::Not);
 				return;
@@ -3044,6 +3050,7 @@ namespace ForgeScript {
 		{
 			if (Match(TokenType::Minus))
 			{
+				Nested nested(*this);
 				Unary();
 				EmitOp(OpCode::Negate);
 				return;
@@ -3056,6 +3063,7 @@ namespace ForgeScript {
 			OfExpression();
 			if (Match(TokenType::Caret))
 			{
+				Nested nested(*this);
 				Unary();
 				EmitOp(OpCode::Power);
 			}
@@ -3389,6 +3397,28 @@ namespace ForgeScript {
 		// The 'finally' tokens that end a try or catch section.
 		std::set<size_t> m_FinallyMarkers;
 		int m_MatchDepth = 0;
+		// How deeply the code being read is nested (brackets, lists, calls, blocks, 'not' and '-' chains).
+		// The parser goes one level down the C++ stack for each, so a limit keeps a hostile file from
+		// overflowing it, and keeps checking fast: each level of blocks rescans what it holds.
+		static constexpr int c_MaxNesting = 256;
+		int m_Nesting = 0;
+
+		class Nested
+		{
+		public:
+			explicit Nested(Compiler& compiler) : m_Compiler(compiler)
+			{
+				if (m_Compiler.m_Nesting >= c_MaxNesting)
+					m_Compiler.ErrorAtCurrent("This is nested too deeply (more than " + std::to_string(c_MaxNesting) +
+						" levels of brackets or blocks). Split it into smaller pieces, like a function for the inner part.");
+				m_Compiler.m_Nesting++;
+			}
+			~Nested() { m_Compiler.m_Nesting--; }
+			Nested(const Nested&) = delete;
+			Nested& operator=(const Nested&) = delete;
+		private:
+			Compiler& m_Compiler;
+		};
 		bool m_ChoicelessMatchIsBlock = false; // set once the phrases are known
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement // open match blocks, where a line starting with 'is' starts the next choice
