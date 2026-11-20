@@ -1,0 +1,145 @@
+# Every ForgeScript example in docs/ForgeScript/ComingFromPythonAndGDScript.md, so the page stays true.
+
+# Variables and text
+set score to 0
+add 10 to score
+set name to "Ada"
+say "Hello, {name}! Score: {score}"                     # expect: Hello, Ada! Score: 10
+constant MAX_HP is 100
+say MAX_HP                                               # expect: 100
+
+# Numbers
+say 7 / 2                                                # expect: 3.5
+say floor(7 / 2)                                         # expect: 3
+say -7 % 3                                               # expect: 2
+say 2 ^ 10                                               # expect: 1024
+
+# What counts as true
+if 0 then say "0 counts as true" end                     # expect: 0 counts as true
+if "" then say "empty text counts as true" end           # expect: empty text counts as true
+set items to []
+if items is empty then say "no items" end                # expect: no items
+
+# Decisions
+set hp to 30
+if hp is below 25 then
+	say "low"
+else if hp is below 50 then
+	say "hurt"
+else
+	say "fine"
+end
+# expect: hurt
+say "big" if hp > 20 otherwise "small"                   # expect: big
+
+set weapon to "bow"
+match weapon
+is "sword" then say "Slash!"
+is "bow", "crossbow" then say "Twang!"
+otherwise say "Thud."
+end
+# expect: Twang!
+
+# Loops
+for i from 0 to 2
+	say i
+end
+# expect: 0
+# expect: 1
+# expect: 2
+for each enemy, position in ["slime", "bat"]
+	say "{position}: {enemy}"
+end
+# expect: 1: slime
+# expect: 2: bat
+set n to 3
+while n is above 0
+	take 1 from n
+end
+say n                                                    # expect: 0
+repeat 2 times
+	say "again"
+end
+# expect: again
+# expect: again
+
+# Lists
+set party to ["Ada", "Bo"]
+add "Cy" to party
+say party[1]                                             # expect: Ada
+say party[-1]                                            # expect: Cy
+say party.length                                         # expect: 3
+say party contains "Bo"                                  # expect: true
+say [1, 2, 3].map(function(x) return x * 2 end)          # expect: [2, 4, 6]
+set a, b to [1, 2]
+set a, b to [b, a]
+say "{a} {b}"                                            # expect: 2 1
+
+# Maps
+set hero to { name: "Ada", hp: 50 }
+set hero.hp to 40
+say hero["name"]                                         # expect: Ada
+say hero.get("mana", 0)                                  # expect: 0
+for each key, value in hero
+	say "{key} = {value}"
+end
+# expect: name = Ada
+# expect: hp = 40
+
+# Functions
+function attack(target, damage is 10, crit is 1)
+	return "{target} takes {damage * crit}"
+end
+say attack("goblin")                                     # expect: goblin takes 10
+say attack("goblin", crit: 2)                            # expect: goblin takes 20
+set double to function(x) return x * 2 end
+say double(4)                                            # expect: 8
+
+# Phrases
+phrase heal (target) by (amount)
+	add amount to target.hp
+end
+heal hero by 5
+say hero.hp                                              # expect: 45
+
+# Kinds (classes)
+kind Enemy
+	set name to "enemy"
+	set health to 50
+	function setup(name)
+		set my name to name
+	end
+	function hurt(amount)
+		take amount from my health
+	end
+end
+kind Boss extends Enemy
+	set health to 300
+	function hurt(amount)
+		parent.hurt(amount / 2)
+	end
+end
+set dragon to new Boss("Dragon")
+dragon.hurt(100)
+say "{dragon.name}: {dragon.health}"                     # expect: Dragon: 250
+say dragon is a Enemy                                    # expect: true
+
+# Errors
+function risky()
+	fail "out of arrows"
+end
+try
+	risky()
+catch problem
+	say "Caught: {problem}"
+finally
+	say "always"
+end
+# expect: Caught: out of arrows
+# expect: always
+
+# Events
+when hit by damage
+	say "Ouch, {damage}!"
+end
+trigger hit with 25                                      # expect: Ouch, 25!
