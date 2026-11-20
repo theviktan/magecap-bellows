@@ -24,7 +24,8 @@ with new language or tool features, the patch number with fixes.
 - **Deep nesting is a mistake, not a crash** (audit S-1 and S-2). Code nested more than 256 levels
   deep (brackets, lists, maps, calls, blocks, or chains of `-`, `not` and `^`) gets "This is nested
   too deeply (more than 256 levels of brackets or blocks). Split it into smaller pieces, like a
-  function for the inner part." Before, 10,000 nested brackets (a 20 KB file) overflowed the stack
+  function for the inner part." The compiler also stops there if reading has used 512 KB of stack,
+  well inside the 1 MB a Windows program's main thread gets. Before, 10,000 nested brackets (a 20 KB file) overflowed the stack
   and crashed every checker, the editor's Script Editor included. Checking deeply nested blocks is
   also fast now: 100,000 nested `if`s check in under half a second instead of 20 seconds, because
   where to go on after a mistake is only worked out when there is one. No real script comes near

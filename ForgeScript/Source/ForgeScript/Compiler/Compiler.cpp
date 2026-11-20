@@ -6,6 +6,7 @@
 #include "ForgeScript/VM/VM.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <set>
 #include <string_view>
 #include <unordered_map>
@@ -167,6 +168,8 @@ namespace ForgeScript {
 
 		Function* Compile(CompileError& outError)
 		{
+			const char stackMark = 0;
+			m_StackStart = reinterpret_cast<std::uintptr_t>(&stackMark);
 			try
 			{
 				// Text the lexer could not read (an unfinished string, a stray character). The rest of the
@@ -401,6 +404,14 @@ namespace ForgeScript {
 		template<typename Resume, typename Unit>
 		void RecoverableUnit(FunctionState& state, Resume resume, Unit unit)
 		{
+			// Without a list of mistakes to fill, the first one ends the compile: no catch, so the error
+			// goes straight up instead of through one handler per nested block (on Windows each handler
+			// runs on top of the stack the error was thrown from).
+			if (!m_AllErrors)
+			{
+				unit();
+				return;
+			}
 			const size_t locals = state.Locals.size();
 			const size_t loops = state.Loops.size();
 			const size_t finallies = state.Finally.size();
@@ -3396,19 +3407,30 @@ namespace ForgeScript {
 		std::unordered_map<std::string, bool> m_NamesMayExist;
 		// The 'finally' tokens that end a try or catch section.
 		std::set<size_t> m_FinallyMarkers;
-		int m_MatchDepth = 0;
+		int m_MatchDepth = 0; // open match blocks, where a line starting with 'is' starts the next choice
 		// How deeply the code being read is nested (brackets, lists, calls, blocks, 'not' and '-' chains).
 		// The parser goes one level down the C++ stack for each, so a limit keeps a hostile file from
-		// overflowing it, and keeps checking fast: each level of blocks rescans what it holds.
+		// overflowing it. Frames differ in size between compilers, so the stack used since Compile began
+		// is limited too, well inside the 1 MB a Windows program's main thread gets.
 		static constexpr int c_MaxNesting = 256;
+		static constexpr std::uintptr_t c_MaxStackBytes = 512 * 1024;
 		int m_Nesting = 0;
+		std::uintptr_t m_StackStart = 0;
+
+		bool StackIsDeep() const
+		{
+			const char here = 0;
+			const std::uintptr_t now = reinterpret_cast<std::uintptr_t>(&here);
+			const std::uintptr_t used = now < m_StackStart ? m_StackStart - now : now - m_StackStart;
+			return m_StackStart != 0 && used > c_MaxStackBytes;
+		}
 
 		class Nested
 		{
 		public:
 			explicit Nested(Compiler& compiler) : m_Compiler(compiler)
 			{
-				if (m_Compiler.m_Nesting >= c_MaxNesting)
+				if (m_Compiler.m_Nesting >= c_MaxNesting || m_Compiler.StackIsDeep())
 					m_Compiler.ErrorAtCurrent("This is nested too deeply (more than " + std::to_string(c_MaxNesting) +
 						" levels of brackets or blocks). Split it into smaller pieces, like a function for the inner part.");
 				m_Compiler.m_Nesting++;
@@ -3421,7 +3443,7 @@ namespace ForgeScript {
 		};
 		bool m_ChoicelessMatchIsBlock = false; // set once the phrases are known
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
-		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement // open match blocks, where a line starting with 'is' starts the next choice
+		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.
