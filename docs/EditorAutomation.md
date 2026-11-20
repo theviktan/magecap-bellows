@@ -51,6 +51,12 @@ request must carry the session token the editor writes to `AgentSession.json` in
 
 (`BELLOWS_CONFIG_DIR` overrides the config folder, which the tests use to stay isolated.)
 
+The token is 64 hex digits from the system's secure random source, new every time the editor
+starts; on Linux the session file is readable only by you (mode 0600). A connection whose first line
+is an HTTP request line (`POST / HTTP/1.1`, ...) is closed without an answer, so a web page in a
+browser can't send the editor commands. Up to 8 clients can be connected at once, each served on
+its own; a request line has 30 seconds to arrive whole.
+
 ### Command-line client
 
 ```bash

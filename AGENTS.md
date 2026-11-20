@@ -56,7 +56,7 @@ The tests:
 | `ForgeScriptEngineExample` | The small stand-alone host in `ForgeScript/Examples/EngineIntegration`. |
 | `ForgeScriptCheckCommand` | `forgescript --check` text, `--json`, `--stdin`/`--name` output and exit codes, which editors and MageCap Forge depend on (`ForgeScript/Tests/CLI`). |
 | `ForgeScriptLspCommand` | `forgescript --lsp`, the language server, over standard input and output with a recorded session (`ForgeScript/Tests/LSP`). |
-| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings (no GPU). |
+| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings, the agent server over loopback (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
