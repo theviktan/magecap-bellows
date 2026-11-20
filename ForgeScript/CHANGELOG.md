@@ -5,7 +5,15 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
-## 1.4.0 (2026-11-18)
+## 1.4.1 (not released yet)
+
+- A `match` with no `is` choice before `otherwise` or `end` now says so: "A 'match' needs at least
+  one 'is' choice before 'otherwise' or 'end', like: match weapon / is "sword" then ... /
+  otherwise ... / end". Before, it said "Expected the end of the line" on the `match` line and then
+  "This 'otherwise' needs an 'if' before it." A script's own phrase named `match` is untouched.
+- 1.4.0's date is the day it first shipped, in MageCap Bellows 0.3.2.
+
+## 1.4.0 (2026-11-19)
 
 Events raised by one entity (Phase 2's UI events):
 - `when "Start" is clicked ... end` runs only when the entity named Start raised the event, with

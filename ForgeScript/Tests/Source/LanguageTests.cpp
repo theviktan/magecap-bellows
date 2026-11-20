@@ -427,6 +427,18 @@ TEST_CASE("CompileErrorsInMatch")
 	CHECK_CONTAINS(CompileFails("match x\nis 1 then say 1\notherwise\nsay 2\nis 3 then say 3\nend\n").Message,
 		"Put 'otherwise' last in a 'match', after every 'is'.");
 	CHECK_CONTAINS(CompileFails("is 4 then say 1\n").Message, "Each 'is' choice goes inside a 'match', like: match weapon");
+	// A match with no 'is' choice says so, whether 'otherwise' or 'end' comes next.
+	CHECK_CONTAINS(CompileFails("match score\notherwise\nsay 1\nend\n").Message,
+		"A 'match' needs at least one 'is' choice before 'otherwise' or 'end'");
+	CHECK(CompileFails("match score\notherwise\nsay 1\nend\n").Line == 1);
+	CHECK_CONTAINS(CompileFails("match \"rain\"\nend\n").Message, "A 'match' needs at least one 'is' choice");
+	// 'match' as a name or a script's own phrase before 'otherwise' still means what it did.
+	{
+		VM vm;
+		CompileError error;
+		CHECK(vm.Check("if yes\nmatch(1)\notherwise\nsay 2\nend\n", "test.forge", error));
+	}
+	CHECK(Output("phrase match (x)\n\tsay \"phrase {x}\"\nend\nif yes\n\tmatch 5\notherwise\n\tsay 0\nend\n") == "phrase 5\n");
 	// An 'if' left open inside a choice is named, not the match.
 	CHECK_CONTAINS(CompileFails("match x\nis 1 then\nif yes then say 1\nis 2 then say 2\nend\n").Message,
 		"This 'if' is missing its 'end'.");
