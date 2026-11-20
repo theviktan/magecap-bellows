@@ -33,7 +33,7 @@ target_link_libraries(Bellows
 		${CMAKE_DL_LIBS})
 
 if(WIN32)
-	target_link_libraries(Bellows PUBLIC ws2_32)
+	target_link_libraries(Bellows PUBLIC ws2_32 bcrypt)
 endif()
 
 target_compile_definitions(Bellows PUBLIC
