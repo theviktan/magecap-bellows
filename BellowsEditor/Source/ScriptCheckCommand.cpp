@@ -66,13 +66,19 @@ namespace Bellows {
 			if (folder == folder.parent_path())
 				break;
 		}
-		AssetManager::SetAssetDirectory(assetDirectory);
-
+		// Checking a Python script only compiles it, which imports nothing, so its project's files
+		// stay off Python's path: checking a script never runs any of the project's code.
 		bool pythonReady = true;
 		if (language == ScriptLanguage::Python)
+		{
+			AssetManager::SetAssetDirectory({});
 			pythonReady = ScriptEngine::Init();
+		}
 		else
+		{
+			AssetManager::SetAssetDirectory(assetDirectory);
 			SetForgeScriptCheckSetup(SetUpEngineForgeScriptCheck);
+		}
 
 		int exitCode = 0;
 		if (!pythonReady)
