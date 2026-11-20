@@ -1035,6 +1035,27 @@ TEST_CASE("UI text inputs take typing, edit, select, copy and paste, and submit"
 		CHECK(input.RuntimeView.Display == "!short");
 		CHECK(input.RuntimeView.Rows.size() == 1);
 	}
+	SUBCASE("Multi-line: a long text is wrapped once, not again while it stays the same")
+	{
+		// MCAudit's B-6: 20,000 characters re-wrapped every frame cost about 50 ms on lavapipe.
+		input.MultiLine = true;
+		std::string text;
+		while (text.size() < 20000)
+			text += "the quick brown fox jumps over the lazy dog ";
+		label.Text = text;
+		ui.Tap(KeyCode::End);
+		REQUIRE(input.RuntimeView.Valid);
+		CHECK(input.RuntimeView.Rows.size() > 100);
+		// A new layout is made before the old one is freed, so a rebuild always moves the quads.
+		const TextGlyphQuad* quads = input.RuntimeView.Layout.Quads.data();
+		ui.Tap(KeyCode::Left);
+		ui.Tap(KeyCode::Up);
+		ui.Frame();
+		CHECK(input.RuntimeView.Layout.Quads.data() == quads);
+		type("!");
+		CHECK(input.RuntimeView.Layout.Quads.data() != quads);
+		CHECK(input.RuntimeView.Display.size() == text.size() + 1);
+	}
 	SUBCASE("A press places the caret, and a drag selects")
 	{
 		type("abcdef");
