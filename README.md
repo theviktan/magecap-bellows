@@ -25,6 +25,7 @@ can drive end to end.
   rounded panels with borders and images, and screen text, drawn crisp over the game. The editor's
   **UI view** shows the game's screen at a chosen size (1080p, 4K, portrait, ...) with handles to move
   and resize the selected rect and drag its anchors, and the Inspector has Godot-style anchor presets.
+  **Create → UI** also makes whole screens to start from: a Main Menu and a HUD.
 * **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics and audio. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
