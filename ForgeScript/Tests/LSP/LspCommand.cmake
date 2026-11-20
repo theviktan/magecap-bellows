@@ -31,7 +31,7 @@ execute_process(COMMAND "${FORGESCRIPT}" --lsp game.forge RESULT_VARIABLE code O
 if(NOT code EQUAL 64)
 	message(FATAL_ERROR "forgescript --lsp game.forge exited with ${code}, expected 64")
 endif()
-# --api goes with --lsp or --check (since 1.4.1); running a script with it is wrong usage.
+# --api goes with --lsp or --check (since 1.5.0); running a script with it is wrong usage.
 execute_process(COMMAND "${FORGESCRIPT}" --api x.json game.forge RESULT_VARIABLE code OUTPUT_QUIET ERROR_QUIET)
 if(NOT code EQUAL 64)
 	message(FATAL_ERROR "forgescript --api without --lsp or --check exited with ${code}, expected 64")

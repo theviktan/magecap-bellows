@@ -5,7 +5,10 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
-## 1.4.1 (not released yet)
+## 1.5.0 (not released yet)
+
+New checker and tool features (warnings, `--check` with the engine API) and new docs, so the minor
+number goes up; it was called 1.4.1 while only fixes were in.
 
 - A `match` with no `is` choice before `otherwise` or `end` now says so: "A 'match' needs at least
   one 'is' choice before 'otherwise' or 'end', like: match weapon / is "sword" then ... /
