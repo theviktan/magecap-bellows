@@ -547,10 +547,11 @@ TEST_CASE("NestingTooDeepIsAMistakeNotACrash")
 		CHECK_CONTAINS(error.Message, tooDeep);
 	}
 
-	// Real code never comes near the limit: 250 levels of each still work.
-	CHECK(Output("set x to " + repeated("(", 250) + "1" + repeated(")", 250) + "\nsay x\n") == "1\n");
-	CHECK(Output("set x to " + repeated("[", 250) + "1" + repeated("]", 250) + "\nsay length(x)\n") == "1\n");
-	CHECK(Output(repeated("if yes then\n", 250) + "say 1\n" + repeated("end\n", 250)) == "1\n");
+	// Real code never comes near the limit: 150 levels of each still work. (Not 255: the stack budget may
+	// stop sooner in builds with big frames, such as sanitizer builds.)
+	CHECK(Output("set x to " + repeated("(", 150) + "1" + repeated(")", 150) + "\nsay x\n") == "1\n");
+	CHECK(Output("set x to " + repeated("[", 150) + "1" + repeated("]", 150) + "\nsay length(x)\n") == "1\n");
+	CHECK(Output(repeated("if yes then\n", 150) + "say 1\n" + repeated("end\n", 150)) == "1\n");
 
 	// The rest of the script is still checked after a line that is too deep.
 	VM vm;

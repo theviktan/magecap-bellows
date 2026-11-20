@@ -5,6 +5,10 @@
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/VM/VM.h"
 
+#if defined(_MSC_VER)
+	#include <intrin.h>
+#endif
+
 #include <algorithm>
 #include <cstdint>
 #include <set>
@@ -168,8 +172,7 @@ namespace ForgeScript {
 
 		Function* Compile(CompileError& outError)
 		{
-			const char stackMark = 0;
-			m_StackStart = reinterpret_cast<std::uintptr_t>(&stackMark);
+			m_StackStart = StackAddress();
 			try
 			{
 				// Text the lexer could not read (an unfinished string, a stray character). The rest of the
@@ -3417,10 +3420,20 @@ namespace ForgeScript {
 		int m_Nesting = 0;
 		std::uintptr_t m_StackStart = 0;
 
+		// An address in the current frame of the real stack. Not a local's address: sanitizers may keep
+		// locals on a separate "fake stack".
+		static std::uintptr_t StackAddress()
+		{
+#if defined(_MSC_VER)
+			return reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+			return reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+		}
+
 		bool StackIsDeep() const
 		{
-			const char here = 0;
-			const std::uintptr_t now = reinterpret_cast<std::uintptr_t>(&here);
+			const std::uintptr_t now = StackAddress();
 			const std::uintptr_t used = now < m_StackStart ? m_StackStart - now : now - m_StackStart;
 			return m_StackStart != 0 && used > c_MaxStackBytes;
 		}
