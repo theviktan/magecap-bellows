@@ -8,7 +8,8 @@ namespace Bellows::BuildInfo {
 	// outside a git checkout. Tells two builds of the same version apart.
 	const char* GetCommit();
 
-	// The engine version with its commit, as shown to people: "0.3.0 (3f8b735)".
+	// The engine version with its commit, as shown to people: "0.4.0 (3f8b735)" for the release, and
+	// "0.4.0-dev (3f8b735)" for builds on the way to it (BW_VERSION is the version part).
 	std::string GetVersionText();
 
 }

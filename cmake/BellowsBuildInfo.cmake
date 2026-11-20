@@ -1,10 +1,17 @@
-# The git commit the engine is built from, for the About box, Install.json, logs and package names.
+# The git commit the engine is built from, for the About box, Install.json, logs and package names,
+# and the version text builds report.
+#
+# Only the release itself reports the plain version ("0.4.0"): a build of the commit tagged
+# v<version>, or one configured with BELLOWS_RELEASE_BUILD (CI does that for version tags). Every
+# other build is on its way to that version and says so ("0.4.0-dev"), so a report from it can't be
+# mistaken for the release. The version in CMakeLists.txt moves to the next release when a cycle starts.
 #
 # It goes into one generated source file (Bellows/Core/BuildInfo.cpp), so a new commit recompiles that
 # file only. CMake configures again when HEAD moves, so the commit stays current without a clean build.
 # Set BELLOWS_BUILD_COMMIT to report a given commit instead (builds from a source archive).
 
 set(BELLOWS_BUILD_COMMIT "" CACHE STRING "Commit to report instead of asking git (empty: ask git)")
+option(BELLOWS_RELEASE_BUILD "This build is the release of the version in CMakeLists.txt (reports it without -dev)" OFF)
 
 set(_bellows_commit "${BELLOWS_BUILD_COMMIT}")
 find_package(Git QUIET)
@@ -54,7 +61,26 @@ if(NOT _bellows_commit)
 	set(_bellows_commit "unknown")
 endif()
 
+set(_bellows_release ${BELLOWS_RELEASE_BUILD})
+if(NOT _bellows_release AND GIT_FOUND AND NOT _bellows_commit STREQUAL "unknown")
+	execute_process(
+		COMMAND "${GIT_EXECUTABLE}" tag --points-at HEAD
+		WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+		OUTPUT_VARIABLE _bellows_tags
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET)
+	string(REPLACE "\n" ";" _bellows_tags "${_bellows_tags}")
+	if("v${PROJECT_VERSION}" IN_LIST _bellows_tags)
+		set(_bellows_release ON)
+	endif()
+endif()
+if(_bellows_release)
+	set(BELLOWS_VERSION_TEXT "${PROJECT_VERSION}")
+else()
+	set(BELLOWS_VERSION_TEXT "${PROJECT_VERSION}-dev")
+endif()
+
 set(BELLOWS_COMMIT "${_bellows_commit}")
 configure_file("${PROJECT_SOURCE_DIR}/Bellows/Source/Bellows/Core/BuildInfo.cpp.in"
 	"${PROJECT_BINARY_DIR}/Generated/BuildInfo.cpp" @ONLY)
-message(STATUS "MageCap Bellows ${PROJECT_VERSION}, commit ${BELLOWS_COMMIT}")
+message(STATUS "MageCap Bellows ${BELLOWS_VERSION_TEXT}, commit ${BELLOWS_COMMIT}")

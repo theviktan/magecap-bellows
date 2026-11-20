@@ -37,7 +37,7 @@ if(WIN32)
 endif()
 
 target_compile_definitions(Bellows PUBLIC
-	BW_VERSION="${PROJECT_VERSION}"
+	BW_VERSION="${BELLOWS_VERSION_TEXT}"
 	$<$<NOT:$<CONFIG:Dist>>:BW_ENABLE_ASSERTS>
 	$<$<CONFIG:Dist>:BW_DIST>)
 
