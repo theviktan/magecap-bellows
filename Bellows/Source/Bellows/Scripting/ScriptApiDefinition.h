@@ -514,6 +514,8 @@ namespace Bellows::Scripting {
 		auto script = api.template Class<ScriptRef>("ScriptComponent", "Attaches a script to the entity");
 		script.Property("path", [](const ScriptRef& r) { return r.Get().ScriptPath; }, [](const ScriptRef& r, const std::string& v) { r.Get().ScriptPath = v; }, "");
 		script.Property("class_name", [](const ScriptRef& r) { return r.Get().ClassName; }, [](const ScriptRef& r, const std::string& v) { r.Get().ClassName = v; }, "");
+		script.Property("run_while_paused", [](const ScriptRef& r) { return r.Get().RunWhilePaused; }, [](const ScriptRef& r, bool v) { r.Get().RunWhilePaused = v; },
+			"Keeps updating while the game is paused (pause menus); its delta time is the real frame time then");
 
 		auto audioSource = api.template Class<AudioSourceRef>("AudioSource", "");
 		audioSource.Property("clip", [](const AudioSourceRef& r) { return r.Get().ClipPath; }, [](const AudioSourceRef& r, const std::string& v) { r.Get().ClipPath = v; }, "");
@@ -990,6 +992,10 @@ namespace Bellows::Scripting {
 			"Deletes the value saved under the name; false when there was none", Arg("name"));
 		api.Function("real_time", []() { return GetRealTime(); },
 			"Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()");
+		api.Function("set_paused", [](bool paused) { RequireContextScene().SetGamePaused(paused); },
+			"Pauses or resumes the game: physics, time() and scripts stop, except scripts marked Run While Paused; the UI still answers. A new scene starts unpaused",
+			Arg("paused", true));
+		api.Function("is_paused", []() { return RequireContextScene().IsGamePaused(); }, "True while the game is paused (set_paused)");
 		api.Function("quit", [](int exitCode) { RequestQuit(exitCode); }, "Quits the game (stops play mode in the editor)", Arg("exit_code", 0));
 		api.Function("started_from_editor", []() { return IsStartedFromEditor(); },
 			"True while the game plays in the editor (its viewport, or a game window it started); false in an exported game");

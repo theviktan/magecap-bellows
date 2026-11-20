@@ -55,6 +55,7 @@ namespace {
 		auto& script = entity.AddComponent<ScriptComponent>();
 		script.ScriptPath = "Scripts/Player.py";
 		script.ClassName = "Player";
+		script.RunWhilePaused = true;
 		script.Fields["speed"] = 4.5;
 		script.Fields["lives"] = int64_t(3);
 		script.Fields["god_mode"] = true;
@@ -277,6 +278,7 @@ TEST_CASE("Scene serialization round-trips every component")
 	CHECK(loadedChild.GetParent().GetName() == "Root");
 	CHECK(loadedChild.GetParent().GetChildren()[0] == loadedChild);
 	const ScriptComponent& script = loadedChild.GetComponent<ScriptComponent>();
+	CHECK(script.RunWhilePaused);
 	CHECK(std::get<double>(script.Fields.at("speed")) == doctest::Approx(4.5));
 	CHECK(std::get<int64_t>(script.Fields.at("lives")) == 3);
 	CHECK(std::get<bool>(script.Fields.at("god_mode")));

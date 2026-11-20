@@ -722,6 +722,11 @@ class ScriptComponent:
     @class_name.setter
     def class_name(self, value: str) -> None: ...
     @property
+    def run_while_paused(self) -> bool:
+        """Keeps updating while the game is paused (pause menus); its delta time is the real frame time then"""
+    @run_while_paused.setter
+    def run_while_paused(self, value: bool) -> None: ...
+    @property
     def fields(self) -> dict[str, typing.Any]: ...
     def set_field(self, name: str, value: typing.Any) -> None:
         """Overrides an exposed field (applies when the script instance is created)"""
@@ -1455,6 +1460,9 @@ def is_mouse_pressed(button: MouseButton | str = ...) -> bool: ...
 
 def is_mouse_released(button: MouseButton | str = ...) -> bool: ...
 
+def is_paused() -> bool:
+    """True while the game is paused (set_paused)"""
+
 def is_playing() -> bool: ...
 
 def lerp(a: float, b: float, t: float) -> float: ...
@@ -1518,6 +1526,9 @@ def set_bus_volume(bus: str, volume: float) -> None:
 def set_gravity(gravity: Vec3 | typing.Sequence[float]) -> None: ...
 
 def set_master_volume(volume: float) -> None: ...
+
+def set_paused(paused: bool = True) -> None:
+    """Pauses or resumes the game: physics, time() and scripts stop, except scripts marked Run While Paused; the UI still answers. A new scene starts unpaused"""
 
 def started_from_editor() -> bool:
     """True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"""

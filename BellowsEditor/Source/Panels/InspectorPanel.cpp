@@ -755,6 +755,9 @@ namespace Bellows {
 			// A ForgeScript file is one script, so only Python files have a class to choose.
 			if (!Scripting::ForgeScriptRuntime::IsForgeScript(c.ScriptPath))
 				UI::Property("Class", c.ClassName, "Leave empty to use the first bellows.Script class in the file");
+			UI::Property("Run While Paused", c.RunWhilePaused,
+				"Keeps this script updating while the game is paused (set_paused), with real frame times: tick it for a pause "
+				"menu that waits or animates. Unticked scripts still get UI events like clicked while paused");
 			UI::EndPropertyGrid();
 		}
 

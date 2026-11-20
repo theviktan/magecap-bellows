@@ -83,8 +83,14 @@ namespace Bellows {
 		void OnUpdateRuntime(Timestep timestep);
 		void OnUpdateEditor(Timestep timestep);
 		bool IsRunning() const { return m_IsRunning; }
+		// The editor's Pause: nothing runs until it resumes or steps.
 		bool IsPaused() const { return m_IsPaused; }
 		void SetPaused(bool paused) { m_IsPaused = paused; }
+		// The game's own pause (set_paused): physics, time() and scripts stop, except scripts marked Run
+		// While Paused, which get real frame times; the UI still answers, so a pause menu works. A scene
+		// starts unpaused, including one loaded while paused.
+		bool IsGamePaused() const { return m_GamePaused; }
+		void SetGamePaused(bool paused) { m_GamePaused = paused; }
 		// While paused, advance the given number of frames.
 		void Step(uint32_t frames = 1) { m_StepFrames += frames; }
 
@@ -255,6 +261,7 @@ namespace Bellows {
 
 		bool m_IsRunning = false;
 		bool m_IsPaused = false;
+		bool m_GamePaused = false;
 		uint32_t m_StepFrames = 0;
 		float m_Time = 0.0f;
 		uint64_t m_FrameCount = 0;

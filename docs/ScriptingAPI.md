@@ -130,8 +130,9 @@ Members: `w x y z`, `q1 * q2`, `q * vec3` (rotates the vector), `to_euler()`,
 | Function | Description |
 |----------|-------------|
 | `delta_time()` | Seconds since the previous frame. |
-| `time()` | Seconds since play started. |
+| `time()` | Seconds of game time since play started; it stops while the game is paused. |
 | `frame()` | Frames since play started. |
+| `set_paused(paused=True)` / `is_paused()` | Pauses or resumes the game. While it is paused, physics, `time()` and scripts stop, except scripts marked **Run While Paused** (`ScriptComponent.run_while_paused`), whose `delta_time()` is the real frame time. The UI still answers and every script still gets UI events like `clicked`, so a pause menu works; tick Run While Paused on its script if it waits or animates. Audio keeps playing. A new scene (`load_scene`) starts unpaused. This is the game's own pause, separate from the editor's Pause button. |
 | `is_key_down(key)` / `is_key_pressed(key)` / `is_key_released(key)` | Held / went down this frame / went up this frame. `key` is a `Key` value (`Key.W`, `Key.Space`, `Key.LeftShift`, `Key.F1`, `Key.D0`…`Key.D9`, `Key.Up`, …) or its name as a string (`"W"`). |
 | `is_mouse_down(button=MouseButton.Left)` / `is_mouse_pressed(...)` / `is_mouse_released(...)` | Mouse buttons: `MouseButton.Left`, `Right`, `Middle`, `Button3`, `Button4`. |
 | `mouse_position()` | `Vec2` in viewport pixels, top-left origin. |
@@ -438,8 +439,9 @@ label.text, label.size, label.alignment = "Score: 0", 32.0, "right"
   compound shape.
 
 ### `ScriptComponent`
-`path`, `class_name` (empty = first `bellows.Script` subclass in the file), `fields` (dict of
-overridden values), `set_field(name, value)`, `instance` (the running object or `None`).
+`path`, `class_name` (empty = first `bellows.Script` subclass in the file), `run_while_paused`
+(keeps updating while the game is paused), `fields` (dict of overridden values),
+`set_field(name, value)`, `instance` (the running object or `None`).
 (The Python class is named `ScriptComponent` because `bellows.Script` is the script base class;
 `"Script"` also works as a component name.)
 

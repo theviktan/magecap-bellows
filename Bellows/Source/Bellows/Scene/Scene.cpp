@@ -397,6 +397,7 @@ namespace Bellows {
 
 		m_IsRunning = true;
 		m_IsPaused = false;
+		m_GamePaused = false;
 		m_Time = 0.0f;
 		m_FrameCount = 0;
 		m_PhysicsAccumulator = 0.0f;
@@ -462,10 +463,12 @@ namespace Bellows {
 			ScriptEngine::OnUpdate(*this, deltaTime);
 		}
 
-		// Fixed-step physics. At most a few steps per frame so a slow frame cannot spiral.
+		// Fixed-step physics. At most a few steps per frame so a slow frame cannot spiral. The game's
+		// pause holds it (and fixed updates) where it is.
 		const float fixedTimestep = std::clamp(m_Settings.FixedTimestep, 1.0f / 480.0f, 1.0f / 15.0f);
-		m_PhysicsAccumulator = std::min(m_PhysicsAccumulator + deltaTime, fixedTimestep * 5.0f);
-		while (m_PhysicsAccumulator >= fixedTimestep)
+		if (!m_GamePaused)
+			m_PhysicsAccumulator = std::min(m_PhysicsAccumulator + deltaTime, fixedTimestep * 5.0f);
+		while (!m_GamePaused && m_PhysicsAccumulator >= fixedTimestep)
 		{
 			m_PhysicsWorld->SetGravity(m_Settings.Gravity);
 			m_PhysicsWorld->SyncBodies();
@@ -485,7 +488,9 @@ namespace Bellows {
 
 		FlushPendingDestroys();
 
-		m_Time += deltaTime;
+		// time() is game time, so it stops while the game is paused; real_time() keeps going.
+		if (!m_GamePaused)
+			m_Time += deltaTime;
 		m_FrameCount++;
 	}
 
