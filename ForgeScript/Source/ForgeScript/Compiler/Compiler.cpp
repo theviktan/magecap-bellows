@@ -1108,6 +1108,9 @@ namespace ForgeScript {
 						MatchStatement();
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
+					else if (MatchWithoutChoices())
+						ErrorAtCurrent("A 'match' needs at least one 'is' choice before 'otherwise' or 'end', like: "
+							"match weapon / is \"sword\" then ... / otherwise ... / end");
 					else
 						ExpressionStatement();
 					break;
@@ -1295,6 +1298,43 @@ namespace ForgeScript {
 			ConsumeEnd(opener, "'if'");
 			for (size_t jump : endJumps)
 				PatchJump(jump);
+		}
+
+		// "match weapon" followed by a line starting with 'otherwise' or 'end': a match with no 'is' choice.
+		// Only asked once no phrase took the line, so a script's own "phrase match (x)" keeps working; and
+		// 'match' followed by a plain value can't be anything else ('match(x)', 'match[1]' and
+		// 'match - 1' are left alone).
+		bool MatchWithoutChoices() const
+		{
+			if (Current().Type != TokenType::Identifier || Current().Lexeme != "match")
+				return false;
+			if (m_Pos > 0)
+			{
+				switch (m_Tokens[m_Pos - 1].Type)
+				{
+					case TokenType::Newline: case TokenType::Then: case TokenType::Do:
+					case TokenType::Else: case TokenType::Otherwise:
+						break;
+					default:
+						return false;
+				}
+			}
+			switch (Peek(1).Type)
+			{
+				case TokenType::Identifier: case TokenType::Number: case TokenType::String:
+				case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No:
+				case TokenType::Nothing:
+					break;
+				default:
+					return false;
+			}
+			size_t i = m_Pos + 1;
+			while (i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Newline && m_Tokens[i].Type != TokenType::Eof)
+				i++;
+			if (i + 1 >= m_Tokens.size() || m_Tokens[i].Type != TokenType::Newline)
+				return false;
+			const TokenType next = m_Tokens[i + 1].Type;
+			return next == TokenType::Otherwise || next == TokenType::Else || next == TokenType::End;
 		}
 
 		// match weapon
