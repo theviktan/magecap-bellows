@@ -328,8 +328,10 @@ entity's `Text` as its label. The editor's **Create > UI** menu makes each one r
   always shows the selected option.
 * `UITextInput`: a field the player types into. Its text is the entity's `Text` (whose font, size and
   color it uses), so `entity.text` reads it. `placeholder` (shown dimmed while it's empty),
-  `multi_line`, `password` (a bullet per character, on one line, never copied) and `max_length`
-  (characters; 0 for no limit; negative raises `ValueError`).
+  `multi_line` (Enter starts a new line, Ctrl+Enter submits, and long lines wrap at the field's
+  width), `password` (a bullet per character, on one line, never copied) and `max_length`
+  (characters; 0 for no limit; negative raises `ValueError`). A one-line field scrolls sideways
+  instead.
   - A click focuses it and places the caret; dragging selects. While it has focus it takes the whole
     keyboard (the game sees no keys), and the caret blinks.
   - Keys: typing, Backspace and Delete (Ctrl: a word), Left/Right (Ctrl: by words; Shift: select),
@@ -397,7 +399,9 @@ gamepad, and the game only sees what the UI leaves it:
   UI's, only its own UI can be pointed at or focused, and `ui_cancel` with nothing focused raises
   `cancelled` from the canvas itself (a pause menu's "back").
 * `UIRect` read-only `hovered`, `pressed` and `focused`; `focus()` gives it focus (`False` when it
-  cannot: not focusable, hidden, not interactable, or behind a modal canvas). Interactable `False`
+  cannot: not focusable, hidden, not interactable, or behind a modal canvas). A widget made this
+  frame can't take focus until the UI has laid it out (the next frame), so `focus()` returns
+  `False` until then; call it again from `on_update`. Interactable `False`
   on a rect turns off the pointer and focus for everything under it too.
 
 UI events are sent to the scripts on the UI entity, then on each of its parents up to the root (through

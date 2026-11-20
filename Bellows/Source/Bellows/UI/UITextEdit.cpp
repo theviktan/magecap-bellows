@@ -177,6 +177,48 @@ namespace Bellows {
 		return masked;
 	}
 
+	std::vector<std::pair<size_t, size_t>> WrapUILine(std::string_view line, const std::vector<float>& stops, float width)
+	{
+		const size_t count = stops.empty() ? 0 : stops.size() - 1;
+		std::vector<std::pair<size_t, size_t>> rows;
+		if (count == 0 || width <= 0.0f || stops.back() - stops.front() <= width)
+		{
+			rows.emplace_back(0, count);
+			return rows;
+		}
+
+		// Each character's first byte, to find the spaces among them.
+		std::vector<bool> isSpace(count, false);
+		for (size_t index = 0, offset = 0; index < count && offset < line.size(); index++, offset = NextUICharacter(line, offset))
+			isSpace[index] = line[offset] == ' ';
+
+		size_t first = 0;
+		while (first < count)
+		{
+			// The most characters that fit, then back to just after the last space among them.
+			size_t end = first + 1;
+			while (end < count && stops[end + 1] - stops[first] <= width)
+				end++;
+			if (end < count)
+			{
+				// A space right after the fit also ends the row (it takes no room there).
+				if (isSpace[end])
+					end++;
+				else
+				{
+					size_t breakAt = end;
+					while (breakAt > first + 1 && !isSpace[breakAt - 1])
+						breakAt--;
+					if (breakAt > first + 1)
+						end = breakAt;		// Otherwise no space to break at: the word is cut
+				}
+			}
+			rows.emplace_back(first, end);
+			first = end;
+		}
+		return rows;
+	}
+
 	std::vector<float> ComputeUICaretStops(const Font& font, std::string_view line, float size)
 	{
 		std::vector<uint32_t> codepoints;

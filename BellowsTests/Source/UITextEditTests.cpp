@@ -146,3 +146,44 @@ TEST_CASE("Without a window, the clipboard is kept inside the program")
 	Input::SetClipboardHandlers(nullptr, nullptr);
 	CHECK(Input::GetClipboardText() == "copied \xC3\xA9");
 }
+
+TEST_CASE("Multi-line fields wrap long lines at spaces, or inside a word that doesn't fit")
+{
+	// Every character 10 pixels wide.
+	const auto stopsFor = [](std::string_view line)
+	{
+		std::vector<float> stops;
+		for (size_t i = 0; i <= CountUICharacters(line); i++)
+			stops.push_back(10.0f * static_cast<float>(i));
+		return stops;
+	};
+	using Rows = std::vector<std::pair<size_t, size_t>>;
+	const auto wrap = [&](std::string_view line, float width) { return WrapUILine(line, stopsFor(line), width); };
+
+	CHECK(wrap("short", 100.0f) == Rows { { 0, 5 } });
+	CHECK(wrap("", 100.0f) == Rows { { 0, 0 } });
+	CHECK(wrap("exactly ten", 110.0f) == Rows { { 0, 11 } });
+	// Breaks after spaces, which stay at a row's end: 10 characters a row, then 8.
+	CHECK(wrap("the quick brown fox", 100.0f) == Rows { { 0, 10 }, { 10, 19 } });
+	CHECK(wrap("the quick brown fox", 80.0f) == Rows { { 0, 4 }, { 4, 10 }, { 10, 16 }, { 16, 19 } });
+	// A space right after the fit ends the row too.
+	CHECK(wrap("aaaa bbbb", 40.0f) == Rows { { 0, 5 }, { 5, 9 } });
+	// A word longer than a row is cut.
+	CHECK(wrap("abcdefghijklmnop", 50.0f) == Rows { { 0, 5 }, { 5, 10 }, { 10, 15 }, { 15, 16 } });
+	CHECK(wrap("go abcdefghij", 50.0f) == Rows { { 0, 3 }, { 3, 8 }, { 8, 13 } });
+	// Never an empty row, even narrower than one character; characters, not bytes.
+	CHECK(wrap("abc", 5.0f) == Rows { { 0, 1 }, { 1, 2 }, { 2, 3 } });
+	CHECK(wrap("\xc3\xa9t\xc3\xa9 caf\xc3\xa9", 50.0f) == Rows { { 0, 4 }, { 4, 8 } });
+	// No width: one row.
+	CHECK(wrap("the quick brown fox", 0.0f) == Rows { { 0, 19 } });
+	// The rows always cover the line.
+	for (float width : { 15.0f, 35.0f, 75.0f, 130.0f })
+	{
+		const Rows rows = wrap("lorem ipsum dolor sit amet, consectetur adipiscing", width);
+		REQUIRE_FALSE(rows.empty());
+		CHECK(rows.front().first == 0);
+		CHECK(rows.back().second == 50);
+		for (size_t i = 1; i < rows.size(); i++)
+			CHECK(rows[i].first == rows[i - 1].second);
+	}
+}
