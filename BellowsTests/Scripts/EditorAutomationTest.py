@@ -239,6 +239,43 @@ editor.set_ui_view(saved_view["enabled"], saved_view["width"], saved_view["heigh
 editor.clear_selection()
 menu.destroy()
 
+# UI templates and anchor presets ----
+templates = editor.ui_templates()
+check("main_menu" in templates and "hud" in templates and "text_input" in templates, f"ui_templates lists the templates ({templates})")
+main_menu = editor.create_ui("Main Menu")
+check(main_menu.has_component(bellows.UICanvas) and main_menu.name == "Main Menu", "create_ui makes a Main Menu with its own canvas")
+check(editor.selection() == [main_menu], "create_ui selects what it made")
+buttons = bellows.find_entity("Buttons")
+check(buttons is not None and [child.name for child in buttons.children] == ["Play", "Settings", "Quit"], "the Main Menu's three buttons")
+slider = editor.create_ui("slider", parent=buttons)
+check(slider.parent == buttons and slider.has_component(bellows.UISlider), "a widget goes inside the canvas its parent is in")
+hud = editor.create_ui("hud")
+fill = bellows.find_entity("Fill")
+check(fill is not None and abs(fill.get_component(bellows.UIRect).anchor_max.x - 0.75) < 1e-6, "the HUD's health bar fill")
+editor.run_frames(1)
+panel = editor.create_ui("panel")
+editor.run_frames(1)
+rect = panel.get_component(bellows.UIRect)
+size_before, offset_before = rect.size, rect.offset_min
+editor.set_ui_anchors(panel, "bottom_right")
+check(abs(rect.anchor_min.x - 1.0) < 1e-6 and abs(rect.anchor_max.y - 1.0) < 1e-6, "set_ui_anchors sets a preset's anchors")
+# The rect stays put (the C++ tests check its place on screen): same size, offsets now from the corner.
+check(abs(rect.size.x - size_before.x) < 0.01 and abs(rect.size.y - size_before.y) < 0.01, "set_ui_anchors keeps the size")
+check(rect.offset_min.x < offset_before.x and rect.offset_min.y < offset_before.y, "set_ui_anchors keeps the place")
+editor.set_ui_anchors(panel, "full_rect", move=True)
+check(abs(rect.offset_min.x) < 0.01 and abs(rect.offset_max.y) < 0.01, "move=True fills the parent for Full Rect")
+plain = bellows.create_entity("Plain")
+for bad_call in (lambda: editor.create_ui("pause_menu"), lambda: editor.set_ui_anchors(panel, "middle"),
+                 lambda: editor.set_ui_anchors(plain, "center")):
+    try:
+        bad_call()
+        check(False, "a bad template, preset or entity raises ValueError")
+    except ValueError:
+        pass
+editor.clear_selection()
+for entity in (main_menu, hud, panel.parent, plain):
+    entity.destroy()
+
 # Console-style evaluation and errors ---------------------------------------------------
 check(editor.error_count() == 0, f"no errors were logged ({editor.error_count()})")
 

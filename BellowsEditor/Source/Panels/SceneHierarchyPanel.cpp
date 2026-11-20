@@ -5,6 +5,7 @@
 #include "EditorUI.h"
 #include "IconsLucide.h"
 #include "Panels/ScriptEditorPanel.h"
+#include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
 
@@ -431,133 +432,27 @@ namespace Bellows {
 
 		if (ImGui::BeginMenu(ICON_MONITOR "  UI"))
 		{
-			// UI elements live under a canvas: inside the selected one, or in a new canvas.
-			auto createUI = [&](const char* name) -> Entity
+			struct Entry { UITemplate Kind; const char* Icon; };
+			static constexpr Entry c_Entries[] = {
+				{ UITemplate::Canvas, ICON_MONITOR }, { UITemplate::Panel, ICON_IMAGE }, { UITemplate::Text, ICON_TYPE },
+				{ UITemplate::Button, ICON_MOUSE_POINTER_CLICK }, { UITemplate::Toggle, ICON_SQUARE_CHECK },
+				{ UITemplate::Slider, ICON_SLIDERS_HORIZONTAL }, { UITemplate::Dropdown, ICON_CHEVRONS_UP_DOWN },
+				{ UITemplate::TextInput, ICON_TEXT_CURSOR_INPUT }, { UITemplate::VerticalLayout, ICON_LAYOUT_GRID },
+				{ UITemplate::ScrollList, ICON_LAYERS },
+				{ UITemplate::MainMenu, ICON_LAYOUT_TEMPLATE }, { UITemplate::HUD, ICON_ACTIVITY },
+			};
+			for (const Entry& entry : c_Entries)
 			{
-				Entity uiParent = parent && scene->IsInsideUICanvas(parent) ? parent : Entity();
-				if (!uiParent)
+				// Whole screens come after the single widgets.
+				if (entry.Kind == UITemplate::MainMenu)
+					ImGui::Separator();
+				const std::string label = std::string(entry.Icon) + "  " + UITemplateToString(entry.Kind);
+				if (ImGui::MenuItem(label.c_str()))
 				{
-					uiParent = scene->CreateChildEntity(parent, "Canvas");
-					uiParent.AddComponent<UICanvasComponent>();
+					Entity created = CreateUITemplate(*scene, parent, entry.Kind);
+					m_Editor.Select(created);
+					m_Editor.CommitChange(std::string("Create ") + UITemplateToString(entry.Kind));
 				}
-				Entity entity = scene->CreateChildEntity(uiParent, name);
-				entity.AddComponent<UIRectComponent>();
-				return entity;
-			};
-			auto finish = [&](Entity entity, const char* name)
-			{
-				m_Editor.Select(entity);
-				m_Editor.CommitChange(std::string("Create ") + name);
-			};
-
-			if (ImGui::MenuItem(ICON_MONITOR "  Canvas"))
-			{
-				Entity canvas = scene->CreateChildEntity(parent, "Canvas");
-				canvas.AddComponent<UICanvasComponent>();
-				finish(canvas, "canvas");
-			}
-			if (ImGui::MenuItem(ICON_IMAGE "  Panel"))
-			{
-				Entity panel = createUI("Panel");
-				UIRectComponent& rect = panel.GetComponent<UIRectComponent>();
-				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
-				UIImageComponent& image = panel.AddComponent<UIImageComponent>();
-				image.Color = glm::vec4(0.09f, 0.09f, 0.16f, 0.9f);
-				image.CornerRadius = 12.0f;
-				finish(panel, "panel");
-			}
-			if (ImGui::MenuItem(ICON_TYPE "  Text"))
-			{
-				Entity label = createUI("Label");
-				UIRectComponent& rect = label.GetComponent<UIRectComponent>();
-				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(300.0f, 60.0f));
-				label.AddComponent<TextComponent>().Size = TextComponent::DefaultScreenSize;
-				finish(label, "UI text");
-			}
-			// Widgets: a rect, a rounded image the widget colors, and a label colored by the canvas's theme.
-			auto createWidget = [&](const char* name, glm::vec2 size, const char* label) -> Entity
-			{
-				Entity widget = createUI(name);
-				UIRectComponent& rect = widget.GetComponent<UIRectComponent>();
-				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, size);
-				if (label)
-				{
-					TextComponent& text = widget.AddComponent<TextComponent>();
-					text.Text = label;
-					text.Size = 28.0f;
-					text.ThemeColor = true;
-				}
-				return widget;
-			};
-			// A rounded image with the theme's look for that widget in its normal state.
-			auto addThemedImage = [&](Entity widget, UIThemeWidget kind)
-			{
-				const Ref<const UITheme> theme = widget.GetScene()->GetUIThemeFor(widget);
-				const UIWidgetStyle& style = theme->Get(kind);
-				const UIStateStyle& normal = style.Get(UIWidgetState::Normal);
-				UIImageComponent& image = widget.AddComponent<UIImageComponent>();
-				image.Color = normal.Background;
-				image.CornerRadius = style.CornerRadius;
-				image.BorderWidth = normal.BorderWidth;
-				image.BorderColor = normal.Border;
-			};
-			if (ImGui::MenuItem(ICON_MOUSE_POINTER_CLICK "  Button"))
-			{
-				Entity button = createWidget("Button", glm::vec2(260.0f, 64.0f), "Button");
-				addThemedImage(button, UIThemeWidget::Button);
-				button.AddComponent<UIButtonComponent>();
-				finish(button, "button");
-			}
-			if (ImGui::MenuItem(ICON_SQUARE_CHECK "  Toggle"))
-			{
-				Entity toggle = createWidget("Toggle", glm::vec2(320.0f, 48.0f), "Option");
-				toggle.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
-				toggle.AddComponent<UIToggleComponent>();
-				finish(toggle, "toggle");
-			}
-			if (ImGui::MenuItem(ICON_SLIDERS_HORIZONTAL "  Slider"))
-			{
-				Entity slider = createWidget("Slider", glm::vec2(320.0f, 40.0f), nullptr);
-				slider.AddComponent<UISliderComponent>().Value = 0.5f;
-				finish(slider, "slider");
-			}
-			if (ImGui::MenuItem(ICON_CHEVRONS_UP_DOWN "  Dropdown"))
-			{
-				Entity dropdown = createWidget("Dropdown", glm::vec2(320.0f, 56.0f), "Option 1");
-				dropdown.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
-				addThemedImage(dropdown, UIThemeWidget::Dropdown);
-				dropdown.AddComponent<UIDropdownComponent>().Options = { "Option 1", "Option 2", "Option 3" };
-				finish(dropdown, "dropdown");
-			}
-			if (ImGui::MenuItem(ICON_TEXT_CURSOR_INPUT "  Text Input"))
-			{
-				Entity field = createWidget("Text Input", glm::vec2(360.0f, 56.0f), "");
-				field.GetComponent<TextComponent>().Alignment = TextAlignment::Left;
-				addThemedImage(field, UIThemeWidget::TextInput);
-				field.AddComponent<UITextInputComponent>().Placeholder = "Type here";
-				finish(field, "text input");
-			}
-			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Vertical Layout"))
-			{
-				Entity group = createUI("Layout");
-				UIRectComponent& rect = group.GetComponent<UIRectComponent>();
-				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
-				group.AddComponent<UILayoutComponent>();
-				finish(group, "UI layout");
-			}
-			if (ImGui::MenuItem(ICON_LAYERS "  Scroll List"))
-			{
-				// A scrolling panel whose children stack and stretch across it.
-				Entity list = createUI("Scroll List");
-				UIRectComponent& rect = list.GetComponent<UIRectComponent>();
-				SetUIRectSize(rect.Pivot, rect.OffsetMin, rect.OffsetMax, glm::vec2(400.0f, 300.0f));
-				UIImageComponent& image = list.AddComponent<UIImageComponent>();
-				image.Color = glm::vec4(0.09f, 0.09f, 0.16f, 0.9f);
-				image.CornerRadius = 12.0f;
-				UILayoutComponent& layout = list.AddComponent<UILayoutComponent>();
-				layout.Padding = glm::vec4(12.0f);
-				list.AddComponent<UIScrollComponent>();
-				finish(list, "scroll list");
 			}
 			ImGui::EndMenu();
 		}

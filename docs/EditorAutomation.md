@@ -154,6 +154,9 @@ if state["stopped"]:
 | `set_camera(position, target)`, `camera_position()`, `camera_target()` | The editor (scene view) camera. |
 | `screenshot(path, width=0, height=0)` | Renders the viewport to a PNG: the editor camera in edit mode, the game camera in play mode. |
 | `capture_window(path)` | PNG of the whole editor window including the UI (runs one frame). |
+| `create_ui(kind, parent=None)` | Makes what **Create → UI** makes, selects it and returns its top entity. Widgets (`canvas`, `panel`, `text`, `button`, `toggle`, `slider`, `dropdown`, `text_input`, `vertical_layout`, `scroll_list`) go into the canvas `parent` is in, or a new canvas; screens (`main_menu`: title, Play/Settings/Quit buttons in a layout, version line; `hud`: health bar whose `Fill` anchor max x is the amount left, score, message line) get their own canvas. Edit mode only. |
+| `ui_templates()` | The names `create_ui` takes. |
+| `set_ui_anchors(entity, preset, move=False)` | The Inspector's anchor presets (`top_left` ... `bottom_right`, `top_wide`, `middle_wide`, `bottom_wide`, `left_tall`, `center_tall`, `right_tall`, `full_rect`): the rect keeps its place on screen (as of the last frame), or with `move=True` goes to the preset. |
 | `set_ui_view(enabled=True, width=0, height=0)` | The UI view: in edit mode the viewport, and `screenshot()` without a size, show the game's screen at `width` x `height` (64 to 8192; 0 keeps the size) through the game camera, for laying out UI. Saved with the editor settings. |
 | `ui_view()` | `{"enabled", "width", "height"}`. |
 | `logs(since=0)`, `latest_log_sequence()`, `error_count()`, `script_error_count()` | Console messages and error counters. |

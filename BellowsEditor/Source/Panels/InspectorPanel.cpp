@@ -6,6 +6,7 @@
 #include "IconsLucide.h"
 #include "Panels/ContentBrowserPanel.h"
 #include "Panels/ScriptEditorPanel.h"
+#include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
@@ -56,26 +57,6 @@ namespace Bellows {
 				entity.RemoveComponent<T>();
 				editor.CommitChange(std::string("Remove ") + name);
 			}
-		}
-
-		// Gives a rect a preset's anchors. It stays where it was on screen (its offsets are worked out
-		// from where it was last laid out), or with 'moveRect' goes to the preset: filling stretching
-		// axes, sitting on the point, pivoted there, along the others.
-		void ApplyAnchorPreset(EditorLayer& editor, Entity entity, UIRectComponent& rect, UIAnchorPreset preset, bool moveRect)
-		{
-			glm::vec2 anchorMin, anchorMax;
-			GetUIAnchorPreset(preset, anchorMin, anchorMax);
-			const std::optional<Scene::UIRectPlacement> placement = editor.GetActiveScene()->GetUIRectPlacement(entity);
-			if (placement)
-			{
-				const UIRectangle target = moveRect
-					? GetUIAnchorPresetRect(preset, placement->Rect, placement->ParentArea, rect.Pivot, rect.Pivot)
-					: placement->Rect;
-				ComputeUIOffsetsFor(target, anchorMin, anchorMax, placement->ParentArea, placement->Scale, rect.OffsetMin, rect.OffsetMax);
-			}
-			rect.AnchorMin = anchorMin;
-			rect.AnchorMax = anchorMax;
-			editor.CommitChange(moveRect ? "Move UI rect to anchors" : "UI anchor preset");
 		}
 
 		bool DrawFieldValue(const char* name, ScriptFieldValue& value)
@@ -481,7 +462,11 @@ namespace Bellows {
 				int preset = 0;
 				if (!inLayout && UI::PropertyAnchorPreset("Anchors", c.AnchorMin, c.AnchorMax, preset,
 					"Where in its parent the rect is attached: a point it keeps its distance from, or edges it stretches with"))
-					ApplyAnchorPreset(m_Editor, entity, c, static_cast<UIAnchorPreset>(preset), ImGui::GetIO().KeyShift);
+				{
+					const bool moveRect = ImGui::GetIO().KeyShift;
+					ApplyUIAnchorPreset(entity, static_cast<UIAnchorPreset>(preset), moveRect);
+					m_Editor.CommitChange(moveRect ? "Move UI rect to anchors" : "UI anchor preset");
+				}
 				if (UI::PropertyVec2("Anchor Min", c.AnchorMin, 0.01f, "The parent's point the top-left corner follows: (0, 0) top-left, (1, 1) bottom-right"))
 					c.AnchorMin = glm::clamp(c.AnchorMin, 0.0f, 1.0f);
 				if (UI::PropertyVec2("Anchor Max", c.AnchorMax, 0.01f, "The parent's point the bottom-right corner follows; different anchors stretch with the parent"))

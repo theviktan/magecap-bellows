@@ -1,6 +1,7 @@
 #include "EditorScriptAPI.h"
 
 #include "EditorLayer.h"
+#include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Application.h"
@@ -247,6 +248,49 @@ namespace Bellows {
 				return path;
 			}, py::arg("path"), py::arg("width") = 0, py::arg("height") = 0,
 				"Renders the viewport (editor camera in edit mode, game camera in play mode) to a PNG file");
+			m.def("create_ui", [](const std::string& kind, const std::optional<ScriptEntity>& parent)
+			{
+				const std::optional<UITemplate> found = UITemplateFromName(kind);
+				if (!found)
+				{
+					std::string names;
+					for (int i = 0; i < UITemplateCount; i++)
+						names += (i ? ", " : "") + UITemplateScriptName(static_cast<UITemplate>(i));
+					throw py::value_error("Unknown UI template '" + kind + "'. Use one of: " + names);
+				}
+				EditorLayer& editor = Editor();
+				if (editor.GetSceneState() != SceneState::Edit)
+					throw std::runtime_error("UI templates are made in edit mode; stop playing first");
+				Entity parentEntity = parent ? ResolveInActiveScene(*parent) : Entity();
+				Entity created = CreateUITemplate(*editor.GetActiveScene(), parentEntity, *found);
+				editor.Select(created);
+				return ScriptEntity(created);
+			}, py::arg("kind"), py::arg("parent") = py::none(),
+				"Makes what Create > UI makes and selects it: a widget ('button', 'text_input', ...) inside the "
+				"canvas 'parent' is in (or a new canvas), or a whole screen ('main_menu', 'hud') with its own "
+				"canvas. Returns its top entity");
+			m.def("ui_templates", []
+			{
+				std::vector<std::string> names;
+				for (int i = 0; i < UITemplateCount; i++)
+					names.push_back(UITemplateScriptName(static_cast<UITemplate>(i)));
+				return names;
+			}, "The names create_ui() takes");
+			m.def("set_ui_anchors", [](const ScriptEntity& handle, const std::string& preset, bool move)
+			{
+				const std::optional<UIAnchorPreset> found = UIAnchorPresetFromName(preset);
+				if (!found)
+				{
+					std::string names;
+					for (int i = 0; i < UIAnchorPresetCount; i++)
+						names += (i ? ", " : "") + UIAnchorPresetScriptName(static_cast<UIAnchorPreset>(i));
+					throw py::value_error("Unknown anchor preset '" + preset + "'. Use one of: " + names);
+				}
+				if (!ApplyUIAnchorPreset(ResolveInActiveScene(handle), *found, move))
+					throw py::value_error("The entity has no UI Rect");
+			}, py::arg("entity"), py::arg("preset"), py::arg("move") = false,
+				"The Inspector's anchor presets ('top_left', 'center', 'bottom_wide', 'full_rect', ...): the rect "
+				"keeps its place on screen, or with move=True goes to the preset");
 			m.def("set_ui_view", [](bool enabled, uint32_t width, uint32_t height)
 			{
 				if ((width == 0) != (height == 0))
