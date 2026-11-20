@@ -190,6 +190,19 @@ function test_screenshots()
 	check(fails(function() save screenshot to "FeatureTest/forge.bmp" end), "unsupported screenshot formats are rejected")
 end
 
+function test_pause()
+	check(not the game is paused and not is_paused(), "the game starts unpaused")
+	# Only the phrases are checked here: this runner isn't marked Run While Paused, so a wait while
+	# paused would hold it. Held waits and time() are covered by BellowsTests.
+	pause the game
+	check(the game is paused and is_paused(), "pause the game")
+	resume the game
+	check(not the game is paused and not is_paused(), "resume the game")
+	set_paused(true)
+	check(the game is paused, "the game is paused follows set_paused")
+	set_paused(false)
+end
+
 function test_saved_data()
 	delete_data("Feature Test")
 	check(load_data("Feature Test", 7) is 7, "load_data gives the default when nothing is saved")
@@ -263,6 +276,7 @@ function run_tests()
 		test_components()
 		test_materials()
 		test_screenshots()
+		test_pause()
 		test_saved_data()
 		test_destruction()
 		test_physics()
