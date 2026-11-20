@@ -1,6 +1,14 @@
 // Implementation units for single-header third-party libraries.
 // Compiled without first-party warning flags (see Bellows/CMakeLists.txt).
 
+// Only the formats Bellows reads (textures, environments, glTF's embedded images, the window icon):
+// less decoder code for a bad file to reach. No image wider or taller than the GPU's usual limit.
+#define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG
+#define STBI_ONLY_TGA
+#define STBI_ONLY_BMP
+#define STBI_ONLY_HDR
+#define STBI_MAX_DIMENSIONS 16384
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 

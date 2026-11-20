@@ -11,6 +11,8 @@ namespace Bellows {
 
 	namespace {
 
+		constexpr size_t c_MaxImageFileSize = size_t(512) * 1024 * 1024;
+
 		// Exact sRGB <-> linear conversion tables for 8-bit values.
 		struct SRGBTables
 		{
@@ -140,6 +142,12 @@ namespace Bellows {
 	{
 		const auto* bytes = static_cast<const stbi_uc*>(data);
 		int width = 0, height = 0, channels = 0;
+		// Decoders take an int size, and no real texture file comes near this.
+		if (!data || size == 0 || size > c_MaxImageFileSize)
+		{
+			BW_CORE_ERROR("Image '{}' is {} bytes; images can be up to {} MB", debugName, size, c_MaxImageFileSize / (1024 * 1024));
+			return nullptr;
+		}
 
 		if (IsOpenEXR(data, size))
 		{
