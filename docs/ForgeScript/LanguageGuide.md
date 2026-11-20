@@ -34,7 +34,7 @@ This guide teaches the whole language step by step. Every example is real ForgeS
 19. [Rules worth remembering](#19-rules-worth-remembering)
 20. [Menus and HUDs](#20-menus-and-huds)
 
-For a one-page list of everything, see [Reference.md](Reference.md).
+For a one-page list of everything, see [Reference.md](Reference.md). The exact rules, for when you need a precise answer, are in [Specification.md](Specification.md).
 
 ---
 
