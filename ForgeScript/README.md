@@ -21,6 +21,7 @@ ForgeScript runs on its own virtual machine, the way GDScript runs inside Godot.
 |---|---|
 | [Language Guide](../docs/ForgeScript/LanguageGuide.md) | Learn ForgeScript step by step. |
 | [Quick Reference](../docs/ForgeScript/Reference.md) | Every statement, operator, function and method on one page. |
+| [Specification](../docs/ForgeScript/Specification.md) | The exact rules of the language, for precise answers and for tools. |
 | [C++ API](../docs/ForgeScript/Embedding.md) | How C++ code hosts the language: types, functions, phrases, events. |
 | [AGENTS.md](AGENTS.md) | Working on the language itself: layout, rules, tests. |
 

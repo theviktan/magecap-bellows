@@ -1,6 +1,6 @@
 # ForgeScript Quick Reference
 
-Everything in the language on one page. For explanations and examples, see the [Language Guide](LanguageGuide.md).
+Everything in the language on one page. For explanations and examples, see the [Language Guide](LanguageGuide.md); for the exact rules, the [Specification](Specification.md).
 
 ## Statements
 

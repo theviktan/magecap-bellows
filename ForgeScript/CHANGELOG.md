@@ -21,6 +21,8 @@ with new language or tool features, the patch number with fixes.
   editor report the same things. The text and JSON formats and exit codes are unchanged; a file given
   with `--api` that can't be read exits with `66`. `--api` without `--lsp` or `--check` is still
   wrong usage (`64`).
+- **The Specification** (`docs/ForgeScript/Specification.md`, ForgeScript Roadmap item 12): the exact rules
+  of the language, for precise answers and for tools, checked against the compiler.
 - **Warnings** (ForgeScript Roadmap item 12): things that are allowed but probably not meant. They
   never stop a script or change what it does; `VM::FindWarnings` lists them, beside `FindMistakes`.
   - A value named like a built-in function the script also calls: "Naming a value 'max' hides the
