@@ -18,7 +18,8 @@ namespace Bellows {
 		constexpr float c_CaretBlinkSeconds = 0.53f;
 
 		// A text field as drawn this frame: its text (bullets for a password), laid out on one line, or
-		// one line per '\n' when multi-line, at the top-left of its text area less its scroll.
+		// when multi-line in rows, one or more per '\n' (long lines wrap at the area's width), at the
+		// top-left of its text area less its scroll.
 		struct TextInputView
 		{
 			Ref<Font> TextFont;
@@ -27,8 +28,8 @@ namespace Bellows {
 			std::string Display;
 			TextLayout Layout;
 			glm::vec2 Origin { 0.0f };					// Where the layout's (0, 0) lands on screen
-			std::vector<size_t> LineFirstCharacter;		// Each display line's first character index
-			// Each display line's byte range in Display (offsets, which stay right when the view is moved).
+			std::vector<size_t> LineFirstCharacter;		// Each row's first character index in Display
+			// Each row's byte range in Display (offsets, which stay right when the view is moved).
 			std::vector<std::pair<size_t, size_t>> LineRanges;
 
 			std::string_view Line(size_t index) const
@@ -56,26 +57,43 @@ namespace Bellows {
 			if (!IsMultiLine(*input))
 				std::replace(view.Display.begin(), view.Display.end(), '\n', ' ');
 
-			TextLayoutSettings settings;
-			settings.Size = view.Size;
-			settings.Wrap = false;
-			view.Layout = LayoutText(*view.TextFont, view.Display, settings);
-			// One line sits in the middle of the field; several start at its top.
-			const float lineHeight = view.TextFont->GetLineHeight() * view.Size;
-			const float top = IsMultiLine(*input) ? 0.0f : (view.Area.GetSize().y - lineHeight) * 0.5f;
-			view.Origin = view.Area.Min + glm::vec2(0.0f, top) - input->RuntimeScroll;
-
+			// The rows: each '\n' line, split further to the area's width when multi-line. What is drawn is
+			// the rows joined by line breaks; the rows keep their places in Display for the caret.
+			const bool multiLine = IsMultiLine(*input);
+			const float wrapWidth = view.Area.GetSize().x - std::max(2.0f * scale, 1.0f);	// Room for the caret
+			std::string drawn;
 			size_t start = 0, character = 0;
 			while (true)
 			{
 				const size_t end = std::min(view.Display.find('\n', start), view.Display.size());
-				view.LineRanges.emplace_back(start, end);
-				view.LineFirstCharacter.push_back(character);
-				character += CountUICharacters(view.Line(view.LineRanges.size() - 1)) + 1;
+				const std::string_view line = std::string_view(view.Display).substr(start, end - start);
+				std::vector<std::pair<size_t, size_t>> rows = { { 0, CountUICharacters(line) } };
+				if (multiLine)
+					rows = WrapUILine(line, ComputeUICaretStops(*view.TextFont, line, view.Size), wrapWidth);
+				for (const auto& [first, last] : rows)
+				{
+					const size_t rowStart = start + UICharacterOffset(line, first);
+					const size_t rowEnd = start + UICharacterOffset(line, last);
+					view.LineRanges.emplace_back(rowStart, rowEnd);
+					view.LineFirstCharacter.push_back(character + first);
+					if (view.LineRanges.size() > 1)
+						drawn += '\n';
+					drawn += view.Display.substr(rowStart, rowEnd - rowStart);
+				}
+				character += CountUICharacters(line) + 1;
 				if (end >= view.Display.size())
 					break;
 				start = end + 1;
 			}
+
+			TextLayoutSettings settings;
+			settings.Size = view.Size;
+			settings.Wrap = false;
+			view.Layout = LayoutText(*view.TextFont, drawn, settings);
+			// One line sits in the middle of the field; several start at its top.
+			const float lineHeight = view.TextFont->GetLineHeight() * view.Size;
+			const float top = multiLine ? 0.0f : (view.Area.GetSize().y - lineHeight) * 0.5f;
+			view.Origin = view.Area.Min + glm::vec2(0.0f, top) - input->RuntimeScroll;
 			return view;
 		}
 
@@ -307,7 +325,8 @@ namespace Bellows {
 		{
 			TextLayoutSettings settings;
 			settings.Size = view->Size;
-			settings.Wrap = false;
+			settings.Wrap = IsMultiLine(input);
+			settings.BoxSize = glm::vec2(IsMultiLine(input) ? view->Area.GetSize().x : 0.0f, 0.0f);
 			TextStyle style;
 			style.Color = glm::vec4(glm::vec3(color), color.a * 0.45f);
 			renderer.SubmitUIText(view->TextFont, LayoutText(*view->TextFont, input.Placeholder, settings), view->Origin, style, entityID, &textClip);

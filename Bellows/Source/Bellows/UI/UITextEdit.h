@@ -52,5 +52,10 @@ namespace Bellows {
 	std::vector<float> ComputeUICaretStops(const Font& font, std::string_view line, float size);
 	// The character boundary nearest to x.
 	size_t NearestUICaretStop(const std::vector<float>& stops, float x);
+	// Word wrap for a multi-line field: splits one line (no '\n'), given its caret stops, into rows no
+	// wider than 'width'. Each row is a [first, end) character range; together they cover the line.
+	// A row breaks after a space (the space stays at the row's end, where it takes no room), or inside
+	// a word too long for a row; every row has at least one character.
+	std::vector<std::pair<size_t, size_t>> WrapUILine(std::string_view line, const std::vector<float>& stops, float width);
 
 }
