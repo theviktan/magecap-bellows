@@ -68,6 +68,21 @@ Without a GPU, run on the Mesa software rasterizer:
 Run a single doctest case with `build/linux-debug/bin/BellowsTests -tc="*name*"`.
 GPU tests run with Vulkan validation enabled and fail on any validation message.
 
+## Versions and releases
+
+* `CMakeLists.txt`'s `VERSION` is the **next** release. It moves up right after a release ships, at
+  the start of the next cycle.
+* Builds that aren't the release say so: `0.4.0-dev (bafec5f)` in the About box, logs, Install.json
+  and `bellows.VERSION`. Only a build of the commit tagged `v<version>`, or one configured with
+  `-DBELLOWS_RELEASE_BUILD=ON` (CI does that for version tags), reports plain `0.4.0`.
+* To release:
+  1. Add `docs/ReleaseNotes/<version>.md`.
+  2. Create the `v<version>` tag and release on github.com.
+  3. CI checks that the tag matches the version, builds and tests the package, and its release job
+     (the only job with write access) attaches the zip, with the notes as the release text.
+* CI's actions are pinned to full commits. To update one, change the commit and its version comment
+  together.
+
 ## Rules
 
 1. **Stay inside this repository.** Do not read, copy from or reference other code on the

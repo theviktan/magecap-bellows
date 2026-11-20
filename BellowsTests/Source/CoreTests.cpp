@@ -10,6 +10,7 @@
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/UUID.h"
 
+#include <algorithm>
 #include <string>
 #include <unordered_set>
 
@@ -156,4 +157,11 @@ TEST_CASE("The build knows its version and commit")
 	const bool shortHash = commit.size() >= 7 && commit.find_first_not_of("0123456789abcdef") == std::string::npos;
 	CHECK((shortHash || commit == "unknown"));
 	CHECK_EQ(BuildInfo::GetVersionText(), std::string(BW_VERSION) + " (" + commit + ")");
+
+	// "0.4.0" only for the release itself; every other build says it is on the way ("0.4.0-dev").
+	const std::string version = BW_VERSION;
+	const std::string number = version.substr(0, version.find('-'));
+	CHECK(std::count(number.begin(), number.end(), '.') == 2);
+	CHECK(number.find_first_not_of("0123456789.") == std::string::npos);
+	CHECK((version == number || version == number + "-dev"));
 }

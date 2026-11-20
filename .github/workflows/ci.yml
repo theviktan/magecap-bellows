@@ -7,19 +7,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Jobs read the repository only; the release job alone may write, and only for a version tag.
+# Actions are pinned to full commits (their version in the comment), so a moved tag can't change what runs.
 permissions:
-  contents: write    # Publishing a GitHub Release when a version tag is pushed
+  contents: read
 
 jobs:
   linux:
     name: Linux (GCC, all tests on lavapipe)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.13"
 
@@ -43,25 +45,32 @@ jobs:
   windows:
     name: Windows (MSVC, build and unit tests)
     runs-on: windows-2022
+    outputs:
+      package_name: ${{ steps.zip.outputs.package_name }}
+      version: ${{ steps.tag.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.13"
 
       - name: Install the Vulkan SDK
-        uses: jakoch/install-vulkan-sdk-action@v1
+        uses: jakoch/install-vulkan-sdk-action@7fe84289ddbf750f7eff9f8e4588e600e1dd06c8  # v1
         with:
-          vulkan_version: latest
+          vulkan_version: 1.4.363.1
           install_runtime: true
           cache: true
           stripdown: true
 
+      # A version tag builds the release itself, which reports its plain version (others say "-dev").
       - name: Configure
-        run: cmake --preset windows -DPython_ROOT_DIR="$env:pythonLocation"
+        run: |
+          $release = @()
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $release += '-DBELLOWS_RELEASE_BUILD=ON' }
+          cmake --preset windows -DPython_ROOT_DIR="$env:pythonLocation" $release
 
       # Compiler errors and warnings are also reported as annotations on the workflow run.
       - name: Build
@@ -108,14 +117,16 @@ jobs:
           exit $code
 
       - name: Zip the package
+        id: zip
         run: |
           $package = Get-ChildItem dist -Directory | Select-Object -First 1
           7z a -tzip "dist/$($package.Name).zip" "./dist/$($package.Name)" -mx=7 | Out-Null
           if ($LASTEXITCODE -ne 0) { exit 1 }
           "PACKAGE_NAME=$($package.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "package_name=$($package.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload the editor
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.PACKAGE_NAME }}
           path: dist/${{ env.PACKAGE_NAME }}
@@ -123,17 +134,43 @@ jobs:
 
       # A tag must match the engine version, or the release would be named for another version.
       - name: Check the tag
+        id: tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $version = (Select-String -Path CMakeLists.txt -Pattern '^\s+VERSION\s+([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
           if ("v$version" -ne $env:GITHUB_REF_NAME) { Write-Output "::error::Tag $env:GITHUB_REF_NAME does not match the engine version $version"; exit 1 }
           if (-not (Test-Path "docs/ReleaseNotes/$version.md")) { Write-Output "::error::docs/ReleaseNotes/$version.md is missing"; exit 1 }
-          "RELEASE_NOTES=docs/ReleaseNotes/$version.md" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      # The zip itself, for the release job.
+      - name: Upload the release zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: release-zip
+          path: dist/${{ env.PACKAGE_NAME }}.zip
+          retention-days: 1
+
+  # Publishing is its own job, the only one that can write to the repository.
+  release:
+    name: Publish the release
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write    # Creating or updating the GitHub Release
+      actions: read      # Downloading the zip the Windows job made
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+
+      - name: Download the release zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-zip --dir dist
 
       - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
-          files: dist/${{ env.PACKAGE_NAME }}.zip
-          body_path: ${{ env.RELEASE_NOTES }}
+          files: dist/${{ needs.windows.outputs.package_name }}.zip
+          body_path: docs/ReleaseNotes/${{ needs.windows.outputs.version }}.md
           generate_release_notes: true
