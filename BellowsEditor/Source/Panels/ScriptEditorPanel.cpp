@@ -550,12 +550,14 @@ namespace Bellows {
 			if (diagnostic.Line == 0 || diagnostic.Line > editor.GetLineCount())
 				continue;
 			const size_t line = diagnostic.Line - 1;
-			editor.AddMarker(line, Theme::Error, IM_COL32(236, 84, 84, 36), diagnostic.Message, diagnostic.Message);
+			const ImU32 color = diagnostic.IsWarning ? Theme::Warning : Theme::Error;
+			const ImU32 lineColor = diagnostic.IsWarning ? IM_COL32(240, 185, 64, 30) : IM_COL32(236, 84, 84, 36);
+			editor.AddMarker(line, color, lineColor, diagnostic.Message, diagnostic.Message);
 
 			const size_t lineLength = editor.GetLineCodePoints(line).size();
 			const size_t start = diagnostic.Column > 0 ? std::min(diagnostic.Column - 1, lineLength) : 0;
 			const size_t end = std::max(start + 1, lineLength);
-			editor.AddSquiggle(TextEditor::DocPos(line, start), TextEditor::DocPos(line, end), 0, Theme::Error, diagnostic.Message);
+			editor.AddSquiggle(TextEditor::DocPos(line, start), TextEditor::DocPos(line, end), 0, color, diagnostic.Message);
 		}
 
 		const ScriptDebugger& debugger = m_Editor.GetScriptDebugger();
@@ -1110,7 +1112,7 @@ namespace Bellows {
 
 			ImGui::PushID(static_cast<int>(i));
 			const bool dirty = IsDirty(document);
-			const bool hasErrors = !document.Diagnostics.empty();
+			const bool hasErrors = HasScriptMistakes(document.Diagnostics);
 
 			const ImVec2 start = ImGui::GetCursorScreenPos();
 			const float rowRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
@@ -1255,11 +1257,13 @@ namespace Bellows {
 		}
 		else
 		{
+			// Mistakes and warnings never come together: a script with mistakes isn't checked for warnings.
 			const ScriptDiagnostic& first = document.Diagnostics.front();
-			std::string text = fmt::format(ICON_CIRCLE_X "  Line {}: {}", first.Line, first.Message);
+			std::string text = fmt::format("{}  Line {}: {}{}", first.IsWarning ? ICON_TRIANGLE_ALERT : ICON_CIRCLE_X, first.Line,
+				first.IsWarning ? "Warning: " : "", first.Message);
 			if (document.Diagnostics.size() > 1)
 				text += fmt::format("  (+{} more)", document.Diagnostics.size() - 1);
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(first.IsWarning ? Theme::Warning : Theme::Error));
 			ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
 			const float maxWidth = ImGui::GetContentRegionAvail().x - 300.0f * scale;
 			if (ImGui::Selectable(text.c_str(), false, ImGuiSelectableFlags_None, ImVec2(std::max(maxWidth, 80.0f * scale), 0.0f)))
