@@ -192,10 +192,10 @@ end
 
 function test_pause()
 	check(not the game is paused and not is_paused(), "the game starts unpaused")
-	set before to time()
+	# Only the phrases are checked here: this runner isn't marked Run While Paused, so a wait while
+	# paused would hold it. Held waits and time() are covered by BellowsTests.
 	pause the game
 	check(the game is paused and is_paused(), "pause the game")
-	check(time() is before, "time() stands still while paused")
 	resume the game
 	check(not the game is paused and not is_paused(), "resume the game")
 	set_paused(true)
