@@ -97,10 +97,11 @@ namespace Bellows {
 			{
 				for (const ScriptDiagnostic& diagnostic : diagnostics)
 					std::cerr << FormatScriptDiagnostic(fileName, diagnostic) << std::endl;
-				if (diagnostics.empty())
+				if (!HasScriptMistakes(diagnostics))
 					std::cout << fileName << ": no mistakes found." << std::endl;
 			}
-			exitCode = diagnostics.empty() ? 0 : 65;
+			// Warnings alone don't fail the check, as with `forgescript --check`.
+			exitCode = HasScriptMistakes(diagnostics) ? 65 : 0;
 		}
 
 		SetForgeScriptCheckSetup(nullptr);

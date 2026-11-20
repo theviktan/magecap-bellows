@@ -182,6 +182,27 @@ TEST_CASE("Script checks report the line and column of the first mistake")
 		CHECK(problems[1].Line == 6);
 	}
 
+	SUBCASE("ForgeScript warnings, once a script has no mistakes")
+	{
+		const std::string source = "set max to 10\nsay max(3, 4)\n";
+		const std::vector<ScriptDiagnostic> warnings = CheckScript(ScriptLanguage::ForgeScript, source, "Warn.forge");
+		REQUIRE(warnings.size() == 1);
+		CHECK(warnings[0].IsWarning);
+		CHECK(warnings[0].Line == 1);
+		CHECK(warnings[0].Message.find("max") != std::string::npos);
+		CHECK_FALSE(HasScriptMistakes(warnings));
+		CHECK(FormatScriptDiagnostic("Warn.forge", warnings[0]).find("Warn.forge:1:") == 0);
+		CHECK(FormatScriptDiagnostic("Warn.forge", warnings[0]).find(": warning: ") != std::string::npos);
+		CHECK(FormatScriptDiagnosticsJson("Warn.forge", source, warnings).find(R"("severity":"warning")") != std::string::npos);
+
+		// With a mistake, only the mistake: a broken script isn't checked for warnings.
+		const std::vector<ScriptDiagnostic> broken = CheckScript(ScriptLanguage::ForgeScript, source + "set y to\n", "Broken.forge");
+		REQUIRE(broken.size() == 1);
+		CHECK_FALSE(broken[0].IsWarning);
+		CHECK(HasScriptMistakes(broken));
+		CHECK(FormatScriptDiagnostic("Broken.forge", broken[0]).find("warning") == std::string::npos);
+	}
+
 	SUBCASE("Python")
 	{
 		const std::vector<ScriptDiagnostic> problems = CheckScript(ScriptLanguage::Python, "import bellows\n\ndef broken(:\n    pass\n", "bad.py");

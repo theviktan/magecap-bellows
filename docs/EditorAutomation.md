@@ -21,7 +21,7 @@ through the agent server, a trailing expression prints its value, like the Pytho
 with the engine's functions and phrases known, Python with the bundled interpreter):
 
 ```
-BellowsEditor --check-script Scripts/Player.forge          # mistakes on stderr: file:line:column: message
+BellowsEditor --check-script Scripts/Player.forge          # on stderr: file:line:column: message (or: warning: message)
 BellowsEditor --check-script Scripts/Player.forge --json   # {"file", "diagnostics": [{line, column, endColumn, severity, message}]}
 BellowsEditor --check-script Scripts/Player.forge --stdin  # reads the (unsaved) text from standard input
 ```
@@ -30,9 +30,13 @@ BellowsEditor --check-script Scripts/Player.forge --stdin  # reads the (unsaved)
 project is the nearest folder above the script that contains a `.bproject` file (outside a project,
 the script's own folder is used).
 
-Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be read, `64` bad usage,
-`70` Python could not start. The text format and exit codes match `forgescript --check`, which
-checks the language alone (engine functions are unknown to it).
+A ForgeScript script with no mistakes gets its **warnings** instead (things allowed but probably
+not meant, like a value named `max` in a script that calls `max(...)`): `warning: ` before the
+message, `"severity": "warning"` in JSON. They never fail the check.
+
+Exit codes: `0` no mistakes (warnings or none), `65` mistakes found, `66` the file could not be
+read, `64` bad usage, `70` Python could not start. The text format, warnings and exit codes match
+`forgescript --check` with `forgescript-api.json` beside it.
 
 **Finding the editor.** Every time the editor starts it writes `Install.json` to its
 configuration folder (Windows: `%APPDATA%\MageCapBellows`, Linux: `~/.config/MageCapBellows`):

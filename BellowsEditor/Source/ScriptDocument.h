@@ -59,23 +59,29 @@ namespace Bellows {
 	// The headings of a Markdown document (the guides opened from the Help menu). Depth is the level minus one.
 	std::vector<ScriptOutlineItem> ParseMarkdownOutline(std::string_view source);
 
-	// A mistake found without running the script.
+	// A mistake found without running the script, or a warning: something allowed but probably not
+	// meant, which never stops the script.
 	struct ScriptDiagnostic
 	{
 		std::string Message;
 		size_t Line = 0;		// 1-based; 0 when unknown
 		size_t Column = 0;		// 1-based; 0 when unknown
+		bool IsWarning = false;
 	};
+	bool HasScriptMistakes(const std::vector<ScriptDiagnostic>& diagnostics);
 
-	// "Scripts/Player.forge:12:5: message", the format of `forgescript --check` (tools parse it).
+	// "Scripts/Player.forge:12:5: message", or "...:5: warning: message", the format of
+	// `forgescript --check` (tools parse it).
 	std::string FormatScriptDiagnostic(const std::string& fileName, const ScriptDiagnostic& diagnostic);
 	// The same mistakes as JSON for editors and tools:
 	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message" } ] }.
-	// endColumn is one past the last character of the line, since the checker reports where a mistake starts.
+	// endColumn is one past the last character of the line, since the checker reports where a mistake starts;
+	// severity is "error" or "warning".
 	std::string FormatScriptDiagnosticsJson(const std::string& fileName, std::string_view source, const std::vector<ScriptDiagnostic>& diagnostics);
 
 	// Compiles the script without running it and reports its mistakes: every one ForgeScript can find
-	// (sorted by line, including 'use' scripts that cannot be found), or Python's first.
+	// (sorted by line, including 'use' scripts that cannot be found), or Python's first. A ForgeScript
+	// script without mistakes gets its warnings instead, as `forgescript --check` does.
 	// Python needs the script engine to be initialized; without it Python scripts are not checked.
 	std::vector<ScriptDiagnostic> CheckScript(ScriptLanguage language, std::string_view source, const std::string& fileName);
 

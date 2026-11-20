@@ -240,6 +240,19 @@ class {Class}(bellows.Script):
 				}
 				diagnostics.push_back(std::move(diagnostic));
 			}
+			// Warnings only matter once the script has no mistakes (they'd drown in a broken one).
+			if (diagnostics.empty())
+			{
+				for (const ForgeScript::CompileError& warning : s_CheckVM->FindWarnings(source, fileName))
+				{
+					ScriptDiagnostic diagnostic;
+					diagnostic.Message = warning.Message;
+					diagnostic.Line = warning.Line > 0 ? static_cast<size_t>(warning.Line) : 0;
+					diagnostic.Column = warning.Column > 0 ? static_cast<size_t>(warning.Column) : 0;
+					diagnostic.IsWarning = true;
+					diagnostics.push_back(std::move(diagnostic));
+				}
+			}
 			return diagnostics;
 		}
 
@@ -442,9 +455,15 @@ class {Class}(bellows.Script):
 		return items;
 	}
 
+	bool HasScriptMistakes(const std::vector<ScriptDiagnostic>& diagnostics)
+	{
+		return std::any_of(diagnostics.begin(), diagnostics.end(), [](const ScriptDiagnostic& diagnostic) { return !diagnostic.IsWarning; });
+	}
+
 	std::string FormatScriptDiagnostic(const std::string& fileName, const ScriptDiagnostic& diagnostic)
 	{
-		return fileName + ":" + std::to_string(diagnostic.Line) + ":" + std::to_string(diagnostic.Column) + ": " + diagnostic.Message;
+		return fileName + ":" + std::to_string(diagnostic.Line) + ":" + std::to_string(diagnostic.Column) + ": " +
+			(diagnostic.IsWarning ? "warning: " : "") + diagnostic.Message;
 	}
 
 	std::string FormatScriptDiagnosticsJson(const std::string& fileName, std::string_view source, const std::vector<ScriptDiagnostic>& diagnostics)
@@ -473,7 +492,7 @@ class {Class}(bellows.Script):
 				{ "line", diagnostic.Line },
 				{ "column", diagnostic.Column },
 				{ "endColumn", std::max(lineLength + 1, diagnostic.Column + 1) },
-				{ "severity", "error" },
+				{ "severity", diagnostic.IsWarning ? "warning" : "error" },
 				{ "message", diagnostic.Message },
 			});
 		}
