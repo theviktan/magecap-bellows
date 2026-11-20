@@ -24,8 +24,10 @@ class Player(bellows.Script):
 
 Attach a script to an entity with a **Script** component (Inspector → Add Component → Script, or
 drag a `.py` or `.forge` file onto the component's Script field). The project's `Assets` folder is on
-`sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). Scripts saved
-during play are reloaded right away (see Hot reload below).
+`sys.path`, so scripts can import each other (`from Scripts.Helpers import clamp01`). It comes after
+Python's standard library and the engine's modules, so a game file named like one of them (`json.py`,
+`bellows.py`) is never imported in its place; give your modules other names. Scripts saved during
+play are reloaded right away (see Hot reload below).
 
 The API is described once (`Bellows/Source/Bellows/Scripting/ScriptApiDefinition.h`), so both
 languages always offer the same functions.

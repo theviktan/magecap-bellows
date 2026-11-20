@@ -566,6 +566,29 @@ sys.stdout = _BellowsLogWriter(0)
 sys.stderr = _BellowsLogWriter(2)
 )PY";
 
+		// The game's asset folder goes last on Python's import path, after the engine's modules and
+		// the standard library: a game file can't stand in for them (a json.py in Assets would
+		// otherwise run whenever anything imports json). A file named like the engine's own modules is
+		// never imported, so it gets a warning.
+		void AddAssetDirectoryToPath()
+		{
+			const std::filesystem::path assetDirectory = AssetManager::GetAssetDirectory();
+			if (assetDirectory.empty())
+				return;
+			py::list path = py::module_::import("sys").attr("path");
+			const std::string folder = assetDirectory.string();
+			if (path.contains(folder))
+				return;
+			path.append(folder);
+
+			for (const char* name : { "bellows.py", "bellows", "_bellows.py" })
+			{
+				std::error_code error;
+				if (std::filesystem::exists(assetDirectory / name, error))
+					BW_CORE_WARN("Assets/{} has the name of one of MageCap Bellows' own Python modules, so it is never imported. Rename it.", name);
+			}
+		}
+
 	}
 
 	bool ScriptEngine::Init(const std::filesystem::path& pythonHome)
@@ -630,8 +653,7 @@ sys.stderr = _BellowsLogWriter(2)
 		{
 			py::module_ sys = py::module_::import("sys");
 			sys.attr("path").attr("insert")(0, engineModuleDirectory.string());
-			if (!AssetManager::GetAssetDirectory().empty())
-				sys.attr("path").attr("insert")(0, AssetManager::GetAssetDirectory().string());
+			AddAssetDirectoryToPath();
 			sys.attr("dont_write_bytecode") = true;
 
 			py::exec(c_PythonBootstrap);
@@ -740,10 +762,7 @@ sys.stderr = _BellowsLogWriter(2)
 		// Make sure the project folder is importable and edited scripts are reloaded.
 		try
 		{
-			py::module_ sys = py::module_::import("sys");
-			const std::string assetDirectory = AssetManager::GetAssetDirectory().string();
-			if (!assetDirectory.empty() && !sys.attr("path").attr("__contains__")(assetDirectory).cast<bool>())
-				sys.attr("path").attr("insert")(0, assetDirectory);
+			AddAssetDirectoryToPath();
 			py::module_::import("importlib").attr("invalidate_caches")();
 		}
 		catch (const std::exception& exception)

@@ -269,3 +269,28 @@ TEST_CASE("The script context forgets a scene that was deleted while active")
 	CHECK_THROWS_AS(Scripting::RequireContextScene(), std::runtime_error);
 	ScriptEngine::SetContextScene(nullptr);
 }
+
+TEST_CASE("A game's files can't stand in for the standard library or the engine's modules")
+{
+	REQUIRE(ScriptEngine::IsInitialized());
+	// colorsys: a standard module nothing has imported yet, so the import below finds it by the path.
+	const std::filesystem::path assets = MakeScriptProject("ScriptImportPath", {
+		{ "colorsys.py", "FROM_THE_GAME = True\n" },
+		{ "bellows.py", "FROM_THE_GAME = True\n" },
+		{ "Scripts/Helper.py", "VALUE = 42\n" } });
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	scene->OnRuntimeStart();
+	std::string output;
+	REQUIRE(ScriptEngine::ExecuteSource(
+		"import sys, colorsys, bellows\n"
+		"from Scripts import Helper\n"
+		"print(hasattr(colorsys, 'rgb_to_hsv'), hasattr(colorsys, 'FROM_THE_GAME'), hasattr(bellows, 'FROM_THE_GAME'), Helper.VALUE)\n"
+		"print(sys.path[-1])\n", output));
+	scene->OnRuntimeStop();
+	AssetManager::SetAssetDirectory({});
+
+	// The standard module and the engine's own, while the game's own packages still import.
+	CHECK(output.find("True False False 42") != std::string::npos);
+	CHECK(output.find(assets.string()) != std::string::npos);
+}
