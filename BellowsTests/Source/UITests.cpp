@@ -770,6 +770,25 @@ TEST_CASE("Layouts and scroll areas place, clip and scroll a scene's UI")
 		ui.Frame();
 		CHECK(rectOf(rows[1]).Min.y == doctest::Approx(110.0f));
 	}
+	SUBCASE("The editor sees where rects were placed, and which one is under a point")
+	{
+		const std::optional<Scene::UIRectPlacement> row = ui.SceneRef->GetUIRectPlacement(rows[0]);
+		REQUIRE(row);
+		CHECK(row->PlacedByLayout);
+		CHECK(row->Rect.Min == rectOf(rows[0]).Min);
+		CHECK(row->ParentArea.Min == rectOf(list).Min);
+		const std::optional<Scene::UIRectPlacement> placedList = ui.SceneRef->GetUIRectPlacement(list);
+		REQUIRE(placedList);
+		CHECK_FALSE(placedList->PlacedByLayout);
+		CHECK(placedList->ParentArea.Min == rectOf(ui.Panel).Min);
+		// The front-most rect: a row over the list, the list where no row is, never the canvas.
+		CHECK(ui.SceneRef->FindUIRectAt(glm::vec2(300.0f, 120.0f)) == rows[0]);
+		CHECK(ui.SceneRef->FindUIRectAt(glm::vec2(300.0f, 105.0f)) == list);
+		CHECK_FALSE(ui.SceneRef->FindUIRectAt(glm::vec2(5.0f, 5.0f)));
+		rows[1].GetComponent<UIRectComponent>().Visible = false;
+		ui.Frame();
+		CHECK_FALSE(ui.SceneRef->GetUIRectPlacement(rows[1]));
+	}
 }
 
 TEST_CASE("UI widgets: toggles flip, sliders drag and step, dropdowns open and pick")
@@ -1012,4 +1031,81 @@ TEST_CASE("UI text inputs take typing, edit, select, copy and paste, and submit"
 		CHECK(input.RuntimeSelection.Begin() == 0);
 		CHECK(input.RuntimeSelection.End() == 7);
 	}
+}
+
+TEST_CASE("Editing a rect on screen: offsets for a place, anchor presets, drags, handles and snapping")
+{
+	const UIRectangle parent { { 100.0f, 50.0f }, { 1100.0f, 650.0f } };	// 1000 x 600
+	const float scale = 2.0f;
+
+	// Offsets for a screen place resolve back to it, whatever the anchors.
+	const UIRectangle place { { 300.0f, 150.0f }, { 500.0f, 250.0f } };
+	for (int i = 0; i < UIAnchorPresetCount; i++)
+	{
+		glm::vec2 anchorMin, anchorMax, offsetMin, offsetMax;
+		GetUIAnchorPreset(static_cast<UIAnchorPreset>(i), anchorMin, anchorMax);
+		ComputeUIOffsetsFor(place, anchorMin, anchorMax, parent, scale, offsetMin, offsetMax);
+		const UIRectangle back = ResolveUIRect(anchorMin, anchorMax, offsetMin, offsetMax, parent, scale);
+		INFO(UIAnchorPresetToString(static_cast<UIAnchorPreset>(i)));
+		CHECK(back.Min.x == doctest::Approx(place.Min.x));
+		CHECK(back.Min.y == doctest::Approx(place.Min.y));
+		CHECK(back.Max.x == doctest::Approx(place.Max.x));
+		CHECK(back.Max.y == doctest::Approx(place.Max.y));
+	}
+	glm::vec2 anchorMin, anchorMax;
+	GetUIAnchorPreset(UIAnchorPreset::BottomRight, anchorMin, anchorMax);
+	CHECK(anchorMin == glm::vec2(1.0f));
+	CHECK(anchorMax == glm::vec2(1.0f));
+	GetUIAnchorPreset(UIAnchorPreset::MiddleWide, anchorMin, anchorMax);
+	CHECK(anchorMin == glm::vec2(0.0f, 0.5f));
+	CHECK(anchorMax == glm::vec2(1.0f, 0.5f));
+	CHECK(std::string(UIAnchorPresetToString(UIAnchorPreset::Full)) == "Full Rect");
+
+	// Snapping to a preset: point axes keep the size and pivot on the point; stretching axes fill.
+	glm::vec2 pivot;
+	const UIRectangle topRight = GetUIAnchorPresetRect(UIAnchorPreset::TopRight, place, parent, glm::vec2(0.5f), pivot);
+	CHECK(pivot == glm::vec2(1.0f, 0.0f));
+	CHECK(topRight.Min == glm::vec2(900.0f, 50.0f));
+	CHECK(topRight.Max == glm::vec2(1100.0f, 150.0f));
+	const UIRectangle bottomWide = GetUIAnchorPresetRect(UIAnchorPreset::BottomWide, place, parent, glm::vec2(0.25f), pivot);
+	CHECK(pivot == glm::vec2(0.25f, 1.0f));
+	CHECK(bottomWide.Min == glm::vec2(100.0f, 550.0f));
+	CHECK(bottomWide.Max == glm::vec2(1100.0f, 650.0f));
+	const UIRectangle full = GetUIAnchorPresetRect(UIAnchorPreset::Full, place, parent, glm::vec2(0.5f), pivot);
+	CHECK(full.Min == parent.Min);
+	CHECK(full.Max == parent.Max);
+	CHECK(pivot == glm::vec2(0.5f));
+	const UIRectangle center = GetUIAnchorPresetRect(UIAnchorPreset::Center, place, parent, glm::vec2(0.0f), pivot);
+	CHECK(center.Min == glm::vec2(500.0f, 300.0f));
+	CHECK(center.GetSize() == place.GetSize());
+
+	// Drags: a move keeps the size; edges and corners resize, but never past each other.
+	const UIRectangle moved = DragUIRect(place, UIRectHandle::Move, { 10.0f, -20.0f }, 4.0f);
+	CHECK(moved.Min == glm::vec2(310.0f, 130.0f));
+	CHECK(moved.GetSize() == place.GetSize());
+	const UIRectangle corner = DragUIRect(place, UIRectHandle::BottomRight, { 50.0f, 25.0f }, 4.0f);
+	CHECK(corner.Min == place.Min);
+	CHECK(corner.Max == glm::vec2(550.0f, 275.0f));
+	const UIRectangle squashed = DragUIRect(place, UIRectHandle::Left, { 500.0f, 0.0f }, 4.0f);
+	CHECK(squashed.Min.x == 496.0f);
+	CHECK(squashed.Max.x == 500.0f);
+
+	// Handles: corners and edges within reach, inside is a move, outside nothing.
+	CHECK(FindUIRectHandle(place, { 302.0f, 151.0f }, 6.0f) == UIRectHandle::TopLeft);
+	CHECK(FindUIRectHandle(place, { 400.0f, 249.0f }, 6.0f) == UIRectHandle::Bottom);
+	CHECK(FindUIRectHandle(place, { 504.0f, 200.0f }, 6.0f) == UIRectHandle::Right);
+	CHECK(FindUIRectHandle(place, { 400.0f, 200.0f }, 6.0f) == UIRectHandle::Move);
+	CHECK(FindUIRectHandle(place, { 600.0f, 200.0f }, 6.0f) == UIRectHandle::None);
+	// A rect smaller than the reach still gives the nearer edge, not always the left one.
+	const UIRectangle tiny { { 0.0f, 0.0f }, { 4.0f, 4.0f } };
+	CHECK(FindUIRectHandle(tiny, { 4.5f, 2.0f }, 6.0f) == UIRectHandle::Right);
+
+	// Snapping rounds only what the drag moved; a move keeps the size.
+	glm::vec2 offsetMin { 13.0f, 7.0f }, offsetMax { 113.0f, 57.0f };
+	SnapUIOffsets(UIRectHandle::Move, offsetMin, offsetMax, 8.0f);
+	CHECK(offsetMin == glm::vec2(16.0f, 8.0f));
+	CHECK(offsetMax == glm::vec2(116.0f, 58.0f));
+	SnapUIOffsets(UIRectHandle::Right, offsetMin, offsetMax, 8.0f);
+	CHECK(offsetMin == glm::vec2(16.0f, 8.0f));
+	CHECK(offsetMax == glm::vec2(120.0f, 58.0f));
 }

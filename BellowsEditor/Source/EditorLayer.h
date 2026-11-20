@@ -5,6 +5,7 @@
 #include "EditorSettings.h"
 #include "GameWindowSession.h"
 #include "ScriptDebugger.h"
+#include "UIRectTool.h"
 #include "UndoHistory.h"
 
 #include "Bellows/Core/FileWatcher.h"
@@ -157,6 +158,9 @@ namespace Bellows {
 		void SetViewportSizeOverride(uint32_t width, uint32_t height);
 		GizmoMode GetGizmoMode() const { return m_GizmoMode; }
 		bool IsUsingGameCamera() const;
+		// The UI view (edit mode only): the viewport shows the game's screen at the UI view size, fitted,
+		// with handles on the selected UI rect.
+		bool IsInUIView() const;
 		// Hot reload: hands scripts saved since the last poll to the script engine.
 		void ReloadChangedScripts();
 
@@ -203,6 +207,7 @@ namespace Bellows {
 		void DrawStatusBar();
 		void DrawViewport();
 		void DrawViewportToolbar();
+		void DrawUIViewSizeMenu();
 		void DrawGizmo();
 		void DrawDialogs();
 		void BuildDefaultLayout(unsigned int dockspaceID);
@@ -259,6 +264,10 @@ namespace Bellows {
 		glm::vec2 m_ViewportSize { 1280.0f, 720.0f };
 		glm::vec2 m_ViewportPosition { 0.0f };
 		glm::uvec2 m_ViewportSizeOverride { 0, 0 };
+		// Where the rendered image is drawn in the viewport window, and screen pixels per rendered pixel.
+		glm::vec2 m_ViewportImageOrigin { 0.0f };
+		glm::vec2 m_ViewportImageScale { 1.0f };
+		UIRectTool m_UIRectTool;
 		bool m_ViewportHovered = false;
 		bool m_ViewportFocused = false;
 		float m_ViewportMouseWheel = 0.0f;		// Collected during the UI frame for the next camera update

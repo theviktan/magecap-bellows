@@ -82,6 +82,8 @@ namespace Bellows {
 			{
 				m_UIElementIndex[handle] = index;
 				m_UIElements.push_back({ handle, state.Canvas, rect, state.Clip, state.Scale, state.Interactable });
+				m_UIElements.back().ParentArea = parentArea;
+				m_UIElements.back().PlacedByLayout = placed != nullptr;
 			}
 			visitChildren(handle, rect, state);
 			if (state.Visible)
@@ -190,6 +192,7 @@ namespace Bellows {
 			{
 				m_UIElementIndex[entry.Handle] = index;
 				m_UIElements.push_back({ entry.Handle, entry.Handle, screen, screen, state.Scale, true });
+				m_UIElements.back().ParentArea = screen;
 				if (canvas.Modal)
 					m_UIModalCanvas = entry.Handle;	// Canvases are in drawing order, so the last one is on top
 			}
@@ -380,6 +383,27 @@ namespace Bellows {
 			renderer.SubmitUIRect(rect.Min - gap, rect.Max + gap, ring, nullptr, 0, &clip);
 		}
 
+	}
+
+	std::optional<Scene::UIRectPlacement> Scene::GetUIRectPlacement(Entity entity) const
+	{
+		if (!entity || !entity.HasComponent<UIRectComponent>())
+			return std::nullopt;
+		auto it = m_UIElementIndex.find(static_cast<entt::entity>(entity));
+		if (it == m_UIElementIndex.end())
+			return std::nullopt;
+		const UIElement& element = m_UIElements[it->second];
+		return UIRectPlacement { element.Rect, element.ParentArea, element.Scale, element.PlacedByLayout };
+	}
+
+	Entity Scene::FindUIRectAt(const glm::vec2& pixel)
+	{
+		for (auto it = m_UIElements.rbegin(); it != m_UIElements.rend(); ++it)
+		{
+			if (it->Handle != it->Canvas && m_Registry.all_of<UIRectComponent>(it->Handle) && it->Rect.Contains(pixel) && it->Clip.Contains(pixel))
+				return Entity(it->Handle, this);
+		}
+		return {};
 	}
 
 	Ref<const UITheme> Scene::GetUIThemeFor(Entity entity) const

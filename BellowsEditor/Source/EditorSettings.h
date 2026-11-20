@@ -36,6 +36,10 @@ namespace Bellows {
 		float UIScale = 0.0f;						// 0 = follow the monitor
 		bool ShowGrid = true;
 		bool ShowUI = true;							// Game UI over the editor's 3D view (always shown through the game camera)
+		// The UI view: the viewport shows the game's screen at this size, fitted, for laying out UI.
+		bool UIView = false;
+		uint32_t UIViewWidth = 1920;
+		uint32_t UIViewHeight = 1080;
 		float CameraSpeed = 6.0f;
 		EditorPanelVisibility Panels;
 		bool ShowContentFolderTree = true;

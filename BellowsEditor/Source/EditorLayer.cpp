@@ -922,7 +922,9 @@ namespace Bellows {
 		if (m_DebugStopPending)
 			HandleDebugStop();
 
-		const bool cameraAllowed = m_SceneState == SceneState::Edit || m_FreeCameraInPlay || !IsUsingGameCamera();
+		// The UI view looks through the game camera when there is one, so flying the editor camera would do nothing.
+		const bool uiViewOwnsCamera = IsInUIView() && m_EditorScene && m_EditorScene->GetPrimaryCameraEntity();
+		const bool cameraAllowed = !uiViewOwnsCamera && (m_SceneState == SceneState::Edit || m_FreeCameraInPlay || !IsUsingGameCamera());
 		m_CameraControlActive = cameraAllowed && m_Camera.OnUpdate(timestep, m_ViewportHovered && !ImGuizmo::IsUsing(), m_ViewportMouseWheel);
 		m_ViewportMouseWheel = 0.0f;
 
@@ -950,6 +952,11 @@ namespace Bellows {
 		return static_cast<bool>(m_RuntimeScene->GetPrimaryCameraEntity());
 	}
 
+	bool EditorLayer::IsInUIView() const
+	{
+		return m_Settings.UIView && m_SceneState == SceneState::Edit;
+	}
+
 	void EditorLayer::SetViewportSizeOverride(uint32_t width, uint32_t height)
 	{
 		m_ViewportSizeOverride = glm::uvec2(width, height);
@@ -961,12 +968,19 @@ namespace Bellows {
 		if (!scene || !m_ViewportRenderer)
 			return;
 
+		const bool uiView = IsInUIView();
 		uint32_t width = static_cast<uint32_t>(std::max(m_ViewportSize.x, 1.0f));
 		uint32_t height = static_cast<uint32_t>(std::max(m_ViewportSize.y, 1.0f));
 		if (m_ViewportSizeOverride.x > 0 && m_ViewportSizeOverride.y > 0)
 		{
 			width = m_ViewportSizeOverride.x;
 			height = m_ViewportSizeOverride.y;
+		}
+		else if (uiView)
+		{
+			// The game's screen size, so the UI is laid out as players will see it.
+			width = m_Settings.UIViewWidth;
+			height = m_Settings.UIViewHeight;
 		}
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 
@@ -975,15 +989,15 @@ namespace Bellows {
 		m_Camera.SetViewportSize(static_cast<float>(width), static_cast<float>(height));
 
 		RenderCamera camera = m_Camera.GetRenderCamera();
-		if (IsUsingGameCamera())
-			scene->GetPrimaryCamera(aspect, camera);
+		if (IsUsingGameCamera() || uiView)
+			scene->GetPrimaryCamera(aspect, camera);	// The UI view keeps the editor camera when there is no game camera
 
 		// Through the game camera the viewport shows exactly what the player sees.
 		m_ViewportShowsGameView = IsUsingGameCamera();
 		SceneRendererSettings& settings = m_ViewportRenderer->GetSettings();
-		settings.ShowGrid = m_Settings.ShowGrid && m_SceneState == SceneState::Edit;
-		settings.ShowSelectionOutline = !m_ViewportShowsGameView;
-		settings.ShowUI = m_ViewportShowsGameView || m_Settings.ShowUI;
+		settings.ShowGrid = m_Settings.ShowGrid && m_SceneState == SceneState::Edit && !uiView;
+		settings.ShowSelectionOutline = !m_ViewportShowsGameView && !uiView;
+		settings.ShowUI = m_ViewportShowsGameView || uiView || m_Settings.ShowUI;
 
 		std::vector<uint32_t> selectedIDs;
 		for (UUID uuid : m_Selection)
@@ -1005,7 +1019,7 @@ namespace Bellows {
 
 	void EditorLayer::SubmitEditorOverlays(SceneRenderer& renderer)
 	{
-		if (IsUsingGameCamera())
+		if (IsUsingGameCamera() || IsInUIView())
 			return;
 
 		const Ref<Scene>& scene = GetActiveScene();
@@ -1151,9 +1165,19 @@ namespace Bellows {
 			return;
 		const uint32_t width = m_ViewportRenderer->GetViewportWidth();
 		const uint32_t height = m_ViewportRenderer->GetViewportHeight();
-		const glm::vec2 scaled = viewportPosition * glm::vec2(static_cast<float>(width), static_cast<float>(height)) / glm::max(m_ViewportSize, glm::vec2(1.0f));
+		const glm::vec2 scaled = (viewportPosition + m_ViewportPosition - m_ViewportImageOrigin) / glm::max(m_ViewportImageScale, glm::vec2(1e-4f));
 		if (scaled.x < 0.0f || scaled.y < 0.0f || scaled.x >= static_cast<float>(width) || scaled.y >= static_cast<float>(height))
 			return;
+
+		// The UI view picks the UI rect itself (it is what gets moved), in front of the 3D scene.
+		if (IsInUIView())
+		{
+			if (Entity rect = scene->FindUIRectAt(scaled))
+			{
+				Select(rect, ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift);
+				return;
+			}
+		}
 
 		const uint32_t id = m_ViewportRenderer->ReadEntityID(static_cast<uint32_t>(scaled.x), static_cast<uint32_t>(scaled.y));
 		Entity entity = scene->GetEntityByRenderID(id);
@@ -1651,6 +1675,12 @@ namespace Bellows {
 			ImGui::Separator();
 			ImGui::MenuItem(ICON_GRID_3X3 "  Grid", nullptr, &m_Settings.ShowGrid);
 			ImGui::MenuItem(ICON_MONITOR "  Game UI", nullptr, &m_Settings.ShowUI);
+			ImGui::MenuItem(ICON_LAYOUT_TEMPLATE "  UI View", nullptr, &m_Settings.UIView);
+			if (ImGui::BeginMenu(ICON_SCAN "  UI View Size"))
+			{
+				DrawUIViewSizeMenu();
+				ImGui::EndMenu();
+			}
 			ImGui::MenuItem(ICON_BOX "  Collider Outlines", nullptr, &m_ShowColliders);
 			ImGui::MenuItem(ICON_ACTIVITY "  Statistics", nullptr, &m_ShowStatistics);
 			ImGui::Separator();
@@ -1877,10 +1907,24 @@ namespace Bellows {
 		m_ViewportSize = glm::vec2(std::max(available.x, 1.0f), std::max(available.y, 1.0f));
 		m_ViewportPosition = glm::vec2(cursor.x, cursor.y);
 
+		// The image fills the viewport, except in the UI view, where the game's screen is fitted and letterboxed.
+		ImVec2 imageSize = available;
+		m_ViewportImageOrigin = m_ViewportPosition;
+		const glm::vec2 rendered(static_cast<float>(std::max(m_ViewportRenderer->GetViewportWidth(), 1u)),
+			static_cast<float>(std::max(m_ViewportRenderer->GetViewportHeight(), 1u)));
+		if (IsInUIView())
+		{
+			const float fit = std::min(m_ViewportSize.x / rendered.x, m_ViewportSize.y / rendered.y);
+			imageSize = ImVec2(std::max(std::floor(rendered.x * fit), 1.0f), std::max(std::floor(rendered.y * fit), 1.0f));
+			m_ViewportImageOrigin = glm::floor(m_ViewportPosition + (m_ViewportSize - glm::vec2(imageSize.x, imageSize.y)) * 0.5f);
+			ImGui::GetWindowDrawList()->AddRectFilled(cursor, ImVec2(cursor.x + available.x, cursor.y + available.y), Theme::Background);
+			ImGui::SetCursorScreenPos(ImVec2(m_ViewportImageOrigin.x, m_ViewportImageOrigin.y));
+		}
+		m_ViewportImageScale = glm::vec2(imageSize.x, imageSize.y) / rendered;
 		if (nvrhi::ITexture* image = m_ViewportRenderer->GetFinalImage())
-			ImGui::Image(ImTextureRef(reinterpret_cast<ImTextureID>(image)), available);
+			ImGui::Image(ImTextureRef(reinterpret_cast<ImTextureID>(image)), imageSize);
 		else
-			ImGui::Dummy(available);
+			ImGui::Dummy(imageSize);
 
 		if (ImGui::BeginDragDropTarget())
 		{
@@ -1891,8 +1935,23 @@ namespace Bellows {
 
 		DrawGizmo();
 
+		bool rectToolHasMouse = false;
+		if (IsInUIView() && GetActiveScene())
+		{
+			const UIRectTool::ImageMapping mapping { m_ViewportImageOrigin, m_ViewportImageScale };
+			rectToolHasMouse = m_UIRectTool.OnImGui(*GetActiveScene(), GetPrimarySelection(), mapping, m_ViewportHovered, m_SceneState == SceneState::Edit);
+			const std::string finished = m_UIRectTool.TakeFinishedDrag();
+			if (!finished.empty())
+				CommitChange(finished);
+			if (m_UIRectTool.TakeClick())
+			{
+				const ImVec2 mouse = ImGui::GetMousePos();
+				PickEntity(glm::vec2(mouse.x - cursor.x, mouse.y - cursor.y));
+			}
+		}
+
 		const bool canPick = m_SceneState == SceneState::Edit || !IsUsingGameCamera();
-		if (canPick && m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyAlt
+		if (canPick && !rectToolHasMouse && m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyAlt
 			&& !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() && !m_CameraControlActive)
 		{
 			const ImVec2 mouse = ImGui::GetMousePos();
@@ -1950,7 +2009,7 @@ namespace Bellows {
 		endOverlay();
 
 		// View options, right aligned
-		const int viewButtons = m_SceneState == SceneState::Edit ? 4 : 5;
+		const int viewButtons = 5;
 		const float viewWidth = buttonSize * static_cast<float>(viewButtons) + padding * static_cast<float>(viewButtons + 1);
 		const ImVec2 viewOrigin(m_ViewportPosition.x + m_ViewportSize.x - viewWidth - 10.0f * scale, origin.y);
 		beginOverlay("View", viewOrigin, viewButtons);
@@ -1965,14 +2024,38 @@ namespace Bellows {
 		ImGui::SameLine();
 		if (UI::IconButton(ICON_ACTIVITY, "Statistics", m_ShowStatistics))
 			m_ShowStatistics = !m_ShowStatistics;
-		if (m_SceneState != SceneState::Edit)
+		ImGui::SameLine();
+		if (m_SceneState == SceneState::Edit)
 		{
-			ImGui::SameLine();
+			const std::string tooltip = fmt::format("UI view: the game's screen at {} x {}, for laying out UI (View > UI View Size)",
+				m_Settings.UIViewWidth, m_Settings.UIViewHeight);
+			if (UI::IconButton(ICON_LAYOUT_TEMPLATE, tooltip.c_str(), m_Settings.UIView))
+				m_Settings.UIView = !m_Settings.UIView;
+		}
+		else
+		{
 			if (UI::IconButton(ICON_CAMERA, m_FreeCameraInPlay ? "Free camera (click for game camera)" : "Game camera (click for free camera)", m_FreeCameraInPlay))
 				m_FreeCameraInPlay = !m_FreeCameraInPlay;
 		}
 		endOverlay();
 		(void)toolsSize;
+
+		// The UI view's size, under the image, opens the size menu.
+		if (IsInUIView())
+		{
+			const std::string label = fmt::format(ICON_LAYOUT_TEMPLATE "  {} x {}", m_Settings.UIViewWidth, m_Settings.UIViewHeight);
+			const ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+			ImGui::SetCursorScreenPos(ImVec2(m_ViewportPosition.x + m_ViewportSize.x - textSize.x - 22.0f * scale,
+				m_ViewportPosition.y + m_ViewportSize.y - textSize.y - 18.0f * scale));
+			if (ImGui::SmallButton(label.c_str()))
+				ImGui::OpenPopup("UIViewSize");
+			UI::Tooltip("The size of the game's screen in the UI view");
+			if (ImGui::BeginPopup("UIViewSize"))
+			{
+				DrawUIViewSizeMenu();
+				ImGui::EndPopup();
+			}
+		}
 
 		// Camera speed hint while flying
 		if (m_Camera.IsFlying())
@@ -1983,11 +2066,46 @@ namespace Bellows {
 		}
 	}
 
+	void EditorLayer::DrawUIViewSizeMenu()
+	{
+		struct Preset { const char* Name; uint32_t Width; uint32_t Height; };
+		static constexpr Preset presets[] = {
+			{ "1280 x 720 (HD)", 1280, 720 },
+			{ "1920 x 1080 (Full HD)", 1920, 1080 },
+			{ "2560 x 1440 (QHD)", 2560, 1440 },
+			{ "3840 x 2160 (4K)", 3840, 2160 },
+			{ "2560 x 1080 (Ultrawide)", 2560, 1080 },
+			{ "1280 x 800 (16:10)", 1280, 800 },
+			{ "1024 x 768 (4:3)", 1024, 768 },
+			{ "1080 x 1920 (Portrait)", 1080, 1920 },
+		};
+		for (const Preset& preset : presets)
+		{
+			const bool current = m_Settings.UIViewWidth == preset.Width && m_Settings.UIViewHeight == preset.Height;
+			if (ImGui::MenuItem(preset.Name, nullptr, current))
+			{
+				m_Settings.UIViewWidth = preset.Width;
+				m_Settings.UIViewHeight = preset.Height;
+				m_Settings.UIView = true;
+			}
+		}
+		ImGui::Separator();
+		int size[2] = { static_cast<int>(m_Settings.UIViewWidth), static_cast<int>(m_Settings.UIViewHeight) };
+		ImGui::SetNextItemWidth(140.0f * Theme::GetScale());
+		if (ImGui::InputInt2("Custom", size, ImGuiInputTextFlags_EnterReturnsTrue))
+		{
+			m_Settings.UIViewWidth = static_cast<uint32_t>(std::clamp(size[0], 64, 8192));
+			m_Settings.UIViewHeight = static_cast<uint32_t>(std::clamp(size[1], 64, 8192));
+			m_Settings.UIView = true;
+		}
+	}
+
 	void EditorLayer::DrawGizmo()
 	{
 		// UI entities are placed by their UI rect, not their transform, so the 3D gizmo would mislead.
 		Entity entity = GetPrimarySelection();
-		if (!entity || m_GizmoMode == GizmoMode::None || IsUsingGameCamera() || GetActiveScene()->IsInsideUICanvas(entity))
+		// The UI view looks through the game camera, and is for laying out UI.
+		if (!entity || m_GizmoMode == GizmoMode::None || IsUsingGameCamera() || IsInUIView() || GetActiveScene()->IsInsideUICanvas(entity))
 		{
 			if (m_GizmoWasUsing && !ImGuizmo::IsUsing())
 				m_GizmoWasUsing = false;

@@ -166,6 +166,11 @@ namespace Bellows {
 		JsonRead(json, "UIScale", settings.UIScale);
 		JsonRead(json, "ShowGrid", settings.ShowGrid);
 		JsonRead(json, "ShowUI", settings.ShowUI);
+		JsonRead(json, "UIView", settings.UIView);
+		JsonRead(json, "UIViewWidth", settings.UIViewWidth);
+		JsonRead(json, "UIViewHeight", settings.UIViewHeight);
+		settings.UIViewWidth = std::clamp(settings.UIViewWidth, 64u, 8192u);
+		settings.UIViewHeight = std::clamp(settings.UIViewHeight, 64u, 8192u);
 		JsonRead(json, "CameraSpeed", settings.CameraSpeed);
 		JsonRead(json, "ShowContentFolderTree", settings.ShowContentFolderTree);
 		JsonRead(json, "LastProjectLocation", settings.LastProjectLocation);
@@ -194,6 +199,9 @@ namespace Bellows {
 		json["UIScale"] = UIScale;
 		json["ShowGrid"] = ShowGrid;
 		json["ShowUI"] = ShowUI;
+		json["UIView"] = UIView;
+		json["UIViewWidth"] = UIViewWidth;
+		json["UIViewHeight"] = UIViewHeight;
 		json["CameraSpeed"] = CameraSpeed;
 		json["ShowContentFolderTree"] = ShowContentFolderTree;
 		json["LastProjectLocation"] = LastProjectLocation;

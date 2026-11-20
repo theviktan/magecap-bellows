@@ -278,6 +278,12 @@ canvas is screen text: its `size` is in reference pixels and its box is the enti
   anchors) and `size` move and resize the rect through the offsets. `visible` (hidden rects hide
   everything under them), `interactable`, and read-only `screen_position` and `screen_size` (pixels,
   as of the last frame drawn). An entity without a `UIRect` fills its parent's rect.
+  In the editor, the viewport toolbar's **UI view** button (or **View → UI View**) shows the game's
+  screen at a set size (**View → UI View Size**, or the size label under the viewport). There, drag
+  the selected rect to move it, its edges and corners to resize it, and the green anchor markers to
+  move its anchors while it stays put; hold **Ctrl** to snap to 8 reference pixels (anchors to 0.05).
+  The Inspector's **Anchors** button picks a preset; **Shift**+click also moves the rect there. Rects
+  a `UILayout` places only show their outline.
 * `UIImage`: a filled rectangle: `texture` (empty = plain color), `color` (multiplies the
   texture), `corner_radius` and `border_width` (reference pixels; the border is inside the rect),
   `border_color`, `visible`, and `slice_border` (9-slice: `[left, top, right, bottom]` in texture

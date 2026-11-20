@@ -102,4 +102,35 @@ namespace Bellows {
 	void SetUIRectPosition(const glm::vec2& pivot, glm::vec2& offsetMin, glm::vec2& offsetMax, const glm::vec2& position);
 	void SetUIRectSize(const glm::vec2& pivot, glm::vec2& offsetMin, glm::vec2& offsetMax, const glm::vec2& size);
 
+	// Editing a rect on screen (the editor's handles, anchor presets).
+
+	// The offsets that put a rect at 'screenRect' with these anchors: the inverse of ResolveUIRect.
+	void ComputeUIOffsetsFor(const UIRectangle& screenRect, const glm::vec2& anchorMin, const glm::vec2& anchorMax,
+		const UIRectangle& parent, float scale, glm::vec2& outOffsetMin, glm::vec2& outOffsetMax);
+
+	// Godot's anchor presets: a corner, the middle of a side or the center, or a stretch across the parent.
+	enum class UIAnchorPreset : uint8_t
+	{
+		TopLeft = 0, TopCenter, TopRight, CenterLeft, Center, CenterRight, BottomLeft, BottomCenter, BottomRight,
+		TopWide, MiddleWide, BottomWide, LeftTall, CenterTall, RightTall, Full
+	};
+	constexpr int UIAnchorPresetCount = 16;
+	void GetUIAnchorPreset(UIAnchorPreset preset, glm::vec2& outAnchorMin, glm::vec2& outAnchorMax);
+	const char* UIAnchorPresetToString(UIAnchorPreset preset);	// "Top Left", ..., "Full Rect"
+	// Where a rect goes when snapped to a preset in 'parent': along a stretching axis it fills the anchors;
+	// along a point axis it keeps its size and sits on the point, pivoted there ('outPivot', per axis;
+	// stretching axes keep 'pivot').
+	UIRectangle GetUIAnchorPresetRect(UIAnchorPreset preset, const UIRectangle& current, const UIRectangle& parent,
+		const glm::vec2& pivot, glm::vec2& outPivot);
+
+	// The part of a rect a drag holds: the whole rect, an edge or a corner.
+	enum class UIRectHandle : uint8_t { None = 0, Move, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight };
+	// The rect after dragging 'handle' by 'delta' screen pixels. A resize stops at 'minSize' (the edges
+	// never cross); a move keeps the size.
+	UIRectangle DragUIRect(const UIRectangle& start, UIRectHandle handle, const glm::vec2& delta, float minSize);
+	// Which handle of 'rect' is at 'point': corners and edges within 'reach' pixels, else Move inside it.
+	UIRectHandle FindUIRectHandle(const UIRectangle& rect, const glm::vec2& point, float reach);
+	// Rounds the edges that a drag moved to multiples of 'step' offset pixels (Ctrl while dragging).
+	void SnapUIOffsets(UIRectHandle handle, glm::vec2& offsetMin, glm::vec2& offsetMax, float step);
+
 }
