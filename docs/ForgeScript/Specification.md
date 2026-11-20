@@ -1,6 +1,6 @@
 # ForgeScript Language Specification
 
-This is the exact description of ForgeScript **1.4.1**: what a script may contain and what it means. Use it when you need a precise answer, when you build a tool that reads ForgeScript, or when you change the language.
+This is the exact description of ForgeScript **1.5.0**: what a script may contain and what it means. Use it when you need a precise answer, when you build a tool that reads ForgeScript, or when you change the language.
 
 - To **learn** ForgeScript, read the [Language Guide](LanguageGuide.md), which explains everything with examples.
 - To **look something up** quickly, use the one-page [Quick Reference](Reference.md).
@@ -534,7 +534,7 @@ end
 
 A **mistake** (compile error) is text that is not ForgeScript. A script with a mistake does not run. Checkers (`forgescript --check`, the language server, the Bellows editor) list every mistake they can find, in order of line.
 
-A **warning** points at code that runs but probably doesn't do what was meant. A warning never stops a script or changes what it does, and checkers show warnings only once a script has no mistakes. In 1.4.1:
+A **warning** points at code that runs but probably doesn't do what was meant. A warning never stops a script or changes what it does, and checkers show warnings only once a script has no mistakes. In 1.5.0:
 
 - A value named like a built-in function that the script also calls: `set max to 10` in a script that calls `max(a, b)`.
 - `show (menu)`, with a space before the bracket, for a host phrase that gives way to calls ([8](#8-phrases)): it is a call, not the phrase.
