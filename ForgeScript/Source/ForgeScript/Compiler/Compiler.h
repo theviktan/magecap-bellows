@@ -35,6 +35,12 @@ namespace ForgeScript {
 		bool ReportMissingScripts = false;
 	};
 
+	// Why 'use "path"' may not load that path, or "" when it may. A script can only use other ForgeScript
+	// scripts in its own place (the project's asset folder, or the folder it is in, and below): the path
+	// must be relative, never step up with "..", and end in .forge or have no extension. The compiler
+	// reports it as a mistake and VM::ResolveModuleSource refuses it, so no host's loader ever sees one.
+	std::string CheckUsePath(const std::string& path);
+
 	// Compiles ForgeScript source code into a top-level function that belongs to the given module.
 	// Returns nullptr and fills outError when the code has a mistake.
 	Function* CompileScript(VM& vm, Module* module, std::string_view source, const std::string& fileName,

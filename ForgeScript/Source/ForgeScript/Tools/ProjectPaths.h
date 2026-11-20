@@ -12,7 +12,12 @@ namespace ForgeScript {
 	std::filesystem::path FindUseFolder(const std::filesystem::path& scriptPath);
 
 	// The file 'use "name"' means, from 'useFolder': ".forge" is added when the name has no extension.
+	// Empty when 'use' may not load it (CheckUsePath), or when the file it reaches, following links, is
+	// outside useFolder.
 	std::filesystem::path ResolveUsePath(const std::filesystem::path& useFolder, const std::string& name);
+
+	// Whether 'file', following links, is 'folder' or inside it.
+	bool IsInsideFolder(const std::filesystem::path& folder, const std::filesystem::path& file);
 
 	bool ReadTextFile(const std::filesystem::path& path, std::string& outText);
 

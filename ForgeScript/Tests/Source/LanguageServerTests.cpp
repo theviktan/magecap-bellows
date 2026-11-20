@@ -969,3 +969,32 @@ TEST_CASE("LanguageServerSurvivesDeepNesting")
 	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
 	CHECK_CONTAINS(diagnostics.AsArray()[0].GetString("message"), "nested too deeply");
 }
+
+TEST_CASE("LanguageServerKeepsUseInsideTheProject")
+{
+	TempFolder project("inside");
+	project.Write("Game.bproject", "{ \"Name\": \"Game\", \"AssetDirectory\": \"Content\" }");
+	project.Write("Secret.forge", "set secret to 42\n");
+	project.Write("Content/Scripts/Main.forge", "");
+	const std::filesystem::path content = project.Path / "Content";
+	CHECK(ResolveUsePath(content, "../Secret").empty());
+	CHECK(ResolveUsePath(content, (project.Path / "Secret").generic_string()).empty());
+	CHECK_FALSE(ResolveUsePath(content, "Scripts/Main").empty());
+
+	Session session;
+	const std::string uri = LanguageServer::PathToUri(project.Path / "Content/Scripts/Main.forge");
+	const Json diagnostics = session.Open(uri, "use \"../Secret\"\n");
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
+	CHECK_CONTAINS(diagnostics.AsArray()[0].GetString("message"), "'use' only reaches scripts inside");
+
+	// A link inside the assets that points outside them is not followed.
+	std::error_code error;
+	std::filesystem::create_symlink(project.Path / "Secret.forge", content / "Linked.forge", error);
+	if (!error)
+	{
+		CHECK(ResolveUsePath(content, "Linked").empty());
+		const Json linked = session.Change(uri, "use \"Linked\"\n", 2);
+		REQUIRE_EQ(linked.AsArray().size(), static_cast<size_t>(1));
+		CHECK_EQ(linked.AsArray()[0].GetString("message"), std::string("Could not find the script \"Linked\" to use."));
+	}
+}

@@ -81,7 +81,7 @@ Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be ope
 
 The engine's API comes from `forgescript-api.json`, which MageCap Bellows generates and installs next to `forgescript`; `--api <file>` points somewhere else. Without it the server knows only the language, so engine phrases show as mistakes. `use` resolves by the same rule as `--check`, and unsaved text of scripts open in the editor wins over the files on disk. The server syncs whole documents, counts positions in UTF-16 as LSP requires, and exits with `0` after `shutdown` then `exit`.
 
-**Where `use` looks.** Inside a MageCap Bellows project (a folder with a `.bproject` file, found by walking up from the script), `use` paths start at the project's asset folder, the same as in the engine: `use "Scripts/Helpers"` in `Assets/Scripts/Main.forge` means `Assets/Scripts/Helpers.forge`. Anywhere else they start next to the script.
+**Where `use` looks.** Inside a MageCap Bellows project (a folder with a `.bproject` file, found by walking up from the script), `use` paths start at the project's asset folder, the same as in the engine: `use "Scripts/Helpers"` in `Assets/Scripts/Main.forge` means `Assets/Scripts/Helpers.forge`. Anywhere else they start next to the script. Either way `use` stays in that folder and below, and loads only `.forge` scripts: absolute paths, `..` steps and other extensions are mistakes, and a link that leads outside the folder isn't followed.
 
 Try the scripts in [`Examples/Scripts`](Examples/Scripts), for example `forgescript ForgeScript/Examples/Scripts/battle.forge`.
 

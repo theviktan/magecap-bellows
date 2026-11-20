@@ -2,6 +2,8 @@
 
 #include "ForgeScript/Compiler/ScriptVariables.h"
 
+#include <algorithm>
+
 using namespace ForgeScript;
 
 // Compile errors: every mistake should point at the right line with a helpful message.
@@ -558,4 +560,31 @@ TEST_CASE("NestingTooDeepIsAMistakeNotACrash")
 	const std::vector<CompileError> mistakes = vm.FindMistakes("set x to " + repeated("(", 1000) + "1" + repeated(")", 1000) + "\nset to 5\n", "deep.forge");
 	REQUIRE(mistakes.size() == 2);
 	CHECK(mistakes[1].Line == 2);
+}
+
+TEST_CASE("UseOnlyReachesScriptsInItsPlace")
+{
+	// Audit S-3: 'use' can't reach files outside the project (or the script's folder), or files that
+	// aren't scripts. It is a mistake in every compile, before any loader sees the path.
+	const char* inside = "'use' only reaches scripts inside this script's place: the project's Assets folder, or the folder this script is in";
+	for (const char* path : { "/etc/hosts", "C:/Games/x", "c:secret", "../Shared/x", "Scripts/../../x", "a/../b" })
+	{
+		INFO(path);
+		CHECK_CONTAINS(CompileFails(std::string("use \"") + path + "\"\n").Message, inside);
+	}
+	CHECK_CONTAINS(CompileFails("use \"notes.txt\"\n").Message, "'use' only loads ForgeScript scripts: the name must end in .forge or have no extension");
+	CHECK_CONTAINS(CompileFails("use \"\"\n").Message, "Write the name of the script to use in the quotes");
+	// Backslashes are escapes in ForgeScript text, so these are checked as the paths they become.
+	CHECK_FALSE(CheckUsePath("\\\\server\\share\\x").empty());
+	CHECK_FALSE(CheckUsePath("Scripts\\..\\..\\x").empty());
+	for (const char* path : { "helpers", "Scripts/helpers", "Scripts\\helpers", "helpers.forge", "Lib.FORGE", "v1.2/helpers" })
+		CHECK(CheckUsePath(path).empty());
+
+	// A host's loader is never asked for a refused path, even by the phrase prescan.
+	VM vm;
+	std::vector<std::string> asked;
+	vm.SetModuleLoader([&asked](const std::string& path, std::string&, std::string&) { asked.push_back(path); return false; });
+	vm.FindMistakes("use \"../secret\"\nuse \"ok\"\n", "test.forge");
+	CHECK(std::find(asked.begin(), asked.end(), "../secret") == asked.end());
+	CHECK(std::find(asked.begin(), asked.end(), "ok") != asked.end());
 }
