@@ -283,5 +283,5 @@ TEST_CASE("Engine phrases are listed for tools")
 		CHECK_FALSE(phrase.Returns.empty());
 	}
 	CHECK_EQ(patterns, std::vector<std::string>{ "save screenshot", "save screenshot to (path)", "user folder",
-		"show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)" });
+		"pause the game", "resume the game", "the game is paused", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)" });
 }

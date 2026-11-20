@@ -42,4 +42,17 @@ namespace ForgeScript {
 	// is set more than once, the first line counts. Does not check the rest of the script for mistakes.
 	std::vector<ScriptVariable> FindScriptVariables(std::string_view source);
 
+	// A 'when' block that waits, directly or through the script's own functions it calls or starts.
+	struct WaitingHandler
+	{
+		std::string Event;	// The event as written after 'when', without its values: "clicked", "\"Resume\" is clicked"
+		int Line = 0;		// The line of its 'when'
+	};
+
+	// Finds the handlers for the given events (the event's own name, like "clicked", also matches
+	// 'when "Resume" is clicked') that contain a 'wait', or call or start a function of this script
+	// that does, in order. A host uses it to warn about handlers that would hold while the game is
+	// paused. Reads the tokens only; does not check the script for mistakes.
+	std::vector<WaitingHandler> FindHandlersThatWait(std::string_view source, const std::vector<std::string>& events);
+
 }

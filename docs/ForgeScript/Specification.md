@@ -504,6 +504,7 @@ end
   | `wait until` *expression* | the first frame on which the expression counts as true, checked every frame |
 
 - The host moves time forward, once per frame.
+- A host whose game is paused calls `VM::UpdatePaused` instead of `Update`. Time and the frame count stand still, so `time()` stops and every wait holds, except the waits of tasks in modules the host names (MageCap Bellows: scripts marked Run While Paused). Those count down by the real frame time. When the host calls `Update` again, the held waits carry on with the time they had left.
 - Code that a host or a built-in function calls directly and must finish right away (a function passed to `sort_by`, an object's `to_text`) cannot `wait`.
 
 ---

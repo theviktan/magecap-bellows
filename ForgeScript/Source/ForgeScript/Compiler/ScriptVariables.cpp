@@ -2,6 +2,8 @@
 
 #include "ForgeScript/Compiler/Lexer.h"
 
+#include <algorithm>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace ForgeScript {
@@ -167,6 +169,143 @@ namespace ForgeScript {
 			}
 		}
 		return variables;
+	}
+
+	namespace {
+
+		// What one top-level block does: whether it waits itself, and which functions it names in a call.
+		struct BlockFacts
+		{
+			bool Waits = false;
+			std::vector<std::string> Calls;
+		};
+
+		// Reads the block that starts at tokens[start] (its opener) to its matching 'end'; returns the
+		// index after it.
+		size_t ReadBlock(const std::vector<Token>& tokens, size_t start, BlockFacts& facts)
+		{
+			int depth = 0;
+			size_t i = start;
+			for (; i < tokens.size() && tokens[i].Type != TokenType::Eof; i++)
+			{
+				if (TokenOpensBlock(tokens, i))
+					depth++;
+				else if (tokens[i].Type == TokenType::End && --depth == 0)
+					return i + 1;
+				if (tokens[i].Type == TokenType::Wait)
+					facts.Waits = true;
+				else if (tokens[i].Type == TokenType::Identifier && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::LeftParen
+					&& (i == 0 || (tokens[i - 1].Type != TokenType::Dot && tokens[i - 1].Type != TokenType::Possessive)))
+					facts.Calls.emplace_back(tokens[i].Lexeme);
+			}
+			return i;
+		}
+
+		// "clicked", "\"Resume\" is clicked", "changed" for 'when changed with value'.
+		std::string HandlerEvent(const std::vector<Token>& tokens, size_t when, std::string& eventName)
+		{
+			std::string written;
+			size_t first = when + 1;
+			size_t i = first;
+			for (; i < tokens.size() && tokens[i].Type != TokenType::Newline && tokens[i].Type != TokenType::With && tokens[i].Type != TokenType::Eof; i++)
+			{
+				if (!written.empty())
+					written += ' ';
+				written += tokens[i].Lexeme;
+			}
+			// The event's own name: after 'is' in the named form, else the whole text.
+			size_t nameStart = first;
+			if (first + 1 < i && tokens[first].Type == TokenType::String && tokens[first + 1].Type == TokenType::Is)
+				nameStart = first + 2;
+			eventName.clear();
+			for (size_t j = nameStart; j < i; j++)
+			{
+				if (!eventName.empty())
+					eventName += ' ';
+				eventName += tokens[j].Lexeme;
+			}
+			return written;
+		}
+
+	}
+
+	std::vector<WaitingHandler> FindHandlersThatWait(std::string_view source, const std::vector<std::string>& events)
+	{
+		Lexer lexer(source);
+		const std::vector<Token> tokens = lexer.Tokenize();
+
+		struct Handler
+		{
+			WaitingHandler Info;
+			BlockFacts Facts;
+		};
+		std::vector<Handler> handlers;
+		std::unordered_map<std::string, BlockFacts> functions;
+		int depth = 0;
+		for (size_t i = 0; i < tokens.size() && tokens[i].Type != TokenType::Eof;)
+		{
+			const bool opens = TokenOpensBlock(tokens, i);
+			if (depth == 0 && opens && tokens[i].Type == TokenType::When)
+			{
+				Handler handler;
+				std::string eventName;
+				handler.Info.Event = HandlerEvent(tokens, i, eventName);
+				handler.Info.Line = tokens[i].Line;
+				const bool wanted = std::find(events.begin(), events.end(), eventName) != events.end();
+				i = ReadBlock(tokens, i, handler.Facts);
+				if (wanted)
+					handlers.push_back(std::move(handler));
+				continue;
+			}
+			if (depth == 0 && opens && tokens[i].Type == TokenType::Function && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier)
+			{
+				BlockFacts facts;
+				const std::string name(tokens[i + 1].Lexeme);
+				i = ReadBlock(tokens, i, facts);
+				functions.emplace(name, std::move(facts));
+				continue;
+			}
+			if (opens)
+				depth++;
+			else if (tokens[i].Type == TokenType::End && depth > 0)
+				depth--;
+			i++;
+		}
+
+		// A function waits when it waits itself or calls one that does.
+		bool changed = true;
+		while (changed)
+		{
+			changed = false;
+			for (auto& [name, facts] : functions)
+			{
+				if (facts.Waits)
+					continue;
+				for (const std::string& call : facts.Calls)
+				{
+					auto it = functions.find(call);
+					if (it != functions.end() && it->second.Waits)
+					{
+						facts.Waits = changed = true;
+						break;
+					}
+				}
+			}
+		}
+
+		std::vector<WaitingHandler> waiting;
+		for (const Handler& handler : handlers)
+		{
+			bool waits = handler.Facts.Waits;
+			for (size_t c = 0; !waits && c < handler.Facts.Calls.size(); c++)
+			{
+				auto it = functions.find(handler.Facts.Calls[c]);
+				waits = it != functions.end() && it->second.Waits;
+			}
+			if (waits)
+				waiting.push_back(handler.Info);
+		}
+		return waiting;
 	}
 
 }

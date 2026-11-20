@@ -229,6 +229,11 @@ namespace ForgeScript {
 
 		// Advances time: resumes every task whose "wait" has finished. Call once per frame.
 		void Update(double deltaSeconds);
+		// The frame of a host whose game is paused. Time and frames stand still, so every task's wait
+		// holds and time() stops, except the tasks of modules 'keepsRunning' accepts (a pause menu's
+		// script): their waits come nearer by the real frame time, as if their own clock went on. When
+		// the game goes on, Update carries on from where the held waits were.
+		void UpdatePaused(double deltaSeconds, const std::function<bool(const Module*)>& keepsRunning);
 		double GetTime() const { return m_Time; }
 		uint64_t GetFrame() const { return m_Frame; }
 
@@ -315,6 +320,8 @@ namespace ForgeScript {
 		void RunTask(Task* task);
 		void Execute(Task* task);
 		void RemovePending(Task* task);
+		// Runs the waiting tasks whose wait is over; with 'only', just those of the modules it accepts.
+		void ResumeFinishedWaits(const std::function<bool(const Module*)>* only);
 		NativeFunction* NativeMethod(const NativeType::MethodInfo& info, const std::string& name);
 		bool Fail(const std::string& message);
 

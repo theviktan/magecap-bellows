@@ -226,6 +226,48 @@ TEST_CASE("FindScriptVariablesIgnoresBrokenAndEmptyScripts")
 	CHECK_EQ(variables[0].Name, std::string("count"));
 }
 
+TEST_CASE("FindHandlersThatWaitFollowsTheScriptsOwnFunctions")
+{
+	const char* script =
+		"function fade_out()\n"
+		"\twait 0.5 seconds\n"
+		"end\n"
+		"function close_menu()\n"
+		"\tfade_out()\n"
+		"end\n"
+		"function quick()\n"
+		"\tsay \"no wait\"\n"
+		"end\n"
+		"when clicked\n"                       // 10: waits itself, in a nested block
+		"\tif true then\n"
+		"\t\twait 1 frame\n"
+		"\tend\n"
+		"end\n"
+		"when \"Resume\" is clicked\n"         // 15: through two functions
+		"\tclose_menu()\n"
+		"end\n"
+		"when \"Quit\" is clicked\n"           // 18: calls only a function that doesn't wait
+		"\tquick()\n"
+		"\tsay text.repeat(2)\n"
+		"end\n"
+		"when changed with value\n"            // 22: starts one that waits
+		"\tstart fade_out()\n"
+		"end\n"
+		"when update\n"                        // 25: not a UI event
+		"\twait 1 second\n"
+		"end\n";
+	const std::vector<WaitingHandler> found = FindHandlersThatWait(script, { "clicked", "changed", "submitted" });
+	REQUIRE_EQ(found.size(), static_cast<size_t>(3));
+	CHECK_EQ(found[0].Event, std::string("clicked"));
+	CHECK_EQ(found[0].Line, 10);
+	CHECK_EQ(found[1].Event, std::string("\"Resume\" is clicked"));
+	CHECK_EQ(found[1].Line, 15);
+	CHECK_EQ(found[2].Event, std::string("changed"));
+	CHECK_EQ(found[2].Line, 22);
+	CHECK(FindHandlersThatWait("", { "clicked" }).empty());
+	CHECK(FindHandlersThatWait("when clicked\n\twait\n", { "clicked" }).size() == 1);
+}
+
 TEST_CASE("CompileErrorsInWhenWithAName")
 {
 	CHECK_CONTAINS(CompileFails("when \"{name}\" is clicked\nend\n").Message, "must be plain, without { }");

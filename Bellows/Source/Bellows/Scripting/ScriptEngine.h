@@ -27,10 +27,20 @@ namespace Bellows {
 		ScriptFieldValue DefaultValue;
 	};
 
+	// A script's event handler, by the event as written ("clicked", "\"Resume\" is clicked") and its line.
+	struct ScriptHandlerInfo
+	{
+		std::string Event;
+		int Line = 0;
+	};
+
 	struct ScriptClassInfo
 	{
 		std::string ClassName;
 		std::vector<ScriptFieldInfo> Fields;
+		// ForgeScript only: UI event handlers that wait (directly or through the script's functions).
+		// While the game is paused their waits hold, unless the script is marked Run While Paused.
+		std::vector<ScriptHandlerInfo> WaitingUIHandlers;
 	};
 
 	// Runs game scripts: Python (embedded CPython) and ForgeScript (.forge, through ForgeScriptRuntime).

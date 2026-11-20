@@ -106,7 +106,9 @@ namespace Bellows::Scripting {
 		// 'source' is the name of the entity that raised the event, for 'when "Start" is clicked'.
 		void Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values, const std::string& source = {});
 		// Sends an event with the timestep to every created script that handles it, skipping entities about to be destroyed.
-		void EmitTimed(Scene& scene, const std::string& event, float timestep);
+		// With 'pausedOnly', just the entities whose script is marked Run While Paused.
+		void EmitTimed(Scene& scene, const std::string& event, float timestep, bool pausedOnly = false);
+		bool RunsWhilePaused(Scene& scene, UUID entity) const;
 
 	private:
 		ErrorReporter m_Reporter;
