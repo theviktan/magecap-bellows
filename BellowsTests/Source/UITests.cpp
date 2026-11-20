@@ -1017,6 +1017,24 @@ TEST_CASE("UI text inputs take typing, edit, select, copy and paste, and submit"
 		CHECK(ui.EventsFrom(field).back() == "submitted");
 		CHECK(value() == "abc\nabc");
 	}
+	SUBCASE("Multi-line: long lines wrap at the field's width, and the caret follows the rows")
+	{
+		input.MultiLine = true;
+		type("one two three four five six seven eight nine ten");
+		const size_t rows = input.RuntimeView.Rows.size();
+		CHECK(rows > 1);								// 200 pixels at 20 pixels per em can't hold it
+		CHECK(input.RuntimeScroll.x == 0.0f);			// Wrapped, so nothing scrolls sideways
+		ui.Tap(KeyCode::Up);
+		CHECK(input.RuntimeSelection.Caret < value().size());	// Up a row inside the same line
+		CHECK(input.RuntimeSelection.Caret > 0);
+		// The rows are kept, and made again when the text changes from elsewhere.
+		label.Text = "short";
+		input.RuntimeSelection = {};
+		type("!");										// Moves the caret, so the field is looked at again
+		CHECK(value() == "!short");
+		CHECK(input.RuntimeView.Display == "!short");
+		CHECK(input.RuntimeView.Rows.size() == 1);
+	}
 	SUBCASE("A press places the caret, and a drag selects")
 	{
 		type("abcdef");

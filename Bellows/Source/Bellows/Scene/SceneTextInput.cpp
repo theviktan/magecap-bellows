@@ -19,30 +19,68 @@ namespace Bellows {
 
 		// A text field as drawn this frame: its text (bullets for a password), laid out on one line, or
 		// when multi-line in rows, one or more per '\n' (long lines wrap at the area's width), at the
-		// top-left of its text area less its scroll.
+		// top-left of its text area less its scroll. The text, rows and layout live in the component's
+		// view cache.
 		struct TextInputView
 		{
 			Ref<Font> TextFont;
 			float Size = 0.0f;
 			UIRectangle Area;
-			std::string Display;
-			TextLayout Layout;
 			glm::vec2 Origin { 0.0f };					// Where the layout's (0, 0) lands on screen
-			std::vector<size_t> LineFirstCharacter;		// Each row's first character index in Display
-			// Each row's byte range in Display (offsets, which stay right when the view is moved).
-			std::vector<std::pair<size_t, size_t>> LineRanges;
+			const UITextInputComponent::ViewCache* Cache = nullptr;
 
+			const std::string& Display() const { return Cache->Display; }
+			const TextLayout& Layout() const { return Cache->Layout; }
+			const std::vector<std::pair<size_t, size_t>>& Rows() const { return Cache->Rows; }
+			const std::vector<size_t>& RowFirstCharacter() const { return Cache->RowFirstCharacter; }
 			std::string_view Line(size_t index) const
 			{
-				return std::string_view(Display).substr(LineRanges[index].first, LineRanges[index].second - LineRanges[index].first);
+				return std::string_view(Cache->Display).substr(Cache->Rows[index].first, Cache->Rows[index].second - Cache->Rows[index].first);
 			}
 		};
 
 		bool IsMultiLine(const UITextInputComponent& input) { return input.MultiLine && !input.Password; }
 
+		// The rows: each '\n' line, split further to the width when multi-line. What is drawn is the
+		// rows joined by line breaks; the rows keep their places in Display for the caret.
+		void BuildTextInputRows(UITextInputComponent::ViewCache& cache, const Font& font)
+		{
+			cache.Rows.clear();
+			cache.RowFirstCharacter.clear();
+			std::string drawn;
+			size_t start = 0, character = 0;
+			while (true)
+			{
+				const size_t end = std::min(cache.Display.find('\n', start), cache.Display.size());
+				const std::string_view line = std::string_view(cache.Display).substr(start, end - start);
+				std::vector<std::pair<size_t, size_t>> rows = { { 0, CountUICharacters(line) } };
+				if (cache.MultiLine)
+					rows = WrapUILine(line, ComputeUICaretStops(font, line, cache.Size), cache.WrapWidth);
+				for (const auto& [first, last] : rows)
+				{
+					const size_t rowStart = start + UICharacterOffset(line, first);
+					const size_t rowEnd = start + UICharacterOffset(line, last);
+					cache.Rows.emplace_back(rowStart, rowEnd);
+					cache.RowFirstCharacter.push_back(character + first);
+					if (cache.Rows.size() > 1)
+						drawn += '\n';
+					drawn += cache.Display.substr(rowStart, rowEnd - rowStart);
+				}
+				character += CountUICharacters(line) + 1;
+				if (end >= cache.Display.size())
+					break;
+				start = end + 1;
+			}
+
+			TextLayoutSettings settings;
+			settings.Size = cache.Size;
+			settings.Wrap = false;
+			cache.Layout = LayoutText(font, drawn, settings);
+		}
+
 		std::optional<TextInputView> MakeTextInputView(Entity entity, const UIRectangle& rect, float scale)
 		{
-			const auto* input = entity.TryGetComponent<UITextInputComponent>();
+			auto* input = entity.TryGetComponent<UITextInputComponent>();
 			if (!input)
 				return std::nullopt;
 			const auto* text = entity.TryGetComponent<TextComponent>();
@@ -52,44 +90,29 @@ namespace Bellows {
 				return std::nullopt;
 			view.Size = (text ? text->Size : TextComponent::DefaultScreenSize) * scale;
 			view.Area = ComputeUITextInputArea(rect, scale);
-			const std::string& value = text ? text->Text : std::string();
-			view.Display = input->Password ? MaskUIText(value) : value;
-			if (!IsMultiLine(*input))
-				std::replace(view.Display.begin(), view.Display.end(), '\n', ' ');
-
-			// The rows: each '\n' line, split further to the area's width when multi-line. What is drawn is
-			// the rows joined by line breaks; the rows keep their places in Display for the caret.
 			const bool multiLine = IsMultiLine(*input);
-			const float wrapWidth = view.Area.GetSize().x - std::max(2.0f * scale, 1.0f);	// Room for the caret
-			std::string drawn;
-			size_t start = 0, character = 0;
-			while (true)
-			{
-				const size_t end = std::min(view.Display.find('\n', start), view.Display.size());
-				const std::string_view line = std::string_view(view.Display).substr(start, end - start);
-				std::vector<std::pair<size_t, size_t>> rows = { { 0, CountUICharacters(line) } };
-				if (multiLine)
-					rows = WrapUILine(line, ComputeUICaretStops(*view.TextFont, line, view.Size), wrapWidth);
-				for (const auto& [first, last] : rows)
-				{
-					const size_t rowStart = start + UICharacterOffset(line, first);
-					const size_t rowEnd = start + UICharacterOffset(line, last);
-					view.LineRanges.emplace_back(rowStart, rowEnd);
-					view.LineFirstCharacter.push_back(character + first);
-					if (view.LineRanges.size() > 1)
-						drawn += '\n';
-					drawn += view.Display.substr(rowStart, rowEnd - rowStart);
-				}
-				character += CountUICharacters(line) + 1;
-				if (end >= view.Display.size())
-					break;
-				start = end + 1;
-			}
 
-			TextLayoutSettings settings;
-			settings.Size = view.Size;
-			settings.Wrap = false;
-			view.Layout = LayoutText(*view.TextFont, drawn, settings);
+			std::string display = text ? text->Text : std::string();
+			if (input->Password)
+				display = MaskUIText(display);
+			else if (!multiLine)
+				std::replace(display.begin(), display.end(), '\n', ' ');
+			const float wrapWidth = view.Area.GetSize().x - std::max(2.0f * scale, 1.0f);	// Room for the caret
+
+			UITextInputComponent::ViewCache& cache = input->RuntimeView;
+			if (!cache.Valid || cache.Display != display || cache.Size != view.Size || cache.TextFont != view.TextFont
+				|| cache.MultiLine != multiLine || (multiLine && cache.WrapWidth != wrapWidth))
+			{
+				cache.Display = std::move(display);
+				cache.Size = view.Size;
+				cache.WrapWidth = wrapWidth;
+				cache.TextFont = view.TextFont;
+				cache.MultiLine = multiLine;
+				BuildTextInputRows(cache, *view.TextFont);
+				cache.Valid = true;
+			}
+			view.Cache = &cache;
+
 			// One line sits in the middle of the field; several start at its top.
 			const float lineHeight = view.TextFont->GetLineHeight() * view.Size;
 			const float top = multiLine ? 0.0f : (view.Area.GetSize().y - lineHeight) * 0.5f;
@@ -101,7 +124,7 @@ namespace Bellows {
 		size_t LineOfCharacter(const TextInputView& view, size_t character)
 		{
 			size_t line = 0;
-			while (line + 1 < view.LineFirstCharacter.size() && view.LineFirstCharacter[line + 1] <= character)
+			while (line + 1 < view.RowFirstCharacter().size() && view.RowFirstCharacter()[line + 1] <= character)
 				line++;
 			return line;
 		}
@@ -111,7 +134,7 @@ namespace Bellows {
 		{
 			const size_t line = LineOfCharacter(view, character);
 			const std::vector<float> stops = ComputeUICaretStops(*view.TextFont, view.Line(line), view.Size);
-			const size_t index = std::min(character - view.LineFirstCharacter[line], stops.size() - 1);
+			const size_t index = std::min(character - view.RowFirstCharacter()[line], stops.size() - 1);
 			const float lineHeight = view.TextFont->GetLineHeight() * view.Size;
 			return view.Origin + glm::vec2(stops[index], lineHeight * static_cast<float>(line));
 		}
@@ -120,9 +143,9 @@ namespace Bellows {
 		{
 			const float lineHeight = view.TextFont->GetLineHeight() * view.Size;
 			const float row = std::floor((point.y - view.Origin.y) / std::max(lineHeight, 1.0f));
-			const size_t line = static_cast<size_t>(std::clamp(row, 0.0f, static_cast<float>(view.LineRanges.size() - 1)));
+			const size_t line = static_cast<size_t>(std::clamp(row, 0.0f, static_cast<float>(view.Rows().size() - 1)));
 			const std::vector<float> stops = ComputeUICaretStops(*view.TextFont, view.Line(line), view.Size);
-			return view.LineFirstCharacter[line] + NearestUICaretStop(stops, point.x - view.Origin.x);
+			return view.RowFirstCharacter()[line] + NearestUICaretStop(stops, point.x - view.Origin.x);
 		}
 
 		// Keeps the selection on character boundaries of the current text, which scripts may have changed.
@@ -171,7 +194,7 @@ namespace Bellows {
 		if (inText.x < input.RuntimeScroll.x)
 			input.RuntimeScroll.x = inText.x;
 		// No space left of the text when it all fits.
-		input.RuntimeScroll.x = std::clamp(input.RuntimeScroll.x, 0.0f, std::max(view->Layout.Size.x + caretWidth - area.x, 0.0f));
+		input.RuntimeScroll.x = std::clamp(input.RuntimeScroll.x, 0.0f, std::max(view->Layout().Size.x + caretWidth - area.x, 0.0f));
 		if (IsMultiLine(input))
 		{
 			if (inText.y + lineHeight - input.RuntimeScroll.y > area.y)
@@ -239,7 +262,7 @@ namespace Bellows {
 				const float lineHeight = view->TextFont->GetLineHeight() * view->Size;
 				const glm::vec2 caret = CaretPosition(*view, UICharacterIndex(value, selection.Caret));
 				const float target = caret.y + (typed(KeyCode::Up) ? -0.5f : 1.5f) * lineHeight;
-				const bool past = typed(KeyCode::Up) ? caret.y <= view->Origin.y : LineOfCharacter(*view, UICharacterIndex(value, selection.Caret)) + 1 >= view->LineRanges.size();
+				const bool past = typed(KeyCode::Up) ? caret.y <= view->Origin.y : LineOfCharacter(*view, UICharacterIndex(value, selection.Caret)) + 1 >= view->Rows().size();
 				const size_t offset = past ? (typed(KeyCode::Up) ? 0 : value.size()) : UICharacterOffset(value, CharacterAt(*view, glm::vec2(caret.x, target)));
 				moveCaret(offset, false, false);
 			}
@@ -305,7 +328,7 @@ namespace Bellows {
 			band.Color = glm::vec4(glm::vec3(theme.Accent), theme.Accent.a * 0.4f);
 			for (size_t line = LineOfCharacter(*view, first); line <= LineOfCharacter(*view, last); line++)
 			{
-				const size_t lineStart = view->LineFirstCharacter[line];
+				const size_t lineStart = view->RowFirstCharacter()[line];
 				const size_t lineEnd = lineStart + CountUICharacters(view->Line(line));
 				const glm::vec2 from = CaretPosition(*view, std::max(first, lineStart));
 				const glm::vec2 to = CaretPosition(*view, std::min(last, lineEnd));
@@ -315,11 +338,11 @@ namespace Bellows {
 			}
 		}
 
-		if (!view->Display.empty())
+		if (!view->Display().empty())
 		{
 			TextStyle style;
 			style.Color = color;
-			renderer.SubmitUIText(view->TextFont, view->Layout, view->Origin, style, entityID, &textClip);
+			renderer.SubmitUIText(view->TextFont, view->Layout(), view->Origin, style, entityID, &textClip);
 		}
 		else if (!input.Placeholder.empty())
 		{
