@@ -472,12 +472,13 @@ namespace Bellows::Scripting {
 		return script && script->RunWhilePaused;
 	}
 
-	void ForgeScriptRuntime::EmitTimed(Scene& scene, const std::string& event, float timestep, bool pausedOnly)
+	void ForgeScriptRuntime::EmitTimed(Scene& scene, const std::string& event, float timestep,
+		const std::unordered_set<const ForgeScript::Module*>* only)
 	{
 		std::vector<UUID> entities;
 		for (const auto& [uuid, instance] : m_Instances)
 		{
-			if (instance.Created && m_VM->HasHandler(instance.Module, event) && (!pausedOnly || RunsWhilePaused(scene, uuid)))
+			if (instance.Created && m_VM->HasHandler(instance.Module, event) && (!only || only->contains(instance.Module)))
 				entities.push_back(uuid);
 		}
 		for (UUID uuid : entities)
@@ -507,13 +508,13 @@ namespace Bellows::Scripting {
 
 		// While the game is paused only scripts marked Run While Paused update, and only their waits
 		// count down (in real time). Everyone else's waits hold and pick up where they were.
-		EmitTimed(scene, "update", timestep, true);
 		std::unordered_set<const ForgeScript::Module*> running;
 		for (const auto& [uuid, instance] : m_Instances)
 		{
 			if (instance.Module && RunsWhilePaused(scene, uuid))
 				running.insert(instance.Module);
 		}
+		EmitTimed(scene, "update", timestep, &running);
 		m_VM->UpdatePaused(timestep, [&running](const ForgeScript::Module* module) { return running.count(module) > 0; });
 	}
 
