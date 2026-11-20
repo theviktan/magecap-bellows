@@ -1195,7 +1195,7 @@ Things worth knowing:
 - **Saving while stopped:** changes to scripts reload when the script goes on.
 - **Stopping play** while a script is stopped ends it there. `when destroyed` still runs, and it does not stop at breakpoints.
 
-The debugger works in play mode in the MageCap Bellows editor. For checking a script without playing it, the editor (and `forgescript --check` outside it) underlines every mistake as you type. For a quick look at a value, `say` still works: it prints to the Console.
+The debugger works in play mode in the MageCap Bellows editor. For checking a script without playing it, the editor (and `forgescript --check` outside it) underlines every mistake as you type. Once there are none, it also marks **warnings**: code that runs but probably doesn't do what you meant. For example, `set max to 10` in a script that also uses `max(a, b)` takes the name `max` away from the built-in, so `max(a, b)` would try to call 10. The warning says so and suggests another name, like `max_value`. A warning never stops a script. For a quick look at a value, `say` still works: it prints to the Console.
 
 ---
 
@@ -1260,7 +1260,7 @@ focus resume_button     # gives it keyboard and gamepad focus
 ```
 
 - `focus` gives back whether the widget could take focus. It can't when it isn't focusable, is hidden, isn't interactable, or sits behind a modal canvas: `if not focus name_box then say "can't type yet" end`.
-- Write the widget right after the word, without brackets: `show pause_menu`. A space doesn't change that: `show (pause_menu)` is still the function, so it prints the entity and the menu stays hidden. With brackets, `show(value)` is still ForgeScript's function for seeing a value the way a programmer does (with quotes around text), as it always was. The same holds for any script that has its own function called `hide`, `enable`, `disable` or `focus`: `hide(x)` calls it.
+- Write the widget right after the word, without brackets: `show pause_menu`. A space doesn't change that: `show (pause_menu)` is still the function, so it prints the entity and the menu stays hidden. The editor warns about this one and suggests `show pause_menu`. With brackets, `show(value)` is still ForgeScript's function for seeing a value the way a programmer does (with quotes around text), as it always was. The same holds for any script that has its own function called `hide`, `enable`, `disable` or `focus`: `hide(x)` calls it.
 - A phrase given something that isn't an entity says so: "'hide' needs a UI entity, like: hide find_entity("Pause Menu"). This is a number."
 
 ### When the UI takes the input

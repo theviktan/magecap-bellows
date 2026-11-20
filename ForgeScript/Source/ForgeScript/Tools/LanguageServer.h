@@ -119,6 +119,7 @@ namespace ForgeScript {
 		void LoadApi(const std::filesystem::path& file);
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
 		std::vector<CompileError> FindMistakesIn(const std::filesystem::path& path, const std::string& text) const;
+		std::vector<CompileError> FindWarningsIn(const std::filesystem::path& path, const std::string& text) const;
 		std::vector<Symbol> UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const;
 		// The diagnostics of the open documents that use 'changed', which may have changed what they show.
 		void PublishDependents(const std::filesystem::path& changed, const std::string& skipUri, std::vector<Json>& replies);

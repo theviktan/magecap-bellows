@@ -12,6 +12,19 @@ with new language or tool features, the patch number with fixes.
   otherwise ... / end". Before, it said "Expected the end of the line" on the `match` line and then
   "This 'otherwise' needs an 'if' before it." A script's own phrase named `match` is untouched.
 - 1.4.0's date is the day it first shipped, in MageCap Bellows 0.3.2.
+- **Warnings** (ForgeScript Roadmap item 12): things that are allowed but probably not meant. They
+  never stop a script or change what it does; `VM::FindWarnings` lists them, beside `FindMistakes`.
+  - A value named like a built-in function the script also calls: "Naming a value 'max' hides the
+    built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like
+    'max_value'." A script variable counts everywhere; a parameter or a function's own value only
+    where the call finds it. A name the script never calls as a function (a game's
+    `set round to 1`) gets none.
+  - `show (pause_menu)` with a space, for an engine phrase that gives way to calls: "With brackets,
+    'show (...)' calls the show function, not the 'show' phrase. To use the phrase, leave the
+    brackets out, like: show pause_menu". Not for a script that makes its own function of that name.
+  - `forgescript --check` prints them after the place as `warning: ...` (JSON `"severity":"warning"`),
+    with the same exit codes. The language server sends them with severity 2, marking the word, and
+    counts the engine's functions as built-ins. Both show warnings only once a script has no mistakes.
 
 ## 1.4.0 (2026-11-19)
 

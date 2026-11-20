@@ -180,7 +180,9 @@ namespace {
 	// The same shape as "BellowsEditor --check-script --json", so editors read both tools alike:
 	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message" } ] }.
 	// endColumn is one past the end of the mistake's line, since the checker reports where it starts.
-	std::string MistakesToJson(const std::string& fileName, const std::string& source, const std::vector<ForgeScript::CompileError>& mistakes)
+	// Warnings come after the mistakes, with "severity":"warning"; they never change the exit code.
+	std::string MistakesToJson(const std::string& fileName, const std::string& source, const std::vector<ForgeScript::CompileError>& mistakes,
+		const std::vector<ForgeScript::CompileError>& warnings)
 	{
 		std::vector<size_t> lineLengths;
 		size_t start = 0;
@@ -198,9 +200,10 @@ namespace {
 		}
 
 		std::string json = "{\"file\":" + JsonString(fileName) + ",\"diagnostics\":[";
-		for (size_t i = 0; i < mistakes.size(); i++)
+		for (size_t i = 0; i < mistakes.size() + warnings.size(); i++)
 		{
-			const ForgeScript::CompileError& mistake = mistakes[i];
+			const bool warning = i >= mistakes.size();
+			const ForgeScript::CompileError& mistake = warning ? warnings[i - mistakes.size()] : mistakes[i];
 			const size_t line = static_cast<size_t>(std::max(mistake.Line, 0));
 			const size_t column = static_cast<size_t>(std::max(mistake.Column, 0));
 			const size_t lineLength = line > 0 && line <= lineLengths.size() ? lineLengths[line - 1] : 0;
@@ -208,7 +211,7 @@ namespace {
 				json += ",";
 			json += "{\"line\":" + std::to_string(line) + ",\"column\":" + std::to_string(column) +
 				",\"endColumn\":" + std::to_string(std::max(lineLength + 1, column + 1)) +
-				",\"severity\":\"error\",\"message\":" + JsonString(mistake.Message) + "}";
+				",\"severity\":\"" + (warning ? "warning" : "error") + "\",\"message\":" + JsonString(mistake.Message) + "}";
 		}
 		return json + "]}";
 	}
@@ -239,15 +242,25 @@ namespace {
 		// "use" is resolved from the checked file's place, even when its text came from standard input.
 		InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
 		const std::vector<ForgeScript::CompileError> mistakes = vm.FindMistakes(source, path.filename().string());
+		// Warnings only for a script without mistakes, as in the language server: fix those first.
+		const std::vector<ForgeScript::CompileError> warnings = mistakes.empty() ?
+			vm.FindWarnings(source, path.filename().string()) : std::vector<ForgeScript::CompileError>();
 
 		if (options.Json)
 		{
-			std::cout << MistakesToJson(fileName, source, mistakes) << std::endl;
+			std::cout << MistakesToJson(fileName, source, mistakes, warnings) << std::endl;
 		}
 		else
 		{
 			for (const ForgeScript::CompileError& mistake : mistakes)
 				std::cerr << mistake.ToString() << std::endl;
+			for (const ForgeScript::CompileError& warning : warnings)
+			{
+				// The mistakes' layout with "warning: " after the place, as C compilers write it.
+				ForgeScript::CompileError shown = warning;
+				shown.Message = "warning: " + shown.Message;
+				std::cerr << shown.ToString() << std::endl;
+			}
 			if (mistakes.empty())
 				std::cout << fileName << ": no mistakes found." << std::endl;
 		}

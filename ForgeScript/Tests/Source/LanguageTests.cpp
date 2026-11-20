@@ -460,3 +460,45 @@ TEST_CASE("CompileErrorsInTakingApart")
 	REQUIRE(variables.size() == 1);
 	CHECK(variables[0].Name == "speed");
 }
+
+TEST_CASE("WarningsForValuesThatHideBuiltins")
+{
+	auto warnings = [](const std::string& source, const std::vector<std::string>& engine = {})
+	{
+		VM vm;
+		return vm.FindWarnings(source, "test.forge", engine);
+	};
+
+	// A script variable hides the built-in everywhere, even in a function defined before it.
+	std::vector<CompileError> found = warnings("set max to 10\nsay max(3, 4)\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 1);
+	CHECK(found[0].Column == 5);
+	CHECK_CONTAINS(found[0].Message, "hides the built-in function 'max', so max(...) on line 2 won't call it.");
+	found = warnings("function f()\n\tsay max(1, 2)\nend\nset max to 3\nf()\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 4);
+
+	// A parameter or a function's own value hides it only where the call can find it.
+	found = warnings("function f(round)\n\treturn round(2.5)\nend\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 1);
+	CHECK(found[0].Column == 12);
+	CHECK(warnings("function attack(x)\n\tset length to 5\n\treturn length\nend\nsay length([1, 2])\n").empty());
+	CHECK(warnings("for each random in [1]\n\tsay random\nend\nsay random(1, 1)\n").empty());
+
+	// Naming a value like a built-in that the script never calls is fine: a game's round counter.
+	CHECK(warnings("set round to 1\nadd 1 to round\nsay round\n").empty());
+	// Engine functions count when the checker is told about them.
+	CHECK(warnings("set find_entity to 1\nsay find_entity(\"x\")\n").empty());
+	CHECK(warnings("set find_entity to 1\nsay find_entity(\"x\")\n", { "find_entity" }).size() == 1);
+
+	// Warnings never stop or change a script: it still runs (and fails) exactly as before.
+	{
+		VM vm;
+		CompileError error;
+		CHECK(vm.Check("set max to 10\nsay max(3, 4)\n", "test.forge", error));
+		CHECK(vm.FindMistakes("set max to 10\nsay max(3, 4)\n", "test.forge").empty());
+	}
+	CHECK(Output("set max to 10\nsay max\n") == "10\n");
+}

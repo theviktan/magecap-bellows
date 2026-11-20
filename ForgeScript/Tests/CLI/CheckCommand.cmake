@@ -34,6 +34,16 @@ expect_run("json mistakes" 65
 	ARGS --check --json "${mistakes}")
 
 expect_run("text no mistakes" 0 "${good}: no mistakes found." ARGS --check "${good}")
+
+# Warnings never change the exit code; they go to standard error as "place: warning: ...".
+# (expect_run joins standard output before standard error.)
+set(warns "${FOLDER}/warns.forge")
+expect_run("text warnings" 0
+	"${warns}: no mistakes found.\nwarns.forge:1:5: warning: Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'."
+	ARGS --check "${warns}")
+expect_run("json warnings" 0
+	"{\"file\":\"${warns}\",\"diagnostics\":[{\"line\":1,\"column\":5,\"endColumn\":14,\"severity\":\"warning\",\"message\":\"Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'.\"}]}"
+	ARGS --check --json "${warns}")
 expect_run("json no mistakes" 0 "{\"file\":\"${good}\",\"diagnostics\":[]}" ARGS --check --json "${good}")
 
 # With --stdin, --name says where the text belongs, so "use" finds cheers.forge next to it.
