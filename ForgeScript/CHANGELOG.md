@@ -38,6 +38,10 @@ with new language or tool features, the patch number with fixes.
   also fast now: 100,000 nested `if`s check in under half a second instead of 20 seconds, because
   where to go on after a mistake is only worked out when there is one. No real script comes near
   256 levels; every script in the repository runs as before.
+- **Coming from Python or GDScript** (`docs/ForgeScript/ComingFromPythonAndGDScript.md`, ForgeScript
+  Roadmap item 13): the same code side by side in all three languages, starting with the
+  differences that catch people out. Its ForgeScript examples run as a test
+  (`Tests/Scripts/33_coming_from_python_and_gdscript.forge`).
 - **The Specification** (`docs/ForgeScript/Specification.md`, ForgeScript Roadmap item 12): the exact rules
   of the language, for precise answers and for tools, checked against the compiler.
 - **Warnings** (ForgeScript Roadmap item 12): things that are allowed but probably not meant. They
