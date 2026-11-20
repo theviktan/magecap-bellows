@@ -12,6 +12,15 @@ with new language or tool features, the patch number with fixes.
   otherwise ... / end". Before, it said "Expected the end of the line" on the `match` line and then
   "This 'otherwise' needs an 'if' before it." A script's own phrase named `match` is untouched.
 - 1.4.0's date is the day it first shipped, in MageCap Bellows 0.3.2.
+- After that message, the checker skips the rest of that `match` through its `end`, so it no longer
+  also reports "This 'otherwise' needs an 'if' before it." and "This 'end' does not close anything."
+  (inside functions too).
+- `forgescript --check` reads the engine API the way `--lsp` does: `--api <file>`, or else the
+  `forgescript-api.json` installed next to `forgescript`. It uses the language server's own checks,
+  so engine phrases aren't mistakes and engine functions count for the warnings: `--check` and the
+  editor report the same things. The text and JSON formats and exit codes are unchanged; a file given
+  with `--api` that can't be read exits with `66`. `--api` without `--lsp` or `--check` is still
+  wrong usage (`64`).
 - **Warnings** (ForgeScript Roadmap item 12): things that are allowed but probably not meant. They
   never stop a script or change what it does; `VM::FindWarnings` lists them, beside `FindMistakes`.
   - A value named like a built-in function the script also calls: "Naming a value 'max' hides the
@@ -20,7 +29,7 @@ with new language or tool features, the patch number with fixes.
     where the call finds it. A name the script never calls as a function (a game's
     `set round to 1`) gets none.
   - `show (pause_menu)` with a space, for an engine phrase that gives way to calls: "With brackets,
-    'show (...)' calls the show function, not the 'show' phrase. To use the phrase, leave the
+    'show (...)' is a call to a function named 'show', not the 'show' phrase. To use the phrase, leave the
     brackets out, like: show pause_menu". Not for a script that makes its own function of that name.
   - `forgescript --check` prints them after the place as `warning: ...` (JSON `"severity":"warning"`),
     with the same exit codes. The language server sends them with severity 2, marking the word, and

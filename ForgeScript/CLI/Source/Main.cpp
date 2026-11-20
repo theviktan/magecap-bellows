@@ -71,6 +71,14 @@ namespace {
 		return std::filesystem::absolute(argv0, error).parent_path();
 	}
 
+	// forgescript-api.json next to this program, as MageCap Bellows installs it; empty when there is none.
+	std::filesystem::path InstalledApi(const char* argv0)
+	{
+		const std::filesystem::path installed = ProgramFolder(argv0) / "forgescript-api.json";
+		std::error_code error;
+		return std::filesystem::exists(installed, error) ? installed : std::filesystem::path();
+	}
+
 	int RunLanguageServer(const std::filesystem::path& apiFile)
 	{
 #ifdef _WIN32
@@ -97,7 +105,8 @@ namespace {
 			"      --stdin                         read the script from standard input\n"
 			"      --name <path>                   the script's path, for messages and 'use' (with --stdin)\n"
 			"  forgescript --lsp                   run as a language server for editors (LSP over stdin/stdout)\n"
-			"      --api <file>                    the engine API description (default: forgescript-api.json\n"
+			"      --api <file>                    the engine API description, for --lsp and --check\n"
+			"                                      (default: forgescript-api.json\n"
 			"                                      next to this program)\n"
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --version               show the version\n";
@@ -219,6 +228,8 @@ namespace {
 	struct CheckOptions
 	{
 		std::string FileName;   // as given; may be empty with --stdin
+		std::filesystem::path ApiFile;   // the engine API description; empty: the language only
+		bool ApiGiven = false;           // --api was given, so a file that can't be read is a mistake
 		bool Json = false;
 		bool FromStdin = false;
 	};
@@ -237,14 +248,22 @@ namespace {
 		}
 
 		const std::string fileName = options.FileName.empty() ? std::string("stdin") : options.FileName;
-		ForgeScript::VM vm;
-		std::filesystem::path path(fileName);
-		// "use" is resolved from the checked file's place, even when its text came from standard input.
-		InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
-		const std::vector<ForgeScript::CompileError> mistakes = vm.FindMistakes(source, path.filename().string());
+		// The language server's own checks, so the editor and --check always agree: the engine's phrases
+		// and functions from forgescript-api.json, and "use" resolved from the checked file's place, even
+		// when its text came from standard input.
+		ForgeScript::LanguageServer::Options serverOptions;
+		serverOptions.ApiFile = options.ApiFile;
+		const ForgeScript::LanguageServer checker(serverOptions);
+		if (options.ApiGiven && !checker.GetApiError().empty())
+		{
+			std::cerr << checker.GetApiError() << "." << std::endl;
+			return 66;
+		}
+		const std::filesystem::path path(fileName);
+		const std::vector<ForgeScript::CompileError> mistakes = checker.FindMistakesIn(path, source);
 		// Warnings only for a script without mistakes, as in the language server: fix those first.
 		const std::vector<ForgeScript::CompileError> warnings = mistakes.empty() ?
-			vm.FindWarnings(source, path.filename().string()) : std::vector<ForgeScript::CompileError>();
+			checker.FindWarningsIn(path, source) : std::vector<ForgeScript::CompileError>();
 
 		if (options.Json)
 		{
@@ -382,20 +401,15 @@ int main(int argc, char** argv)
 			std::cerr << "--lsp takes its scripts from the editor; use it without --check or a file name." << std::endl;
 			return 64;
 		}
-		if (!apiGiven)
-		{
-			const std::filesystem::path installed = ProgramFolder(argv[0]) / "forgescript-api.json";
-			std::error_code error;
-			if (std::filesystem::exists(installed, error))
-				apiFile = installed;
-		}
-		return RunLanguageServer(apiFile);
+		return RunLanguageServer(apiGiven ? apiFile : InstalledApi(argv[0]));
 	}
-	if (apiGiven)
+	if (apiGiven && !check)
 	{
-		std::cerr << "--api works together with --lsp." << std::endl;
+		std::cerr << "--api works together with --lsp or --check." << std::endl;
 		return 64;
 	}
+	checkOptions.ApiFile = apiGiven ? apiFile : InstalledApi(argv[0]);
+	checkOptions.ApiGiven = apiGiven;
 	if ((checkOptions.Json || checkOptions.FromStdin) && !check)
 	{
 		std::cerr << "--json and --stdin work together with --check." << std::endl;

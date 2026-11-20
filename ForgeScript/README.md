@@ -62,6 +62,7 @@ After a mistake it skips the rest of that statement (or the block the statement 
 |---|---|
 | `--json` | Print `{"file": ..., "diagnostics": [{"line", "column", "endColumn", "severity", "message"}]}` on standard output instead (the same shape as `BellowsEditor --check-script --json`). `endColumn` is one past the end of the mistake's line; `severity` is `"error"`, or `"warning"` for a warning (after the mistakes). |
 | `--stdin` | Read the script from standard input, for text an editor has not saved yet. |
+| `--api <file>` | The engine API description (`forgescript-api.json`), as for `--lsp`; by default the one installed next to `forgescript`, if there is one. With it, engine phrases and functions are known, so `--check` reports exactly what the editor shows. A file given with `--api` that can't be read exits with `66`. |
 | `--name <path>` | The script's path, used in messages and to find `use` scripts (from its project's asset folder, or next to it). Needed with `--stdin` so `use` and phrases from other scripts work. |
 
 Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be opened, `64` wrong usage. When running a script, `70` means it failed. Tools depend on the text format and exit codes, so they stay stable.
