@@ -6,6 +6,7 @@
 #include "IconsLucide.h"
 #include "Panels/ContentBrowserPanel.h"
 #include "Panels/ScriptEditorPanel.h"
+#include "ScriptDocument.h"
 #include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
@@ -779,6 +780,19 @@ namespace Bellows {
 			ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", cached.Error.empty() ? "The script could not be loaded." : cached.Error.c_str());
 			ImGui::PopStyleColor();
 			return;
+		}
+
+		// A pause menu whose buttons wait would freeze under the game's pause.
+		if (const std::string warning = c.RunWhilePaused ? std::string() : FormatPauseWaitWarning(info->WaitingUIHandlers); !warning.empty())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+			ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", warning.c_str());
+			ImGui::PopStyleColor();
+			if (ImGui::SmallButton("Tick Run While Paused"))
+			{
+				c.RunWhilePaused = true;
+				m_Editor.CommitChange("Run while paused");
+			}
 		}
 
 		if (info->Fields.empty())

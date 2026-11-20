@@ -9,6 +9,8 @@ namespace ForgeScript { class VM; }
 
 namespace Bellows {
 
+	struct ScriptHandlerInfo;
+
 	// Editor-side knowledge about script files: languages, templates, outlines and syntax checks.
 	// Kept free of UI code so it can be unit-tested.
 
@@ -89,6 +91,11 @@ namespace Bellows {
 	// functions and phrases. Set by whoever registers the engine API (by default: nothing extra).
 	using ForgeScriptCheckSetup = void(*)(ForgeScript::VM& vm);
 	void SetForgeScriptCheckSetup(ForgeScriptCheckSetup setup);
+
+	// The Inspector's warning on a script not marked Run While Paused whose UI event handlers wait
+	// (ScriptClassInfo::WaitingUIHandlers): those waits hold while the game is paused, which a pause
+	// menu doesn't want. Empty when there are none.
+	std::string FormatPauseWaitWarning(const std::vector<ScriptHandlerInfo>& handlers);
 
 	// The setup the editor and `BellowsEditor --check-script` use: the engine API, and 'use' scripts
 	// read from the project's asset folder (AssetManager's), exactly like the game does.

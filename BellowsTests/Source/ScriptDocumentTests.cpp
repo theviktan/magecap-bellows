@@ -6,6 +6,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
+#include "Bellows/Scripting/ScriptEngine.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
 #include <ForgeScript/VM/VM.h>
@@ -316,4 +317,25 @@ TEST_CASE("The Script Editor's check reads scripts pulled in with use, from the 
 
 	SetForgeScriptCheckSetup(nullptr);
 	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("The Inspector warns about a pause menu whose handlers wait")
+{
+	CHECK(FormatPauseWaitWarning({}).empty());
+	const std::string one = FormatPauseWaitWarning({ { "\"Resume\" is clicked", 4 } });
+	CHECK(one.find("'when \"Resume\" is clicked' (line 4) waits.") == 0);
+	CHECK(one.find("tick Run While Paused") != std::string::npos);
+	CHECK(FormatPauseWaitWarning({ { "clicked", 2 }, { "cancelled", 9 } }).find("(line 2) and 1 other handler wait.") != std::string::npos);
+	CHECK(FormatPauseWaitWarning({ { "clicked", 2 }, { "cancelled", 9 }, { "changed", 12 } }).find("and 2 other handlers wait.") != std::string::npos);
+
+	// What the Inspector reads, for a real ForgeScript pause menu.
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "PauseWarning";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts/Menu.forge",
+		"when \"Quit\" is clicked\n\tquit()\nend\n\nwhen \"Resume\" is clicked\n\twait 0.2 seconds\n\tresume the game\nend\n"));
+	AssetManager::SetAssetDirectory(assets);
+	ScriptClassInfo info;
+	REQUIRE(ScriptEngine::GetClassInfo("Scripts/Menu.forge", "", info));
+	AssetManager::SetAssetDirectory({});
+	REQUIRE(info.WaitingUIHandlers.size() == 1);
+	CHECK(FormatPauseWaitWarning(info.WaitingUIHandlers).find("'when \"Resume\" is clicked' (line 5) waits.") == 0);
 }

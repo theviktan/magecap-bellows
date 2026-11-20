@@ -455,6 +455,19 @@ class {Class}(bellows.Script):
 		return items;
 	}
 
+	std::string FormatPauseWaitWarning(const std::vector<ScriptHandlerInfo>& handlers)
+	{
+		if (handlers.empty())
+			return {};
+		const ScriptHandlerInfo& first = handlers.front();
+		std::string text = "'when " + first.Event + "' (line " + std::to_string(first.Line) + ")";
+		if (handlers.size() > 1)
+			text += " and " + std::to_string(handlers.size() - 1) + (handlers.size() == 2 ? " other handler wait" : " other handlers wait");
+		else
+			text += " waits";
+		return text + ". While the game is paused those waits hold until it resumes. If this is a pause menu, tick Run While Paused.";
+	}
+
 	bool HasScriptMistakes(const std::vector<ScriptDiagnostic>& diagnostics)
 	{
 		return std::any_of(diagnostics.begin(), diagnostics.end(), [](const ScriptDiagnostic& diagnostic) { return !diagnostic.IsWarning; });
