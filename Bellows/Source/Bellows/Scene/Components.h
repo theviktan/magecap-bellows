@@ -423,6 +423,22 @@ namespace Bellows {
 
 		UITextSelection RuntimeSelection;	// Kept inside the text when it changes from elsewhere
 		glm::vec2 RuntimeScroll { 0.0f };	// Screen pixels the text is moved to keep the caret in view
+
+		// The text as shown, its rows (wrapped when multi-line) and their layout, kept between frames and
+		// made again only when the text, size, width or font changes: a long text isn't wrapped every frame.
+		struct ViewCache
+		{
+			std::string Display;							// The text as shown (bullets for a password)
+			float Size = 0.0f;
+			float WrapWidth = 0.0f;
+			Ref<Font> TextFont;
+			bool MultiLine = false;
+			bool Valid = false;
+			TextLayout Layout;								// The rows joined by line breaks
+			std::vector<std::pair<size_t, size_t>> Rows;	// Each row's byte range in Display
+			std::vector<size_t> RowFirstCharacter;			// Each row's first character index in Display
+		};
+		ViewCache RuntimeView;
 	};
 
 	// Marks an entity instantiated from a prefab file.
