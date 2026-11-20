@@ -174,6 +174,12 @@ class FeatureTest(bellows.Script):
 
     def test_time_and_input(self):
         self.check(bellows.delta_time() >= 0.0 and bellows.time() >= 0.0 and bellows.frame() >= 0, "time functions")
+        # Resumed right away, so the rest of the test keeps running.
+        self.check(not bellows.is_paused(), "the game starts unpaused")
+        bellows.set_paused(True)
+        paused = bellows.is_paused()
+        bellows.set_paused(False)
+        self.check(paused and not bellows.is_paused(), "set_paused and is_paused")
         # No device input is delivered in automated runs, but every query must work.
         self.check(not bellows.is_key_down(Key.Space) and not bellows.is_key_pressed(Key.W) and not bellows.is_key_released(Key.Escape), "keyboard queries")
         self.check(not bellows.is_key_down("A"), "keys by name")
@@ -469,7 +475,9 @@ class FeatureTest(bellows.Script):
 
         script = entity.add_component(bellows.ScriptComponent)
         script.path, script.class_name = "Scripts/Spinner.py", "Spinner"
-        self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner", "ScriptComponent properties")
+        self.check(not script.run_while_paused, "scripts hold while the game is paused unless marked")
+        script.run_while_paused = True
+        self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
                     "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",

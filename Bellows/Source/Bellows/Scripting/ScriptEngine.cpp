@@ -855,6 +855,8 @@ sys.stderr = _BellowsLogWriter(2)
 		Scripting::SetContextScene(&scene);
 		Scripting::SetFrameTiming(timestep, scene.GetTime(), scene.GetFrameCount());
 
+		// While the game is paused only scripts marked Run While Paused update.
+		const bool paused = scene.IsGamePaused();
 		std::vector<UUID> uuids;
 		uuids.reserve(s_Data->Instances.size());
 		for (const auto& [uuid, instance] : s_Data->Instances)
@@ -871,13 +873,21 @@ sys.stderr = _BellowsLogWriter(2)
 			Entity entity = scene.TryGetEntityByUUID(uuid);
 			if (!entity || scene.IsPendingDestroy(entity))
 				continue;
+			if (paused)
+			{
+				const auto* script = entity.TryGetComponent<ScriptComponent>();
+				if (!script || !script->RunWhilePaused)
+					continue;
+			}
 			ScriptInstance instance = it->second;
 			Invoke(uuid, instance, "on_update", timestep);
 			if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
 				again->second.ErrorCount = instance.ErrorCount;
 		}
 
-		s_Data->ForgeScript->Update(scene, timestep);
+		// ForgeScript's updates and waits hold while the game is paused, and pick up where they were.
+		if (!paused)
+			s_Data->ForgeScript->Update(scene, timestep);
 	}
 
 	void ScriptEngine::OnFixedUpdate(Scene& scene, float timestep)

@@ -480,6 +480,24 @@
 			"doc": "Real-world seconds since January 1, 1970 (UTC); keeps counting while the game is closed, unlike time()"
 		},
 		{
+			"name": "set_paused",
+			"params": [
+				{
+					"name": "paused",
+					"type": "bool",
+					"default": true
+				}
+			],
+			"returns": "None",
+			"doc": "Pauses or resumes the game: physics, time() and scripts stop, except scripts marked Run While Paused; the UI still answers. A new scene starts unpaused"
+		},
+		{
+			"name": "is_paused",
+			"params": [],
+			"returns": "bool",
+			"doc": "True while the game is paused (set_paused)"
+		},
+		{
 			"name": "quit",
 			"params": [
 				{
@@ -1257,6 +1275,12 @@
 					"kind": "property",
 					"type": "str",
 					"doc": ""
+				},
+				{
+					"name": "run_while_paused",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Keeps updating while the game is paused (pause menus); its delta time is the real frame time then"
 				}
 			]
 		},

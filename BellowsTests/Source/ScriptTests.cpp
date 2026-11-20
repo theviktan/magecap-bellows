@@ -294,3 +294,62 @@ TEST_CASE("A game's files can't stand in for the standard library or the engine'
 	CHECK(output.find("True False False 42") != std::string::npos);
 	CHECK(output.find(assets.string()) != std::string::npos);
 }
+
+TEST_CASE("The game's pause: scripts, physics and time() stop, except scripts marked Run While Paused")
+{
+	REQUIRE(ScriptEngine::IsInitialized());
+	ScriptEngine::ResetErrorCount();
+	MakeScriptProject("ScriptGamePause", { { "Scripts/Walker.py", R"PY(
+import bellows
+
+class Walker(bellows.Script):
+    def on_update(self, dt):
+        self.entity.translate(bellows.Vec3(dt, 0.0, 0.0))
+)PY" } });
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity game = scene->CreateEntity("Game Walker");
+	game.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Walker.py";
+	Entity menu = scene->CreateEntity("Menu Walker");
+	auto& menuScript = menu.AddComponent<ScriptComponent>();
+	menuScript.ScriptPath = "Scripts/Walker.py";
+	menuScript.RunWhilePaused = true;
+	Entity box = scene->CreateEntity("Falling Box");
+	box.GetComponent<TransformComponent>().Translation = { 0.0f, 10.0f, 0.0f };
+	box.AddComponent<RigidBodyComponent>();
+	box.AddComponent<BoxColliderComponent>();
+
+	scene->OnRuntimeStart();
+	RunFrames(*scene, 10);
+	const auto x = [](Entity entity) { return entity.GetComponent<TransformComponent>().Translation.x; };
+	const auto y = [](Entity entity) { return entity.GetComponent<TransformComponent>().Translation.y; };
+	CHECK(x(game) == doctest::Approx(10.0f / 60.0f));
+	CHECK(y(box) < 10.0f);
+
+	// Paused from a script, as a game does it.
+	std::string output;
+	REQUIRE(ScriptEngine::ExecuteSource("bellows.set_paused(True)\nprint(bellows.is_paused())", output));
+	CHECK(output.find("True") != std::string::npos);
+	CHECK(scene->IsGamePaused());
+	const float gameX = x(game), menuX = x(menu), boxY = y(box), time = scene->GetTime();
+	RunFrames(*scene, 30);
+	CHECK(x(game) == doctest::Approx(gameX));					// Held
+	CHECK(y(box) == doctest::Approx(boxY));						// Physics held
+	CHECK(scene->GetTime() == doctest::Approx(time));			// time() is game time
+	CHECK(x(menu) == doctest::Approx(menuX + 30.0f / 60.0f));	// Marked: real frame times
+
+	scene->SetGamePaused(false);
+	RunFrames(*scene, 6);
+	CHECK(x(game) == doctest::Approx(gameX + 6.0f / 60.0f));
+	CHECK(y(box) < boxY);
+	CHECK(scene->GetTime() == doctest::Approx(time + 6.0f / 60.0f));
+	scene->OnRuntimeStop();
+
+	// A scene starts unpaused, even when it was paused before.
+	scene->SetGamePaused(true);
+	scene->OnRuntimeStart();
+	CHECK_FALSE(scene->IsGamePaused());
+	scene->OnRuntimeStop();
+	AssetManager::SetAssetDirectory({});
+	CHECK(ScriptEngine::GetErrorCount() == 0);
+}

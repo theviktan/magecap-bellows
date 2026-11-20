@@ -213,6 +213,7 @@ namespace Bellows {
 		std::string ScriptPath;		// Project-relative .py file, e.g. "Scripts/Player.py"
 		std::string ClassName;		// Class inside the module; empty = first bellows.Script subclass
 		std::map<std::string, ScriptFieldValue> Fields;	// Overrides of the class's exposed fields
+		bool RunWhilePaused = false;	// Keeps updating while the game is paused (pause menus, their animations)
 	};
 
 	struct AudioSourceComponent

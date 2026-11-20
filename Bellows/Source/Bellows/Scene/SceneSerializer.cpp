@@ -186,6 +186,7 @@ namespace Bellows {
 				auto& component = entity.AddOrReplaceComponent<ScriptComponent>();
 				JsonRead(*it, "Script", component.ScriptPath);
 				JsonRead(*it, "Class", component.ClassName);
+				JsonRead(*it, "RunWhilePaused", component.RunWhilePaused);
 				if (auto fields = it->find("Fields"); fields != it->end() && fields->is_object())
 				{
 					for (auto field = fields->begin(); field != fields->end(); ++field)
@@ -492,6 +493,7 @@ namespace Bellows {
 			Json& j = json["Script"];
 			j["Script"] = c->ScriptPath;
 			j["Class"] = c->ClassName;
+			j["RunWhilePaused"] = c->RunWhilePaused;
 			Json fields = Json::object();
 			for (const auto& [name, value] : c->Fields)
 				fields[name] = SerializeScriptField(value);
