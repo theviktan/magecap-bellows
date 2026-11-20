@@ -223,6 +223,9 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		settings.PlayInGameWindow = false;
 		CHECK(settings.ShowUI);
 		settings.ShowUI = false;
+		settings.UIView = true;
+		settings.UIViewWidth = 1280;
+		settings.UIViewHeight = 99999;
 		REQUIRE(settings.Save());
 
 		const EditorSettings loaded = EditorSettings::Load();
@@ -236,6 +239,9 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		CHECK(loaded.LastProjectLocation == "/games");
 		CHECK_FALSE(loaded.PlayInGameWindow);
 		CHECK_FALSE(loaded.ShowUI);
+		CHECK(loaded.UIView);
+		CHECK(loaded.UIViewWidth == 1280);
+		CHECK(loaded.UIViewHeight == 8192);	// Kept to a size the renderer can make
 	}
 
 	SUBCASE("Settings from before the Project Manager keep their recent projects")

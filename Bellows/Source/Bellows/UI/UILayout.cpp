@@ -290,4 +290,148 @@ namespace Bellows {
 		offsetMax += delta * (glm::vec2(1.0f) - pivot);
 	}
 
+	void ComputeUIOffsetsFor(const UIRectangle& screenRect, const glm::vec2& anchorMin, const glm::vec2& anchorMax,
+		const UIRectangle& parent, float scale, glm::vec2& outOffsetMin, glm::vec2& outOffsetMax)
+	{
+		const glm::vec2 parentSize = parent.GetSize();
+		const float safeScale = std::max(scale, 1e-6f);
+		outOffsetMin = (screenRect.Min - parent.Min - anchorMin * parentSize) / safeScale;
+		outOffsetMax = (screenRect.Max - parent.Min - anchorMax * parentSize) / safeScale;
+	}
+
+	void GetUIAnchorPreset(UIAnchorPreset preset, glm::vec2& outAnchorMin, glm::vec2& outAnchorMax)
+	{
+		const int index = static_cast<int>(preset);
+		if (index < 9)
+		{
+			// The nine points: columns left, center, right; rows top, middle, bottom.
+			const glm::vec2 point(static_cast<float>(index % 3) * 0.5f, static_cast<float>(index / 3) * 0.5f);
+			outAnchorMin = outAnchorMax = point;
+			return;
+		}
+		switch (preset)
+		{
+			case UIAnchorPreset::TopWide:		outAnchorMin = { 0.0f, 0.0f }; outAnchorMax = { 1.0f, 0.0f }; return;
+			case UIAnchorPreset::MiddleWide:	outAnchorMin = { 0.0f, 0.5f }; outAnchorMax = { 1.0f, 0.5f }; return;
+			case UIAnchorPreset::BottomWide:	outAnchorMin = { 0.0f, 1.0f }; outAnchorMax = { 1.0f, 1.0f }; return;
+			case UIAnchorPreset::LeftTall:		outAnchorMin = { 0.0f, 0.0f }; outAnchorMax = { 0.0f, 1.0f }; return;
+			case UIAnchorPreset::CenterTall:	outAnchorMin = { 0.5f, 0.0f }; outAnchorMax = { 0.5f, 1.0f }; return;
+			case UIAnchorPreset::RightTall:		outAnchorMin = { 1.0f, 0.0f }; outAnchorMax = { 1.0f, 1.0f }; return;
+			default:							outAnchorMin = { 0.0f, 0.0f }; outAnchorMax = { 1.0f, 1.0f }; return;
+		}
+	}
+
+	UIRectangle GetUIAnchorPresetRect(UIAnchorPreset preset, const UIRectangle& current, const UIRectangle& parent,
+		const glm::vec2& pivot, glm::vec2& outPivot)
+	{
+		glm::vec2 anchorMin, anchorMax;
+		GetUIAnchorPreset(preset, anchorMin, anchorMax);
+		const glm::vec2 parentSize = parent.GetSize();
+		const glm::vec2 size = current.GetSize();
+		UIRectangle result;
+		outPivot = pivot;
+		for (int axis = 0; axis < 2; axis++)
+		{
+			const float low = parent.Min[axis] + anchorMin[axis] * parentSize[axis];
+			const float high = parent.Min[axis] + anchorMax[axis] * parentSize[axis];
+			if (anchorMin[axis] == anchorMax[axis])
+			{
+				outPivot[axis] = anchorMin[axis];
+				result.Min[axis] = low - outPivot[axis] * size[axis];
+				result.Max[axis] = result.Min[axis] + size[axis];
+			}
+			else
+			{
+				result.Min[axis] = low;
+				result.Max[axis] = high;
+			}
+		}
+		return result;
+	}
+
+	const char* UIAnchorPresetToString(UIAnchorPreset preset)
+	{
+		static constexpr const char* c_Names[UIAnchorPresetCount] = {
+			"Top Left", "Top Center", "Top Right", "Center Left", "Center", "Center Right", "Bottom Left", "Bottom Center",
+			"Bottom Right", "Top Wide", "Middle Wide", "Bottom Wide", "Left Tall", "Center Tall", "Right Tall", "Full Rect" };
+		return c_Names[std::clamp(static_cast<int>(preset), 0, UIAnchorPresetCount - 1)];
+	}
+
+	UIRectangle DragUIRect(const UIRectangle& start, UIRectHandle handle, const glm::vec2& delta, float minSize)
+	{
+		UIRectangle rect = start;
+		if (handle == UIRectHandle::Move)
+		{
+			rect.Min += delta;
+			rect.Max += delta;
+			return rect;
+		}
+		const bool left = handle == UIRectHandle::Left || handle == UIRectHandle::TopLeft || handle == UIRectHandle::BottomLeft;
+		const bool right = handle == UIRectHandle::Right || handle == UIRectHandle::TopRight || handle == UIRectHandle::BottomRight;
+		const bool top = handle == UIRectHandle::Top || handle == UIRectHandle::TopLeft || handle == UIRectHandle::TopRight;
+		const bool bottom = handle == UIRectHandle::Bottom || handle == UIRectHandle::BottomLeft || handle == UIRectHandle::BottomRight;
+		if (left)
+			rect.Min.x = std::min(start.Min.x + delta.x, start.Max.x - minSize);
+		if (right)
+			rect.Max.x = std::max(start.Max.x + delta.x, start.Min.x + minSize);
+		if (top)
+			rect.Min.y = std::min(start.Min.y + delta.y, start.Max.y - minSize);
+		if (bottom)
+			rect.Max.y = std::max(start.Max.y + delta.y, start.Min.y + minSize);
+		return rect;
+	}
+
+	UIRectHandle FindUIRectHandle(const UIRectangle& rect, const glm::vec2& point, float reach)
+	{
+		// Inside, an edge reaches at most a third of the way across, so a small rect keeps edges to grab
+		// and a middle to move; outside, the full reach still counts.
+		const glm::vec2 inside = glm::min(glm::vec2(reach), rect.GetSize() / 3.0f);
+		const auto near = [reach](float distance, float insideReach, bool outside) { return outside ? distance <= reach : distance <= insideReach; };
+		const bool nearLeft = near(std::abs(point.x - rect.Min.x), inside.x, point.x < rect.Min.x);
+		const bool nearRight = near(std::abs(point.x - rect.Max.x), inside.x, point.x > rect.Max.x);
+		const bool nearTop = near(std::abs(point.y - rect.Min.y), inside.y, point.y < rect.Min.y);
+		const bool nearBottom = near(std::abs(point.y - rect.Max.y), inside.y, point.y > rect.Max.y);
+		const bool withinX = point.x >= rect.Min.x - reach && point.x <= rect.Max.x + reach;
+		const bool withinY = point.y >= rect.Min.y - reach && point.y <= rect.Max.y + reach;
+		if (!withinX || !withinY)
+			return UIRectHandle::None;
+		// On a small rect both edges can be in reach; the nearer one wins.
+		const bool left = nearLeft && (!nearRight || std::abs(point.x - rect.Min.x) <= std::abs(point.x - rect.Max.x));
+		const bool right = nearRight && !left;
+		const bool top = nearTop && (!nearBottom || std::abs(point.y - rect.Min.y) <= std::abs(point.y - rect.Max.y));
+		const bool bottom = nearBottom && !top;
+		if (top && left) return UIRectHandle::TopLeft;
+		if (top && right) return UIRectHandle::TopRight;
+		if (bottom && left) return UIRectHandle::BottomLeft;
+		if (bottom && right) return UIRectHandle::BottomRight;
+		if (left) return UIRectHandle::Left;
+		if (right) return UIRectHandle::Right;
+		if (top) return UIRectHandle::Top;
+		if (bottom) return UIRectHandle::Bottom;
+		return rect.Contains(point) ? UIRectHandle::Move : UIRectHandle::None;
+	}
+
+	void SnapUIOffsets(UIRectHandle handle, glm::vec2& offsetMin, glm::vec2& offsetMax, float step)
+	{
+		if (step <= 0.0f || handle == UIRectHandle::None)
+			return;
+		const auto snap = [step](float value) { return std::round(value / step) * step; };
+		if (handle == UIRectHandle::Move)
+		{
+			// A move keeps the size: snap the top-left corner and carry the rest.
+			const glm::vec2 snapped(snap(offsetMin.x), snap(offsetMin.y));
+			offsetMax += snapped - offsetMin;
+			offsetMin = snapped;
+			return;
+		}
+		if (handle == UIRectHandle::Left || handle == UIRectHandle::TopLeft || handle == UIRectHandle::BottomLeft)
+			offsetMin.x = snap(offsetMin.x);
+		if (handle == UIRectHandle::Right || handle == UIRectHandle::TopRight || handle == UIRectHandle::BottomRight)
+			offsetMax.x = snap(offsetMax.x);
+		if (handle == UIRectHandle::Top || handle == UIRectHandle::TopLeft || handle == UIRectHandle::TopRight)
+			offsetMin.y = snap(offsetMin.y);
+		if (handle == UIRectHandle::Bottom || handle == UIRectHandle::BottomLeft || handle == UIRectHandle::BottomRight)
+			offsetMax.y = snap(offsetMax.y);
+	}
+
 }

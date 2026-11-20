@@ -37,6 +37,9 @@ namespace Bellows::UI {
 	// An asset path field: accepts drops from the content browser and offers a searchable list of matching assets.
 	bool PropertyAsset(const char* label, std::string& path, AssetType type, const char* tooltip = nullptr, bool allowBuiltins = false);
 	void PropertyText(const char* label, const char* value);
+	// A UI rect's anchors as a button showing the matching preset; it opens a 4 x 4 grid of presets.
+	// Returns true with 'outPreset' (a UIAnchorPreset index) when one is picked.
+	bool PropertyAnchorPreset(const char* label, const glm::vec2& anchorMin, const glm::vec2& anchorMax, int& outPreset, const char* tooltip = nullptr);
 
 	// Collapsible component section. Returns true when expanded; 'outRemove' is set when "Remove" was chosen.
 	bool ComponentHeader(const char* icon, const char* name, bool canRemove, bool& outRemove, bool& outReset);

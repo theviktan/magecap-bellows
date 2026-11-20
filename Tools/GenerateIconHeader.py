@@ -26,7 +26,7 @@ ICONS = [
     "crosshair", "flashlight", "cone", "cylinder", "panel-left", "layout-grid", "activity", "gauge", "arrow-left",
     "moon", "circle-dot", "clapperboard", "square-function", "book-open", "paperclip", "unlink", "file-text",
     "save-all", "star", "bug", "redo-dot", "arrow-down-to-dot", "arrow-up-from-dot", "list-x", "type", "file-type",
-    "mouse-pointer-click", "square-check", "chevrons-up-down", "text-cursor-input",
+    "mouse-pointer-click", "square-check", "chevrons-up-down", "text-cursor-input", "layout-template",
 ]
 
 def main():

@@ -3,6 +3,8 @@
 #include "EditorTheme.h"
 #include "IconsLucide.h"
 
+#include "Bellows/UI/UILayout.h"
+
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <portable-file-dialogs.h>
@@ -342,6 +344,94 @@ namespace Bellows::UI {
 
 		EndRow();
 		return changed;
+	}
+
+	namespace {
+
+		// A small picture of a preset: the parent's frame, and the anchors as a dot, a bar or a block.
+		void DrawAnchorPresetIcon(ImDrawList* drawList, const ImVec2& min, const ImVec2& max, UIAnchorPreset preset, bool highlighted)
+		{
+			glm::vec2 anchorMin, anchorMax;
+			GetUIAnchorPreset(preset, anchorMin, anchorMax);
+			const float inset = (max.x - min.x) * 0.2f;
+			const ImVec2 frameMin(min.x + inset, min.y + inset), frameMax(max.x - inset, max.y - inset);
+			const ImVec2 frameSize(frameMax.x - frameMin.x, frameMax.y - frameMin.y);
+			const ImU32 color = highlighted ? Theme::Accent : Theme::Text;
+			drawList->AddRect(frameMin, frameMax, Theme::TextMuted, 1.0f);
+			const float mark = std::max(frameSize.x * 0.14f, 2.0f);
+			ImVec2 markMin(frameMin.x + anchorMin.x * frameSize.x - mark, frameMin.y + anchorMin.y * frameSize.y - mark);
+			ImVec2 markMax(frameMin.x + anchorMax.x * frameSize.x + mark, frameMin.y + anchorMax.y * frameSize.y + mark);
+			markMin = ImVec2(std::max(markMin.x, frameMin.x), std::max(markMin.y, frameMin.y));
+			markMax = ImVec2(std::min(markMax.x, frameMax.x), std::min(markMax.y, frameMax.y));
+			drawList->AddRectFilled(markMin, markMax, color, 1.0f);
+		}
+
+		int FindAnchorPreset(const glm::vec2& anchorMin, const glm::vec2& anchorMax)
+		{
+			for (int i = 0; i < UIAnchorPresetCount; i++)
+			{
+				glm::vec2 presetMin, presetMax;
+				GetUIAnchorPreset(static_cast<UIAnchorPreset>(i), presetMin, presetMax);
+				if (glm::all(glm::lessThan(glm::abs(presetMin - anchorMin), glm::vec2(1e-4f))) && glm::all(glm::lessThan(glm::abs(presetMax - anchorMax), glm::vec2(1e-4f))))
+					return i;
+			}
+			return -1;
+		}
+
+	}
+
+	bool PropertyAnchorPreset(const char* label, const glm::vec2& anchorMin, const glm::vec2& anchorMax, int& outPreset, const char* tooltip)
+	{
+		// Laid out like the presets' meaning: the nine points, then a stretching row and column.
+		static constexpr UIAnchorPreset c_Grid[4][4] = {
+			{ UIAnchorPreset::TopLeft, UIAnchorPreset::TopCenter, UIAnchorPreset::TopRight, UIAnchorPreset::TopWide },
+			{ UIAnchorPreset::CenterLeft, UIAnchorPreset::Center, UIAnchorPreset::CenterRight, UIAnchorPreset::MiddleWide },
+			{ UIAnchorPreset::BottomLeft, UIAnchorPreset::BottomCenter, UIAnchorPreset::BottomRight, UIAnchorPreset::BottomWide },
+			{ UIAnchorPreset::LeftTall, UIAnchorPreset::CenterTall, UIAnchorPreset::RightTall, UIAnchorPreset::Full },
+		};
+
+		bool picked = false;
+		BeginRow(label, tooltip);
+		const int current = FindAnchorPreset(anchorMin, anchorMax);
+		const std::string text = std::string(current >= 0 ? UIAnchorPresetToString(static_cast<UIAnchorPreset>(current)) : "Custom") + "  " ICON_CHEVRON_DOWN;
+		if (ImGui::Button(text.c_str(), ImVec2(-FLT_MIN, 0.0f)))
+			ImGui::OpenPopup("AnchorPresets");
+		if (ImGui::BeginPopup("AnchorPresets"))
+		{
+			TextMuted("Click: anchors only, the rect stays put");
+			TextMuted("Shift+click: also move it there");
+			const float size = ImGui::GetFrameHeight() * 1.6f;
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			for (int row = 0; row < 4; row++)
+			{
+				for (int column = 0; column < 4; column++)
+				{
+					const UIAnchorPreset preset = c_Grid[row][column];
+					ImGui::PushID(row * 4 + column);
+					if (column > 0)
+						ImGui::SameLine(0.0f, column == 3 ? ImGui::GetStyle().ItemSpacing.x * 3.0f : -1.0f);
+					const ImVec2 position = ImGui::GetCursorScreenPos();
+					if (ImGui::InvisibleButton("##preset", ImVec2(size, size)))
+					{
+						outPreset = static_cast<int>(preset);
+						picked = true;
+						ImGui::CloseCurrentPopup();
+					}
+					const bool hovered = ImGui::IsItemHovered();
+					if (hovered)
+						ImGui::SetTooltip("%s", UIAnchorPresetToString(preset));
+					const ImVec2 end(position.x + size, position.y + size);
+					drawList->AddRectFilled(position, end, hovered ? Theme::FieldHovered : Theme::Field, 4.0f);
+					DrawAnchorPresetIcon(drawList, position, end, preset, hovered || static_cast<int>(preset) == current);
+					ImGui::PopID();
+				}
+				if (row == 2)
+					ImGui::Spacing();
+			}
+			ImGui::EndPopup();
+		}
+		EndRow();
+		return picked;
 	}
 
 	void PropertyText(const char* label, const char* value)

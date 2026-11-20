@@ -148,6 +148,8 @@ if state["stopped"]:
 | `set_camera(position, target)`, `camera_position()`, `camera_target()` | The editor (scene view) camera. |
 | `screenshot(path, width=0, height=0)` | Renders the viewport to a PNG: the editor camera in edit mode, the game camera in play mode. |
 | `capture_window(path)` | PNG of the whole editor window including the UI (runs one frame). |
+| `set_ui_view(enabled=True, width=0, height=0)` | The UI view: in edit mode the viewport, and `screenshot()` without a size, show the game's screen at `width` x `height` (64 to 8192; 0 keeps the size) through the game camera, for laying out UI. Saved with the editor settings. |
+| `ui_view()` | `{"enabled", "width", "height"}`. |
 | `logs(since=0)`, `latest_log_sequence()`, `error_count()`, `script_error_count()` | Console messages and error counters. |
 | `export_game(output_directory)` | Builds a standalone game; returns `{success, executable, messages, bytes}`. |
 | `frame()`, `quit(exit_code=0)` | Frame counter; close the editor. |

@@ -247,6 +247,31 @@ namespace Bellows {
 				return path;
 			}, py::arg("path"), py::arg("width") = 0, py::arg("height") = 0,
 				"Renders the viewport (editor camera in edit mode, game camera in play mode) to a PNG file");
+			m.def("set_ui_view", [](bool enabled, uint32_t width, uint32_t height)
+			{
+				if ((width == 0) != (height == 0))
+					throw py::value_error("Give both the width and the height of the UI view, or neither");
+				if (width != 0 && (width < 64 || width > 8192 || height < 64 || height > 8192))
+					throw py::value_error("The UI view's width and height go from 64 to 8192 pixels");
+				EditorSettings& settings = Editor().GetSettings();
+				settings.UIView = enabled;
+				if (width != 0)
+				{
+					settings.UIViewWidth = width;
+					settings.UIViewHeight = height;
+				}
+			}, py::arg("enabled") = true, py::arg("width") = 0, py::arg("height") = 0,
+				"Turns the UI view on or off: in edit mode the viewport (and screenshot()) shows the game's screen at "
+				"width x height through the game camera, for laying out UI. A size of 0 keeps the current one");
+			m.def("ui_view", []
+			{
+				const EditorSettings& settings = Editor().GetSettings();
+				py::dict result;
+				result["enabled"] = settings.UIView;
+				result["width"] = settings.UIViewWidth;
+				result["height"] = settings.UIViewHeight;
+				return result;
+			}, "The UI view's state: {'enabled': bool, 'width': int, 'height': int}");
 			m.def("capture_window", [](const std::string& path)
 			{
 				EditorLayer& editor = Editor();

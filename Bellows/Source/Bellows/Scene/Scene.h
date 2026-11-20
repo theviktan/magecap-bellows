@@ -107,6 +107,19 @@ namespace Bellows {
 		std::vector<Entity> GetVisibleUIEntities();
 		// True for an entity that is a canvas or has one above it, from the hierarchy alone.
 		bool IsInsideUICanvas(Entity entity);
+		// Where a shown UI rect was laid out last frame, for editing it on screen: its rect, the area its
+		// anchors are in, the canvas scale, and whether a layout placed it. Empty when it isn't shown.
+		struct UIRectPlacement
+		{
+			UIRectangle Rect;
+			UIRectangle ParentArea;
+			float Scale = 1.0f;
+			bool PlacedByLayout = false;
+		};
+		std::optional<UIRectPlacement> GetUIRectPlacement(Entity entity) const;
+		// The front-most shown UI rect under 'pixel' (screen pixels of the last layout), for picking UI in
+		// the editor: interactable or not, canvases excluded. Null when there is none.
+		Entity FindUIRectAt(const glm::vec2& pixel);
 
 		// The game UI's input for this frame, run by OnUpdateRuntime before scripts: what the pointer is
 		// over and pressing, keyboard and gamepad focus and navigation, the events they raise (clicked,
@@ -177,6 +190,8 @@ namespace Bellows {
 			float Scale = 1.0f;					// Screen pixels per reference pixel
 			bool Interactable = true;			// Itself and everything above it up to the canvas
 			size_t SubtreeEnd = 0;				// The index after its last shown descendant
+			UIRectangle ParentArea;				// The rect its anchors are in (its parent's, scrolled)
+			bool PlacedByLayout = false;		// Its parent's UILayout placed it, not its anchors and offsets
 		};
 		struct UIEvent
 		{

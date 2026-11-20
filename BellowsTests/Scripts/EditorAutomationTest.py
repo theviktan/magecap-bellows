@@ -205,6 +205,40 @@ window = output / "window.png"
 editor.capture_window(str(window))
 check(window.is_file() and window.stat().st_size > 1000, "window screenshot")
 
+# The UI view: the game's screen at a set size, with handles on the selected UI rect ----
+def png_size(path):
+    header = pathlib.Path(path).read_bytes()[16:24]
+    return int.from_bytes(header[:4], "big"), int.from_bytes(header[4:], "big")
+
+
+saved_view = editor.ui_view()
+check(saved_view["width"] >= 64 and saved_view["height"] >= 64, "the UI view has a size")
+menu = bellows.create_entity("Menu")
+menu.add_component(bellows.UICanvas)
+button = bellows.create_entity("Button", parent=menu)
+button_rect = button.add_component(bellows.UIRect)
+button_rect.offset_min = bellows.Vec3(40.0, 30.0, 0.0)
+button_rect.offset_max = bellows.Vec3(240.0, 90.0, 0.0)
+editor.select(button)
+editor.set_ui_view(True, 320, 180)
+check(editor.ui_view() == {"enabled": True, "width": 320, "height": 180}, "set_ui_view sets the state and size")
+ui_shot = output / "ui_view.png"
+editor.screenshot(str(ui_shot))
+check(png_size(ui_shot) == (320, 180), f"a UI view screenshot is the UI view's size ({png_size(ui_shot)})")
+editor.capture_window(str(output / "ui_view_window.png"))	# Draws the rect tool over the fitted image
+editor.set_ui_view(False)
+check(editor.ui_view() == {"enabled": False, "width": 320, "height": 180}, "turning the UI view off keeps its size")
+for bad in ((100, 0), (32, 32), (9000, 100)):
+    try:
+        editor.set_ui_view(True, *bad)
+        check(False, f"set_ui_view refuses {bad}")
+    except ValueError:
+        pass
+check(not editor.ui_view()["enabled"], "a refused size changes nothing")
+editor.set_ui_view(saved_view["enabled"], saved_view["width"], saved_view["height"])
+editor.clear_selection()
+menu.destroy()
+
 # Console-style evaluation and errors ---------------------------------------------------
 check(editor.error_count() == 0, f"no errors were logged ({editor.error_count()})")
 

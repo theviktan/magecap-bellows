@@ -126,3 +126,4 @@
 #define ICON_SQUARE_CHECK                "\xee\x95\x99"	// U+E559
 #define ICON_CHEVRONS_UP_DOWN            "\xee\x88\x91"	// U+E211
 #define ICON_TEXT_CURSOR_INPUT           "\xee\x89\xa5"	// U+E265
+#define ICON_LAYOUT_TEMPLATE             "\xee\x88\x87"	// U+E207
