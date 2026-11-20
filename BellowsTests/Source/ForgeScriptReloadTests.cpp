@@ -182,3 +182,30 @@ TEST_CASE("ForgeScript hot reload reads changed helper scripts")
 	CHECK(h.Runtime.Reload("Scripts/Mover.py"));
 	CHECK(h.Errors.empty());
 }
+
+TEST_CASE("ForgeScript 'use' stays inside the asset folder")
+{
+	// Audit S-3: a game's scripts can't load files outside its assets, by path or through a link.
+	ReloadHarness h("ForgeUseInside");
+	REQUIRE(FileSystem::WriteTextFile(BellowsTests::GetTestOutputDirectory() / "ForgeUseOutside.forge", "set secret to 42\n"));
+	h.Write("Scripts/Climbs.forge", "use \"../ForgeUseOutside\"\nwhen created\n\tset my name to text(secret)\nend\n");
+	Entity climbs = h.Spawn("Climbs", "Scripts/Climbs.forge");
+	h.Runtime.Start();
+	CHECK_FALSE(h.Runtime.CreateInstance(climbs));
+	CHECK(h.AllErrors().find("'use' only reaches scripts inside") != std::string::npos);
+	CHECK_EQ(climbs.GetName(), std::string("Climbs"));
+
+	std::error_code error;
+	std::filesystem::create_symlink(BellowsTests::GetTestOutputDirectory() / "ForgeUseOutside.forge",
+		AssetManager::GetAbsolutePath("Scripts/Linked.forge"), error);
+	if (!error)
+	{
+		h.Errors.clear();
+		h.Write("Scripts/Links.forge", "use \"Scripts/Linked\"\nwhen created\n\tset my name to text(secret)\nend\n");
+		Entity links = h.Spawn("Links", "Scripts/Links.forge");
+		h.Runtime.CreateInstance(links);
+		h.Runtime.CallCreated(links.GetUUID());
+		CHECK_EQ(links.GetName(), std::string("Links"));
+		CHECK(h.AllErrors().find("Could not find the script") != std::string::npos);
+	}
+}

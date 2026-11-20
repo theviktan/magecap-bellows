@@ -1,5 +1,6 @@
 #include "ForgeScript/Tools/ProjectPaths.h"
 
+#include "ForgeScript/Compiler/Compiler.h"
 #include "ForgeScript/Tools/Json.h"
 
 #include <fstream>
@@ -42,10 +43,25 @@ namespace ForgeScript {
 
 	std::filesystem::path ResolveUsePath(const std::filesystem::path& useFolder, const std::string& name)
 	{
+		if (!CheckUsePath(name).empty())
+			return {};
 		std::filesystem::path candidate = useFolder / PathFromUtf8(name);
 		if (!candidate.has_extension())
 			candidate += ".forge";
-		return candidate;
+		return IsInsideFolder(useFolder, candidate) ? candidate : std::filesystem::path();
+	}
+
+	bool IsInsideFolder(const std::filesystem::path& folder, const std::filesystem::path& file)
+	{
+		std::error_code error;
+		const std::filesystem::path base = std::filesystem::weakly_canonical(std::filesystem::absolute(folder, error), error);
+		if (error)
+			return false;
+		const std::filesystem::path target = std::filesystem::weakly_canonical(std::filesystem::absolute(file, error), error);
+		if (error)
+			return false;
+		const std::filesystem::path relative = target.lexically_relative(base);
+		return !relative.empty() && *relative.begin() != "..";
 	}
 
 	bool ReadTextFile(const std::filesystem::path& path, std::string& outText)

@@ -7,6 +7,7 @@
 #include "Bellows/Scripting/ScriptApi.h"
 
 #include "ForgeScript/Compiler/ScriptVariables.h"
+#include "ForgeScript/Tools/ProjectPaths.h"
 
 #include <algorithm>
 #include <fstream>
@@ -189,7 +190,12 @@ namespace Bellows::Scripting {
 	{
 		vm.SetModuleLoader([](const std::string& path, std::string& outName, std::string& outSource)
 		{
+			// The VM has already refused absolute paths, ".." and other extensions (CheckUsePath); a link
+			// inside the assets can still point outside, so the file it reaches must be in the asset folder.
 			const std::string scriptPath = std::filesystem::path(path).has_extension() ? path : path + ".forge";
+			if (!ForgeScript::CheckUsePath(path).empty() ||
+				!ForgeScript::IsInsideFolder(AssetManager::GetAssetDirectory(), AssetManager::GetAbsolutePath(scriptPath)))
+				return false;
 			outName = scriptPath;
 			return ReadScript(scriptPath, outSource);
 		});

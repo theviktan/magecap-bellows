@@ -524,6 +524,7 @@ end
 `use "helpers"` loads another script once and makes its top-level functions, phrases, kinds and variables available. With `as h`, they are reached as `h.name` instead.
 
 - `.forge` is added when the path has no extension.
+- The path must be relative, must not contain a `..` step, and must end in `.forge` or have no extension. Anything else is a mistake, in every compile: "'use' only reaches scripts inside this script's place ...", or "'use' only loads ForgeScript scripts ...". A link that leads outside the folder is not followed (the script counts as not found).
 - In a MageCap Bellows project (a folder with a `.bproject` file, found by walking up from the script), paths start at the project's asset folder: `use "Scripts/Helpers"` means `Assets/Scripts/Helpers.forge`. Anywhere else they start next to the script.
 - A script that `use`s a script that cannot be found, or that has a mistake, stops at the `use` line.
 

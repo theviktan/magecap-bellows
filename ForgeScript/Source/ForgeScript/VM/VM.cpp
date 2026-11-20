@@ -2026,7 +2026,8 @@ namespace ForgeScript {
 			outSource = cached->second.Source;
 			return true;
 		}
-		if (!m_ModuleLoader || !m_ModuleLoader(path, outName, outSource))
+		// The compiler refuses such a 'use' too; refusing here also covers the phrase prescan and hosts.
+		if (!CheckUsePath(path).empty() || !m_ModuleLoader || !m_ModuleLoader(path, outName, outSource))
 			return false;
 		m_SourceCache[path] = { outName, outSource };
 		return true;

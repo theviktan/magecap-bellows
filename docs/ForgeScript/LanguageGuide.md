@@ -1074,6 +1074,8 @@ say h.VERSION
 
 A script is loaded only once, no matter how many scripts use it, so they all share its variables.
 
+**Where `use` looks.** In a MageCap Bellows project, the path starts at the project's Assets folder, so `use "Scripts/helpers"` means `Assets/Scripts/helpers.forge` from any script. Outside a project, it starts next to the script. `use` only reaches scripts in that place and the folders below it, and only `.forge` scripts: `use "../shared"`, a full path like `use "C:/Games/x"`, or `use "notes.txt"` is a mistake that says so. That keeps a script you got from someone else from reading files elsewhere on your computer.
+
 ---
 
 ## 17. Scripts attached to entities: `self` and `my`

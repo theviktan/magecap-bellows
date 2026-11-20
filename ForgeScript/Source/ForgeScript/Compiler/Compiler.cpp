@@ -10,6 +10,7 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <set>
 #include <string_view>
@@ -141,6 +142,39 @@ namespace ForgeScript {
 
 		const std::set<std::string> s_NoStopWords;
 
+	}
+
+	std::string CheckUsePath(const std::string& path)
+	{
+		const std::string inside = "'use' only reaches scripts inside this script's place: the project's Assets folder, or "
+			"the folder this script is in and the folders below it. Write the path from there, like: use \"Scripts/helpers\"";
+		if (path.empty())
+			return "Write the name of the script to use in the quotes, like: use \"helpers\"";
+		if (path[0] == '/' || path[0] == '\\' || (path.size() > 1 && path[1] == ':'))
+			return inside;
+		std::string last;
+		size_t start = 0;
+		while (start <= path.size())
+		{
+			const size_t end = path.find_first_of("/\\", start);
+			const std::string part = path.substr(start, end == std::string::npos ? std::string::npos : end - start);
+			if (part == "..")
+				return inside;
+			last = part;
+			if (end == std::string::npos)
+				break;
+			start = end + 1;
+		}
+		const size_t dot = last.rfind('.');
+		if (dot != std::string::npos && dot > 0)
+		{
+			std::string extension = last.substr(dot + 1);
+			for (char& c : extension)
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			if (extension != "forge")
+				return "'use' only loads ForgeScript scripts: the name must end in .forge or have no extension, like: use \"helpers\"";
+		}
+		return "";
 	}
 
 	class Compiler
@@ -2530,6 +2564,9 @@ namespace ForgeScript {
 			if (!Check(TokenType::String))
 				ErrorAtCurrent("Expected the script name in quotes, like: use \"helpers\"");
 			std::string path = Current().Text;
+			const std::string refused = CheckUsePath(path);
+			if (!refused.empty())
+				ErrorAtCurrent(refused);
 			// When checking, a script that cannot be found is a mistake. A normal compile leaves this to
 			// the moment the script runs, which reports the same message.
 			if (m_Options.ReportMissingScripts)

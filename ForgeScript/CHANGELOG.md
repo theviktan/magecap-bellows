@@ -21,6 +21,14 @@ with new language or tool features, the patch number with fixes.
   editor report the same things. The text and JSON formats and exit codes are unchanged; a file given
   with `--api` that can't be read exits with `66`. `--api` without `--lsp` or `--check` is still
   wrong usage (`64`).
+- **`use` stays inside the script's place** (audit S-3). The path must be relative, without `..`, and end in
+  `.forge` or have no extension; anything else is a mistake ("'use' only reaches scripts inside this
+  script's place: the project's Assets folder, or the folder this script is in and the folders below
+  it. ..." or "'use' only loads ForgeScript scripts: ..."). The VM refuses such paths before a host's
+  loader sees them, and the loaders of the checker, the language server, `forgescript` and MageCap
+  Bellows also refuse a link that leads outside the folder. This is the one deliberate exception to
+  "nothing that works changes meaning": a script that reached outside its project could read any file
+  on the computer. No script in the repository did.
 - **Deep nesting is a mistake, not a crash** (audit S-1 and S-2). Code nested more than 256 levels
   deep (brackets, lists, maps, calls, blocks, or chains of `-`, `not` and `^`) gets "This is nested
   too deeply (more than 256 levels of brackets or blocks). Split it into smaller pieces, like a
