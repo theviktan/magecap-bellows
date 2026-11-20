@@ -52,4 +52,16 @@ if(BELLOWS_BUILD_TESTS)
 	add_test(NAME ForgeScriptLspCommand
 		COMMAND ${CMAKE_COMMAND} -DFORGESCRIPT=$<TARGET_FILE:ForgeScriptCLI> -DFOLDER=${CMAKE_CURRENT_SOURCE_DIR}/Tests/LSP
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/LSP/LspCommand.cmake)
+
+	# The docs' examples, checked against the engine API (only in the full MageCap Bellows tree).
+	set(FORGESCRIPT_DOC_API "${CMAKE_SOURCE_DIR}/Resources/forgescript-api.json")
+	if(EXISTS "${FORGESCRIPT_DOC_API}")
+		file(GLOB FORGESCRIPT_DOCS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/docs/ForgeScript/*.md")
+		list(APPEND FORGESCRIPT_DOCS "${CMAKE_SOURCE_DIR}/docs/ScriptingAPI.md" "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+		list(JOIN FORGESCRIPT_DOCS "|" FORGESCRIPT_DOC_LIST)
+		add_test(NAME ForgeScriptDocExamples
+			COMMAND ${CMAKE_COMMAND} -DFORGESCRIPT=$<TARGET_FILE:ForgeScriptCLI> -DAPI=${FORGESCRIPT_DOC_API}
+				-DOUT=${CMAKE_CURRENT_BINARY_DIR}/DocExamples "-DDOCS=${FORGESCRIPT_DOC_LIST}"
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/Docs/DocExamples.cmake)
+	endif()
 endif()

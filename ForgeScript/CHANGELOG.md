@@ -24,6 +24,10 @@ number goes up; it was called 1.4.1 while only fixes were in.
   editor report the same things. The text and JSON formats and exit codes are unchanged; a file given
   with `--api` that can't be read exits with `66`. `--api` without `--lsp` or `--check` is still
   wrong usage (`64`).
+- **Every example in the docs is checked.** The new `ForgeScriptDocExamples` test runs
+  `forgescript --check` with the engine API on each ```` ```forge ```` block in the ForgeScript docs,
+  the Scripting API page and the README (83 today). It found one: the guide's "Naming the values in a
+  call" example had `...` for a body, which isn't ForgeScript; it now has a real one.
 - **Pausing the game** (MageCap Bellows 0.4, step 2.11). New phrases `pause the game`, `resume the
   game` and `the game is paused` (the same as `set_paused(true)`, `set_paused(false)` and
   `is_paused()`). While paused, only scripts marked Run While Paused get `when update`, and only

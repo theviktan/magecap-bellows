@@ -30,7 +30,7 @@ ForgeScript runs on its own virtual machine, the way GDScript runs inside Godot.
 
 ForgeScript builds with the rest of Bellows (see the repository [README](../README.md)). After a build:
 
-- the tests run as part of `ctest` (`ForgeScriptTests`, `ForgeScriptEngineExample`, `ForgeScriptCheckCommand` and `ForgeScriptLspCommand`),
+- the tests run as part of `ctest` (`ForgeScriptTests`, `ForgeScriptEngineExample`, `ForgeScriptCheckCommand`, `ForgeScriptLspCommand` and, in the full MageCap Bellows tree, `ForgeScriptDocExamples`, which checks every example in the docs),
 - the command line tool is `build/<preset>/bin/forgescript` (`forgescript.exe` on Windows).
 
 ```
