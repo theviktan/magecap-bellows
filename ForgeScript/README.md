@@ -48,11 +48,19 @@ game.forge:12:5: 'to' is a ForgeScript keyword and cannot be used as a variable 
 game.forge:20:9: Expected a value here, but found '*'.
 ```
 
+A script with no mistakes may still get **warnings**: things that are allowed but probably not meant. They follow on standard error, with `warning:` after the place, and never change the exit code:
+
+```
+game.forge:1:5: warning: Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'.
+```
+
+There are two so far: a value named like a built-in function the script also calls (a script variable everywhere; a parameter or a function's own value where the call can find it), and `show (menu)` with a space before the bracket, which calls a function where an engine phrase was meant. Warnings show only once a script has no mistakes, and running a script never reports them.
+
 After a mistake it skips the rest of that statement (or the block the statement opens) and carries on, so one typo is reported once. Unreadable text, like a string without its closing quote, ends the check, and so does a bracket that is never closed (everything after it reads as one line). A `use` whose script cannot be found counts as a mistake.
 
 | Option | |
 |---|---|
-| `--json` | Print `{"file": ..., "diagnostics": [{"line", "column", "endColumn", "severity", "message"}]}` on standard output instead (the same shape as `BellowsEditor --check-script --json`). `endColumn` is one past the end of the mistake's line; `severity` is `"error"`. |
+| `--json` | Print `{"file": ..., "diagnostics": [{"line", "column", "endColumn", "severity", "message"}]}` on standard output instead (the same shape as `BellowsEditor --check-script --json`). `endColumn` is one past the end of the mistake's line; `severity` is `"error"`, or `"warning"` for a warning (after the mistakes). |
 | `--stdin` | Read the script from standard input, for text an editor has not saved yet. |
 | `--name <path>` | The script's path, used in messages and to find `use` scripts (from its project's asset folder, or next to it). Needed with `--stdin` so `use` and phrases from other scripts work. |
 
@@ -62,7 +70,7 @@ Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be ope
 
 `forgescript --lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) 3.17 server over standard input and output. An editor starts it and gets, for `.forge` files:
 
-- **Mistakes as you type** (pushed `textDocument/publishDiagnostics`, the same mistakes as `--check`). A script it uses that has mistakes of its own is also marked on its `use` line, as `Helpers.forge line 3: ...`, since running stops there. Editing a script, or closing it unsaved, updates the open scripts that use it.
+- **Mistakes as you type** (pushed `textDocument/publishDiagnostics`, the same mistakes as `--check`), and its warnings (severity 2, on the word they're about) once the script has no mistakes; the engine's functions count as built-ins there. A script it uses that has mistakes of its own is also marked on its `use` line, as `Helpers.forge line 3: ...`, since running stops there. Editing a script, or closing it unsaved, updates the open scripts that use it.
 - **Completion**: keywords, built-in functions and phrases, the engine's functions, types and phrases, the script's own functions, phrases, kinds, variables and event values, and the scripts it uses (`helpers.` after `use "helpers" as helpers`). After a `.` it offers the members of what the value is when the script shows it: the engine entity after `my` and `self.`, an engine type after `set hero to find_entity("Hero")` or `set t to my transform`, text, list, map or vector methods after a value written as one, and a kind's fields and functions (with those of the kinds it extends) after `set d to new Dragon()`. Otherwise it offers every member any value could have.
 - **Hover**: the signature and help of whatever is under the cursor. A script's own functions show the `#` comment lines written right above them. Engine types are shown with ForgeScript's names (`text`, `number`, `yes/no`, `vector`, `nothing`, `list of Entity`), although `forgescript-api.json` uses Python's.
 - **Go to definition**: functions, phrases, kinds, variables and parameters, in the file and in scripts it uses; on the path of a `use` line, the script it names.

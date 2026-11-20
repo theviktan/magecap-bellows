@@ -54,6 +54,7 @@ namespace ForgeScript {
 
 		// LSP enumerations.
 		constexpr int c_SeverityError = 1;
+		constexpr int c_SeverityWarning = 2;
 		constexpr int c_CompletionMethod = 2;
 		constexpr int c_CompletionFunction = 3;
 		constexpr int c_CompletionField = 5;
@@ -967,15 +968,34 @@ namespace ForgeScript {
 		return vm.FindMistakes(text, PathToUtf8(path.filename()));
 	}
 
+	std::vector<CompileError> LanguageServer::FindWarningsIn(const std::filesystem::path& path, const std::string& text) const
+	{
+		VM vm;
+		for (const ApiPhrase& phrase : m_ApiPhrases)
+			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); },
+				nullptr, phrase.YieldsToCalls);
+		const std::filesystem::path useFolder = FindUseFolder(path);
+		vm.SetModuleLoader([this, useFolder](const std::string& name, std::string& outName, std::string& outSource)
+		{
+			const std::filesystem::path file = ResolveUsePath(useFolder, name);
+			outName = PathToUtf8(file.filename());
+			return ReadScriptForUse(file, outSource);
+		});
+		std::vector<std::string> engineFunctions;
+		for (const ApiFunction& function : m_ApiFunctions)
+			engineFunctions.push_back(function.Name);
+		return vm.FindWarnings(text, PathToUtf8(path.filename()), engineFunctions);
+	}
+
 	Json LanguageServer::PublishDiagnostics(const std::string& uri)
 	{
 		const Document& document = m_Documents[uri];
 		const std::vector<std::string_view> lines = SplitLines(document.Text);
 		Json diagnostics = Json(Json::Array());
-		auto add = [&diagnostics](Json range, const std::string& message)
+		auto add = [&diagnostics](Json range, const std::string& message, int severity = c_SeverityError)
 		{
 			Json diagnostic;
-			diagnostic.Set("range", std::move(range)).Set("severity", c_SeverityError).Set("source", "forgescript").Set("message", message);
+			diagnostic.Set("range", std::move(range)).Set("severity", severity).Set("source", "forgescript").Set("message", message);
 			diagnostics.Add(std::move(diagnostic));
 		};
 
@@ -989,6 +1009,20 @@ namespace ForgeScript {
 			const int end = ToUtf16(lines[index], lines[index].size());
 			range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
 			add(std::move(range), mistake.Message);
+		}
+
+		// Warnings mark the word they are about. A script with mistakes gets none: fix those first.
+		if (diagnostics.AsArray().empty())
+		{
+			for (const CompileError& warning : FindWarningsIn(document.Path, document.Text))
+			{
+				const size_t index = static_cast<size_t>(std::clamp(warning.Line - 1, 0, static_cast<int>(lines.size()) - 1));
+				const size_t at = std::min(lines[index].size(), static_cast<size_t>(std::max(warning.Column - 1, 0)));
+				size_t length = 0;
+				while (at + length < lines[index].size() && (std::isalnum(static_cast<unsigned char>(lines[index][at + length])) || lines[index][at + length] == '_'))
+					length++;
+				add(RangeOf(document.Text, warning.Line, warning.Column, static_cast<int>(std::max<size_t>(length, 1))), warning.Message, c_SeverityWarning);
+			}
 		}
 
 		// A script this one uses that has mistakes of its own: shown on the 'use' line, because the script

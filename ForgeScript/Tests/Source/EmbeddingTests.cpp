@@ -575,3 +575,28 @@ TEST_CASE("PhrasesThatYieldToCalls")
 	plain.Machine.Load("say greet(\"Ron\")\n", "t.forge");
 	CHECK_EQ(plain.Output, std::string("hi Ron\n"));
 }
+
+TEST_CASE("WarningsForBracketsThatHideAPhrase")
+{
+	auto warnings = [](const std::string& source)
+	{
+		VM vm;
+		vm.RegisterPhrase("show (thing)", [](CallContext&) { return Value(); }, nullptr, true);
+		vm.RegisterPhrase("hide (thing)", [](CallContext&) { return Value(); }, nullptr, true);
+		return vm.FindWarnings(source, "menu.forge");
+	};
+
+	// "show (pause_menu)" calls the show function; the warning says how to write the phrase.
+	std::vector<CompileError> found = warnings("set pause_menu to 1\nshow (pause_menu)\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 2);
+	CHECK(found[0].Column == 1);
+	CHECK_CONTAINS(found[0].Message, "With brackets, 'show (...)' calls the show function, not the 'show' phrase.");
+	CHECK_CONTAINS(found[0].Message, "like: show pause_menu");
+	CHECK_CONTAINS(warnings("show (menus[1])\n")[0].Message, "like: show the_widget");
+
+	// No space means the call was meant; the phrase itself and other uses are fine.
+	CHECK(warnings("show(\"hello\")\nshow \"menu\"\nsay show of \"x\"\n").empty());
+	// A script that makes its own 'hide' function means to call it.
+	CHECK(warnings("function hide(x)\n\treturn x\nend\nhide (5)\n").empty());
+}

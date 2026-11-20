@@ -1,0 +1,2 @@
+set max to 10
+say max(3, 4)

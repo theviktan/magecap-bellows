@@ -161,6 +161,7 @@ namespace ForgeScript {
 		// Shares a value with every script, like "player" or "gravity".
 		void SetSharedGlobal(const std::string& name, Value value);
 		Value GetSharedGlobal(const std::string& name);
+		bool HasSharedGlobal(const std::string& name) const;
 		// Every name shared by all scripts (built-in functions, values like pi, host functions), sorted.
 		// For tools such as the language server.
 		std::vector<std::string> GetSharedGlobalNames() const;
@@ -193,6 +194,11 @@ namespace ForgeScript {
 		bool Check(std::string_view source, const std::string& fileName, CompileError& outError);
 		// Like Check, but reports every mistake it can find (sorted by line), not only the first.
 		std::vector<CompileError> FindMistakes(std::string_view source, const std::string& fileName);
+		// Things that are allowed but probably not meant, in order of line: a value named like a built-in
+		// function the script also calls, or "show (menu)" calling a function where a phrase was meant.
+		// Warnings never stop a script; FindMistakes and running don't report them.
+		std::vector<CompileError> FindWarnings(std::string_view source, const std::string& fileName,
+			const std::vector<std::string>& moreBuiltinFunctions = {});
 		// Removes a module, cancels its tasks and lets the garbage collector free it.
 		void UnloadModule(Module* module);
 		// Forgets every script loaded with "use", so the next "use" reads the file again (hot reload).

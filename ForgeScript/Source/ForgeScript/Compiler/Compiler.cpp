@@ -1218,6 +1218,7 @@ namespace ForgeScript {
 				if (ResolveLocal(m_State, name) == -1)
 				{
 					// A script level variable: "set score to 0".
+					WarnIfHidesBuiltin(name);
 					Advance();
 					Advance();
 					Expression();
@@ -1398,6 +1399,102 @@ namespace ForgeScript {
 			for (size_t jump : endJumps)
 				PatchJump(jump);
 			EndScope();
+		}
+
+		// --- Warnings: only collected for checkers (CompileOptions::Warnings); they never change the code.
+
+		void Warn(const Token& at, const std::string& message)
+		{
+			if (!m_Options.Warnings)
+				return;
+			// A checker may compile a part twice while it recovers from a mistake: keep each warning once.
+			for (const CompileError& existing : *m_Options.Warnings)
+			{
+				if (existing.Line == at.Line && existing.Column == at.Column && existing.Message == message)
+					return;
+			}
+			m_Options.Warnings->push_back({ message, m_FileName, at.Line, at.Column });
+		}
+
+		bool IsBuiltinFunction(const std::string& name) const
+		{
+			if (m_VM.HasSharedGlobal(name))
+				return true;
+			const std::vector<std::string>* more = m_Options.BuiltinFunctions;
+			return more && std::find(more->begin(), more->end(), name) != more->end();
+		}
+
+		// The token where a value named like a built-in gets its name: the nearest use of the name before
+		// 'index' that isn't a call, or else the first after.
+		const Token* NamingToken(const std::string& name, size_t index) const
+		{
+			const Token* before = nullptr;
+			const Token* after = nullptr;
+			for (size_t i = 0; i + 1 < m_Tokens.size(); i++)
+			{
+				const Token& token = m_Tokens[i];
+				if (token.Type != TokenType::Identifier || token.Lexeme != name || m_Tokens[i + 1].Type == TokenType::LeftParen)
+					continue;
+				if (i <= index)
+					before = &token;
+				else if (!after)
+					after = &token;
+			}
+			return before ? before : after;
+		}
+
+		void WarnHidesBuiltin(const Token& at, const std::string& name, int callLine)
+		{
+			Warn(at, "Naming a value '" + name + "' hides the built-in function '" + name + "', so " + name +
+				"(...) on line " + std::to_string(callLine) + " won't call it. Pick another name, like '" + name + "_value'.");
+		}
+
+		// A script variable named like a built-in ("set max to 10") hides it everywhere in the script, so it
+		// is warned when the script calls that built-in anywhere. A game's "set round to 1" with no
+		// round(...) stays quiet.
+		void WarnIfHidesBuiltin(const std::string& name)
+		{
+			if (!m_Options.Warnings || name.empty() || !IsBuiltinFunction(name))
+				return;
+			for (size_t i = 0; i + 1 < m_Tokens.size(); i++)
+			{
+				if (m_Tokens[i].Type == TokenType::Identifier && m_Tokens[i].Lexeme == name && m_Tokens[i + 1].Type == TokenType::LeftParen)
+				{
+					if (const Token* named = NamingToken(name, m_Pos))
+						WarnHidesBuiltin(*named, name, m_Tokens[i].Line);
+					return;
+				}
+			}
+		}
+
+		// A call like max(a, b) that finds a function's own value or parameter named max, not the built-in.
+		void WarnIfCallFindsOwnValue(const std::string& name, const Target& target, size_t nameIndex)
+		{
+			if (!m_Options.Warnings || (target.Type != TargetType::Local && target.Type != TargetType::Upvalue) ||
+				!Check(TokenType::LeftParen) || !IsBuiltinFunction(name))
+				return;
+			if (const Token* named = NamingToken(name, nameIndex))
+				WarnHidesBuiltin(*named, name, m_Tokens[nameIndex].Line);
+		}
+
+		// "show (pause_menu)": the space doesn't make it the phrase, so it calls the show function. Not
+		// warned when the script makes a function of that name itself, since then the call is meant.
+		void WarnIfBracketsHidePhrase(const std::string& word)
+		{
+			const Token& open = Peek(1);
+			if (!m_Options.Warnings || open.Type != TokenType::LeftParen || open.Line != Current().Line ||
+				open.Column <= Current().Column + static_cast<int>(Current().Lexeme.size()))
+				return;
+			for (size_t i = 0; i + 1 < m_Tokens.size(); i++)
+			{
+				if (m_Tokens[i].Type == TokenType::Function && m_Tokens[i + 1].Lexeme == word)
+					return;
+			}
+			std::string example = word + " the_widget";
+			if (Peek(2).Type == TokenType::Identifier && Peek(3).Type == TokenType::RightParen)
+				example = word + " " + std::string(Peek(2).Lexeme);
+			Warn(Current(), "With brackets, '" + word + " (...)' calls the " + word + " function, not the '" + word +
+				"' phrase. To use the phrase, leave the brackets out, like: " + example);
 		}
 
 		void PushLoop(size_t continueTarget, bool continueKnown)
@@ -1788,6 +1885,7 @@ namespace ForgeScript {
 		{
 			if (m_State->Kind == ScopeKind::Script && m_State->ScopeDepth == 0)
 			{
+				WarnIfHidesBuiltin(name);
 				EmitWithName(OpCode::SetGlobal, name);
 				EmitOp(OpCode::Pop);
 			}
@@ -2508,7 +2606,10 @@ namespace ForgeScript {
 			// Some phrases start with a word that may be a name too, like 'show': there the word followed by
 			// a call or an operator keeps its old meaning, and only "show menu" is the phrase.
 			if (m_VM.PhraseYieldsToCalls(word) && ContinuesValue(Peek(1)))
+			{
+				WarnIfBracketsHidePhrase(word);
 				return false;
+			}
 
 			const PhraseTable::Node* node = it->second.get();
 			const Token& next = Peek(1);
@@ -3181,8 +3282,11 @@ namespace ForgeScript {
 					if (TryPhrase(false))
 						return;
 					std::string name(token.Lexeme);
+					const size_t nameIndex = m_Pos;
 					Advance();
-					EmitGet(ResolveName(name));
+					const Target target = ResolveName(name);
+					WarnIfCallFindsOwnValue(name, target, nameIndex);
+					EmitGet(target);
 					return;
 				}
 				case TokenType::Self:

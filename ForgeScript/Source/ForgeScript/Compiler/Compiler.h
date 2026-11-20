@@ -22,6 +22,12 @@ namespace ForgeScript {
 
 	struct CompileOptions
 	{
+		// Checkers that want warnings (VM::FindWarnings) point this at a list. A warning never stops a
+		// script or changes what it does, and compiling to run leaves it null.
+		std::vector<CompileError>* Warnings = nullptr;
+		// More built-in functions for the warnings to know, beside the VM's own (the engine's, in the
+		// language server).
+		const std::vector<std::string>* BuiltinFunctions = nullptr;
 		// In the interactive prompt, a line that is just a value prints that value.
 		bool Repl = false;
 		// Treat a 'use' whose script the module loader cannot find as a mistake now, instead of

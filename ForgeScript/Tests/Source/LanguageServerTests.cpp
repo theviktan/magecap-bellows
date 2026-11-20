@@ -932,3 +932,28 @@ TEST_CASE("LanguageServerPairsAMatchWithItsEnd")
 	CHECK(outline[0].EndLine == 6);
 	CHECK(outline[1].Name == "after");
 }
+
+TEST_CASE("LanguageServerPublishesWarnings")
+{
+	TempFolder folder("warnings");
+	Session session;
+	const std::string uri = LanguageServer::PathToUri(folder.Path / "menu.forge");
+
+	// An engine function hidden by a value, and an engine phrase hidden by brackets (test-api.json).
+	Json diagnostics = session.Open(uri, "set find_entity to 1\nsay find_entity(\"Menu\")\nhide (find_entity)\n");
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(2));
+	const Json& hidden = diagnostics.AsArray()[0];
+	CHECK_EQ(hidden.Get("severity").AsNumber(), 2.0);
+	CHECK_EQ(RangeValue(hidden, "start", "line"), 0);
+	CHECK_EQ(RangeValue(hidden, "start", "character"), 4);
+	CHECK_EQ(RangeValue(hidden, "end", "character"), 15);
+	const Json& brackets = diagnostics.AsArray()[1];
+	CHECK_EQ(brackets.Get("severity").AsNumber(), 2.0);
+	CHECK_EQ(RangeValue(brackets, "start", "line"), 2);
+	CHECK_CONTAINS(brackets.GetString("message"), "like: hide find_entity");
+
+	// While the script has a mistake, only the mistake shows.
+	diagnostics = session.Change(uri, "set find_entity to 1\nsay find_entity(\"Menu\")\nset to 5\n", 2);
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(diagnostics.AsArray()[0].Get("severity").AsNumber(), 1.0);
+}

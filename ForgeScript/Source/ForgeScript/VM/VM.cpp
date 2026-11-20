@@ -401,6 +401,11 @@ namespace ForgeScript {
 		return names;
 	}
 
+	bool VM::HasSharedGlobal(const std::string& name) const
+	{
+		return std::any_of(m_SharedGlobals.begin(), m_SharedGlobals.end(), [&name](const auto& entry) { return entry.first->Text == name; });
+	}
+
 	Value VM::GetSharedGlobal(const std::string& name)
 	{
 		auto it = m_SharedGlobals.find(Intern(name));
@@ -491,6 +496,27 @@ namespace ForgeScript {
 		CompileOptions options;
 		options.ReportMissingScripts = true;
 		return FindCompileErrors(*this, scratch, source, fileName, options);
+	}
+
+	std::vector<CompileError> VM::FindWarnings(std::string_view source, const std::string& fileName,
+		const std::vector<std::string>& moreBuiltinFunctions)
+	{
+		GCPause pause(*this);
+		Module* scratch = Allocate<Module>(0, fileName);
+		std::vector<CompileError> warnings;
+		CompileOptions options;
+		options.ReportMissingScripts = true;
+		options.Warnings = &warnings;
+		options.BuiltinFunctions = &moreBuiltinFunctions;
+		FindCompileErrors(*this, scratch, source, fileName, options);
+		// Only this script's own: a script it uses is checked on its own.
+		warnings.erase(std::remove_if(warnings.begin(), warnings.end(), [&fileName](const CompileError& warning) { return warning.File != fileName; }),
+			warnings.end());
+		std::stable_sort(warnings.begin(), warnings.end(), [](const CompileError& a, const CompileError& b)
+		{
+			return a.Line != b.Line ? a.Line < b.Line : a.Column < b.Column;
+		});
+		return warnings;
 	}
 
 	LoadResult VM::RunInModule(Module* module, std::string_view source, const std::string& fileName, const CompileOptions& options)
