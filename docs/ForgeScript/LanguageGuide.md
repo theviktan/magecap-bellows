@@ -644,7 +644,7 @@ When a function takes several values, you can name them in the call, after the o
 
 ```forge
 function attack(target, damage is 10, crit is 2)
-	...
+	say "{target} takes {damage}, or {damage * crit} on a critical hit"
 end
 
 attack(goblin, crit: 5)              # damage stays 10, crit is 5
