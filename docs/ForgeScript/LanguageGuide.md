@@ -1278,3 +1278,64 @@ end
 
 `ui_wants_keyboard()` does the same for keys: it's true while a text box has focus.
 
+
+### Pausing the game
+
+A pause menu stops the game behind it. Three phrases do that:
+
+```forge
+pause the game      # physics, time() and scripts stop
+resume the game     # everything picks up where it was
+if the game is paused then say "paused" end
+```
+
+They are the same as `set_paused(true)`, `set_paused(false)` and `is_paused()`.
+
+While the game is paused:
+
+- `when update` doesn't run, and every `wait` holds. When the game resumes, each wait carries on with the time it had left, so a `wait 3 seconds` that had waited 1 second waits 2 more.
+- `time()` stands still. It counts game time, not real time.
+- UI events still reach **every** script: `when "Resume" is clicked` works on any menu script.
+- Scripts marked **Run While Paused** keep going. Tick it on the entity's Script component in the Inspector. Their `when update` runs and their waits count down in real time, so a pause menu can animate or fade.
+
+Here is a pause menu that works. Its script is on the Pause Menu canvas, a **modal** canvas that starts hidden:
+
+```forge
+# pause_menu.forge, on the Pause Menu canvas
+when "Resume" is clicked
+	hide self
+	resume the game
+end
+
+when cancelled     # Esc or the gamepad's B on the menu
+	hide self
+	resume the game
+end
+```
+
+And one game script opens it:
+
+```forge
+# player.forge
+when update
+	if is_action_pressed("pause") then
+		show find_entity("Pause Menu")
+		pause the game
+	end
+end
+```
+
+`player.forge` doesn't need Run While Paused: once the game is paused, the menu's own events close it.
+
+**The one trap: waiting in a menu that isn't marked.** A button handler that waits holds at its `wait` while the game is paused, because only marked scripts count time then:
+
+```forge
+when "Resume" is clicked
+	play_sound("click")
+	wait 0.2 seconds      # holds here while paused: the menu never closes
+	hide self
+	resume the game
+end
+```
+
+Either tick **Run While Paused** on that script, or resume first and wait after. The Inspector warns about this: on a script that isn't marked, it lists the UI handlers that wait, including waits inside your own functions they call or `start`.

@@ -675,14 +675,35 @@ namespace ForgeScript {
 		if (deltaSeconds > 0)
 			m_Time += deltaSeconds;
 		m_Frame++;
+		ResumeFinishedWaits(nullptr);
+	}
 
+	void VM::UpdatePaused(double deltaSeconds, const std::function<bool(const Module*)>& keepsRunning)
+	{
+		if (m_StoppedTask)
+			return;
+		for (Task* task : m_Tasks)
+		{
+			if (task->State != TaskState::Waiting || !keepsRunning(task->Owner))
+				continue;
+			if (task->Mode == WaitMode::Seconds)
+				task->WakeTime -= std::max(0.0, deltaSeconds);
+			else if (task->WakeFrame > 0)
+				task->WakeFrame--;
+		}
+		ResumeFinishedWaits(&keepsRunning);
+	}
+
+	void VM::ResumeFinishedWaits(const std::function<bool(const Module*)>* only)
+	{
 		std::vector<Task*> ready;
 		std::vector<Task*> keep;
 		for (Task* task : m_Tasks)
 		{
 			if (task->State != TaskState::Waiting)
 				continue;
-			bool wake = task->Mode == WaitMode::Seconds ? m_Time >= task->WakeTime : m_Frame >= task->WakeFrame;
+			const bool due = task->Mode == WaitMode::Seconds ? m_Time >= task->WakeTime : m_Frame >= task->WakeFrame;
+			const bool wake = due && (!only || (*only)(task->Owner));
 			(wake ? ready : keep).push_back(task);
 		}
 		m_Tasks = std::move(keep);

@@ -2,6 +2,8 @@
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Scene/Components.h"
+#include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
 #include "Bellows/Scripting/ScriptApi.h"
@@ -461,12 +463,21 @@ namespace Bellows::Scripting {
 		Emit(entity, "created", {});
 	}
 
-	void ForgeScriptRuntime::EmitTimed(Scene& scene, const std::string& event, float timestep)
+	bool ForgeScriptRuntime::RunsWhilePaused(Scene& scene, UUID uuid) const
+	{
+		Entity entity = scene.TryGetEntityByUUID(uuid);
+		if (!entity)
+			return false;
+		const auto* script = entity.TryGetComponent<ScriptComponent>();
+		return script && script->RunWhilePaused;
+	}
+
+	void ForgeScriptRuntime::EmitTimed(Scene& scene, const std::string& event, float timestep, bool pausedOnly)
 	{
 		std::vector<UUID> entities;
 		for (const auto& [uuid, instance] : m_Instances)
 		{
-			if (instance.Created && m_VM->HasHandler(instance.Module, event))
+			if (instance.Created && m_VM->HasHandler(instance.Module, event) && (!pausedOnly || RunsWhilePaused(scene, uuid)))
 				entities.push_back(uuid);
 		}
 		for (UUID uuid : entities)
@@ -486,9 +497,24 @@ namespace Bellows::Scripting {
 		// A script stopped in the debugger holds the whole game, like the editor's pause.
 		if (!m_VM || m_VM->IsStopped())
 			return;
-		EmitTimed(scene, "update", timestep);
-		// Resume every task whose 'wait' has finished.
-		m_VM->Update(timestep);
+		if (!scene.IsGamePaused())
+		{
+			EmitTimed(scene, "update", timestep);
+			// Resume every task whose 'wait' has finished.
+			m_VM->Update(timestep);
+			return;
+		}
+
+		// While the game is paused only scripts marked Run While Paused update, and only their waits
+		// count down (in real time). Everyone else's waits hold and pick up where they were.
+		EmitTimed(scene, "update", timestep, true);
+		std::unordered_set<const ForgeScript::Module*> running;
+		for (const auto& [uuid, instance] : m_Instances)
+		{
+			if (instance.Module && RunsWhilePaused(scene, uuid))
+				running.insert(instance.Module);
+		}
+		m_VM->UpdatePaused(timestep, [&running](const ForgeScript::Module* module) { return running.count(module) > 0; });
 	}
 
 	void ForgeScriptRuntime::FixedUpdate(Scene& scene, float timestep)
@@ -551,6 +577,11 @@ namespace Bellows::Scripting {
 		outInfo.Fields.clear();
 		for (const ForgeScript::ScriptVariable& variable : ForgeScript::FindScriptVariables(source))
 			outInfo.Fields.push_back({ variable.Name, VariableToField(variable) });
+		// The events SceneUI and the text input raise.
+		static const std::vector<std::string> s_UIEvents = { "clicked", "changed", "submitted", "focused", "unfocused", "cancelled" };
+		outInfo.WaitingUIHandlers.clear();
+		for (const ForgeScript::WaitingHandler& handler : ForgeScript::FindHandlersThatWait(source, s_UIEvents))
+			outInfo.WaitingUIHandlers.push_back({ handler.Event, handler.Line });
 		return true;
 	}
 

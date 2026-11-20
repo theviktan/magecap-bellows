@@ -8,6 +8,7 @@
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/Scripting/ScriptApi.h"
+#include "Bellows/Scripting/ScriptEngine.h"
 
 #include <string>
 #include <vector>
@@ -208,4 +209,52 @@ TEST_CASE("ForgeScript 'use' stays inside the asset folder")
 		CHECK_EQ(links.GetName(), std::string("Links"));
 		CHECK(h.AllErrors().find("Could not find the script") != std::string::npos);
 	}
+}
+
+TEST_CASE("ForgeScript while the game is paused: only Run While Paused scripts update and wait")
+{
+	ReloadHarness h("ForgePause");
+	h.Write("Scripts/Ticker.forge", "set ticks to 0\nwhen update\n\tset ticks to ticks + 1\n\tset my name to \"ticks {ticks}\"\nend\n");
+	h.Write("Scripts/Waiter.forge", "when created\n\twait 0.25 seconds\n\tset my name to \"waited\"\nend\n");
+	h.Write("Scripts/Pauser.forge", "when created\n\tpause the game\n\tif the game is paused then\n\t\tset my name to \"paused\"\n\tend\nend\n");
+	h.Write("Scripts/Resumer.forge", "when created\n\tresume the game\n\tset my name to \"resumed {the game is paused}\"\nend\n");
+	Entity gameTicker = h.Spawn("Game Ticker", "Scripts/Ticker.forge");
+	Entity menuTicker = h.Spawn("Menu Ticker", "Scripts/Ticker.forge");
+	Entity gameWaiter = h.Spawn("Game Waiter", "Scripts/Waiter.forge");
+	Entity menuWaiter = h.Spawn("Menu Waiter", "Scripts/Waiter.forge");
+	Entity pauser = h.Spawn("Pauser", "Scripts/Pauser.forge");
+	menuTicker.GetComponent<ScriptComponent>().RunWhilePaused = true;
+	menuWaiter.GetComponent<ScriptComponent>().RunWhilePaused = true;
+	h.Start({ gameTicker, menuTicker, gameWaiter, menuWaiter, pauser });
+	CHECK(h.PlayScene->IsGamePaused());
+	CHECK_EQ(pauser.GetName(), std::string("paused"));
+
+	// Paused: the marked scripts go on in real time, the others hold.
+	h.Frames(30);
+	CHECK_EQ(gameTicker.GetName(), std::string("Game Ticker"));
+	CHECK_EQ(gameWaiter.GetName(), std::string("Game Waiter"));
+	CHECK_EQ(menuTicker.GetName(), std::string("ticks 30"));
+	CHECK_EQ(menuWaiter.GetName(), std::string("waited"));
+
+	// Resumed: the held scripts carry on from where they were.
+	Entity resumer = h.Spawn("Resumer", "Scripts/Resumer.forge");
+	REQUIRE(h.Runtime.CreateInstance(resumer));
+	h.Runtime.CallCreated(resumer.GetUUID());
+	CHECK_FALSE(h.PlayScene->IsGamePaused());
+	CHECK_EQ(resumer.GetName(), std::string("resumed false"));
+	h.Frames(30);
+	CHECK_EQ(gameTicker.GetName(), std::string("ticks 30"));
+	CHECK_EQ(gameWaiter.GetName(), std::string("waited"));
+	CHECK_EQ(menuTicker.GetName(), std::string("ticks 60"));
+	CHECK(h.Errors.empty());
+
+	// The Inspector's hint: a menu button that waits holds while paused unless it's marked.
+	h.Write("Scripts/Menu.forge", "function fade()\n\twait 0.2 seconds\nend\nwhen \"Resume\" is clicked\n\tfade()\n\tresume the game\nend\n"
+		"when \"Quit\" is clicked\n\tsay \"bye\"\nend\nwhen update\n\twait 1 frame\nend\n");
+	ScriptClassInfo info;
+	std::string error;
+	REQUIRE(h.Runtime.GetScriptInfo("Scripts/Menu.forge", info, error));
+	REQUIRE_EQ(info.WaitingUIHandlers.size(), static_cast<size_t>(1));
+	CHECK_EQ(info.WaitingUIHandlers[0].Event, std::string("\"Resume\" is clicked"));
+	CHECK_EQ(info.WaitingUIHandlers[0].Line, 4);
 }

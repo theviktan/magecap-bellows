@@ -885,9 +885,8 @@ sys.stderr = _BellowsLogWriter(2)
 				again->second.ErrorCount = instance.ErrorCount;
 		}
 
-		// ForgeScript's updates and waits hold while the game is paused, and pick up where they were.
-		if (!paused)
-			s_Data->ForgeScript->Update(scene, timestep);
+		// ForgeScript applies the same Run While Paused rule to its updates and waits.
+		s_Data->ForgeScript->Update(scene, timestep);
 	}
 
 	void ScriptEngine::OnFixedUpdate(Scene& scene, float timestep)

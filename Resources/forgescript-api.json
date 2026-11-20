@@ -2229,6 +2229,21 @@
 			"returns": "str"
 		},
 		{
+			"pattern": "pause the game",
+			"doc": "Pauses the game: physics, time() and scripts stop, except scripts marked Run While Paused; same as set_paused(true)",
+			"returns": "None"
+		},
+		{
+			"pattern": "resume the game",
+			"doc": "Lets a paused game go on, and every script picks up where it was; same as set_paused(false)",
+			"returns": "None"
+		},
+		{
+			"pattern": "the game is paused",
+			"doc": "True while the game is paused; same as is_paused()",
+			"returns": "bool"
+		},
+		{
 			"pattern": "show (widget)",
 			"doc": "Shows a UI entity and everything under it; same as set widget.visible to true",
 			"returns": "None",

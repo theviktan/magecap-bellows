@@ -24,6 +24,14 @@ number goes up; it was called 1.4.1 while only fixes were in.
   editor report the same things. The text and JSON formats and exit codes are unchanged; a file given
   with `--api` that can't be read exits with `66`. `--api` without `--lsp` or `--check` is still
   wrong usage (`64`).
+- **Pausing the game** (MageCap Bellows 0.4, step 2.11). New phrases `pause the game`, `resume the
+  game` and `the game is paused` (the same as `set_paused(true)`, `set_paused(false)` and
+  `is_paused()`). While paused, only scripts marked Run While Paused get `when update`, and only
+  their waits count down, in real time; every other wait holds and carries on with the time it had
+  left, and `time()` stands still. Hosts call the new `VM::UpdatePaused(delta, keepsRunning)`.
+  `FindHandlersThatWait(source, events)` lists the `when` blocks for given events that wait,
+  directly or through the script's own functions; the Bellows Inspector uses it to warn about a
+  pause menu's buttons that wait. Nothing changes for a game that never pauses.
 - **`use` stays inside the script's place** (audit S-3). The path must be relative, without `..`, and end in
   `.forge` or have no extension; anything else is a mistake ("'use' only reaches scripts inside this
   script's place: the project's Assets folder, or the folder this script is in and the folders below

@@ -116,5 +116,6 @@ Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`
 
 - Every `when` handler and every `start` runs as its own task.
 - `wait` pauses only the current task. The engine moves time forward once per frame.
+- While the game is paused (`pause the game`), waits hold and `time()` stops, except in scripts marked Run While Paused, whose waits count down in real time. Held waits carry on with the time they had left (guide, [Pausing the game](LanguageGuide.md#pausing-the-game)).
 - Code called directly by the engine or by a built-in function (such as the function given to `sort_by`) must finish right away and cannot `wait`.
 - A task that runs too long without waiting is stopped with an error when the engine sets an instruction limit.

@@ -256,6 +256,47 @@ TEST_CASE("WaitUsesGameTime")
 	CHECK_EQ(h.Machine.GetTaskCount(), static_cast<size_t>(0));
 }
 
+TEST_CASE("PausedUpdateRunsOnlyTheModulesThatKeepRunning")
+{
+	Harness h;
+	const char* script =
+		"when game starts\n"
+		"\twait 2 seconds\n"
+		"\tsay \"{name} after two seconds at {time()}\"\n"
+		"\twait 1 frame\n"
+		"\tsay \"{name} after a frame\"\n"
+		"end\n";
+	Module* menu = h.Machine.CreateModule("menu.forge");
+	Module* enemy = h.Machine.CreateModule("enemy.forge");
+	h.Machine.SetGlobal(menu, "name", h.Machine.MakeText("menu"));
+	h.Machine.SetGlobal(enemy, "name", h.Machine.MakeText("enemy"));
+	CHECK(h.Machine.RunInModule(menu, script, "pause.forge").Success);
+	CHECK(h.Machine.RunInModule(enemy, script, "pause.forge").Success);
+	h.Machine.EmitAll("game starts");
+	const auto onlyMenu = [menu](const Module* module) { return module == menu; };
+
+	// Paused: the menu's wait counts real time, the enemy's holds, and time() stands still.
+	h.Machine.Update(0.5);
+	h.Machine.UpdatePaused(1.0, onlyMenu);
+	CHECK(h.Output.empty());
+	h.Machine.UpdatePaused(0.5, onlyMenu);
+	CHECK_EQ(h.Output, std::string("menu after two seconds at 0.5\n"));
+	CHECK_EQ(h.Machine.GetTime(), 0.5);
+	h.Machine.UpdatePaused(5.0, [](const Module*) { return false; });
+	CHECK_EQ(h.Output, std::string("menu after two seconds at 0.5\n"));
+	h.Machine.UpdatePaused(0.1, onlyMenu);
+	CHECK_EQ(h.Output, std::string("menu after two seconds at 0.5\nmenu after a frame\n"));
+
+	// Unpaused: the enemy carries on from the 0.5 seconds it had already waited.
+	h.Machine.Update(1.0);
+	CHECK_EQ(h.Output, std::string("menu after two seconds at 0.5\nmenu after a frame\n"));
+	h.Machine.Update(0.5);
+	CHECK_EQ(h.Output, std::string("menu after two seconds at 0.5\nmenu after a frame\nenemy after two seconds at 2\n"));
+	h.Machine.Update(0.0);
+	CHECK_EQ(h.Machine.GetTaskCount(), static_cast<size_t>(0));
+	CHECK(h.Errors.empty());
+}
+
 TEST_CASE("UnloadCancelsWaitingTasks")
 {
 	Harness h;
