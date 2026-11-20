@@ -544,6 +544,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 
 | Limit | Value | When it's reached |
 |---|---|---|
+| Nesting of brackets, lists, maps, calls, blocks, and chains of `-`, `not` and `^` | 256 levels (or fewer, if reading it has used 512 KB of the program's stack) | a mistake: "This is nested too deeply" |
 | Calls inside calls | 512 | an error: "Too many functions calling each other" |
 | Built-in functions calling back into scripts, and `trigger` inside `when` | 64 levels | an error on the deepest line |
 | Variables in one function | 255 | a mistake |

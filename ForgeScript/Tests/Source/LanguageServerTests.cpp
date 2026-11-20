@@ -957,3 +957,15 @@ TEST_CASE("LanguageServerPublishesWarnings")
 	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
 	CHECK_EQ(diagnostics.AsArray()[0].Get("severity").AsNumber(), 1.0);
 }
+
+TEST_CASE("LanguageServerSurvivesDeepNesting")
+{
+	// Audit S-1: a hostile file must give a diagnostic, not take the server (and Chisel's checks) down.
+	TempFolder folder("deep");
+	Session session;
+	const std::string uri = LanguageServer::PathToUri(folder.Path / "deep.forge");
+	const std::string source = "set x to " + std::string(100000, '[') + "1" + std::string(100000, ']') + "\n";
+	const Json diagnostics = session.Open(uri, source);
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
+	CHECK_CONTAINS(diagnostics.AsArray()[0].GetString("message"), "nested too deeply");
+}
