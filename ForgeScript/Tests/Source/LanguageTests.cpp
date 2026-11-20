@@ -432,6 +432,15 @@ TEST_CASE("CompileErrorsInMatch")
 		"A 'match' needs at least one 'is' choice before 'otherwise' or 'end'");
 	CHECK(CompileFails("match score\notherwise\nsay 1\nend\n").Line == 1);
 	CHECK_CONTAINS(CompileFails("match \"rain\"\nend\n").Message, "A 'match' needs at least one 'is' choice");
+	// The checker reports it once and goes on after its 'end', inside a function too.
+	{
+		VM vm;
+		const std::vector<CompileError> mistakes = vm.FindMistakes(
+			"function f()\n\tmatch x\n\totherwise\n\t\tif yes then say 1 end\n\tend\n\tsay 2\nend\nset to 1\n", "test.forge");
+		REQUIRE(mistakes.size() == 2);
+		CHECK(mistakes[0].Line == 2);
+		CHECK(mistakes[1].Line == 8);
+	}
 	// 'match' as a name or a script's own phrase before 'otherwise' still means what it did.
 	{
 		VM vm;

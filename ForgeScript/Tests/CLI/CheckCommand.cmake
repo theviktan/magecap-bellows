@@ -46,6 +46,18 @@ expect_run("json warnings" 0
 	ARGS --check --json "${warns}")
 expect_run("json no mistakes" 0 "{\"file\":\"${good}\",\"diagnostics\":[]}" ARGS --check --json "${good}")
 
+# --api gives --check the engine's phrases and functions, as --lsp gets them: "hide menu" is an engine
+# phrase, not a mistake, and "hide (menu)" gets the bracket warning.
+set(menu "${FOLDER}/menu.forge")
+set(api "${FOLDER}/../LSP/test-api.json")
+expect_run("check with api" 0
+	"${menu}: no mistakes found.\nmenu.forge:2:1: warning: With brackets, 'hide (...)' is a call to a function named 'hide', not the 'hide' phrase. To use the phrase, leave the brackets out, like: hide menu"
+	ARGS --check --api "${api}" "${menu}")
+expect_run("check with a missing api" 66
+	"Could not read the engine API description '${FOLDER}/no-such-api.json'."
+	ARGS --check --api "${FOLDER}/no-such-api.json" "${menu}")
+expect_run("api without lsp or check" 64 "--api works together with --lsp or --check." ARGS --api "${api}" "${menu}")
+
 # With --stdin, --name says where the text belongs, so "use" finds cheers.forge next to it.
 expect_run("stdin with name" 0 "{\"file\":\"${FOLDER}/unsaved.forge\",\"diagnostics\":[]}"
 	ARGS --check --json --stdin --name "${FOLDER}/unsaved.forge" INPUT "${good}")

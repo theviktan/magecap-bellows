@@ -1,0 +1,3 @@
+set menu to find_entity("Menu")
+hide (menu)
+hide menu

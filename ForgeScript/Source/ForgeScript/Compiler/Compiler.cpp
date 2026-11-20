@@ -184,6 +184,9 @@ namespace ForgeScript {
 
 				std::unordered_set<std::string> visited;
 				PrescanPhrases(m_Tokens, visited);
+				// "match 5" may be a phrase's line when the engine, this script or one it uses has a phrase
+				// starting with 'match'; otherwise a match with no 'is' still pairs with its 'end'.
+				m_ChoicelessMatchIsBlock = m_Phrases.GetRoot()->Words.count("match") == 0;
 				PrescanModuleNames();
 
 				Function* fn = m_VM.NewFunction();
@@ -381,7 +384,9 @@ namespace ForgeScript {
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Identifier &&
 						(tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 				case TokenType::Identifier:
-					return MatchOpensBlock(tokens, i);
+					// A match with no 'is' choice is a mistake, but its 'end' still belongs to it, so the
+					// rest of the script pairs up as written.
+					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i));
 				default:
 					return false;
 			}
@@ -419,7 +424,9 @@ namespace ForgeScript {
 				state.TryDepth = tryDepth;
 				m_StopWords.resize(stopWords);
 				m_NoInvoke = false;
-				m_Pos = resume;
+				// A mistake that knows its block reaches further (a match with no 'is') says where to go on.
+				m_Pos = m_ResumeAfter != c_NoResume ? std::max(resume, m_ResumeAfter) : resume;
+				m_ResumeAfter = c_NoResume;
 			}
 		}
 
@@ -1109,8 +1116,12 @@ namespace ForgeScript {
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else if (MatchWithoutChoices())
+					{
+						// Skip the rest of it, so its 'otherwise' and 'end' aren't reported as stray too.
+						m_ResumeAfter = SkipBlock(m_Pos + 1);
 						ErrorAtCurrent("A 'match' needs at least one 'is' choice before 'otherwise' or 'end', like: "
 							"match weapon / is \"sword\" then ... / otherwise ... / end");
+					}
 					else
 						ExpressionStatement();
 					break;
@@ -1305,13 +1316,16 @@ namespace ForgeScript {
 		// Only asked once no phrase took the line, so a script's own "phrase match (x)" keeps working; and
 		// 'match' followed by a plain value can't be anything else ('match(x)', 'match[1]' and
 		// 'match - 1' are left alone).
-		bool MatchWithoutChoices() const
+		bool MatchWithoutChoices() const { return MatchWithoutChoicesAt(m_Pos); }
+
+
+		bool MatchWithoutChoicesAt(size_t index) const
 		{
-			if (Current().Type != TokenType::Identifier || Current().Lexeme != "match")
+			if (index + 1 >= m_Tokens.size() || m_Tokens[index].Type != TokenType::Identifier || m_Tokens[index].Lexeme != "match")
 				return false;
-			if (m_Pos > 0)
+			if (index > 0)
 			{
-				switch (m_Tokens[m_Pos - 1].Type)
+				switch (m_Tokens[index - 1].Type)
 				{
 					case TokenType::Newline: case TokenType::Then: case TokenType::Do:
 					case TokenType::Else: case TokenType::Otherwise:
@@ -1320,7 +1334,7 @@ namespace ForgeScript {
 						return false;
 				}
 			}
-			switch (Peek(1).Type)
+			switch (m_Tokens[index + 1].Type)
 			{
 				case TokenType::Identifier: case TokenType::Number: case TokenType::String:
 				case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No:
@@ -1329,7 +1343,7 @@ namespace ForgeScript {
 				default:
 					return false;
 			}
-			size_t i = m_Pos + 1;
+			size_t i = index + 1;
 			while (i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Newline && m_Tokens[i].Type != TokenType::Eof)
 				i++;
 			if (i + 1 >= m_Tokens.size() || m_Tokens[i].Type != TokenType::Newline)
@@ -1493,7 +1507,7 @@ namespace ForgeScript {
 			std::string example = word + " the_widget";
 			if (Peek(2).Type == TokenType::Identifier && Peek(3).Type == TokenType::RightParen)
 				example = word + " " + std::string(Peek(2).Lexeme);
-			Warn(Current(), "With brackets, '" + word + " (...)' calls the " + word + " function, not the '" + word +
+			Warn(Current(), "With brackets, '" + word + " (...)' is a call to a function named '" + word + "', not the '" + word +
 				"' phrase. To use the phrase, leave the brackets out, like: " + example);
 		}
 
@@ -3374,7 +3388,10 @@ namespace ForgeScript {
 		std::unordered_map<std::string, bool> m_NamesMayExist;
 		// The 'finally' tokens that end a try or catch section.
 		std::set<size_t> m_FinallyMarkers;
-		int m_MatchDepth = 0; // open match blocks, where a line starting with 'is' starts the next choice
+		int m_MatchDepth = 0;
+		bool m_ChoicelessMatchIsBlock = false; // set once the phrases are known
+		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
+		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement // open match blocks, where a line starting with 'is' starts the next choice
 		CompileError m_Error;
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.

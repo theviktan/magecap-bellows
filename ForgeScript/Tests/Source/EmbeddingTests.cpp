@@ -591,7 +591,7 @@ TEST_CASE("WarningsForBracketsThatHideAPhrase")
 	REQUIRE(found.size() == 1);
 	CHECK(found[0].Line == 2);
 	CHECK(found[0].Column == 1);
-	CHECK_CONTAINS(found[0].Message, "With brackets, 'show (...)' calls the show function, not the 'show' phrase.");
+	CHECK_CONTAINS(found[0].Message, "With brackets, 'show (...)' is a call to a function named 'show', not the 'show' phrase.");
 	CHECK_CONTAINS(found[0].Message, "like: show pause_menu");
 	CHECK_CONTAINS(warnings("show (menus[1])\n")[0].Message, "like: show the_widget");
 

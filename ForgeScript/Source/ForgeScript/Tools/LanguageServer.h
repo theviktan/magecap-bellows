@@ -39,6 +39,14 @@ namespace ForgeScript {
 		// notifications (diagnostics). Used by Run, and directly by tests.
 		std::vector<Json> Handle(const Json& message);
 
+		// The checks behind the diagnostics, also used by 'forgescript --check': the mistakes, and the
+		// warnings, of a script's text, with the engine's phrases and functions known. 'path' places the
+		// script, for its messages and to find the scripts it uses.
+		std::vector<CompileError> FindMistakesIn(const std::filesystem::path& path, const std::string& text) const;
+		std::vector<CompileError> FindWarningsIn(const std::filesystem::path& path, const std::string& text) const;
+		// Why the engine API description could not be read; empty when it was, or none was given.
+		const std::string& GetApiError() const { return m_ApiError; }
+
 		bool ExitRequested() const { return m_ExitRequested; }
 		int ExitCode() const { return m_ShutdownRequested ? 0 : 1; }
 
@@ -118,8 +126,6 @@ namespace ForgeScript {
 
 		void LoadApi(const std::filesystem::path& file);
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
-		std::vector<CompileError> FindMistakesIn(const std::filesystem::path& path, const std::string& text) const;
-		std::vector<CompileError> FindWarningsIn(const std::filesystem::path& path, const std::string& text) const;
 		std::vector<Symbol> UsedSymbols(const std::filesystem::path& scriptPath, const std::string& source) const;
 		// The diagnostics of the open documents that use 'changed', which may have changed what they show.
 		void PublishDependents(const std::filesystem::path& changed, const std::string& skipUri, std::vector<Json>& replies);
