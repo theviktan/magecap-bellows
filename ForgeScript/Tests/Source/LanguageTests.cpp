@@ -375,6 +375,22 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("NumberWordsKeepOldMeanings")
+{
+	// A script's own 'even' or 'odd', anywhere in reach, keeps 'x is even' a comparison.
+	CHECK_EQ(Output("set even to 4\nsay 4 is even\nsay 6 is even\n"), std::string("true\nfalse\n"));
+	CHECK_CONTAINS(Output("try\n\tsay 3 is even\ncatch problem\n\tsay problem\nend\nset even to 3\n"), "'even' has not been given a value");
+	CHECK_EQ(Output("function f(odd)\n\treturn 3 is odd\nend\nsay f(3)\nsay f(2)\n"), std::string("true\nfalse\n"));
+	CHECK_EQ(Output("function odd()\n\treturn 1\nend\nsay 1 is odd\n"), std::string("false\n"));
+	CHECK_EQ(Output("set m to {even: 2}\nsay m.even\n"), std::string("2\n"));
+	// A value right after the word means it was a name being worked with, so the old error stays.
+	CHECK_CONTAINS(Output("try\n\tsay 4 is even + 1\ncatch problem\n\tsay problem\nend\n"), "'even' has not been given a value");
+	// 'even' and 'odd' need a number; 'a whole number' is just false.
+	CHECK_CONTAINS(Output("try\n\tsay \"a\" is even\ncatch problem\n\tsay problem\nend\n"), "'is even' needs a number, but this is a text");
+	CHECK_CONTAINS(Output("try\n\tsay nothing is odd\ncatch problem\n\tsay problem\nend\n"), "'is odd' needs a number, but this is nothing");
+	CHECK_EQ(Output("say [] is a whole number\n"), std::string("false\n"));
+}
+
 TEST_CASE("InlineIfIsNotAPlainScriptVariable")
 {
 	// The Inspector only shows plain values; a value picked by a test depends on the script running.

@@ -266,6 +266,15 @@ if health is 0 then say "Game over" end
 | `a is in list` / `list contains a` | membership |
 | `a is a number` | type check (`number`, `text`, `boolean`, `list`, `map`, `function`, `vector`, `object`, `kind`) |
 | `a is a Enemy` | is this object made from the kind `Enemy` (or a kind that extends it)? |
+| `a is even` / `a is odd` | a whole number that divides by 2 (or doesn't); `2.5` is neither |
+| `a is a whole number` | a number with nothing after the point (`4`, `-2`, but not `4.5`) |
+
+Every one of these has an `is not` form: `a is not even`, `a is not a whole number`.
+
+> **Your own `even`.** `even` and `odd` aren't reserved. If your script has its own variable,
+> parameter or function called `even` (say `set even to 4`, anywhere in the script), then
+> `x is even` in that script means "is x equal to even", as it always did. Rename yours if you want
+> the number test.
 
 If you prefer symbols, `==`, `!=`, `<`, `<=`, `>`, `>=` also work. A single `=` is **not** used in ForgeScript; the compiler will tell you to use `is` or `to` instead.
 

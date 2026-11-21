@@ -3139,6 +3139,33 @@ namespace ForgeScript {
 			return false;
 		}
 
+		bool CheckWordAt(size_t ahead, const char* word) const
+		{
+			const Token& token = Peek(ahead);
+			return token.Type == TokenType::Identifier && token.Lexeme == word;
+		}
+
+		// 'even' or 'odd' after 'is' is the number test unless a variable, parameter or script name of
+		// that word is in reach, so 'x is even' where 'even' is the script's own value compares as before.
+		bool IsNumberWord() const
+		{
+			if (!CheckWord("even") && !CheckWord("odd"))
+				return false;
+			const std::string name(Current().Lexeme);
+			if (ResolveLocal(m_State, name) != -1 || IsVisibleInEnclosing(name) || IsModuleName(name))
+				return false;
+			// A value right after it ('is even + 1') means 'even' is a name being worked with.
+			const TokenType next = Peek(1).Type;
+			switch (next)
+			{
+				case TokenType::Dot: case TokenType::Possessive: case TokenType::LeftParen: case TokenType::LeftBracket:
+				case TokenType::Plus: case TokenType::Minus: case TokenType::Star: case TokenType::Slash: case TokenType::Percent: case TokenType::Caret:
+					return false;
+				default:
+					return true;
+			}
+		}
+
 		bool IsArticle() const
 		{
 			if (!(CheckWord("a") || CheckWord("an")))
@@ -3301,6 +3328,29 @@ namespace ForgeScript {
 			else if (MatchWord("equal"))
 			{
 				Consume(TokenType::To, "Expected 'to' after 'equal'.");
+			}
+			else if (IsNumberWord())
+			{
+				// 'x is even', 'x is odd': IsNumberWord already checked that no name 'even' or 'odd' is in reach.
+				const bool even = Current().Lexeme == "even";
+				Advance();
+				EmitOp(OpCode::NumberTest);
+				EmitByte(static_cast<uint8_t>(even ? NumberTest::Even : NumberTest::Odd));
+				if (negate)
+					EmitOp(OpCode::Not);
+				return;
+			}
+			else if (IsArticle() && CheckWordAt(1, "whole") && CheckWordAt(2, "number"))
+			{
+				// 'x is a whole number': 'a whole' followed by 'number' was always a mistake.
+				Advance();
+				Advance();
+				Advance();
+				EmitOp(OpCode::NumberTest);
+				EmitByte(static_cast<uint8_t>(NumberTest::Whole));
+				if (negate)
+					EmitOp(OpCode::Not);
+				return;
 			}
 			else if (IsArticle())
 			{

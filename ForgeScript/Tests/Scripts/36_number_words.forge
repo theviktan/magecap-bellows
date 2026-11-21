@@ -1,0 +1,25 @@
+# 'is even', 'is odd' and 'is a whole number' test numbers.
+say 4 is even                                           # expect: true
+say 3 is even                                           # expect: false
+say 3 is odd                                            # expect: true
+say -3 is odd                                           # expect: true
+say 0 is even                                           # expect: true
+say 4 is not even                                       # expect: false
+say 3 is not odd                                        # expect: false
+
+# Only whole numbers are even or odd.
+say 2.5 is odd                                          # expect: false
+say 2.5 is even                                         # expect: false
+
+say 4 is a whole number                                 # expect: true
+say -2 is a whole number                                # expect: true
+say 4.5 is a whole number                               # expect: false
+say "4" is a whole number                               # expect: false
+say 4.5 is not a whole number                           # expect: true
+
+set odds to []
+for i from 1 to 6 do
+	if i is odd then odds.add(i) end
+end
+say odds                                                # expect: [1, 3, 5]
+say 7 is odd and 8 is even                              # expect: true

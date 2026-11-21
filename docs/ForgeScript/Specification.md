@@ -232,6 +232,8 @@ Order comparisons work between two numbers, or between two texts (character by c
 | `text contains t`, `t is in text` | `t` appears in the text |
 | `x is not in y` | the opposite of `x is in y` |
 | `x is empty` / `x is not empty` | text, list or map with no characters, items or keys (other values are never empty) |
+| `x is even` / `x is odd` | `x` is a finite whole number and `x % 2` is `0` (even) or not (odd); a value that isn't a number is an error. Only when no local, parameter, enclosing local or script name `even` / `odd` exists, and the next token isn't `.`, `'s`, `(`, `[` or an arithmetic operator; otherwise it is the comparison `x is even` |
+| `x is a whole number` | `x` is a finite number equal to its floor; false for other values |
 | `x is a number` | `type(x)` is that type name: `number`, `text`, `boolean`, `list`, `map`, `function`, `vector`, `object`, `kind` |
 | `x is a Enemy`, `x is an Enemy` | `x` is an object of that kind, or of a kind that extends it |
 

@@ -52,6 +52,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Range | `x is between 1 and 10`, `x is not between 1 and 10` (both ends included, in either order; numbers or text) |
 | Membership | `list contains x`, `x is in list`, `x is not in list` (also maps and text) |
 | Empty | `x is empty`, `x is not empty` |
+| Numbers | `x is even`, `x is odd`, `x is a whole number`, and each with `is not` (a name `even`/`odd` of your own keeps the comparison) |
 | Type | `x is a number` / `text` / `boolean` / `list` / `map` / `function` / `vector` / `object` / `kind`, `x is a Enemy`, `x is an Enemy` |
 | Logic | `and`, `or`, `not` |
 | Pick a value | `"big" if x > 3 otherwise "small"` (only the picked value runs; chains: `a if p otherwise b if q otherwise c`; `else` works too) |
