@@ -235,6 +235,11 @@ class FeatureTest(bellows.Script):
         parent.name = "Renamed Parent"
         self.check(parent.name == "Renamed Parent", "renaming")
 
+        self.check(parent.keep_across_scenes is False, "entities aren't kept across scenes unless marked")
+        parent.keep_across_scenes = True
+        self.check(parent.keep_across_scenes, "keep_across_scenes")
+        parent.keep_across_scenes = False
+
         parent.position = Vec3(1.0, 2.0, 3.0)
         child.local_position = Vec3(0.0, 1.0, 0.0)
         self.check(close(child.position, (1.0, 3.0, 3.0)), "child world position follows the parent")

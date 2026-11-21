@@ -75,7 +75,8 @@ in both languages (Python's `on_event`, ForgeScript's `when <name> with ...`):
 | Event | Values | When |
 |-------|--------|------|
 | `script error` | `message`, `file`, `line`, `stack`, `language`, `name` | A script raised an error (it is also logged as before). `file` is the script's asset path with forward slashes (`Scripts/player.py`), or just a file name for code outside the assets; `line` is 0 when unknown. `stack` is a list of the calls, innermost first, each `"file:line in function"` or `"file:line"` for code at the top of a file. `language` is `"python"` or `"forgescript"`; `name` is the Python exception's class (`"AttributeError"`), or `""`. An error raised while a `script error` handler runs is only logged, never sent again. |
-| `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too, so it can't tell the two apart). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
+| `scene loaded` | `name`, `path` | After `load_scene` has loaded a scene, to every script, kept ones included: the new scene's name and its asset path. New scripts have had `on_create` by then, so a kept player can find the new level's things. |
+| `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too for what isn't kept, so it can't tell the two apart; `scene loaded` follows the change). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
 
 ```python
 class CrashReporter(bellows.Script):
@@ -186,7 +187,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `screen_to_world_ray(screen_position)` | `(origin, direction)` through a viewport pixel, or `None` without a camera. |
 | `world_to_screen(world_position)` | `Vec2` pixel position, or `None` if behind the camera. |
 | `scene_name()`, `is_playing()` | Current scene name; whether the game is running. |
-| `load_scene(path)` | Switches to another scene at the end of the frame. Returns `False` if it does not exist. |
+| `load_scene(path)` | Switches to another scene at the end of the frame. Returns `False` if it does not exist. Entities marked `keep_across_scenes` stay, with their children, scripts (no second `on_create`), physics and playing sounds; everything else is destroyed (`on_destroy` runs). If the new scene has an entity with a kept entity's ID (the player placed in every level), the kept one stays and the scene's copy is left out. `time()` keeps counting (a kept ForgeScript script's `wait` finishes on time; a wait in a script that goes is cancelled), the game starts unpaused, and every script then gets `scene loaded`. A kept script still holding an entity from the old scene gets the usual "no longer exists" error when it uses it. |
 | `quit(exit_code=0)` | Quits the game (in the editor: stops play mode). |
 | `started_from_editor()` | `True` while the game plays in the editor: in its viewport, or in a game window the editor started. `False` in an exported game or a runtime started by hand. For tools that should behave differently while you develop (a crash reporter that ignores editor runs). |
 | `get_gravity()` / `set_gravity(Vec3)` | Scene gravity (default `(0, -9.81, 0)`). |
@@ -199,6 +200,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `id` | Persistent 64-bit ID (stable across saves). |
 | `valid` / `bool(entity)` | `False` once destroyed. |
 | `name` | Read/write. |
+| `keep_across_scenes` | Read/write. When true, the entity and its children stay when `load_scene` changes the scene (the Inspector's **Keep Across Scenes**, saved in the scene). A kept child of an entity that goes moves to the top level and stays where it is in the world. |
 | `position` | **World** position (read/write). |
 | `local_position` | Position relative to the parent. |
 | `rotation` | Local rotation as Euler angles in **degrees**. |

@@ -342,6 +342,16 @@ namespace Bellows {
 		}
 	}
 
+	void SceneAudio::OnEntitiesLoaded(const std::vector<Entity>& entities)
+	{
+		for (Entity entity : entities)
+		{
+			const auto* source = entity.TryGetComponent<AudioSourceComponent>();
+			if (source && source->PlayOnStart)
+				Play(entity);
+		}
+	}
+
 	void SceneAudio::OnUpdate()
 	{
 		if (!AudioEngine::IsInitialized())

@@ -63,6 +63,8 @@ namespace Bellows {
 		SceneAudio& operator=(const SceneAudio&) = delete;
 
 		void OnRuntimeStart();
+		// Starts the Play On Start sources among entities that arrived with a new scene (Scene::ChangeScene).
+		void OnEntitiesLoaded(const std::vector<Entity>& entities);
 		// Creates sounds for new sources, follows entity positions and the active listener.
 		void OnUpdate();
 		void OnEntityDestroyed(Entity entity);

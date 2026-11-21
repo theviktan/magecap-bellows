@@ -6,6 +6,7 @@
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/SceneSerializer.h"
 
 #include <glm/gtc/constants.hpp>
 #include <miniaudio.h>
@@ -157,6 +158,50 @@ TEST_CASE("Audio buses set volumes for groups of sounds")
 	source.Bus = "Nonsense";		// Unknown buses fall back to Effects instead of failing
 	CHECK(scene->GetAudio()->Play(speaker));
 	CHECK(AudioEngine::PlayOneShot("Audio/Tone.wav", 0.5f, "Music"));
+	scene->OnRuntimeStop();
+	AssetManager::SetAssetDirectory({});
+}
+
+TEST_CASE("Kept music keeps playing through load_scene, and the new scene's sounds start")
+{
+	REQUIRE(AudioEngine::IsInitialized());
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "AudioSceneChange";
+	WriteSineWav(assets / "Audio" / "Tone.wav", 0.5f, 440.0f);
+	AssetManager::SetAssetDirectory(assets);
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity music = scene->CreateEntity("Music");
+	music.GetComponent<TagComponent>().KeepAcrossScenes = true;
+	auto& musicSource = music.AddComponent<AudioSourceComponent>();
+	musicSource.ClipPath = "Audio/Tone.wav";
+	musicSource.PlayOnStart = true;
+	musicSource.Loop = true;
+	Entity hum = scene->CreateEntity("Old level's hum");
+	auto& humSource = hum.AddComponent<AudioSourceComponent>();
+	humSource.ClipPath = "Audio/Tone.wav";
+	humSource.PlayOnStart = true;
+	humSource.Loop = true;
+
+	Scene level("Level 2");
+	Entity bell = level.CreateEntity("Bell");
+	auto& bellSource = bell.AddComponent<AudioSourceComponent>();
+	bellSource.ClipPath = "Audio/Tone.wav";
+	bellSource.PlayOnStart = true;
+	Entity quiet = level.CreateEntity("Quiet");
+	quiet.AddComponent<AudioSourceComponent>().ClipPath = "Audio/Tone.wav";
+
+	const UUID humID = hum.GetUUID();
+	scene->OnRuntimeStart();
+	scene->OnUpdateRuntime(1.0f / 60.0f);
+	REQUIRE(scene->GetAudio()->GetSoundCount() == 2);
+
+	REQUIRE(scene->ChangeScene(SceneSerializer::SerializeToJson(level), "Scenes/Level2.bscene"));
+	CHECK(scene->GetAudio()->IsPlaying(music));
+	CHECK(scene->GetAudio()->IsPlaying(scene->FindEntityByName("Bell")));
+	CHECK_FALSE(scene->GetAudio()->IsPlaying(scene->FindEntityByName("Quiet")));
+	CHECK_FALSE(scene->TryGetEntityByUUID(humID));
+	CHECK(scene->GetAudio()->GetSoundCount() == 2);
+
 	scene->OnRuntimeStop();
 	AssetManager::SetAssetDirectory({});
 }

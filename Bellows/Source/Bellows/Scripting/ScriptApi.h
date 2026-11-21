@@ -146,6 +146,8 @@ namespace Bellows::Scripting {
 	// the scene. Handlers run to completion before anything shuts down, so they can still save or send
 	// over the network. Never throws.
 	void EmitGameQuitting();
+	// Sends 'scene loaded' (name, path) to every script, after load_scene has loaded a scene into the running one.
+	void EmitSceneLoaded(const std::string& name, const std::string& path);
 
 	// The scene that module-level functions (create_entity, find_entity, ...) operate on.
 	void SetContextScene(Scene* scene);

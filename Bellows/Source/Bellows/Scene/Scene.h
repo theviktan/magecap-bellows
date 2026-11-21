@@ -10,6 +10,7 @@
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
+#include <nlohmann/json_fwd.hpp>
 
 #include <chrono>
 #include <functional>
@@ -80,6 +81,13 @@ namespace Bellows {
 		// Play mode
 		void OnRuntimeStart();
 		void OnRuntimeStop();
+		// load_scene while running: loads the scene in json (from path) into this one. Everything that isn't
+		// kept (TagComponent::KeepAcrossScenes, with its children) is destroyed; the new scene's settings and
+		// entities come in, except trees whose root is already here, so a kept entity also placed in the new
+		// scene stays one entity. Kept entities keep their scripts, physics bodies and sounds; time() keeps
+		// counting; the game starts unpaused. Then 'scene loaded' goes to every script. False, with nothing
+		// changed, when json isn't a scene or the scene isn't running.
+		bool ChangeScene(const nlohmann::ordered_json& json, const std::string& path);
 		void OnUpdateRuntime(Timestep timestep);
 		void OnUpdateEditor(Timestep timestep);
 		bool IsRunning() const { return m_IsRunning; }

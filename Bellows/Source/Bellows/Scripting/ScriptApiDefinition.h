@@ -773,6 +773,9 @@ namespace Bellows::Scripting {
 		entity.ReadOnly("id", [](const ScriptEntity& e) { return static_cast<uint64_t>(e.ID); }, "");
 		entity.ReadOnly("valid", [](const ScriptEntity& e) { return e.IsValid(); }, "False once the entity has been destroyed");
 		entity.Property("name", [](const ScriptEntity& e) { return e.Resolve().GetName(); }, [](const ScriptEntity& e, const std::string& v) { e.Resolve().SetName(v); }, "");
+		entity.Property("keep_across_scenes", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TagComponent>().KeepAcrossScenes; },
+			[](const ScriptEntity& e, bool v) { e.Resolve().GetComponent<TagComponent>().KeepAcrossScenes = v; },
+			"The entity and its children stay when load_scene changes the scene, keeping their scripts, physics and sounds");
 		entity.ReadOnly("transform", [](const ScriptEntity& e) { e.Resolve(); return TransformRef { e }; }, "");
 		entity.Property("position", [](const ScriptEntity& e) { return GetWorldPosition(e); }, [](const ScriptEntity& e, const glm::vec3& v) { SetWorldPosition(e, v); }, "World-space position");
 		entity.Property("local_position", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TransformComponent>().Translation; },

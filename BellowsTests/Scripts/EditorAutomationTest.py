@@ -118,7 +118,20 @@ stat = mover.stat()
 os.utime(mover, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
 editor.run_frames(45)
 check(bellows.find_entity("Reloaded Player") is not None, "a script saved during play is reloaded")
+
+# load_scene during play loads into the play copy: a kept entity stays, the rest is replaced.
+(pathlib.Path(editor.asset_directory()) / "Scenes" / "Next.bscene").write_text(
+    '{"Version": 1, "Scene": "Next", "Entities": [{"ID": 424242, "Name": "Next Level Thing", "Parent": 0}]}',
+    encoding="utf-8")
+bellows.find_entity("Reloaded Player").keep_across_scenes = True
+check(bellows.load_scene("Scenes/Next.bscene"), "load_scene during play")
+editor.run_frames(2)
+check(bellows.find_entity("Next Level Thing") is not None, "the next scene is loaded during play")
+check(bellows.find_entity("Reloaded Player") is not None, "a kept entity stays through load_scene")
+check(bellows.find_entity("Spawned during play") is None, "entities that aren't kept go with the old scene")
 editor.stop()
+check(bellows.find_entity("Next Level Thing") is None, "load_scene in play never changes the edited scene")
+check(not bellows.find_entity("Player").keep_across_scenes, "keep_across_scenes set in play stays in play")
 check(editor.state() == "edit", "stop")
 check(abs(bellows.find_entity("Player").transform.position.x - 1.0) < 1e-5, "stopping restores the edited scene")
 check(len(bellows.get_entities()) == edit_count, "entities spawned in play mode are discarded")

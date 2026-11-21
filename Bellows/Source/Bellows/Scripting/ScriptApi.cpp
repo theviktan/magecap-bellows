@@ -512,6 +512,18 @@ namespace Bellows::Scripting {
 		}
 	}
 
+	void EmitSceneLoaded(const std::string& name, const std::string& path)
+	{
+		try
+		{
+			EmitScriptEvent("scene loaded", { ScriptValue(name), ScriptValue(path) });
+		}
+		catch (const std::exception& exception)
+		{
+			BW_CORE_ERROR("The 'scene loaded' event could not be sent: {}", exception.what());
+		}
+	}
+
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values)
 	{
 		EventNesting nesting(name);
