@@ -375,6 +375,17 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("ForEachOverAnObject")
+{
+	// Changing a field's value while going through them is seen; the loop ends after the last field.
+	CHECK_EQ(Output("kind K\n\tset a to 1\n\tset b to 2\nend\nset k to new K()\nfor each f, v in k do\n\tset k.b to 9\n\tsay v\nend\n"),
+		std::string("1\n9\n"));
+	CHECK_EQ(Output("kind K\nend\nfor each f in new K() do\n\tsay f\nend\nsay \"none\"\n"), std::string("none\n"));
+	// Other values are still an error, which now names objects.
+	CHECK_CONTAINS(Output("try\n\tfor each x in 5 do\n\tend\ncatch problem\n\tsay problem\nend\n"),
+		"'for each' needs a list, a map, text or an object made from a kind, but got number.");
+}
+
 TEST_CASE("ChoicesKeepOldMeaningsAndExplainMistakes")
 {
 	// 'choices' and 'are' are still names, and a phrase starting with 'choices' still wins.

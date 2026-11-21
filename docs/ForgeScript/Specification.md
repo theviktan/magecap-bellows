@@ -348,7 +348,7 @@ until expression [do]  block  end
 ```
 
 - `for ... from ... to ...` counts both ends included. Without `by`, it counts up by 1, or down by 1 when the end is smaller than the start.
-- `for each` goes through a list (the second name, if given, is the position), a map (key and value), or text (each character).
+- `for each` goes through a list (the second name, if given, is the position), a map (key and value), text (each character), or an object made from a kind (each field's name as text, and its value, in the order the fields were first set: a parent kind's first; methods aren't fields). Anything else is an error.
 - `stop` leaves the innermost loop; `skip` goes on with its next round.
 
 ### 5.6 Match

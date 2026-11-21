@@ -45,7 +45,7 @@ namespace ForgeScript {
 				Keyword("contains", "list contains x", "True when a list, map or text holds the value."),
 				Keyword("divide", "divide target by n", "Divides a variable by a number and keeps the result in it."),
 				Keyword("do", "while x do ... end", "Optional word that starts the body of a loop."),
-				Keyword("each", "for each item in list ... end", "Goes through every item of a list (or every key and value of a map)."),
+				Keyword("each", "for each item in list ... end", "Goes through every item of a list (or every key and value of a map, or every field and value of an object)."),
 				Keyword("else", "if ... else ... end", "The part of an if that runs when the condition is false. otherwise means the same."),
 				Keyword("end", "... end", "Closes a block: if, loops, function, phrase, kind, when, try."),
 				Keyword("extends", "kind Boss extends Enemy", "Makes a kind that starts with everything another kind has."),
