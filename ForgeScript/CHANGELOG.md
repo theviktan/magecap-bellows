@@ -23,6 +23,11 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Number words** (Tier 1 #6): `x is even`, `x is odd` and `x is a whole number`, with `is not`
+  forms. `even` and `odd` are whole numbers only (`2.5 is odd` is false), and need a number;
+  `is a whole number` is false for anything that isn't one. The words aren't reserved: where a
+  variable, parameter or script name `even` or `odd` is in reach, `x is even` compares with it as
+  before.
 - **Mistakes from other languages teach the ForgeScript** (Roadmap 2.0, Tier 1 #1). Errors keep
   their message and add the form that works for common habits: `x += 1` and `x++` (`add 1 to x`),
   `increase x by 2`, `def` / `func`, `var` / `let` / `const`, `elif`, a line ending in `:`, `&&` and

@@ -2678,6 +2678,26 @@ namespace ForgeScript {
 					stack.back() = Value::FromBool(aboveLow && belowHigh);
 					break;
 				}
+				case OpCode::NumberTest:
+				{
+					const NumberTest test = static_cast<NumberTest>(FORGESCRIPT_READ_BYTE());
+					const Value value = stack.back();
+					if (test == NumberTest::Whole)
+					{
+						stack.back() = Value::FromBool(value.IsNumber() && std::isfinite(value.AsNumber()) && std::floor(value.AsNumber()) == value.AsNumber());
+						break;
+					}
+					if (!value.IsNumber())
+					{
+						FORGESCRIPT_FAIL(std::string("'is ") + (test == NumberTest::Even ? "even" : "odd") + "' needs a number, but this is " +
+							(value.IsNothing() ? std::string("nothing") : "a " + TypeOf(value)) + ".");
+					}
+					const double number = value.AsNumber();
+					const bool whole = std::isfinite(number) && std::floor(number) == number;
+					const bool even = whole && std::fmod(number, 2.0) == 0.0;
+					stack.back() = Value::FromBool(whole && (test == NumberTest::Even ? even : !even));
+					break;
+				}
 				case OpCode::IsEmpty:
 				{
 					Value value = stack.back();
