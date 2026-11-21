@@ -256,8 +256,13 @@ So `nothing or "default"` is `"default"`, and `player and player.name` never rea
 | `a[i]` | the item at position `i` of a list or text (from 1; negative from the end), or the value under key `i` of a map |
 | `f(x, y)` | a call ([7](#7-functions)) |
 | `f of x` | `f(x)`: `length of items` |
+| `the x` | `x`, for any name `x` |
+| `first of x`, `first item of x` | `x.first`; `last` likewise gives `x.last` |
+| `item i of x` | `x[i]`. `i` is a number, a name (with `.`, `'s`, `[ ]` and calls after it) or an expression in brackets; anything else before the `of` is an error |
 | `a.m(x)` | a method call on `a` |
 | `parent.m(x)` | inside a kind, the method `m` of the kind it extends |
+
+The four words `the`, `first`, `last` and `item` take the forms above only where nothing is named so: no local, parameter, enclosing local, name of the script or of a script it uses, or built-in function. Otherwise each is an ordinary name, and `first of x` is `first(x)`.
 
 A position outside a list or text is an error that names the position and the length. Position `0` is an error that explains that positions start at 1.
 

@@ -477,6 +477,26 @@ say items.length                # 2
 say length of items             # 2
 ```
 
+**Reading a list like a sentence.** These say the same things in words:
+
+```forge
+set items to ["sword", "shield", "potion"]
+say the length of items         # 3, the same as length of items
+say first of items              # sword, the same as items.first
+say the last item of items      # potion, the same as items.last
+say item 2 of items             # shield, the same as items[2]
+say item i of items             # the item at position i
+say item (i + 1) of items       # a worked-out position goes in brackets
+say item 2 of item 1 of grid    # a list in a list: grid[1][2]
+```
+
+- `the` can go before any name in a value, and it changes nothing: `say the score` is `say score`.
+- `first of` and `last of` an empty list give `nothing`, as `.first` and `.last` do.
+- **Your own names win.** These words aren't reserved. If your script has its own `the`, `first`,
+  `last` or `item` (a variable, a parameter, a function, anywhere in the script), that word means
+  yours, as it always did. For example, inside `items.map(function(item) ... end)`, `item` is the
+  parameter.
+
 **Taking a list apart.** When a list holds a few values that belong together, give each its own name in one line:
 
 ```forge
