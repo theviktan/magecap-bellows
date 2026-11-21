@@ -770,6 +770,16 @@ TEST_CASE("FindOutlineListsAScriptsDefinitions")
 	CHECK(FindOutline("end\nend\nfunction (\n").empty());
 }
 
+TEST_CASE("OutlineListsChoiceSets")
+{
+	const std::vector<OutlineItem> outline = FindOutline("choices State are idle, running\nset choices to 2\n");
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
+	CHECK(outline[0].ItemKind == OutlineItem::Kind::Constant);
+	CHECK_EQ(outline[0].Name, std::string("State"));
+	CHECK_EQ(outline[0].Detail, std::string("choices State are idle, running"));
+	CHECK(outline[1].ItemKind == OutlineItem::Kind::Variable);
+}
+
 TEST_CASE("LanguageServerGivesAnOutline")
 {
 	Session session;

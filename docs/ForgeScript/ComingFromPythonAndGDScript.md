@@ -59,6 +59,9 @@ constant MAX_HP is 100
 - `set ... to` both makes a variable and changes it; there is no `var`.
 - Every text can hold `{ }` placeholders, like a Python f-string, without a prefix.
 - `constant` works only at the top of a script, and nothing can change it afterward.
+- For an `enum` (Python's `class State(Enum)`, GDScript's `enum State { IDLE, RUN }`), write
+  `choices State are idle, running`. `State.idle` is the text `"idle"`, not a number, so it prints
+  and saves as its name.
 
 ## Decisions
 

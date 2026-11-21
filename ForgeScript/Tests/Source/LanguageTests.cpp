@@ -375,6 +375,35 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("ChoicesKeepOldMeaningsAndExplainMistakes")
+{
+	// 'choices' and 'are' are still names, and a phrase starting with 'choices' still wins.
+	CHECK_EQ(Output("set choices to 2\nset are to 3\nsay choices + are\n"), std::string("5\n"));
+	CHECK_EQ(Output("phrase choices (x) are (y)\n\tsay \"phrase {x} {y}\"\nend\nchoices 1 are 2\n"), std::string("phrase 1 2\n"));
+	// A choice set is a constant whose choices are their names as text.
+	CHECK_EQ(Output("choices State are idle, running\nsay State.running is \"running\"\nsay State.length\n"), std::string("true\n2\n"));
+	CHECK_CONTAINS(Output("choices State are idle\ntry\n\tset State to 3\ncatch problem\n\tsay problem\nend\n"), "'State' is a constant");
+	// Mistakes, also above the line that makes the set.
+	CHECK_CONTAINS(CompileFails("say State.idel\nchoices State are idle, running\n").Message,
+		"State has no choice 'idel'. Did you mean 'idle'? Its choices are: idle, running.");
+	CHECK_CONTAINS(CompileFails("function f()\n\tchoices S are a\nend\n").Message, "Write choices at the top level of the script");
+	CHECK_CONTAINS(CompileFails("choices S are a, 3\n").Message, "Each choice is a name, like: choices S are idle, running");
+	CHECK_CONTAINS(CompileFails("choices S are a, a\n").Message, "'a' is in S's choices twice.");
+	// A local named like the set is the local, so its members aren't checked.
+	CHECK_EQ(Output("choices S are a\nfunction f(S)\n\treturn S.b\nend\nsay f({b: 1})\n"), std::string("1\n"));
+
+	// A match over one set's choices, with no otherwise, warns about each choice it leaves out.
+	VM vm;
+	std::vector<CompileError> found = vm.FindWarnings(
+		"choices State are idle, running, jumping\nset s to State.idle\nmatch s\n\tis State.idle then say 1\n\tis State.running then say 2\nend\n", "test.forge", {});
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 3);
+	CHECK_CONTAINS(found[0].Message, "This match has no case for State.jumping, and no otherwise.");
+	CHECK(vm.FindWarnings("choices State are idle, running\nset s to State.idle\nmatch s\n\tis State.idle then say 1\n\totherwise say 2\nend\n", "test.forge", {}).empty());
+	CHECK(vm.FindWarnings("choices State are idle, running\nset s to State.idle\nmatch s\n\tis State.idle, State.running then say 1\nend\n", "test.forge", {}).empty());
+	CHECK(vm.FindWarnings("choices State are idle, running\nset s to State.idle\nmatch s\n\tis State.idle then say 1\n\tis \"x\" then say 2\nend\n", "test.forge", {}).empty());
+}
+
 TEST_CASE("EveryAndAnyKeepOldMeanings")
 {
 	// A script's own 'every' or 'any' keeps its meaning; so does a timer and a phrase.

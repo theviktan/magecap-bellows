@@ -361,20 +361,48 @@ How it works:
 
 `match` is not a reserved word. It only starts a match when it begins a line and the next line starts with `is`. So a variable or function named `match` (`set match to 3`) works as it always has.
 
-A match pairs well with a constant list of states:
+A match pairs well with a set of **choices**:
 
 ```forge
-constant STATES is ["idle", "patrol", "chase"]
-set state to "patrol"
+choices State are idle, patrol, chase
+set state to State.patrol
 
 when update with delta
 	match state
-	is "idle" then wait_for_player()
-	is "patrol" then walk_route()
-	is "chase" then run_at_player()
+	is State.idle then wait_for_player()
+	is State.patrol then walk_route()
+	is State.chase then run_at_player()
 	end
 end
 ```
+
+### Naming your choices with `choices`
+
+Many things in a game can be one of a few states: an enemy is idle, patrolling or chasing; a door is
+open, closed or locked. `choices` gives each one a name (other languages call this an *enum*):
+
+```forge
+choices Door are open, closed and locked
+
+set door to Door.closed
+if door is Door.locked then
+	say "You need a key"
+end
+```
+
+- `Door.closed` is the text `"closed"`, so `say door` prints `closed`, and the value saves and loads
+  like any text.
+- **Spelling mistakes are caught before the game runs.** `Door.lockd` is an error: "Door has no
+  choice 'lockd'. Did you mean 'locked'? Its choices are: open, closed, locked."
+- **A `match` that forgets a choice gets a warning.** When every case of a `match` is one of a set's
+  choices and there is no `otherwise`, the checker (and the editor) warns about each missing one:
+  "This match has no case for Door.locked, and no otherwise." Add the case, or an `otherwise`.
+- `Door` can't be changed (it's a constant), and you can walk it: `for each d in Door do`, and count
+  it: `Door.length`.
+- Write `choices` at the top level of the script (not inside a function or kind), separated by
+  commas, with an optional `and` before the last.
+- `choices` isn't reserved: `set choices to 3` still works. It only makes choices at the start of a
+  line followed by a name and `are`.
 
 ---
 
