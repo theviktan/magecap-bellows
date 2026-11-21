@@ -77,10 +77,14 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
   and `bellows.VERSION`. Only a build of the commit tagged `v<version>`, or one configured with
   `-DBELLOWS_RELEASE_BUILD=ON` (CI does that for version tags), reports plain `0.4.0`.
 * To release:
-  1. Add `docs/ReleaseNotes/<version>.md`.
+  1. Finish `docs/ReleaseNotes/<version>.md` (started with the cycle): remove its "These notes
+     grow" line, and have FSC date ForgeScript's "(not released yet)" heading in
+     `ForgeScript/CHANGELOG.md` if it has one.
   2. Create the `v<version>` tag and release on github.com.
-  3. CI checks that the tag matches the version, builds and tests the package, and its release job
-     (the only job with write access) attaches the zip, with the notes as the release text.
+  3. CI checks that the tag matches the version and that both files are finished, builds and tests
+     the package, and its release job (the only job with write access) attaches the zip, with the
+     notes as the release text.
+  4. Then move `VERSION` up and start the next `docs/ReleaseNotes/<version>.md`.
 * CI's actions are pinned to full commits. To update one, change the commit and its version comment
   together.
 
