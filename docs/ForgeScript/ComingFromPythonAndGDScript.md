@@ -377,6 +377,7 @@ say dragon is a Enemy                # true
 | `super().hurt(x)` | `super.hurt(x)` | `parent.hurt(x)` |
 | `Boss("Dragon")` | `Boss.new("Dragon")` | `new Boss("Dragon")` |
 | `__str__` | `_to_string` | `to_text` |
+| class variable `count = 0` | `static var count = 0` | `shared count is 0`, read as `Enemy.count` |
 
 - `set` lines at the top of a kind are fields: every object gets its own copy, worked out when it is made. A kind that extends another starts from its parent's fields, so `Boss` doesn't need its own `setup`.
 - Inside a method, a plain `set health to 5` makes a local variable. Write `set my health to 5` to change the field (like Python's `self.`).

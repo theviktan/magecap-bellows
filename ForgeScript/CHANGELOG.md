@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Shared values** (Tier 2 #10): `shared count is 0` inside a kind makes one value for the kind
+  and every object made from it, read and changed as `Enemy.count` (also in the kind's own
+  functions, and as `Boss.count` for a kind that extends it). It is worked out once, when the kind
+  is made. `goblin.count` says to write `Enemy.count`, and `set Enemy.x to ...` for a name that
+  isn't shared says how to share it. `shared` isn't reserved: the line was an error inside a kind
+  before, and `set shared to 2` still works.
 - **Any number of values** (Tier 2 #14): `function total(numbers...)`. The last parameter, written
   with `...`, gets the values left over as a list (`[]` when there are none); the ones before it can
   have defaults and be named. It works in kinds' functions and function values, and the language

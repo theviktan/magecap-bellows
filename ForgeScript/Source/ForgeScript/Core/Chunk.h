@@ -104,6 +104,7 @@ namespace ForgeScript {
 		NamedArgs,       // u16 list of names         (the next call's last values go to the parameters with these names)
 		SkipIfGiven,     // u8 default index, u16 offset: skips a default's code when the call gave that value
 		Unpack,          // u8 count                  list or vector -> its items, in order (set x, y to ...)
+		SharedValue,     // u16 name                  kind value -> kind (the kind's 'shared name is value')
 		NumberTest,      // u8 NumberTest             value -> bool ('is even', 'is odd', 'is a whole number')
 		WaitEvent,       // u16 event name, u16 entity name ("" = any), u8 count: pauses the task until its
 		                 // script gets the event, then pushes the event's first 'count' values (nothing for missing ones)

@@ -1689,6 +1689,12 @@ namespace ForgeScript {
 				std::vector<std::string_view> names;
 				AddNames(names, instance->Fields);
 				AddKindMethods(names, instance->Class);
+				Kind* owner = nullptr;
+				if (instance->Class->FindShared(name, &owner))
+				{
+					return Fail("'" + instance->Class->Name->Text + "' has no field or function called '" + key + "'. '" + key +
+						"' is shared by every " + owner->Name->Text + ": write " + owner->Name->Text + "." + key);
+				}
 				return Fail("'" + instance->Class->Name->Text + "' has no field or function called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::NativeObject:
@@ -1813,7 +1819,15 @@ namespace ForgeScript {
 					outValue = Value::FromObject(kind->Name);
 					return true;
 				}
-				return Fail("The kind '" + kind->Name->Text + "' has no property called '" + key + "'.");
+				if (Value* shared = kind->FindShared(name))
+				{
+					outValue = *shared;
+					return true;
+				}
+				std::vector<std::string_view> names;
+				for (Kind* k = kind; k; k = k->Parent)
+					AddNames(names, k->Shared);
+				return Fail("The kind '" + kind->Name->Text + "' has no property called '" + key + "'." + DidYouMean(key, names));
 			}
 			default:
 				break;
@@ -1840,6 +1854,17 @@ namespace ForgeScript {
 			case ObjectType::Map:
 				As<Map>(object)->Set(Value::FromObject(name), value);
 				return true;
+			case ObjectType::Kind:
+			{
+				Kind* kind = As<Kind>(object);
+				if (Value* shared = kind->FindShared(name))
+				{
+					*shared = value;
+					return true;
+				}
+				return Fail("Cannot change '" + key + "' on a kind. To give every " + kind->Name->Text +
+					" one value they share, write inside the kind: shared " + key + " is 0");
+			}
 			case ObjectType::NativeObject:
 			{
 				NativeObject* native = As<NativeObject>(object);
@@ -3045,6 +3070,14 @@ namespace ForgeScript {
 					kind->Parent = As<Kind>(parent);
 					break;
 				}
+				case OpCode::SharedValue:
+				{
+					String* name = FORGESCRIPT_READ_STRING();
+					Value value = stack.back();
+					stack.pop_back();
+					As<Kind>(stack.back())->Shared[name] = value;
+					break;
+				}
 				case OpCode::Method:
 				{
 					String* name = FORGESCRIPT_READ_STRING();
@@ -3426,6 +3459,11 @@ namespace ForgeScript {
 				{
 					MarkObject(name);
 					MarkObject(method);
+				}
+				for (auto& [name, value] : kind->Shared)
+				{
+					MarkObject(name);
+					MarkValue(value);
 				}
 				break;
 			}

@@ -177,10 +177,15 @@ namespace ForgeScript {
 		Kind* Parent = nullptr;
 		Closure* Fields = nullptr;
 		std::unordered_map<String*, Closure*> Methods;
+		// 'shared count is 0': one value for the kind and every object made from it, read as Enemy.count.
+		std::unordered_map<String*, Value> Shared;
 
 		explicit Kind(String* name) : Object(ObjectType::Kind), Name(name) {}
 
 		Closure* FindMethod(String* name) const;
+		// The shared value with this name, in this kind or the nearest kind it extends; null if none.
+		// 'owner' is set to the kind that has it.
+		Value* FindShared(String* name, Kind** owner = nullptr);
 	};
 
 	struct Instance : public Object

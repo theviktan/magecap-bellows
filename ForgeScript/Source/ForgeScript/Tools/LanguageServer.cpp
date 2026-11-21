@@ -18,6 +18,14 @@ namespace ForgeScript {
 	namespace {
 
 		// The positions of the names in "set x, y to ...", from the first name; empty when it isn't that.
+		// 'shared count is 0' at the start of a line (inside a kind, the compiler's shared value).
+		bool IsSharedLine(const std::vector<Token>& tokens, size_t i)
+		{
+			return i + 2 < tokens.size() && (i == 0 || tokens[i - 1].Type == TokenType::Newline) &&
+				tokens[i].Type == TokenType::Identifier && tokens[i].Lexeme == "shared" && tokens[i + 1].Type == TokenType::Identifier &&
+				(tokens[i + 2].Type == TokenType::Is || tokens[i + 2].Type == TokenType::To);
+		}
+
 		// A parameter written 'numbers...', which gets the values left over.
 		bool CollectsTheRest(const std::vector<Token>& tokens, size_t i)
 		{
@@ -560,6 +568,12 @@ namespace ForgeScript {
 			{
 				const Token& name = tokens[i + 1];
 				add(Kind::Constant, name, std::string(name.Lexeme), RestOfLine(tokens, i), docAbove(token.Line), "");
+			}
+			else if (!owner.empty() && IsSharedLine(tokens, i))
+			{
+				const Token& name = tokens[i + 1];
+				if (variables.insert(owner + "." + std::string(name.Lexeme)).second)
+					add(Kind::Variable, name, std::string(name.Lexeme), RestOfLine(tokens, i), docAbove(token.Line), owner);
 			}
 			else if (token.Type == TokenType::Set && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::To)
 			{
@@ -1739,6 +1753,11 @@ namespace ForgeScript {
 					last = j;
 				const int length = tokens[last].Column + static_cast<int>(tokens[last].Lexeme.size()) - token.Column;
 				item = add(Kind::Handler, lineText(i), "", token, token, length, parent);
+			}
+			else if (listed && inKind && IsSharedLine(tokens, i))
+			{
+				if (variables.insert({ parent, std::string(next->Lexeme) }).second)
+					add(Kind::Variable, std::string(next->Lexeme), RestOfLine(tokens, i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && token.Type == TokenType::Set && next && next->Type == TokenType::Identifier &&
 				i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::To)

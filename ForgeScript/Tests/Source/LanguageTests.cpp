@@ -375,6 +375,26 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("SharedValuesKeepOldMeaningsAndExplainMistakes")
+{
+	// 'shared' is still a name, also as a field.
+	CHECK_EQ(Output("set shared to 4\nsay shared\n"), std::string("4\n"));
+	CHECK_EQ(Output("kind E\n\tset shared to 2\nend\nsay new E().shared\n"), std::string("2\n"));
+	// A bare name in a method is not the shared value.
+	CHECK_CONTAINS(Output("kind E\n\tshared c is 1\n\tfunction f()\n\t\treturn c\n\tend\nend\ntry\n\tsay new E().f()\ncatch problem\n\tsay problem\nend\n"),
+		"'c' has not been given a value yet");
+	// Mistakes say what to write.
+	CHECK_CONTAINS(Output("kind E\n\tshared c is 0\nend\ntry\n\tsay new E().c\ncatch problem\n\tsay problem\nend\n"),
+		"'E' has no field or function called 'c'. 'c' is shared by every E: write E.c");
+	CHECK_CONTAINS(Output("kind E\nend\ntry\n\tset E.x to 1\ncatch problem\n\tsay problem\nend\n"),
+		"Cannot change 'x' on a kind. To give every E one value they share, write inside the kind: shared x is 0");
+	CHECK_CONTAINS(Output("kind E\n\tshared count is 0\nend\ntry\n\tsay E.cuont\ncatch problem\n\tsay problem\nend\n"),
+		"The kind 'E' has no property called 'cuont'. Did you mean 'count'?");
+	CHECK_CONTAINS(CompileFails("kind E\n\tshared name is 0\nend\n").Message, "A kind's 'name' is already its name");
+	CHECK_CONTAINS(CompileFails("kind E\n\tshared a is 0\n\tshared a is 1\nend\n").Message, "'a' is shared twice in this kind.");
+	CHECK_CONTAINS(CompileFails("kind E\n\tsay 1\nend\n").Message, "Inside a kind, use 'set name to value' for fields and 'function' for methods");
+}
+
 TEST_CASE("AnyNumberOfValuesExplainsMistakes")
 {
 	CHECK_CONTAINS(CompileFails("function f(a..., b)\nend\n").Message, "Only the last value can collect the rest, like: function total(first, others...)");
