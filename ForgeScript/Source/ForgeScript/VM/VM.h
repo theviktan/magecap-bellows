@@ -351,6 +351,9 @@ namespace ForgeScript {
 
 		bool GetProperty(Task* task, const Value& object, String* name, Value& outValue);
 		bool SetProperty(Task* task, const Value& object, String* name, const Value& value);
+		// Writes a field of an object whose kind has 'when my field changes' handlers, then runs the ones
+		// for that field when the value changed (see the Specification, 9).
+		bool SetWatchedField(Task* task, Instance* instance, String* name, const Value& value);
 		bool GetIndex(Task* task, const Value& object, const Value& index, Value& outValue);
 		bool SetIndex(Task* task, const Value& object, const Value& index, const Value& value);
 		bool LookupGlobal(Module* module, String* name, Value& outValue);

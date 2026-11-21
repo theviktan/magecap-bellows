@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Reacting to a change** (Tier 2 #9): `when my health changes with now, before ... end` inside a
+  kind runs right after a write that changes the field (by `is`), as a task like `trigger`'s, so it
+  may `wait`. A field's first value isn't a change, a write inside the field's own handler doesn't
+  run it again, and a parent kind's handlers run first. Kinds without handlers, and fields without
+  them, write as fast as before. At the top level, `when my health changes` is still the event of
+  that name; inside a kind the line was an error before.
 - **Optional types** (Tier 2 #11): `function heal(amount as number, who as text is "you")`. Types
   never change what runs: `--check`, the language server and the editor warn when a call to one of
   the script's functions gives a plain value of another type ("'heal' takes a number for 'amount'

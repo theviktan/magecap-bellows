@@ -27,6 +27,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Anonymous function | `function(x) return x * 2 end` |
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
+| Change handler | `when my health changes [with now, before] ... end` inside a kind: runs right after a write that changes the field (not for its first value; not again for a write inside it) |
 | Shared value | `shared count is 0` inside a kind: one value for the kind and all its objects, read and changed as `Enemy.count` (also inside its functions; `Boss.count` for a kind that extends it) |
 | New object | `new Enemy("Goblin")`, `new Point` |
 | Event handler | `when hit by damage ... end`, `when key pressed with key and shift ... end` |

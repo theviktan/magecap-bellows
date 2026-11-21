@@ -999,6 +999,41 @@ say Enemy.count        # 2
 - `goblin.count` (through an object) is an error that tells you to write `Enemy.count`.
 - `shared` isn't reserved: `set shared to 2` still makes a field called `shared`.
 
+### Reacting when a field changes
+
+Inside a kind, `when my health changes` runs code every time an object's `health` changes, wherever
+the change came from. It's the place for a health bar, a "you died" check or a sound:
+
+```forge
+kind Player
+	set health to 100
+	when my health changes with now, before
+		say "health went from {before} to {now}"
+		if now is at most 0 then
+			trigger player died
+		end
+	end
+end
+
+set hero to new Player()
+take 30 from hero.health      # health went from 100 to 70
+set hero.health to 70         # nothing: it didn't change
+```
+
+- The names after `with` are optional: the first gets the new value, the second the old one.
+- It runs right after the change, before the next line. Like a `when` event, it can `wait`; then
+  the rest of the script goes on while it waits.
+- A field's first value (the kind's `set` lines, when `new` makes the object) isn't a change. A
+  change in `setup` is.
+- Setting the same field inside its own `when ... changes` doesn't run it again, so
+  `set my health to max(now, 0)` inside it is fine.
+- A kind that `extends` Player keeps Player's `when ... changes` blocks and can add its own; the
+  parent's run first.
+- Changing what's *inside* a list field (`add sword to my items`) doesn't change the field itself,
+  so it doesn't count.
+- This works only inside a kind. At the top level of a script, `when my health changes` is still an
+  ordinary event called "my health changes", as it always was.
+
 ### Going through an object's fields
 
 `for each` goes through an object's fields, like a map's keys and values:

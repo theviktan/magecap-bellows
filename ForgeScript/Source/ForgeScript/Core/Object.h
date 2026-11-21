@@ -117,6 +117,9 @@ namespace ForgeScript {
 		// 'function total(numbers...)': the last parameter (counted in Arity) gets the values left over, as
 		// a list. MinArity and DefaultIps count only the parameters before it.
 		bool HasRest = false;
+		// The hidden method that gives a kind's fields their first values: its writes run no
+		// 'when my field changes' handlers.
+		bool IsFieldInit = false;
 		int UpvalueCount = 0;
 		String* Name = nullptr;
 		Module* Owner = nullptr;
@@ -179,6 +182,12 @@ namespace ForgeScript {
 		std::unordered_map<String*, Closure*> Methods;
 		// 'shared count is 0': one value for the kind and every object made from it, read as Enemy.count.
 		std::unordered_map<String*, Value> Shared;
+		// 'when my health changes ... end': handlers by field name, in the order written.
+		std::unordered_map<String*, std::vector<Closure*>> ChangeHandlers;
+		// Whether this kind or one it extends has a change handler, so a field write of a kind without
+		// any costs one check; and the fields that have one, so a write to another field costs one lookup.
+		bool WatchesFields = false;
+		std::unordered_set<String*> WatchedFields;
 
 		explicit Kind(String* name) : Object(ObjectType::Kind), Name(name) {}
 
