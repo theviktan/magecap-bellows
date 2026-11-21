@@ -576,6 +576,7 @@ engine sends these events, which the script handles with `when`:
   | `pause the game` | `set_paused(True)` |
   | `resume the game` | `set_paused(False)` |
   | `the game is paused` | `is_paused()` |
+  | `keep (entity) across scenes` | `entity.keep_across_scenes = True` |
 
   Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works. The widget
   phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still

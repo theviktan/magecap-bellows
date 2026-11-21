@@ -719,17 +719,23 @@ namespace Bellows::Scripting {
 			FS::NativeFn Function;
 		};
 
-		// The widget a UI phrase is about.
-		ScriptEntity PhraseWidget(FS::CallContext& context, const char* phrase)
+		// The entity a phrase is about ('example' shows the phrase written right).
+		ScriptEntity PhraseEntity(FS::CallContext& context, const char* phrase, const char* what, const std::string& example)
 		{
 			FS::VM& vm = context.GetVM();
 			const FS::Value value = context.Arg(0);
 			if (!FS::IsObjectType(value, FS::ObjectType::NativeObject) || FS::As<FS::NativeObject>(value)->Type != &TypeFor<ScriptEntity>())
 			{
-				throw FS::RuntimeError(std::string("'") + phrase + "' needs a UI entity, like: " + phrase +
-					" find_entity(\"Pause Menu\"). This is " + (value.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(value)) + ".");
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs " + what + ", like: " + example + ". This is " +
+					(value.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(value)) + ".");
 			}
 			return Convert<ScriptEntity>::From(vm, value, std::string("'") + phrase + "'");
+		}
+
+		// The widget a UI phrase is about.
+		ScriptEntity PhraseWidget(FS::CallContext& context, const char* phrase)
+		{
+			return PhraseEntity(context, phrase, "a UI entity", std::string(phrase) + " find_entity(\"Pause Menu\")");
 		}
 
 		// show / hide / enable / disable (widget): the everyday UI properties, as phrases.
@@ -769,6 +775,13 @@ namespace Bellows::Scripting {
 					[](FS::CallContext&) { Guard([] { RequireContextScene().SetGamePaused(false); }); return FS::Value(); } },
 				{ { "the game is paused", "True while the game is paused; same as is_paused()", "bool" },
 					[](FS::CallContext&) { return FS::Value::FromBool(Guard([] { return RequireContextScene().IsGamePaused(); })); } },
+				{ { "keep (entity) across scenes", "Keeps the entity and its children when load_scene changes the scene, with their scripts, physics and sounds; same as set entity.keep_across_scenes to true", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "keep", "an entity", "keep self across scenes");
+						Guard([&] { entity.Resolve().GetComponent<TagComponent>().KeepAcrossScenes = true; });
+						return FS::Value();
+					} },
 				{ { "show (widget)", "Shows a UI entity and everything under it; same as set widget.visible to true", "None", true },
 					SetUIFlag("show", false, true) },
 				{ { "hide (widget)", "Hides a UI entity and everything under it; same as set widget.visible to false", "None", true },

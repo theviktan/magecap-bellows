@@ -1387,3 +1387,33 @@ end
 ```
 
 Either tick **Run While Paused** on that script, or resume first and wait after. The Inspector warns about this: on a script that isn't marked, it lists the UI handlers that wait, including waits inside your own functions they call or `start`.
+
+### Moving between scenes
+
+`load_scene("Scenes/Level2.bscene")` changes the level at the end of the frame. Everything in the old scene goes, unless it's **kept**. Keep the things that should carry on, like the player, the music or a game manager:
+
+```forge
+# player.forge
+when created
+	keep self across scenes
+end
+```
+
+You can also tick **Keep Across Scenes** in the Inspector, or write `set my keep_across_scenes to true`. A kept entity takes its children with it, and keeps:
+
+- its script's values, with no second `when created`;
+- its running `wait`s and timers, which finish on time in the new scene;
+- its physics, so it keeps moving, and its playing sounds.
+
+It's fine to place the player in every level. When the new scene has the same entity, the kept one stays and the scene's copy is left out, so there are never two players.
+
+Every script hears `scene loaded` once the new scene is in. That's where a kept script finds the new level's things:
+
+```forge
+when scene loaded with name, path
+	say "Welcome to {name}"
+	set my position to find_entity("Spawn Point").position
+end
+```
+
+A kept script that still holds an entity from the old scene gets a "no longer exists" error when it uses it. Look entities up again in `when scene loaded`.

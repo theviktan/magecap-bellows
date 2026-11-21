@@ -2250,6 +2250,12 @@
 			"returns": "bool"
 		},
 		{
+			"pattern": "keep (entity) across scenes",
+			"doc": "Keeps the entity and its children when load_scene changes the scene, with their scripts, physics and sounds; same as set entity.keep_across_scenes to true",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
 			"pattern": "show (widget)",
 			"doc": "Shows a UI entity and everything under it; same as set widget.visible to true",
 			"returns": "None",
