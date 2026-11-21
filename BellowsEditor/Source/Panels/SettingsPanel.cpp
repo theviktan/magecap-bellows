@@ -147,6 +147,17 @@ namespace Bellows {
 		{
 			changed |= UI::Property("Name", config.Name);
 			changed |= UI::PropertyAsset("Start Scene", config.StartScene, AssetType::Scene, "The scene exported games open first");
+			static const char* const c_Fronts[] = { "-Z (as made)", "+Z (turn to face forward)" };
+			int front = config.ModelFrontFaces == ModelFront::PositiveZ ? 1 : 0;
+			if (UI::PropertyCombo("Model Front Faces", front, c_Fronts, 2,
+				"Which way the front of a model faces in its file, for models with no Front Faces setting of their own "
+				"(Content panel, right-click a model). Blender and most glTF models face +Z; Bellows' forward is -Z"))
+			{
+				config.ModelFrontFaces = front == 1 ? ModelFront::PositiveZ : ModelFront::NegativeZ;
+				changed = true;
+				project->ApplyImportSettings();
+				m_Editor.ReloadPlacedMeshes();
+			}
 			UI::EndPropertyGrid();
 		}
 		UI::SectionHeader("Exported game window");

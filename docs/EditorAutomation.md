@@ -150,6 +150,7 @@ if state["stopped"]:
 | `save_prefab(entity, path)` | Saves an entity and its children as a `.bprefab`. |
 | `import_asset(source, folder="")` | Copies an external file into the project; returns its asset path. |
 | `reload_asset(path)` | Reloads an asset you changed on disk. |
+| `model_front(path)`, `set_model_front(path, front)` | Which way a model's front faces in its file: `"-Z"` (as made, Bellows' forward) or `"+Z"` (Blender's and glTF's convention; the model is turned half a turn about its up axis, around its own origin, at import). Saved in `<model>.bimport` beside the model, and placed copies reload at once. Models without the file use the project's **Model Front Faces** (Project Settings). Raises `ValueError` for a path that isn't a model, or a front that isn't `"-Z"` or `"+Z"`. |
 | `download_polyhaven_hdri(asset_id, resolution="2k", folder="Environments")` | Downloads a CC0 HDRI from [Poly Haven](https://polyhaven.com/hdris) and returns its asset path (assign it to `SkyLight.environment`). |
 
 ### Viewing and verifying

@@ -74,6 +74,32 @@ check(copy is not None and copy.find_child("Hat") is not None, "prefab instantia
 copy.name = "Player Copy"
 editor.commit("Instantiate")
 
+# Model front: a +Z-front model is turned at import, by a setting kept beside it ------------
+import struct
+models = pathlib.Path(editor.asset_directory()) / "Models"
+models.mkdir(parents=True, exist_ok=True)
+(models / "Front.bin").write_bytes(struct.pack("<9f", -0.5, 0, 1, 0.5, 0, 1, 0, 1, 2))
+(models / "Front.gltf").write_text(
+    '{"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],'
+    ' "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],'
+    ' "buffers": [{"uri": "Front.bin", "byteLength": 36}], "bufferViews": [{"buffer": 0, "byteLength": 36}],'
+    ' "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",'
+    ' "min": [-0.5, 0, 1], "max": [0.5, 1, 2]}]}',
+    encoding="utf-8")
+check(editor.model_front("Models/Front.gltf") == "-Z", "models face -Z (as made) by default")
+editor.set_model_front("Models/Front.gltf", "+Z")
+check(editor.model_front("Models/Front.gltf") == "+Z", "set_model_front")
+check((models / "Front.gltf.bimport").is_file(), "the setting is saved beside the model")
+for bad_call in (lambda: editor.set_model_front("Models/Front.gltf", "up"),
+                 lambda: editor.set_model_front("Scenes/Main.bscene", "+Z"),
+                 lambda: editor.model_front("Builtin/Cube")):
+    try:
+        bad_call()
+        check(False, "bad model front calls raise ValueError")
+    except ValueError:
+        check(True, "bad model front calls raise ValueError")
+editor.set_model_front("Models/Front.gltf", "-Z")
+
 # Play mode ----------------------------------------------------------------------------
 scripts = pathlib.Path(editor.asset_directory()) / "Scripts"
 (scripts / "Mover.py").write_text(

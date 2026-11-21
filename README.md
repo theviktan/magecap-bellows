@@ -15,7 +15,8 @@ can drive end to end.
 * **Renderer** (Vulkan 1.3 via NVRHI): metallic/roughness PBR, image-based lighting from HDRIs
   (e.g. [Poly Haven](https://polyhaven.com/hdris)) or a procedural sky, cascaded soft shadows (PCSS),
   SSAO, HDR bloom, ACES/AgX tonemapping, FXAA, alpha blending and masking, glTF 2.0 models with
-  their materials and textures.
+  their materials and textures (models made facing +Z, as Blender exports them, can be turned to
+  face forward: right-click the model, **Front Faces**).
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.

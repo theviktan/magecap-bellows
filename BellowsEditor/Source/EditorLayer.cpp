@@ -269,6 +269,7 @@ namespace Bellows {
 		m_ScriptEditorPanel->CloseAll();
 		project->ApplyAudioSettings();
 		project->ApplyInputSettings();
+		project->ApplyImportSettings();
 
 		const std::string startScene = project->GetConfig().StartScene;
 		if (!startScene.empty() && AssetManager::Exists(startScene))
@@ -473,6 +474,7 @@ namespace Bellows {
 		// Every play starts from the project's mixer, whatever the last session's scripts changed.
 		m_Project->ApplyAudioSettings();
 		m_Project->ApplyInputSettings();
+		m_Project->ApplyImportSettings();
 
 		m_RuntimeScene = Scene::Copy(m_EditorScene);
 		m_RuntimeScene->OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));
@@ -731,6 +733,39 @@ namespace Bellows {
 		Select(entity);
 		CommitChange("Create " + name);
 		return entity;
+	}
+
+	bool EditorLayer::SetModelFront(const std::string& meshPath, ModelFront front)
+	{
+		if (AssetManager::IsBuiltinPath(meshPath) || AssetManager::GetAssetType(meshPath) != AssetType::Mesh || !AssetManager::Exists(meshPath))
+			return false;
+		MeshImportSettings settings = AssetManager::GetMeshImportSettings(meshPath);
+		settings.Front = front;
+		if (!settings.Save(AssetManager::GetAbsolutePath(meshPath)))
+		{
+			BW_ERROR("Could not save the import settings of '{}'", meshPath);
+			return false;
+		}
+
+		AssetManager::Invalidate(meshPath);
+		ReloadPlacedMeshes(meshPath);
+		return true;
+	}
+
+	void EditorLayer::ReloadPlacedMeshes(const std::string& meshPath)
+	{
+		// Placed copies hold the mesh they loaded; clearing its path makes them load it again.
+		for (const Ref<Scene>& scene : { m_EditorScene, m_RuntimeScene })
+		{
+			if (!scene)
+				continue;
+			for (entt::entity handle : scene->GetAllEntitiesWith<MeshRendererComponent>())
+			{
+				MeshRendererComponent& renderer = Entity(handle, scene.get()).GetComponent<MeshRendererComponent>();
+				if (meshPath.empty() || renderer.MeshPath == meshPath)
+					renderer.LoadedMeshPath.clear();
+			}
+		}
 	}
 
 	Entity EditorLayer::CreateMeshEntity(const std::string& meshPath, const glm::vec3& position)

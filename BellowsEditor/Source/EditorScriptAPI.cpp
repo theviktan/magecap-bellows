@@ -228,6 +228,21 @@ namespace Bellows {
 			}, py::arg("source"), py::arg("folder") = "", "Copies a file into the project's assets; returns its asset path");
 			m.def("reload_asset", [](const std::string& path) { AssetManager::Invalidate(path); }, py::arg("path"),
 				"Drops a cached asset so it is loaded again from disk");
+			m.def("model_front", [](const std::string& path)
+			{
+				if (AssetManager::GetAssetType(path) != AssetType::Mesh || AssetManager::IsBuiltinPath(path))
+					throw py::value_error("'" + path + "' is not a model file (.glb or .gltf)");
+				return std::string(ModelFrontToString(AssetManager::GetMeshImportSettings(path).Front));
+			}, py::arg("path"), "Which way the model's front faces in its file: \"-Z\" (as made) or \"+Z\" (turned to face forward)");
+			m.def("set_model_front", [](const std::string& path, const std::string& front)
+			{
+				const std::optional<ModelFront> parsed = ModelFrontFromString(front);
+				if (!parsed)
+					throw py::value_error("front must be \"-Z\" or \"+Z\", not \"" + front + "\"");
+				if (!Editor().SetModelFront(path, *parsed))
+					throw py::value_error("'" + path + "' is not a model file in this project, or its settings could not be saved");
+			}, py::arg("path"), py::arg("front"),
+				"Saves the model's front (\"-Z\" or \"+Z\") in '<model>.bimport' and reloads it where it is placed");
 
 			// Viewport --------------------------------------------------------------------------
 			m.def("set_camera", [](const py::object& position, const py::object& target)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Bellows/Core/Base.h"
+#include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/InputMap.h"
 
 #include <filesystem>
@@ -26,6 +27,9 @@ namespace Bellows {
 
 		// Named input actions scripts ask for (is_action_down("jump")); new projects get InputMap's defaults.
 		InputActionMap InputActions;
+
+		// Which way the front of a model with no '.bimport' file faces (see MeshImportSettings).
+		ModelFront ModelFrontFaces = ModelFront::NegativeZ;
 	};
 
 	// A game project: a folder containing '<Name>.bproject' and an asset directory.
@@ -43,6 +47,8 @@ namespace Bellows {
 		void ApplyAudioSettings() const;
 		// Makes the project's input actions the ones scripts see.
 		void ApplyInputSettings() const;
+		// Hands ModelFrontFaces to the AssetManager, for models without their own import settings.
+		void ApplyImportSettings() const;
 
 		static Ref<Project> GetActive() { return s_ActiveProject; }
 		static void SetActive(const Ref<Project>& project);
