@@ -3,6 +3,7 @@
 
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Renderer/Texture.h"
+#include "Bellows/Serialization/JsonUtils.h"
 
 #include <cgltf.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -223,7 +224,59 @@ namespace Bellows {
 
 	}
 
-	Ref<Mesh> MeshImporter::ImportGLTF(const std::filesystem::path& path)
+	const char* ModelFrontToString(ModelFront front)
+	{
+		return front == ModelFront::PositiveZ ? "+Z" : "-Z";
+	}
+
+	std::optional<ModelFront> ModelFrontFromString(std::string_view text)
+	{
+		if (text == "-Z")
+			return ModelFront::NegativeZ;
+		if (text == "+Z")
+			return ModelFront::PositiveZ;
+		return std::nullopt;
+	}
+
+	std::filesystem::path MeshImportSettings::GetFilePath(const std::filesystem::path& modelPath)
+	{
+		std::filesystem::path path = modelPath;
+		path += ".bimport";
+		return path;
+	}
+
+	std::optional<MeshImportSettings> MeshImportSettings::Load(const std::filesystem::path& modelPath)
+	{
+		const std::filesystem::path file = GetFilePath(modelPath);
+		std::error_code error;
+		if (!std::filesystem::is_regular_file(file, error))
+			return std::nullopt;
+		const std::optional<std::string> text = FileSystem::ReadTextFile(file);
+		const Json json = text ? Json::parse(*text, nullptr, false) : Json();
+		if (!json.is_object())
+		{
+			BW_CORE_WARN("Import settings '{}' could not be read; using the project's defaults", file.string());
+			return std::nullopt;
+		}
+		MeshImportSettings settings;
+		std::string front = ModelFrontToString(settings.Front);
+		JsonRead(json, "FrontFaces", front);
+		if (const std::optional<ModelFront> parsed = ModelFrontFromString(front))
+			settings.Front = *parsed;
+		else
+			BW_CORE_WARN("Import settings '{}': FrontFaces is \"{}\"; it must be \"-Z\" or \"+Z\"", file.string(), front);
+		return settings;
+	}
+
+	bool MeshImportSettings::Save(const std::filesystem::path& modelPath) const
+	{
+		Json json;
+		json["Version"] = 1;
+		json["FrontFaces"] = ModelFrontToString(Front);
+		return FileSystem::WriteTextFile(GetFilePath(modelPath), json.dump(1, '\t') + "\n");
+	}
+
+	Ref<Mesh> MeshImporter::ImportGLTF(const std::filesystem::path& path, const MeshImportSettings& settings)
 	{
 		const std::string pathString = path.string();
 		cgltf_options options {};
@@ -264,6 +317,10 @@ namespace Bellows {
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 		std::vector<Submesh> submeshes;
+		// A +Z-front model turns half a turn about +Y, around its own origin: x and z change sign.
+		const glm::mat4 turn = settings.Front == ModelFront::PositiveZ
+			? glm::mat4(glm::vec4(-1.0f, 0.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 0.0f, -1.0f, 0.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f))
+			: glm::mat4(1.0f);
 
 		auto importNode = [&](const cgltf_node* node)
 		{
@@ -278,7 +335,7 @@ namespace Bellows {
 				Submesh submesh;
 				if (!ImportPrimitive(primitive, vertices, indices, submesh))
 					continue;
-				submesh.Transform = worldTransform;
+				submesh.Transform = turn * worldTransform;
 				submesh.MaterialIndex = primitive.material
 					? static_cast<uint32_t>(cgltf_material_index(data, primitive.material)) : defaultMaterialIndex;
 				submesh.Name = node->name ? node->name : (node->mesh->name ? node->mesh->name : "Submesh");

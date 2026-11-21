@@ -27,6 +27,7 @@ namespace Bellows {
 		m_CommandList = Renderer::GetDevice()->createCommandList();
 		m_Project->ApplyAudioSettings();
 		m_Project->ApplyInputSettings();
+		m_Project->ApplyImportSettings();
 
 		Scripting::SetStartedFromEditor(m_Options.StartedByEditor);
 		ScriptEngine::SetQuitHandler([](int exitCode) { Application::Get().Close(exitCode); });

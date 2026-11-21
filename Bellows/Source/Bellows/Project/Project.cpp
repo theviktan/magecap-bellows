@@ -169,6 +169,15 @@ namespace Bellows {
 				}
 			}
 		}
+		if (auto it = json.find("Import"); it != json.end())
+		{
+			std::string front = ModelFrontToString(config.ModelFrontFaces);
+			JsonRead(*it, "ModelFrontFaces", front);
+			if (const std::optional<ModelFront> parsed = ModelFrontFromString(front))
+				config.ModelFrontFaces = *parsed;
+			else
+				BW_CORE_WARN("Project '{}': ModelFrontFaces is \"{}\"; it must be \"-Z\" or \"+Z\"", config.Name, front);
+		}
 		// The game UI navigates with these, so every project has them.
 		InputMap::AddMissingUIActions(config.InputActions);
 
@@ -192,6 +201,11 @@ namespace Bellows {
 		InputMap::SetActions(m_Config.InputActions);
 	}
 
+	void Project::ApplyImportSettings() const
+	{
+		AssetManager::SetDefaultModelFront(m_Config.ModelFrontFaces);
+	}
+
 	bool Project::Save()
 	{
 		Json json;
@@ -207,6 +221,7 @@ namespace Bellows {
 		Json& audio = json["Audio"];
 		for (const auto& [bus, volume] : m_Config.BusVolumes)
 			audio[bus] = volume;
+		json["Import"]["ModelFrontFaces"] = ModelFrontToString(m_Config.ModelFrontFaces);
 		Json& actions = json["Input"]["Actions"];
 		actions = Json::object();
 		for (const auto& [action, bindings] : m_Config.InputActions)

@@ -466,6 +466,16 @@ namespace Bellows {
 				m_Editor.InstantiatePrefab(item.AssetPath, m_Editor.GetCamera().GetFocusPoint());
 			if (type == AssetType::Mesh && ImGui::MenuItem(ICON_PLUS "  Add to Scene"))
 				m_Editor.CreateMeshEntity(item.AssetPath, m_Editor.GetCamera().GetFocusPoint());
+			if (type == AssetType::Mesh && ImGui::BeginMenu(ICON_ROTATE_3D "  Front Faces"))
+			{
+				// Blender and most glTF models face +Z; Bellows' forward is -Z.
+				const ModelFront current = AssetManager::GetMeshImportSettings(item.AssetPath).Front;
+				if (ImGui::MenuItem("-Z (as made)", nullptr, current == ModelFront::NegativeZ))
+					m_Editor.SetModelFront(item.AssetPath, ModelFront::NegativeZ);
+				if (ImGui::MenuItem("+Z (turn to face forward)", nullptr, current == ModelFront::PositiveZ))
+					m_Editor.SetModelFront(item.AssetPath, ModelFront::PositiveZ);
+				ImGui::EndMenu();
+			}
 			if (type == AssetType::Script && ImGui::MenuItem(ICON_EXTERNAL_LINK "  Open in External Editor"))
 				Platform::OpenWithDefaultApplication(item.Path);
 			if (type == AssetType::Script && m_Editor.GetPrimarySelection() && ImGui::MenuItem(ICON_PAPERCLIP "  Attach to Selected Entity"))

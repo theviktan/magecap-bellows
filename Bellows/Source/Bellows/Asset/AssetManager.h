@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Bellows/Core/Base.h"
+#include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Renderer/Environment.h"
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
@@ -52,6 +53,11 @@ namespace Bellows {
 		static const std::vector<std::string>& GetBuiltinMeshPaths();
 
 		static Ref<Mesh> GetMesh(const std::string& assetPath);
+		// How a model is imported: its '.bimport' file beside it, else the project's default front.
+		static MeshImportSettings GetMeshImportSettings(const std::string& assetPath);
+		// The front of models with no '.bimport' file (the project's ModelFrontFaces).
+		static void SetDefaultModelFront(ModelFront front);
+		static ModelFront GetDefaultModelFront();
 		static Ref<Material> GetMaterial(const std::string& assetPath);
 		static Ref<Texture2D> GetTexture(const std::string& assetPath, TextureColorSpace colorSpace);
 		static Ref<Environment> GetEnvironment(const std::string& assetPath);
