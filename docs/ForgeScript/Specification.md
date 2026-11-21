@@ -84,6 +84,9 @@ A **name** starts with a letter (`a` to `z`, `A` to `Z`) or `_`, followed by let
 | `seconds`, `second`, `ms`, `milliseconds`, `minute`, `minutes`, `frames`, `frame` | after the amount in `wait` |
 | `above`, `below`, `greater`, `less`, `than`, `least`, `most`, `equal`, `between`, `empty` | after `is` (comparisons, [4.4](#44-comparisons)) |
 | `a`, `an` | type tests: `x is a number` |
+| `even`, `odd`, `whole` | number tests after `is`: `x is even`, `x is a whole number` |
+| `the`, `first`, `last`, `item` | list words in a value: `the length of items`, `first of items`, `item 2 of items` |
+| `every`, `any` | `every x in list is ...`, `any x in list is ...`; `every` also starts a timer |
 | `as` | `use "helpers" as h` |
 | `match` | the start of a match block ([5.6](#56-match)) |
 
@@ -258,9 +261,14 @@ So `nothing or "default"` is `"default"`, and `player and player.name` never rea
 | `f of x` | `f(x)`: `length of items` |
 | `the x` | `x`, for any name `x` |
 | `first of x`, `first item of x` | `x.first`; `last` likewise gives `x.last` |
+| `every n in x <comparison>` | `x.all(function(n) return n <comparison> end)`: one comparison chain (`is ...`, `contains`, `==`, `!=`, `<`, `<=`, `>`, `>=`) about `n`, ending where a comparison ends (`and`, `or`, `then`, ...) |
+| `any n in x <comparison>` | `x.any(...)` likewise |
+| `every n in x is f`, `is not f` | with nothing after `f`, and no name `f` in reach (and `f` not `empty`, `even` or `odd`): `n.f` (or `not n.f`) |
 | `item i of x` | `x[i]`. `i` is a number, a name (with `.`, `'s`, `[ ]` and calls after it) or an expression in brackets; anything else before the `of` is an error |
 | `a.m(x)` | a method call on `a` |
 | `parent.m(x)` | inside a kind, the method `m` of the kind it extends |
+
+`every` and `any` take their forms only when followed by a name and `in`, and when nothing named `every` or `any` is in reach (by the same rule as below); a script phrase starting with the word wins. `every` with a time word at the end of the line is a timer ([10.2](#102-tasks)).
 
 The four words `the`, `first`, `last` and `item` take the forms above only where nothing is named so: no local, parameter, enclosing local, name of the script or of a script it uses, or built-in function. Otherwise each is an ordinary name, and `first of x` is `first(x)`.
 

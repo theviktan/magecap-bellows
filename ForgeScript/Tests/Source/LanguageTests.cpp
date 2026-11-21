@@ -375,6 +375,19 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("EveryAndAnyKeepOldMeanings")
+{
+	// A script's own 'every' or 'any' keeps its meaning; so does a timer and a phrase.
+	CHECK_EQ(Output("set any to 3\nsay any\n"), std::string("3\n"));
+	CHECK_EQ(Output("function every(x)\n\treturn x\nend\nsay every(4)\n"), std::string("4\n"));
+	CHECK_EQ(Output("phrase every (x) in (y)\n\tsay \"phrase {x} {y}\"\nend\nevery 1 in 2\n"), std::string("phrase 1 2\n"));
+	// A script's own 'defeated' makes 'is defeated' a comparison with it.
+	CHECK_EQ(Output("set defeated to true\nsay any e in [false, true] is defeated\n"), std::string("true\n"));
+	// Something must say what each item is.
+	CHECK_CONTAINS(CompileFails("say every x in [1] 5\n").Message, "After 'every x in ...', say what each one is");
+	CHECK_CONTAINS(CompileFails("say any x in [1]\n").Message, "After 'any x in ...', say what each one is");
+}
+
 TEST_CASE("ListWordsKeepOldMeanings")
 {
 	// A script's own word, of any sort, keeps its meaning.

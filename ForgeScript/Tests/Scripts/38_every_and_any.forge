@@ -1,0 +1,32 @@
+# 'every x in list is ...' and 'any x in list is ...' ask about all the items.
+set scores to [80, 95, 72]
+say every score in scores is at least 70                # expect: true
+say every score in scores is above 75                   # expect: false
+say any score in scores is above 90                     # expect: true
+say any score in scores is 100                          # expect: false
+
+# Names from around it can be used; 'and' belongs to the whole condition.
+set limit to 90
+say any score in scores is above limit                  # expect: true
+set level to 2
+if every score in scores is above 0 and level is 2 then
+	say "all in"                                        # expect: all in
+end
+
+set words to ["cat", "dog"]
+say any word in words contains "o"                      # expect: true
+say every n in [1, 3] is odd                            # expect: true
+
+# 'is defeated' with nothing after it reads the field.
+set enemies to [{defeated: true}, {defeated: false}]
+say every enemy in enemies is defeated                  # expect: false
+say any enemy in enemies is not defeated                # expect: true
+
+# An empty list: every is true, any is false.
+say every x in [] is 5                                  # expect: true
+say any x in [] is 5                                    # expect: false
+
+function all_below(list, n)
+	return every v in list is below n
+end
+say all_below(scores, 100)                              # expect: true
