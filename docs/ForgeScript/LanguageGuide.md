@@ -915,6 +915,32 @@ end
 say new Point        # (0, 0)
 ```
 
+### Going through an object's fields
+
+`for each` goes through an object's fields, like a map's keys and values:
+
+```forge
+kind Enemy
+	set health to 5
+	set name to "Bo"
+	function hit()
+		take 1 from my health
+	end
+end
+
+set goblin to new Enemy()
+for each field, value in goblin do
+	say "{field} is {value}"     # health is 5, then name is Bo
+end
+```
+
+- The fields come in the order they were first set: a kind it `extends` first, then its own, then
+  any set later (`set goblin.loot to "gold"`).
+- With one name, `for each field in goblin`, you get just the field names, as text.
+- Functions (`hit`) belong to the kind, so they aren't fields and don't come up.
+- Inside the kind, `for each field, value in self do` goes through the object's own fields: handy for
+  saving or showing a debug panel.
+
 ---
 
 ## 12. Events with `when` and `trigger`

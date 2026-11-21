@@ -1,0 +1,39 @@
+# 'for each field, value in object' goes through an object's fields, like a map.
+kind Enemy
+	set health to 5
+	set name to "Bo"
+	function hit()
+		take 1 from my health
+	end
+	function describe()
+		set parts to []
+		for each field, value in self do
+			add "{field}={value}" to parts
+		end
+		return parts.join(", ")
+	end
+end
+
+set goblin to new Enemy()
+for each field, value in goblin do
+	say "{field} is {value}"                            # expect: health is 5
+end                                                     # expect: name is Bo
+
+# Fields set later come last; functions aren't fields.
+set goblin.loot to "gold"
+set names to []
+for each field in goblin do
+	add field to names
+end
+say names                                               # expect: ["health", "name", "loot"]
+say goblin.describe()                                   # expect: health=5, name=Bo, loot=gold
+
+# A kind it extends comes first.
+kind Boss extends Enemy
+	set rage to 1
+end
+set fields to []
+for each field in new Boss() do
+	add field to fields
+end
+say fields                                              # expect: ["health", "name", "rage"]

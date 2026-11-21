@@ -2874,9 +2874,24 @@ namespace ForgeScript {
 						stack.push_back(MakeText(text.substr(position, length)));
 						stack.push_back(Value::FromNumber(static_cast<double>(Utf8::Length(std::string_view(text).substr(0, position)) + 1)));
 					}
+					else if (IsObjectType(iterable, ObjectType::Instance))
+					{
+						// An object made from a kind: its fields in the order they were first set, like a map's
+						// keys. Its functions belong to the kind, so they aren't among them.
+						Instance* instance = As<Instance>(iterable);
+						if (position >= instance->FieldOrder.size())
+						{
+							frame->Ip += exit;
+							break;
+						}
+						String* field = instance->FieldOrder[position];
+						stack[slot + 1] = Value::FromNumber(static_cast<double>(position + 1));
+						stack.push_back(Value::FromObject(field));
+						stack.push_back(instance->Fields[field]);
+					}
 					else
 					{
-						FORGESCRIPT_FAIL("'for each' needs a list, a map or text, but got " +
+						FORGESCRIPT_FAIL("'for each' needs a list, a map, text or an object made from a kind, but got " +
 							std::string(iterable.IsNothing() ? "nothing" : TypeOf(iterable)) + ".");
 					}
 					break;

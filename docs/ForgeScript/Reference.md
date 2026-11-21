@@ -20,7 +20,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Match | `match weapon` / `is "sword" then ...` / `is "bow", "crossbow" then ...` / `is above 100 then ...` / `otherwise ...` / `end`: the first choice that fits runs; each `is` works like an `if`'s |
 | Repeat | `repeat 3 times ... end`, `repeat forever ... end` |
 | Count | `for i from 1 to 10 [by 2] do ... end` |
-| Each | `for each item [, position] in list do ... end` (maps: `key, value`) |
+| Each | `for each item [, position] in list do ... end` (maps: `key, value`; objects made from a kind: `field, value`) |
 | While / until | `while x is below 5 do ... end`, `until done do ... end` |
 | Leave / skip a loop | `stop`, `skip` |
 | Function | `function name(a, b) ... return x ... end`; defaults: `function attack(target, damage is 10)` (worked out at each call that leaves the value out; defaults come last); named values in a call, after the others: `attack(goblin, crit: 5)` (not for built-in functions) |
