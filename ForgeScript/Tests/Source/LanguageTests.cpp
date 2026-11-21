@@ -363,6 +363,18 @@ TEST_CASE("MistakesFromOtherLanguagesTeachTheForgeScript")
 	CHECK_CONTAINS(Output("try\n\tsay zork\ncatch problem\n\tsay problem\nend\n"), "Use: set zork to ...");
 }
 
+TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
+{
+	CHECK_CONTAINS(CompileFails("set e to []\nsort e by e.health\n").Message, "After 'by', write a field name or a function");
+	CHECK_CONTAINS(CompileFails("set e to []\nsort e by\n").Message, "After 'by', write a field name or a function");
+	// A script's own phrase starting with the word, and a call, keep their meaning.
+	CHECK_EQ(Output("phrase sort (x)\n\tsay \"phrase sorts {x}\"\nend\nset items to [2, 1]\nsort items\n"), std::string("phrase sorts [2, 1]\n"));
+	CHECK_EQ(Output("function sort(x)\n\treturn \"called\"\nend\nsay sort([2, 1])\n"), std::string("called\n"));
+	CHECK_EQ(Output("set m to {reverse: 1}\nsay m.reverse\n"), std::string("1\n"));
+	// 'sort' of something that isn't a list says so, as items.sort() would.
+	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
+}
+
 TEST_CASE("InlineIfIsNotAPlainScriptVariable")
 {
 	// The Inspector only shows plain values; a value picked by a test depends on the script running.

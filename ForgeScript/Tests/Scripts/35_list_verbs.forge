@@ -1,0 +1,53 @@
+# 'sort items', 'shuffle items' and 'reverse items' are the list functions, written as sentences.
+set scores to [30, 10, 20]
+sort scores
+say scores                                              # expect: [10, 20, 30]
+reverse scores
+say scores                                              # expect: [30, 20, 10]
+
+# 'sort ... by' a field (of a kind's objects, or a map's key) or by a function.
+kind Enemy
+	set health to 0
+	function setup(amount)
+		set my health to amount
+	end
+end
+set enemies to [new Enemy(5), new Enemy(1), new Enemy(3)]
+sort enemies by health
+say enemies.map(function(e) return e.health end)        # expect: [1, 3, 5]
+
+set players to [{name: "Bo", level: 4}, {name: "Ada", level: 2}]
+sort players by level
+say players[1].name                                     # expect: Ada
+
+set words to ["ccc", "a", "bb"]
+sort words by function(w) return w.length end
+say words                                               # expect: ["a", "bb", "ccc"]
+
+# 'shuffle' keeps the same items; a fixed random seed makes the order repeatable.
+random_seed(1)
+set deck to [1, 2, 3, 4, 5]
+shuffle deck
+sort deck
+say deck                                                # expect: [1, 2, 3, 4, 5]
+
+# Fields, and text: 'reverse name' changes the variable, since text can't change in place.
+kind Hand
+	set cards to [3, 1, 2]
+	function tidy()
+		sort my cards
+		return my cards
+	end
+end
+say new Hand().tidy()                                   # expect: [1, 2, 3]
+set name to "Ada"
+reverse name
+say name                                                # expect: adA
+
+# The words are still names and functions.
+set sort to "a name"
+say sort                                                # expect: a name
+function shuffle(x)
+	return "my own shuffle of {x}"
+end
+say shuffle(3)                                          # expect: my own shuffle of 3

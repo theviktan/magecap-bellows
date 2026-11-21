@@ -18,6 +18,11 @@ with new language or tool features, the patch number with fixes.
   They take `wait`'s units, work anywhere (also in functions and kinds), hold while the game is
   paused unless the script is Run While Paused, and end with their script. `stop` inside `every` ends
   it.
+- **List verbs as sentences** (Tier 1 #4): `sort scores`, `sort enemies by health` (each item's field
+  or a map's key), `sort words by function(w) ... end`, `shuffle deck` and `reverse items`, the same
+  as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
+  variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
+  their meaning.
 - **Mistakes from other languages teach the ForgeScript** (Roadmap 2.0, Tier 1 #1). Errors keep
   their message and add the form that works for common habits: `x += 1` and `x++` (`add 1 to x`),
   `increase x by 2`, `def` / `func`, `var` / `let` / `const`, `elif`, a line ending in `:`, `&&` and
