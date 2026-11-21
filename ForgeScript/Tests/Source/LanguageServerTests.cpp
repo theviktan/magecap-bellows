@@ -770,6 +770,13 @@ TEST_CASE("FindOutlineListsAScriptsDefinitions")
 	CHECK(FindOutline("end\nend\nfunction (\n").empty());
 }
 
+TEST_CASE("OutlineShowsAParameterThatCollectsTheRest")
+{
+	const std::vector<OutlineItem> outline = FindOutline("function total(first, numbers...)\n\treturn 1\nend\n");
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(1));
+	CHECK_EQ(outline[0].Detail, std::string("function total(first, numbers...)"));
+}
+
 TEST_CASE("OutlineListsChoiceSets")
 {
 	const std::vector<OutlineItem> outline = FindOutline("choices State are idle, running\nset choices to 2\n");

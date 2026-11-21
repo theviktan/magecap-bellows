@@ -1209,12 +1209,13 @@ namespace ForgeScript {
 	{
 		Function* fn = closure->Fn;
 		List* names = std::exchange(task->PendingNames, nullptr);
-		const int given = static_cast<int>(argCount);
-		const int fewest = fn->DefaultIps.empty() ? fn->Arity : fn->MinArity;
-		if (!names && (given < fewest || given > fn->Arity))
+		int given = static_cast<int>(argCount);
+		const int fixed = fn->HasRest ? fn->Arity - 1 : fn->Arity;
+		const int fewest = fn->DefaultIps.empty() ? fixed : fn->MinArity;
+		if (!names && (given < fewest || (!fn->HasRest && given > fixed)))
 		{
-			const std::string needs = fewest == fn->Arity ? ValueCount(fn->Arity)
-				: std::to_string(fewest) + " to " + ValueCount(fn->Arity);
+			const std::string needs = fn->HasRest ? "at least " + ValueCount(fewest)
+				: fewest == fixed ? ValueCount(fixed) : std::to_string(fewest) + " to " + ValueCount(fixed);
 			return Fail("'" + FunctionLabel(fn) + "' needs " + needs + ", but was given " + ValueCount(given) + ".");
 		}
 		if (task->Frames.size() >= m_Config.MaxCallDepth)
@@ -1222,15 +1223,29 @@ namespace ForgeScript {
 		if (names)
 			return CallWithNames(task, closure, argCount, flags, names);
 
+		// The values after the fixed ones become one list. They stay on the stack (where the collector
+		// sees them) until the list holds them.
+		Value rest;
+		if (fn->HasRest)
+		{
+			const int extra = given > fixed ? given - fixed : 0;
+			const auto first = task->Stack.end() - extra;
+			rest = MakeList(std::vector<Value>(first, task->Stack.end()));
+			task->Stack.resize(task->Stack.size() - static_cast<size_t>(extra));
+			given -= extra;
+		}
+
 		// Values left out get their defaults: their places are made here, and the call starts at the
 		// code that fills in the first one left out.
 		size_t start = 0;
 		if (!fn->DefaultIps.empty())
 		{
-			for (int i = given; i < fn->Arity; i++)
+			for (int i = given; i < fixed; i++)
 				task->Stack.push_back(Value());
 			start = fn->DefaultIps[static_cast<size_t>(given - fewest)];
 		}
+		if (fn->HasRest)
+			task->Stack.push_back(rest);
 
 		CallFrame frame;
 		frame.Function = closure;
@@ -1255,22 +1270,34 @@ namespace ForgeScript {
 		const size_t named = names->Items.size();
 		const size_t positional = argCount - named;
 		const size_t arity = static_cast<size_t>(fn->Arity);
-		const size_t fewest = fn->DefaultIps.empty() ? arity : static_cast<size_t>(fn->MinArity);
+		// With a last parameter that collects the rest, the positional values after the fixed ones go
+		// to it; it can't be named.
+		const size_t fixed = fn->HasRest ? arity - 1 : arity;
+		const size_t fewest = fn->DefaultIps.empty() ? fixed : static_cast<size_t>(fn->MinArity);
 		const std::string label = "'" + FunctionLabel(fn) + "'";
-		if (positional > arity)
+		if (!fn->HasRest && positional > arity)
 			return Fail(label + " needs at most " + ValueCount(fn->Arity) + ", but was given " + ValueCount(static_cast<int>(positional)) + " before the named ones.");
 
 		std::vector<Value> values(arity);
 		std::vector<bool> given(arity, false);
 		const size_t base = task->Stack.size() - argCount;
-		for (size_t i = 0; i < positional; i++)
+		for (size_t i = 0; i < positional && i < fixed; i++)
 		{
 			values[i] = task->Stack[base + i];
 			given[i] = true;
 		}
+		if (fn->HasRest)
+		{
+			const size_t first = std::min(positional, fixed);
+			values[fixed] = MakeList(std::vector<Value>(task->Stack.begin() + static_cast<std::ptrdiff_t>(base + first),
+				task->Stack.begin() + static_cast<std::ptrdiff_t>(base + positional)));
+			given[fixed] = true;
+		}
 		for (size_t i = 0; i < named; i++)
 		{
 			const std::string& name = As<String>(names->Items[i])->Text;
+			if (fn->HasRest && name == fn->ParamNames.back())
+				return Fail(label + " collects the values left over in '" + name + "', so it can't be named. Give them in order, after the others.");
 			auto found = std::find(fn->ParamNames.begin(), fn->ParamNames.end(), name);
 			if (found == fn->ParamNames.end())
 			{
@@ -1283,14 +1310,14 @@ namespace ForgeScript {
 			values[index] = task->Stack[base + positional + i];
 			given[index] = true;
 		}
-		size_t firstMissing = arity;
-		for (size_t i = 0; i < arity; i++)
+		size_t firstMissing = fixed;
+		for (size_t i = 0; i < fixed; i++)
 		{
 			if (given[i])
 				continue;
 			if (i < fewest)
 				return Fail(label + " needs a value for '" + fn->ParamNames[i] + "'.");
-			if (firstMissing == arity)
+			if (firstMissing == fixed)
 				firstMissing = i;
 		}
 
@@ -1298,9 +1325,9 @@ namespace ForgeScript {
 		task->Stack.insert(task->Stack.end(), values.begin(), values.end());
 		CallFrame frame;
 		frame.Function = closure;
-		frame.Ip = fn->DefaultIps.empty() ? 0 : fn->DefaultIps[(firstMissing == arity ? arity : firstMissing) - fewest];
+		frame.Ip = fn->DefaultIps.empty() ? 0 : fn->DefaultIps[firstMissing - fewest];
 		frame.Given = 0;
-		for (size_t i = fewest; i < arity; i++)
+		for (size_t i = fewest; i < fixed; i++)
 		{
 			if (given[i])
 				frame.Given |= uint64_t(1) << (i - fewest);

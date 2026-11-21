@@ -18,6 +18,13 @@ namespace ForgeScript {
 	namespace {
 
 		// The positions of the names in "set x, y to ...", from the first name; empty when it isn't that.
+		// A parameter written 'numbers...', which gets the values left over.
+		bool CollectsTheRest(const std::vector<Token>& tokens, size_t i)
+		{
+			return i + 3 < tokens.size() && tokens[i + 1].Type == TokenType::Dot && tokens[i + 2].Type == TokenType::Dot &&
+				tokens[i + 3].Type == TokenType::Dot;
+		}
+
 		// 'choices State are idle, running' at the start of a line (the compiler's IsChoicesAt).
 		bool IsChoicesLine(const std::vector<Token>& tokens, size_t i)
 		{
@@ -499,7 +506,7 @@ namespace ForgeScript {
 							brackets--;
 						if (expectName && type == TokenType::Identifier)
 						{
-							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
+							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme) + (CollectsTheRest(tokens, j) ? "..." : "");
 							add(Kind::Parameter, tokens[j], std::string(tokens[j].Lexeme), std::string(tokens[j].Lexeme), "", std::string(name.Lexeme));
 							expectName = false;
 						}
@@ -1695,7 +1702,7 @@ namespace ForgeScript {
 					tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
 				{
 					if (tokens[j].Type == TokenType::Identifier)
-						params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
+						params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme) + (CollectsTheRest(tokens, j) ? "..." : "");
 				}
 				item = add(Kind::Function, std::string(next->Lexeme), "function " + std::string(next->Lexeme) + "(" + params + ")", token, *next,
 					static_cast<int>(next->Lexeme.size()), parent);

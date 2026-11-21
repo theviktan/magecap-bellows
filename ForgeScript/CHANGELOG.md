@@ -23,6 +23,10 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Any number of values** (Tier 2 #14): `function total(numbers...)`. The last parameter, written
+  with `...`, gets the values left over as a list (`[]` when there are none); the ones before it can
+  have defaults and be named. It works in kinds' functions and function values, and the language
+  server shows it in signatures. `...` after a parameter was an error before.
 - **Going through an object's fields** (Tier 2 #12): `for each field, value in goblin do` goes
   through an object made from a kind, field names as text, in the order they were first set (a
   parent kind's first); `for each field in goblin` gives the names. It was an error before ("'for

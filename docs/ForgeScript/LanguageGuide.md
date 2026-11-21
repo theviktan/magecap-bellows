@@ -757,6 +757,36 @@ attack(target: goblin, damage: 25)   # any order once they're named
 - The names are the function's own parameter names. A misspelled one gets a "Did you mean" hint.
 - It works for your functions, functions in kinds (and `new`), function values and `start`. Built-in functions such as `max` take their values in order.
 
+### Any number of values
+
+Put `...` after the last parameter's name, and it collects all the values left over into a list:
+
+```forge
+function total(numbers...)
+	set sum to 0
+	for each n in numbers do
+		add n to sum
+	end
+	return sum
+end
+
+say total(1, 2, 3)      # 6
+say total()             # 0: numbers is an empty list
+say total of 5          # 5
+
+function greet(greeting, names...)
+	say "{greeting}, {names.join(" and ")}!"
+end
+greet("Hi", "Ada", "Bo")   # Hi, Ada and Bo!
+```
+
+- Only the last parameter can have `...`, and it can't have a default: with no values left over,
+  it is an empty list `[]`.
+- The parameters before it work as usual: they can have defaults, and they can be named
+  (`spawn("orc", count: 3)` for `function spawn(what, count is 1, tags...)`). The `...` one can't be
+  named; its values come in order, after the others.
+- It works in kinds' functions and in function values too: `function(xs...) return xs.length end`.
+
 ### Variables inside functions
 
 A variable you `set` inside a function belongs to that function and disappears when it finishes, **unless** the script already has a variable with that name:

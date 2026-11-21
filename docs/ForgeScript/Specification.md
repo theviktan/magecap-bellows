@@ -457,13 +457,14 @@ The built-in functions (`print`, `max`, `random`, `time`, ...) and the host's fu
 ## 7. Functions
 
 ```
-function name ( [ parameter { , parameter } ] )  block  end
+function name ( [ parameter { , parameter } ] [ , name ... ] )  block  end
 parameter:  name [ is expression ]
 ```
 
 - A call must give each parameter without a default exactly once. Too few or too many values is an error that says how many the function needs.
 - **Defaults** (`damage is 10`) come after the parameters without one. A default is worked out at each call that leaves its value out, and may use the parameters before it.
 - **Named values:** `attack(goblin, crit: 5)` gives values by name, after the values given in order. Built-in functions take values in order only.
+- **The rest:** a last parameter written `name...` gets the values given in order after the other parameters, as a new list (`[]` when there are none). The parameters before it work as above; a call needs at least as many values as they have without defaults, and too few is an error that says "at least". The `...` parameter can't have a default or be named.
 - `return` *expression* gives back a value and leaves the function. A function that ends without `return`, or with a bare `return`, gives back `nothing`.
 - Functions are values: they can be stored in variables, lists and maps, and passed to other functions.
 
