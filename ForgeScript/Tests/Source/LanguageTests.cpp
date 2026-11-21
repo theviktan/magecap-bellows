@@ -375,6 +375,23 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("ListWordsKeepOldMeanings")
+{
+	// A script's own word, of any sort, keeps its meaning.
+	CHECK_EQ(Output("set the to 5\nsay the\n"), std::string("5\n"));
+	CHECK_EQ(Output("function first(x)\n\treturn \"mine\"\nend\nsay first of [1]\n"), std::string("mine\n"));
+	CHECK_EQ(Output("set item to 2\nsay item\n"), std::string("2\n"));
+	CHECK_EQ(Output("function item(n)\n\treturn n * 2\nend\nsay item(3)\n"), std::string("6\n"));
+	CHECK_EQ(Output("for each last in [1, 2] do\n\tsay last\nend\n"), std::string("1\n2\n"));
+	CHECK_EQ(Output("set m to {first: 1, the: 2}\nsay m.first + m.the\n"), std::string("3\n"));
+	// A worked-out position needs brackets; 'item' with no 'of' after it is the old error.
+	CHECK_CONTAINS(CompileFails("set items to [1]\nset i to 1\nsay item i + 1 of items\n").Message, "Put brackets around a worked-out position");
+	CHECK_CONTAINS(CompileFails("say item 2\n").Message, "Expected the end of the line");
+	// The same errors as the property and index forms.
+	CHECK_CONTAINS(Output("try\n\tsay item 5 of [1]\ncatch problem\n\tsay problem\nend\n"), "5");
+	CHECK_CONTAINS(Output("try\n\tsay first of 3\ncatch problem\n\tsay problem\nend\n"), "first");
+}
+
 TEST_CASE("NumberWordsKeepOldMeanings")
 {
 	// A script's own 'even' or 'odd', anywhere in reach, keeps 'x is even' a comparison.

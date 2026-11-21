@@ -3690,6 +3690,87 @@ namespace ForgeScript {
 			EmitByte(count);
 		}
 
+		// Whether a word names nothing a script could mean by it: no local, parameter, enclosing local,
+		// script name (in this script or one it uses) or built-in function. Only such words take the
+		// sentence forms below, so a script's own 'first' or 'the' keeps its meaning.
+		bool IsFreeWord(const std::string& name) const
+		{
+			return ResolveLocal(m_State, name) == -1 && !IsVisibleInEnclosing(name) && !IsModuleName(name) &&
+				!IsBuiltinFunction(name);
+		}
+
+		// Sentence forms that read a list, each an error before: 'the' before a name is left out
+		// ('the length of items' is length(items)); 'first of items' and 'the last item of items' are
+		// items.first and items.last; 'item 2 of items' is items[2].
+		bool TryOfPhrase()
+		{
+			const std::string word(Current().Lexeme);
+			if (word == "the" && Peek(1).Type == TokenType::Identifier && IsFreeWord(word))
+			{
+				Advance();
+				Primary();
+				return true;
+			}
+
+			if ((word == "first" || word == "last") && IsFreeWord(word))
+			{
+				const size_t ofAt = CheckWordAt(1, "item") ? 2 : 1;
+				if (Peek(ofAt).Type != TokenType::Of)
+					return false;
+				for (size_t i = 0; i <= ofAt; i++)
+					Advance();
+				Unary();
+				EmitWithName(OpCode::GetProperty, word);
+				return true;
+			}
+
+			if (word == "item" && IsFreeWord(word))
+			{
+				const TokenType next = Peek(1).Type;
+				if (next != TokenType::Number && next != TokenType::Identifier && next != TokenType::LeftParen)
+					return false;
+				const size_t ofPos = FindOfOnThisLine(m_Pos + 1);
+				if (ofPos == 0)
+					return false;
+
+				// The list goes on the stack before the position, so read it first, then come back.
+				const size_t indexStart = m_Pos + 1;
+				m_Pos = ofPos + 1;
+				Unary();
+				const size_t listEnd = m_Pos;
+				m_Pos = indexStart;
+				Postfix();
+				if (m_Pos != ofPos)
+					ErrorAtCurrent("Put brackets around a worked-out position, like: item (i + 1) of items");
+				m_Pos = listEnd;
+				EmitOp(OpCode::GetIndex);
+				return true;
+			}
+			return false;
+		}
+
+		// The position of the first 'of' outside brackets from 'start' to the end of the line, or 0.
+		size_t FindOfOnThisLine(size_t start) const
+		{
+			int depth = 0;
+			for (size_t i = start; i < m_Tokens.size(); i++)
+			{
+				const TokenType type = m_Tokens[i].Type;
+				if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace)
+					depth++;
+				else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace)
+				{
+					if (--depth < 0)
+						return 0;
+				}
+				else if (depth == 0 && type == TokenType::Of)
+					return i;
+				else if (type == TokenType::Newline || type == TokenType::Eof)
+					return 0;
+			}
+			return 0;
+		}
+
 		void Primary()
 		{
 			const Token& token = Current();
@@ -3721,6 +3802,8 @@ namespace ForgeScript {
 				case TokenType::Identifier:
 				{
 					if (TryPhrase(false))
+						return;
+					if (TryOfPhrase())
 						return;
 					std::string name(token.Lexeme);
 					const size_t nameIndex = m_Pos;

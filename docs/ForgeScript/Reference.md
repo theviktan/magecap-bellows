@@ -59,6 +59,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Property | `player.health`, `player's health`, `my health` (= `self.health`) |
 | Index | `list[1]`, `list[-1]`, `map["key"]`, `text[1]` |
 | Call | `f(1, 2)`, `object.method()`, `length of list` (= `length(list)`) |
+| List words | `the length of items`, `first of items` (= `items.first`), `the last item of items` (= `items.last`), `item 2 of items` (= `items[2]`), `item (i + 1) of items`; `the` before a name changes nothing. A name `the`/`first`/`last`/`item` of your own keeps its meaning |
 | Parent method | `parent.setup(name)` inside a kind |
 
 Precedence from loosest to tightest: `... if ... otherwise ...` → `or` → `and` → `not` → comparisons → `+ -` → `* / %` → unary `-` → `^` → `of` → `.` `[ ]` `( )`.

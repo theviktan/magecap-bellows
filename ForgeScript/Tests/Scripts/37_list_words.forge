@@ -1,0 +1,25 @@
+# 'the length of', 'first of', 'last of' and 'item N of' read lists as sentences.
+set items to ["sword", "shield", "potion"]
+say the length of items                                 # expect: 3
+say first of items                                      # expect: sword
+say last of items                                       # expect: potion
+say the first item of items                             # expect: sword
+say the last item of items                              # expect: potion
+say item 2 of items                                     # expect: shield
+
+set i to 1
+say item i of items                                     # expect: sword
+say item (i + 2) of items                               # expect: potion
+say "{first of items} and {item 3 of items}"            # expect: sword and potion
+
+# 'the' before a name changes nothing.
+set score to 40
+say the score                                           # expect: 40
+
+# Lists in lists, and an empty list.
+set grid to [[1, 2], [3, 4]]
+say item 2 of item 1 of grid                            # expect: 2
+say first of []                                         # expect: nothing
+
+# A function's parameter named 'item' is still the parameter.
+say items.map(function(item) return item.length end)    # expect: [5, 6, 6]
