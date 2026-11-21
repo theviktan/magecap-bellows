@@ -384,7 +384,83 @@ namespace ForgeScript {
 				return;
 			if (Check(TokenType::Equal))
 				ErrorAtCurrent("'=' is not used in ForgeScript. Use 'set x to 5' to change a value, or 'is' to compare.");
-			ErrorAtCurrent("Expected the end of the line, but found '" + std::string(Current().Lexeme) + "'.");
+			ErrorAtCurrent("Expected the end of the line, but found '" + std::string(Current().Lexeme) + "'." + GuessedStatementHint());
+		}
+
+		// The words from tokens[from] to the end of the line, for a hint that repeats what was written.
+		std::string LineText(size_t from) const
+		{
+			std::string text;
+			for (size_t i = from; i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Newline && m_Tokens[i].Type != TokenType::Eof; i++)
+			{
+				if (!text.empty())
+					text += ' ';
+				text += m_Tokens[i].Lexeme;
+			}
+			return text;
+		}
+
+		// The teaching layer: a statement written the way another language (or plain English) says it,
+		// answered with the ForgeScript that does it. Only used on a line that is already a mistake.
+		std::string GuessedStatementHint() const
+		{
+			const size_t start = m_StatementStart;
+			if (start + 1 >= m_Tokens.size() || m_Tokens[start].Type != TokenType::Identifier)
+				return {};
+			const std::string_view word = m_Tokens[start].Lexeme;
+			const Token& next = m_Tokens[start + 1];
+			const std::string name = next.Type == TokenType::Identifier ? std::string(next.Lexeme) : "x";
+			if ((word == "increase" || word == "decrease") && next.Type == TokenType::Identifier &&
+				start + 3 < m_Tokens.size() && m_Tokens[start + 2].Type == TokenType::By)
+			{
+				const std::string amount = LineText(start + 3);
+				return word == "increase" ? " To make a number bigger, write: add " + amount + " to " + name :
+					" To make a number smaller, write: take " + amount + " from " + name;
+			}
+			if (next.Type != TokenType::Identifier)
+				return {};
+			if (word == "def" || word == "func" || word == "fn" || word == "fun" || word == "sub" || word == "procedure")
+				return " To make a function, write: function " + name + "() ... end";
+			if (word == "var" || word == "let" || word == "local" || word == "dim" || word == "auto")
+				return " To make a variable, write: set " + name + " to ...";
+			if (word == "const")
+				return " To make a constant, write: constant " + name + " is ...";
+			if (word == "elif" || word == "elsif" || word == "elseif")
+				return " ForgeScript writes it as two words, like: else if " + name + " is 2 then";
+			return {};
+		}
+
+		// The same for a value: symbols from other languages that ForgeScript writes in words.
+		std::string GuessedValueHint() const
+		{
+			const Token& token = Current();
+			const Token& before = Previous();
+			const Token& after = Peek(1);
+			// 'x += 1', 'x -= 1', 'x *= 2', 'x /= 2': the value before the operator is the one being changed.
+			if (token.Type == TokenType::Equal && m_Pos >= 2)
+			{
+				const std::string target(m_Tokens[m_Pos - 2].Lexeme);
+				const std::string amount = LineText(m_Pos + 1);
+				switch (before.Type)
+				{
+					case TokenType::Plus:  return " To add to a value, write: add " + amount + " to " + target;
+					case TokenType::Minus: return " To take from a value, write: take " + amount + " from " + target;
+					case TokenType::Star:  return " To multiply a value, write: multiply " + target + " by " + amount;
+					case TokenType::Slash: return " To divide a value, write: divide " + target + " by " + amount;
+					default: break;
+				}
+			}
+			if ((token.Type == TokenType::Plus && before.Type == TokenType::Plus) || (token.Type == TokenType::Minus && before.Type == TokenType::Minus))
+			{
+				const std::string target = m_Pos >= 2 ? std::string(m_Tokens[m_Pos - 2].Lexeme) : "x";
+				return token.Type == TokenType::Plus ? " ForgeScript has no ++. Write: add 1 to " + target :
+					" ForgeScript has no --. Write: take 1 from " + target;
+			}
+			if (token.Type == TokenType::Slash && before.Type == TokenType::Slash)
+				return " ForgeScript has no //. For a whole-number result, write: floor(a / b)";
+			if (token.Type == TokenType::Colon && (after.Type == TokenType::Newline || after.Type == TokenType::Eof))
+				return " ForgeScript doesn't end a line with ':'. Write 'then' after an if, or 'do' after a loop, and close the block with 'end'.";
+			return {};
 		}
 
 		// ------------------------------------------------------------------ Errors
@@ -1131,6 +1207,7 @@ namespace ForgeScript {
 
 		void Statement()
 		{
+			m_StatementStart = m_Pos;
 			switch (Current().Type)
 			{
 				case TokenType::Set:       SetStatement(); break;
@@ -3385,7 +3462,16 @@ namespace ForgeScript {
 				parts++;
 			}
 			if (!Check(TokenType::String))
+			{
+				// "{price:.2}" is how other languages pick decimals.
+				if (Check(TokenType::Colon))
+				{
+					const std::string value = Previous().Type == TokenType::Identifier ? std::string(Previous().Lexeme) : "price";
+					ErrorAtCurrent("Expected '}' to close the {value} inside this text. To show a number with 2 decimals, write: {format_number(" +
+						value + ", 2)}");
+				}
 				ErrorAtCurrent("Expected '}' to close the {value} inside this text.");
+			}
 			if (!Current().Text.empty() || parts == 0)
 			{
 				EmitConstant(Value::FromObject(m_VM.Intern(Current().Text)));
@@ -3559,6 +3645,10 @@ namespace ForgeScript {
 					return;
 				case TokenType::Newline:
 				case TokenType::Eof:
+					// 'x--' ends the line after the second '-'.
+					if (Previous().Type == TokenType::Minus && m_Pos >= 2 && m_Tokens[m_Pos - 2].Type == TokenType::Minus && m_Pos >= 3)
+						ErrorAtCurrent("Expected a value here, but the line ended. ForgeScript has no --. Write: take 1 from " +
+							std::string(m_Tokens[m_Pos - 3].Lexeme));
 					ErrorAtCurrent("Expected a value here, but the line ended.");
 				default:
 					break;
@@ -3566,7 +3656,7 @@ namespace ForgeScript {
 
 			if (token.IsWord())
 				ErrorAtCurrent("Expected a value here, but found the keyword '" + std::string(token.Lexeme) + "'.");
-			ErrorAtCurrent("Expected a value here, but found '" + std::string(token.Lexeme) + "'.");
+			ErrorAtCurrent("Expected a value here, but found '" + std::string(token.Lexeme) + "'." + GuessedValueHint());
 		}
 
 	private:
@@ -3634,6 +3724,7 @@ namespace ForgeScript {
 			Compiler& m_Compiler;
 		};
 		bool m_ChoicelessMatchIsBlock = false; // set once the phrases are known
+		size_t m_StatementStart = 0;           // where the statement being compiled starts, for hints
 		bool m_EveryIsPhrase = false;          // set once the phrases are known
 		bool m_AfterIsPhrase = false;
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);

@@ -18,6 +18,12 @@ with new language or tool features, the patch number with fixes.
   They take `wait`'s units, work anywhere (also in functions and kinds), hold while the game is
   paused unless the script is Run While Paused, and end with their script. `stop` inside `every` ends
   it.
+- **Mistakes from other languages teach the ForgeScript** (Roadmap 2.0, Tier 1 #1). Errors keep
+  their message and add the form that works for common habits: `x += 1` and `x++` (`add 1 to x`),
+  `increase x by 2`, `def` / `func`, `var` / `let` / `const`, `elif`, a line ending in `:`, `&&` and
+  `||`, `//`, `"{price:.2}"`, and at run time `True` / `None` / `null`, `len`, `str`, `int`, `console`,
+  and methods such as `list.append`, `text.toUpperCase` and `number.toString`. Each one keeps its old
+  first sentence, so tools that match it keep working.
 - Nothing changes meaning: `wait for` was an error, and `every`/`after` start a timer only on a line
   that ends in a time word (they stay usable as names; a script phrase starting with them still wins).
 - The language server, outline, `FindScriptVariables` and `FindHandlersThatWait` know both forms; a UI

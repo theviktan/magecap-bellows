@@ -89,4 +89,66 @@ namespace ForgeScript {
 		return closest.empty() ? std::string() : " Did you mean '" + closest + "'?";
 	}
 
+	std::string OtherLanguageNameHint(std::string_view name)
+	{
+		struct Way
+		{
+			std::string_view Name;
+			std::string_view Write;
+		};
+		static const Way s_Ways[] = {
+			{ "True", "true" }, { "TRUE", "true" }, { "False", "false" }, { "FALSE", "false" },
+			{ "None", "nothing" }, { "null", "nothing" }, { "NULL", "nothing" }, { "nil", "nothing" },
+			{ "undefined", "nothing" }, { "this", "self (or my health for a field)" },
+			{ "len", "length(list), or: length of list" }, { "str", "text(value)" }, { "tostring", "text(value)" },
+			{ "String", "text(value)" }, { "int", "number(text), and floor(x) for a whole number" },
+			{ "float", "number(text)" }, { "parseInt", "number(text)" }, { "parseFloat", "number(text)" },
+			{ "tonumber", "number(text)" }, { "console", "say value" }, { "echo", "say value" },
+			{ "puts", "say value" }, { "println", "say value" }, { "printf", "say \"Score: {score}\"" },
+			{ "math", "floor(x), sqrt(x) and the other math functions, without math." },
+			{ "Math", "floor(x), sqrt(x) and the other math functions, without Math." },
+			{ "await", "wait for door opened, or wait 2 seconds" },
+		};
+		for (const Way& way : s_Ways)
+		{
+			if (way.Name == name)
+				return " In ForgeScript, write: " + std::string(way.Write);
+		}
+		return {};
+	}
+
+	std::string OtherLanguageMethodHint(std::string_view typeName, std::string_view method)
+	{
+		struct Way
+		{
+			std::string_view Type;
+			std::string_view Method;
+			std::string_view Write;
+		};
+		static const Way s_Ways[] = {
+			{ "list", "append", "add x to list, or list.add(x)" }, { "list", "push", "add x to list, or list.add(x)" },
+			{ "list", "push_back", "add x to list, or list.add(x)" }, { "list", "indexOf", "list.index_of(x)" }, { "list", "includes", "list contains x" },
+			{ "list", "has", "list contains x" }, { "list", "extend", "for each item in other do add item to list end" },
+			{ "list", "forEach", "for each item in list do ... end" }, { "list", "erase", "take x from list, or list.remove(x)" },
+			{ "list", "delete", "take x from list, or list.remove(x)" },
+			{ "text", "toUpperCase", "text.upper()" }, { "text", "toLowerCase", "text.lower()" },
+			{ "text", "strip", "text.trim()" }, { "text", "startswith", "text.starts_with(x)" },
+			{ "text", "endswith", "text.ends_with(x)" }, { "text", "includes", "text contains x" },
+			{ "text", "format", "\"Score: {score}\", with the value inside { }" },
+			{ "text", "toString", "the text itself; it already is text" },
+			{ "map", "items", "for each key, value in map do ... end" }, { "map", "containsKey", "map.has(key)" },
+			{ "map", "contains", "map.has(key)" },
+			{ "map", "update", "map.merge(other)" },
+			{ "number", "toString", "text(x)" }, { "number", "round", "round(x)" }, { "number", "floor", "floor(x)" },
+			{ "vector", "normalize", "v.normalized()" }, { "vector", "magnitude", "v.length, without brackets" },
+		};
+		for (const Way& way : s_Ways)
+		{
+			if (way.Type == typeName && way.Method == method)
+				return " In ForgeScript, write: " + std::string(way.Write);
+		}
+		return {};
+	}
+
 }
+

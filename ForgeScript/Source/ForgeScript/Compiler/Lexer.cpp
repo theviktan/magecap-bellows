@@ -468,6 +468,10 @@ namespace ForgeScript {
 				break;
 		}
 
+		if (c == '&')
+			return MakeError("Unexpected character '&'. ForgeScript writes 'and', like: if x > 0 and x < 5 then");
+		if (c == '|')
+			return MakeError("Unexpected character '|'. ForgeScript writes 'or', like: if x is 0 or y is 0 then");
 		return MakeError(std::string("Unexpected character '") + c + "'.");
 	}
 

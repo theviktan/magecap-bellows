@@ -976,6 +976,22 @@ Error: 'helth' has not been given a value yet. Did you mean 'health'?
 
 This works for your variables and functions, built-in functions, the functions and values of lists, text and maps, a kind's fields and functions, and the names in a script you `use`. A value read with brackets, like `items.length()`, gets told to drop them.
 
+When you write something the way another language (or plain English) says it, the error shows the ForgeScript for it:
+
+| You wrote | The error ends with |
+|---|---|
+| `x += 1`, `x++` | `To add to a value, write: add 1 to x` |
+| `increase score by 5` | `To make a number bigger, write: add 5 to score` |
+| `def jump():`, `var x = 1` | `function jump() ... end`, `set x to ...` |
+| `elif x is 2 then` | `else if x is 2 then` |
+| `if x > 0:` | `Write 'then' after an if, or 'do' after a loop` |
+| `a && b`, `a \|\| b` | `ForgeScript writes 'and'` / `'or'` |
+| `7 // 2` | `floor(a / b)` |
+| `"{price:.2}"` | `{format_number(price, 2)}` |
+| `True`, `None`, `null` | `true`, `nothing` |
+| `len(items)`, `str(x)`, `int(t)` | `length(list)`, `text(value)`, `number(text)` |
+| `items.append(x)`, `name.toUpperCase()` | `add x to list`, `text.upper()` |
+
 Catch errors you expect with `try ... catch`:
 
 ```forge
