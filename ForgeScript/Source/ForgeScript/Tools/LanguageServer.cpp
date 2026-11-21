@@ -1754,6 +1754,12 @@ namespace ForgeScript {
 				const int length = tokens[last].Column + static_cast<int>(tokens[last].Lexeme.size()) - token.Column;
 				item = add(Kind::Handler, lineText(i), "", token, token, length, parent);
 			}
+			else if (listed && !inKind && opens && TestOpensBlock(tokens, i))
+			{
+				// 'test "name"' is listed like a handler, selected from 'test' to the end of its name.
+				const int length = next->Column + static_cast<int>(next->Lexeme.size()) - token.Column;
+				item = add(Kind::Handler, "test " + std::string(next->Lexeme), "", token, token, length, parent);
+			}
 			else if (listed && inKind && IsSharedLine(tokens, i))
 			{
 				if (variables.insert({ parent, std::string(next->Lexeme) }).second)

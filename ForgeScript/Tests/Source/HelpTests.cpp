@@ -95,7 +95,7 @@ TEST_CASE("HelpOnlyDescribesThingsThatExist")
 			// own (see MatchOpensBlock, TimerOpensBlock and IsChoicesAt), so they have their own help.
 			case HelpEntry::Kind::Keyword:
 				CHECK((contains(keywords, entry.Name) || entry.Name == "match" || entry.Name == "every" || entry.Name == "after" ||
-					entry.Name == "choices" || entry.Name == "shared"));
+					entry.Name == "choices" || entry.Name == "shared" || entry.Name == "test" || entry.Name == "expect"));
 				break;
 			case HelpEntry::Kind::Function: CHECK(contains(globals, entry.Name)); break;
 			case HelpEntry::Kind::Phrase: CHECK(contains(phrases, entry.Name)); break;

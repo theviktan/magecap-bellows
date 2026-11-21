@@ -770,6 +770,16 @@ TEST_CASE("FindOutlineListsAScriptsDefinitions")
 	CHECK(FindOutline("end\nend\nfunction (\n").empty());
 }
 
+TEST_CASE("OutlineListsTests")
+{
+	const std::vector<OutlineItem> outline = FindOutline("test \"adds\"\n\texpect 1 + 1 is 2\nend\nset test to 3\n");
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
+	CHECK(outline[0].ItemKind == OutlineItem::Kind::Handler);
+	CHECK_EQ(outline[0].Name, std::string("test \"adds\""));
+	CHECK_EQ(outline[0].EndLine, 3);
+	CHECK(outline[1].ItemKind == OutlineItem::Kind::Variable);
+}
+
 TEST_CASE("OutlineListsSharedValuesInTheirKind")
 {
 	const std::vector<OutlineItem> outline = FindOutline("kind Enemy\n\tshared count is 0\n\tset health to 5\nend\n");

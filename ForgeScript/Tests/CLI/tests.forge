@@ -1,0 +1,16 @@
+function double(x)
+	return x * 2
+end
+
+test "double works"
+	expect double(2) is 4
+end
+
+test "a failing one"
+	expect double(2) is 5
+end
+
+test "waits"
+	wait 3 seconds
+	expect double(1) is 2
+end

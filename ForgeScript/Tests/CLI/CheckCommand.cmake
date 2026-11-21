@@ -78,6 +78,16 @@ expect_run("project stdin" 0 "{\"file\":\"${project}/Content/Scripts/Unsaved.for
 	ARGS --check --json --stdin --name "${project}/Content/Scripts/Unsaved.forge" INPUT "${project}/Content/Scripts/Main.forge")
 expect_run("project run" 0 "42" ARGS "${project}/Content/Scripts/Main.forge")
 
+# --test runs the script, then its tests: PASS or FAIL (with the reason, indented), a summary, and
+# exit code 1 when one failed. A plain run doesn't run tests.
+set(tests "${FOLDER}/tests.forge")
+expect_run("tests" 1
+	"PASS double works\nFAIL a failing one\n    Error: Expected double(2) is 5, but double(2) is 4.\n        in 'test \"a failing one\"' (tests.forge line 10)\nPASS waits\n\n3 tests: 2 passed, 1 failed."
+	ARGS --test "${tests}")
+expect_run("tests don't run on a plain run" 0 "" ARGS "${tests}")
+expect_run("no tests" 0 "Go team!\nNo tests in good.forge. Write one like:\ntest \"adding works\"\n\texpect 1 + 1 is 2\nend" ARGS --test "${good}")
+expect_run("test with check" 64 "--test runs on its own: use it without --check or --realtime." ARGS --test --check "${tests}")
+
 # The version: tools and MageCap Forge read it from --version, and CHANGELOG.md's newest entry must
 # describe it, so a version bump without its changelog entry (or the other way round) fails here.
 execute_process(COMMAND "${FORGESCRIPT}" --version RESULT_VARIABLE code OUTPUT_VARIABLE out)

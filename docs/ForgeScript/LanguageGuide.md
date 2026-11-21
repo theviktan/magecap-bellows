@@ -1446,6 +1446,59 @@ Things worth knowing:
 
 The debugger works in play mode in the MageCap Bellows editor. For checking a script without playing it, the editor (and `forgescript --check` outside it) underlines every mistake as you type. Once there are none, it also marks **warnings**: code that runs but probably doesn't do what you meant. For example, `set max to 10` in a script that also uses `max(a, b)` takes the name `max` away from the built-in, so `max(a, b)` would try to call 10. The warning says so and suggests another name, like `max_value`. A warning never stops a script. For a quick look at a value, `say` still works: it prints to the Console.
 
+### Testing your scripts with `test` and `expect`
+
+A **test** is a small check that your code does what you meant. Write it in the same script, with
+`test`, a name, and `expect` lines:
+
+```forge
+function damage_after_armor(damage, armor)
+	return max(damage - armor, 1)
+end
+
+test "armor lowers damage"
+	expect damage_after_armor(10, 3) is 7
+end
+
+test "a hit always does at least 1"
+	expect damage_after_armor(2, 50) is 1
+end
+```
+
+**Tests don't run when the game runs.** Run them from a terminal with:
+
+```
+forgescript --test Scripts/combat.forge
+```
+
+It runs the script first (so its functions and kinds exist), then each test, and prints:
+
+```
+PASS armor lowers damage
+PASS a hit always does at least 1
+
+2 tests: 2 passed, 0 failed.
+```
+
+When an `expect` isn't true, the test fails and says what it found:
+
+```
+FAIL armor lowers damage
+    Error: Expected damage_after_armor(10, 3) is 8, but damage_after_armor(10, 3) is 7.
+        in 'test "armor lowers damage"' (combat.forge line 6)
+```
+
+- Write tests at the top level of the script. `do` after the name is optional.
+- A test stops at its first failed `expect` (or any other error); the next test still runs.
+- A test can `wait`: `wait 3 seconds` takes no real time in `--test`, as without `--realtime`.
+- Tests run in order and share the script's variables, like the rest of the script.
+- `expect` works anywhere, not just in tests: outside a test, a failed `expect` is an error like
+  `fail`, which makes it a handy check while you build.
+- `forgescript --test` ends with exit code 1 when a test failed, so a build or CI can stop on it.
+- `test` and `expect` aren't reserved: `set test to 3` and a function called `expect` still work.
+  Because of that, an `expect` can't start with `(` or `[` (`expect (x)` is a call to `expect`):
+  write `expect 2 is in [1, 2]`, not `expect [1, 2] contains 2`.
+
 ---
 
 ## 19. Rules worth remembering

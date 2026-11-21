@@ -225,6 +225,15 @@ namespace ForgeScript {
 		// Sends an event to every loaded module.
 		void EmitAll(const std::string& event, const std::vector<Value>& values = {});
 
+		// The names of a module's 'test "name" ... end' blocks, in the order they were written. Tests never
+		// run when the script runs; a host runs them with RunTest ('forgescript --test' does).
+		std::vector<std::string> GetTestNames(Module* module) const;
+		// Runs one of a module's tests as a task of its own, calling Update(step) until it ends, so it may
+		// 'wait' (as much game time as it needs, without waiting really). Returns true when it passed;
+		// otherwise outFailure gives the error (a failed 'expect', or any other), with its line. A test still
+		// waiting after maxSeconds of game time fails.
+		bool RunTest(Module* module, size_t index, std::string& outFailure, double step = 1.0 / 60.0, double maxSeconds = 600.0);
+
 		// Calls a ForgeScript function and waits for its result. The function may not use "wait".
 		// Returns false if it failed; outResult receives the return value.
 		bool Call(const Value& callee, const std::vector<Value>& args, Value* outResult = nullptr);

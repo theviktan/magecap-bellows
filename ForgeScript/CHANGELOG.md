@@ -23,6 +23,13 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Tests in scripts** (Tier 2 #13): `test "armor lowers damage" ... end` at the top level of a
+  script, with `expect damage_after_armor(10, 3) is 7` lines. Tests never run when the script runs;
+  `forgescript --test game.forge` runs the script, then each test (as a task, so it may `wait`),
+  prints PASS or FAIL with the reason, and exits with 1 when one failed. `expect` works anywhere:
+  "Expected total(2, 3) is 6, but total(2, 3) is 5." Hosts run tests with `VM::GetTestNames` and
+  `VM::RunTest`. The language server, outline and VS Code indent rule know `test` blocks. `test`
+  and `expect` aren't reserved: both lines were errors before, and `expect(x)` is still a call.
 - **Shared values** (Tier 2 #10): `shared count is 0` inside a kind makes one value for the kind
   and every object made from it, read and changed as `Enemy.count` (also in the kind's own
   functions, and as `Boss.count` for a kind that extends it). It is worked out once, when the kind

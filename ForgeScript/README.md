@@ -38,6 +38,7 @@ forgescript                          start the interactive prompt
 forgescript game.forge               run a script
 forgescript --check game.forge       check a script for mistakes without running it
 forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
+forgescript --test game.forge        run the script, then its 'test "..." ... end' blocks
 forgescript --version                show the version (see CHANGELOG.md)
 ```
 
@@ -68,6 +69,21 @@ After a mistake it skips the rest of that statement (or the block the statement 
 | `--name <path>` | The script's path, used in messages and to find `use` scripts (from its project's asset folder, or next to it). Needed with `--stdin` so `use` and phrases from other scripts work. |
 
 Exit codes: `0` no mistakes, `65` mistakes found, `66` the file could not be opened, `64` wrong usage. When running a script, `70` means it failed. Tools depend on the text format and exit codes, so they stay stable.
+
+### Running a script's tests
+
+`--test` runs the script, then each of its `test "name" ... end` blocks in order (see the Language Guide's "Testing your scripts"), and prints one line per test on standard output, then a summary:
+
+```
+PASS armor lowers damage
+FAIL a hit always does at least 1
+    Error: Expected damage_after_armor(2, 50) is 1, but damage_after_armor(2, 50) is 0.
+        in 'test "a hit always does at least 1"' (combat.forge line 10)
+
+2 tests: 1 passed, 1 failed.
+```
+
+Each test runs as a task, with game time stepping by 1/60 second (a test that still waits after 600 seconds of game time fails). Exit codes: `0` every test passed (or there were none), `1` a test failed, `70` the script itself failed before its tests, `66` and `64` as above. `--test` can't be combined with `--check` or `--realtime`.
 
 ### Language server for editors
 

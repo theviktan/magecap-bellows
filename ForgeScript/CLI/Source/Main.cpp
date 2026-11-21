@@ -30,9 +30,11 @@
 //   forgescript --check --json game.forge                      the mistakes as JSON, for editors
 //   forgescript --check --stdin --name Scripts/game.forge      check text from standard input
 //   forgescript --realtime game.forge   run with real time, so "wait 2 seconds" really waits
+//   forgescript --test game.forge    run the script, then its 'test "..." ... end' blocks
 //
-// Exit codes (tools depend on them): 0 no mistakes / ran fine, 64 wrong usage, 65 the script has
-// mistakes, 66 the file could not be opened, 70 the script failed while running.
+// Exit codes (tools depend on them): 0 no mistakes / ran fine / every test passed, 1 a test failed,
+// 64 wrong usage, 65 the script has mistakes, 66 the file could not be opened, 70 the script failed
+// while running.
 
 namespace {
 
@@ -109,6 +111,7 @@ namespace {
 			"                                      (default: forgescript-api.json\n"
 			"                                      next to this program)\n"
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
+			"  forgescript --test <script.forge>   run the script, then its tests ('test \"name\" ... end')\n"
 			"  forgescript --version               show the version\n";
 	}
 
@@ -156,6 +159,60 @@ namespace {
 			}
 		}
 		return hadError ? 70 : 0;
+	}
+
+	// Runs the script, then each of its tests in order: PASS or FAIL with the reason, then a summary.
+	int RunTests(const std::string& fileName)
+	{
+		std::string source;
+		if (!ReadFile(fileName, source))
+		{
+			std::cerr << "Could not open '" << fileName << "'." << std::endl;
+			return 66;
+		}
+
+		ForgeScript::VM vm;
+		std::filesystem::path path(fileName);
+		InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
+		// Until the tests start, errors are the script's own and are shown as when it runs.
+		bool testing = false;
+		vm.SetErrorHandler([&testing](const ForgeScript::ScriptError& error)
+		{
+			if (!testing)
+				std::cerr << error.ToString() << std::endl;
+		});
+
+		ForgeScript::LoadResult result = vm.Load(source, path.filename().string());
+		if (!result.Success)
+			return 70;
+
+		const std::vector<std::string> names = vm.GetTestNames(result.LoadedModule);
+		if (names.empty())
+		{
+			std::cout << "No tests in " << path.filename().string() << ". Write one like:\n"
+				"test \"adding works\"\n\texpect 1 + 1 is 2\nend" << std::endl;
+			return 0;
+		}
+
+		testing = true;
+		size_t failed = 0;
+		for (size_t i = 0; i < names.size(); i++)
+		{
+			std::string failure;
+			if (vm.RunTest(result.LoadedModule, i, failure))
+			{
+				std::cout << "PASS " << names[i] << std::endl;
+				continue;
+			}
+			failed++;
+			std::cout << "FAIL " << names[i] << std::endl;
+			std::istringstream lines(failure);
+			for (std::string line; std::getline(lines, line);)
+				std::cout << "    " << line << std::endl;
+		}
+		std::cout << "\n" << names.size() << (names.size() == 1 ? " test: " : " tests: ") << names.size() - failed << " passed, "
+			<< failed << " failed." << std::endl;
+		return failed > 0 ? 1 : 0;
 	}
 
 	std::string JsonString(const std::string& text)
@@ -338,6 +395,7 @@ int main(int argc, char** argv)
 
 	bool realtime = false;
 	bool check = false;
+	bool test = false;
 	bool lsp = false;
 	std::filesystem::path apiFile;
 	bool apiGiven = false;
@@ -359,6 +417,8 @@ int main(int argc, char** argv)
 			realtime = true;
 		else if (std::strcmp(argv[i], "--check") == 0)
 			check = true;
+		else if (std::strcmp(argv[i], "--test") == 0)
+			test = true;
 		else if (std::strcmp(argv[i], "--lsp") == 0)
 			lsp = true;
 		else if (std::strcmp(argv[i], "--api") == 0)
@@ -415,6 +475,11 @@ int main(int argc, char** argv)
 		std::cerr << "--json and --stdin work together with --check." << std::endl;
 		return 64;
 	}
+	if (test && (check || realtime))
+	{
+		std::cerr << "--test runs on its own: use it without --check or --realtime." << std::endl;
+		return 64;
+	}
 	if (check)
 	{
 		checkOptions.FileName = file;
@@ -430,5 +495,7 @@ int main(int argc, char** argv)
 		PrintUsage();
 		return 64;
 	}
+	if (test)
+		return RunTests(file);
 	return RunFile(file, realtime);
 }

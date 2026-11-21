@@ -236,6 +236,8 @@ namespace ForgeScript {
 		// How many of the module's tasks wait for each event ('wait for hit'), so a host can tell that the
 		// module wants the event without looking through every task.
 		std::unordered_map<String*, int> EventWaits;
+		// The script's 'test "name" ... end' blocks, in order. They run only through VM::RunTest.
+		std::vector<std::pair<String*, Closure*>> Tests;
 		bool HasRun = false;
 
 		explicit Module(std::string name) : Object(ObjectType::Module), Name(std::move(name)) {}
