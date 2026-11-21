@@ -3,6 +3,7 @@
 #include "ForgeScript/Compiler/Lexer.h"
 #include "ForgeScript/Compiler/Phrase.h"
 #include "ForgeScript/Core/Object.h"
+#include "ForgeScript/Core/Suggest.h"
 #include "ForgeScript/VM/VM.h"
 
 #if defined(_MSC_VER)
@@ -230,6 +231,8 @@ namespace ForgeScript {
 				// Likewise a phrase starting with 'every' or 'after' keeps its lines (timers came later).
 				m_EveryIsPhrase = m_Phrases.GetRoot()->Words.count("every") > 0;
 				m_AfterIsPhrase = m_Phrases.GetRoot()->Words.count("after") > 0;
+				m_ChoicesIsPhrase = m_Phrases.GetRoot()->Words.count("choices") > 0;
+				PrescanChoices();
 				for (const char* verb : { "sort", "shuffle", "reverse" })
 				{
 					if (m_Phrases.GetRoot()->Words.count(verb) > 0)
@@ -691,6 +694,10 @@ namespace ForgeScript {
 					// set x, y to ...: each name is set, so each is a variable here.
 					std::vector<std::string> names = UnpackNames(i + 1);
 					outNames.insert(outNames.end(), names.begin(), names.end());
+				}
+				else if (!afterMember && IsChoicesAt(m_Tokens, i))
+				{
+					outNames.emplace_back(m_Tokens[i + 1].Lexeme);
 				}
 				else if (!afterMember && token.Type == TokenType::Wait)
 				{
@@ -1262,6 +1269,8 @@ namespace ForgeScript {
 						TimerStatement();
 					else if (IsListVerbAt(m_Pos))
 						ListVerbStatement();
+					else if (IsChoicesAt(m_Tokens, m_Pos))
+						ChoicesStatement();
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else if (MatchWithoutChoices())
@@ -1482,6 +1491,88 @@ namespace ForgeScript {
 		// 'sort items', 'shuffle my cards', 'reverse items': a list verb with a variable or field after it.
 		// Neither word is reserved, and such a line was always a mistake, so names, calls ('sort(x)') and a
 		// script's own phrases starting with the word keep their meaning.
+		// 'choices State are idle, running' starts a statement: the word, a name, then 'are'. None of
+		// them are reserved, and the line was an error before; a script phrase starting with it wins.
+		bool IsChoicesAt(const std::vector<Token>& tokens, size_t index) const
+		{
+			if (m_ChoicesIsPhrase || index + 2 >= tokens.size())
+				return false;
+			const Token& word = tokens[index];
+			const Token& are = tokens[index + 2];
+			const bool startsLine = index == 0 || tokens[index - 1].Type == TokenType::Newline;
+			return startsLine && word.Type == TokenType::Identifier && word.Lexeme == "choices" &&
+				tokens[index + 1].Type == TokenType::Identifier && are.Type == TokenType::Identifier && are.Lexeme == "are";
+		}
+
+		// Notes every choice set before compiling, so 'State.idel' is caught above the line that makes it.
+		void PrescanChoices()
+		{
+			for (size_t i = 0; i < m_Tokens.size(); i++)
+			{
+				if (!IsChoicesAt(m_Tokens, i))
+					continue;
+				std::vector<std::string>& names = m_Choices[std::string(m_Tokens[i + 1].Lexeme)];
+				names.clear();
+				for (size_t j = i + 3; j < m_Tokens.size() && m_Tokens[j].Type != TokenType::Newline && m_Tokens[j].Type != TokenType::Eof; j++)
+				{
+					if (m_Tokens[j].Type == TokenType::Identifier)
+						names.emplace_back(m_Tokens[j].Lexeme);
+				}
+			}
+		}
+
+		// choices State are idle, running and jumping: a constant map from each name to itself as text.
+		void ChoicesStatement()
+		{
+			const Token keyword = Current();
+			Advance(); // choices
+			if (m_State->Kind != ScopeKind::Script || m_State->ScopeDepth != 0)
+				ErrorAt(keyword, "Write choices at the top level of the script, not inside a function, kind or block.");
+			const std::string name(Current().Lexeme);
+			Advance(); // the name
+			Advance(); // are
+			std::vector<std::string> names;
+			EmitOp(OpCode::NewMap);
+			while (true)
+			{
+				if (!Check(TokenType::Identifier))
+					ErrorAtCurrent("Each choice is a name, like: choices " + name + " are idle, running");
+				const std::string choice(Current().Lexeme);
+				if (std::find(names.begin(), names.end(), choice) != names.end())
+					ErrorAtCurrent("'" + choice + "' is in " + name + "'s choices twice.");
+				names.push_back(choice);
+				Advance();
+				Value text = Value::FromObject(m_VM.Intern(choice));
+				EmitConstant(text);
+				EmitConstant(text);
+				EmitOp(OpCode::MapSet);
+				if (!Match(TokenType::Comma) && !Match(TokenType::And))
+					break;
+			}
+			EmitWithName(OpCode::DefineConstant, name);
+		}
+
+		// 'State.idel' where State is this script's choice set: a compile error that lists the choices.
+		void CheckChoiceName(const std::string& set)
+		{
+			auto found = m_Choices.find(set);
+			if (found == m_Choices.end() || !(Check(TokenType::Dot) || Check(TokenType::Possessive)) || Peek(1).Type != TokenType::Identifier ||
+				Peek(2).Type == TokenType::LeftParen)
+				return;
+			const std::string member(Peek(1).Lexeme);
+			const std::vector<std::string>& names = found->second;
+			if (std::find(names.begin(), names.end(), member) != names.end() || member == "length" || member == "size" || member == "count")
+				return;
+			std::string list;
+			std::vector<std::string_view> candidates;
+			for (const std::string& choice : names)
+			{
+				list += (list.empty() ? "" : ", ") + choice;
+				candidates.push_back(choice);
+			}
+			ErrorAt(Peek(1), set + " has no choice '" + member + "'." + DidYouMean(member, candidates) + " Its choices are: " + list + ".");
+		}
+
 		bool IsListVerbAt(size_t index) const
 		{
 			const Token& token = m_Tokens[index];
@@ -1559,6 +1650,27 @@ namespace ForgeScript {
 		// end
 		// The value is worked out once; the first choice that fits runs, and nothing runs when none fits
 		// and there is no 'otherwise'.
+		// For the missing-choice warning: whether the case at the current token is 'Set.choice' and
+		// nothing more, of the same set as the cases before it.
+		void NoteMatchChoice(std::string& choiceSet, bool& allChoices, std::vector<std::string>& named)
+		{
+			if (!allChoices)
+				return;
+			const TokenType after = Peek(3).Type;
+			const bool isChoice = Check(TokenType::Identifier) && m_Choices.count(std::string(Current().Lexeme)) &&
+				ResolveLocal(m_State, std::string(Current().Lexeme)) == -1 && Peek(1).Type == TokenType::Dot &&
+				Peek(2).Type == TokenType::Identifier &&
+				(after == TokenType::Comma || after == TokenType::Then || after == TokenType::Newline);
+			const std::string set = isChoice ? std::string(Current().Lexeme) : std::string();
+			if (!isChoice || (!choiceSet.empty() && set != choiceSet))
+			{
+				allChoices = false;
+				return;
+			}
+			choiceSet = set;
+			named.emplace_back(Peek(2).Lexeme);
+		}
+
 		void MatchStatement()
 		{
 			Token opener = Current();
@@ -1576,12 +1688,17 @@ namespace ForgeScript {
 			} inMatch(m_MatchDepth);
 
 			std::vector<size_t> endJumps;
+			// Whether every case is a choice of one set ('is State.idle'), and which choices they name.
+			std::string choiceSet;
+			bool allChoices = true;
+			std::vector<std::string> named;
 			while (Check(TokenType::Is))
 			{
 				Advance(); // is
 				std::vector<size_t> fits;
 				while (true)
 				{
+					NoteMatchChoice(choiceSet, allChoices, named);
 					EmitOp(OpCode::GetLocal);
 					EmitByte(static_cast<uint8_t>(subject));
 					IsTail();
@@ -1602,11 +1719,21 @@ namespace ForgeScript {
 				EmitOp(OpCode::Pop);
 			}
 
+			bool hasOtherwise = false;
 			if (Match(TokenType::Otherwise) || Match(TokenType::Else))
 			{
+				hasOtherwise = true;
 				ScopedBlock();
 				if (Check(TokenType::Is))
 					ErrorAtCurrent("Put 'otherwise' last in a 'match', after every 'is'.");
+			}
+			if (!hasOtherwise && allChoices && !choiceSet.empty())
+			{
+				for (const std::string& choice : m_Choices[choiceSet])
+				{
+					if (std::find(named.begin(), named.end(), choice) == named.end())
+						Warn(opener, "This match has no case for " + choiceSet + "." + choice + ", and no otherwise.");
+				}
 			}
 			ConsumeEnd(opener, "'match'");
 			for (size_t jump : endJumps)
@@ -3907,6 +4034,8 @@ namespace ForgeScript {
 					Advance();
 					const Target target = ResolveName(name);
 					WarnIfCallFindsOwnValue(name, target, nameIndex);
+					if (target.Type == TargetType::Global)
+						CheckChoiceName(name);
 					EmitGet(target);
 					return;
 				}
@@ -3988,6 +4117,9 @@ namespace ForgeScript {
 		CompileOptions m_Options;
 		PhraseTable m_Phrases;
 		std::unordered_set<std::string> m_ModuleNames;
+		// Each 'choices State are idle, running' of this script: the set's name and its choices, in order.
+		std::unordered_map<std::string, std::vector<std::string>> m_Choices;
+		bool m_ChoicesIsPhrase = false;
 		FunctionState* m_State = nullptr;
 		std::vector<const std::set<std::string>*> m_StopWords;
 		bool m_NoInvoke = false;

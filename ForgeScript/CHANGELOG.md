@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Choices (enums)** (Roadmap 2.0 Tier 2 #8): `choices State are idle, running and jumping` at the
+  top level makes the constant `State`, where `State.idle` is the text `"idle"`. `State.idel` is a
+  compile error that lists the choices, and a `match` whose cases are all one set's choices, with no
+  `otherwise`, warns about each missing one. The language server lists the set like a constant.
+  `choices` and `are` aren't reserved; the line was an error before, and a script phrase starting
+  with `choices` still wins.
 - **Every and any** (Tier 1 #7): `every score in scores is at least 70`, `any word in words
   contains "a"` and `every enemy in enemies is defeated` (the field is true), the same as
   `scores.all(...)` and `words.any(...)`. One comparison follows the list; `and`/`or` after it belong

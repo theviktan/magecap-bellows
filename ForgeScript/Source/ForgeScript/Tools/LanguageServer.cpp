@@ -18,6 +18,23 @@ namespace ForgeScript {
 	namespace {
 
 		// The positions of the names in "set x, y to ...", from the first name; empty when it isn't that.
+		// 'choices State are idle, running' at the start of a line (the compiler's IsChoicesAt).
+		bool IsChoicesLine(const std::vector<Token>& tokens, size_t i)
+		{
+			return i + 2 < tokens.size() && (i == 0 || tokens[i - 1].Type == TokenType::Newline) &&
+				tokens[i].Type == TokenType::Identifier && tokens[i].Lexeme == "choices" &&
+				tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::Identifier && tokens[i + 2].Lexeme == "are";
+		}
+
+		// The words of a line from tokens[i] to its end, joined by spaces.
+		std::string RestOfLine(const std::vector<Token>& tokens, size_t i)
+		{
+			std::string text;
+			for (size_t j = i; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
+				text += (text.empty() || tokens[j].Type == TokenType::Comma ? "" : " ") + std::string(tokens[j].Lexeme);
+			return text;
+		}
+
 		std::vector<size_t> UnpackedNames(const std::vector<Token>& tokens, size_t first)
 		{
 			std::vector<size_t> names;
@@ -531,6 +548,11 @@ namespace ForgeScript {
 				for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
 					value += (value.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
 				add(Kind::Constant, name, std::string(name.Lexeme), "constant " + std::string(name.Lexeme) + " is " + value, docAbove(token.Line), "");
+			}
+			else if (IsChoicesLine(tokens, i))
+			{
+				const Token& name = tokens[i + 1];
+				add(Kind::Constant, name, std::string(name.Lexeme), RestOfLine(tokens, i), docAbove(token.Line), "");
 			}
 			else if (token.Type == TokenType::Set && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::To)
 			{
@@ -1727,6 +1749,10 @@ namespace ForgeScript {
 					if (variables.insert({ parent, std::string(name.Lexeme) }).second)
 						add(Kind::Variable, std::string(name.Lexeme), lineText(i), token, name, static_cast<int>(name.Lexeme.size()), parent);
 				}
+			}
+			else if (listed && !inKind && IsChoicesLine(tokens, i))
+			{
+				add(Kind::Constant, std::string(next->Lexeme), RestOfLine(tokens, i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && !inKind && token.Type == TokenType::Constant && next && next->Type == TokenType::Identifier)
 			{

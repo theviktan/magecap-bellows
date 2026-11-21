@@ -10,6 +10,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Change a property or item | `set enemy.health to 0`, `set list[2] to "x"`, `set my speed to 3` |
 | Take a list apart | `set name, score to entry` (one item per name, exactly), `set x, y, z to position` (a vector: 2 or 3 names), `set a, b to [b, a]` (swaps) |
 | Constant (top level only) | `constant MAX_HP is 100` |
+| Choices / enum (top level only) | `choices State are idle, running and jumping`; `State.idle` is the text `"idle"`; a misspelled choice is a compile error, and a `match` over the choices with no `otherwise` warns about a missing one |
 | Add / subtract | `add 5 to score`, `take 10 from health` |
 | Add to / remove from a list | `add "key" to items`, `take "key" from items` |
 | Sort, shuffle, turn around | `sort scores`, `sort enemies by health` (a field or key), `sort words by function(w) return w.length end`, `shuffle deck`, `reverse items` (on text, `reverse name` changes the variable) |

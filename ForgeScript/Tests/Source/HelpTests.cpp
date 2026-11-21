@@ -91,10 +91,11 @@ TEST_CASE("HelpOnlyDescribesThingsThatExist")
 		CHECK_FALSE(entry.Signature.empty());
 		switch (entry.EntryKind)
 		{
-			// 'match', 'every' and 'after' are not reserved, but they open blocks (see MatchOpensBlock and
-			// TimerOpensBlock), so they have their own help.
+			// 'match', 'every', 'after' and 'choices' are not reserved, but they start statements of their
+			// own (see MatchOpensBlock, TimerOpensBlock and IsChoicesAt), so they have their own help.
 			case HelpEntry::Kind::Keyword:
-				CHECK((contains(keywords, entry.Name) || entry.Name == "match" || entry.Name == "every" || entry.Name == "after"));
+				CHECK((contains(keywords, entry.Name) || entry.Name == "match" || entry.Name == "every" || entry.Name == "after" ||
+					entry.Name == "choices"));
 				break;
 			case HelpEntry::Kind::Function: CHECK(contains(globals, entry.Name)); break;
 			case HelpEntry::Kind::Phrase: CHECK(contains(phrases, entry.Name)); break;

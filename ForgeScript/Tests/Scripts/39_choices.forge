@@ -1,0 +1,29 @@
+# 'choices' makes a set of named choices (an enum). Each choice is its name, as text.
+choices State are idle, running and jumping
+
+set state to State.idle
+say state                                               # expect: idle
+if state is State.idle then
+	say "standing still"                                # expect: standing still
+end
+
+set state to State.jumping
+match state
+	is State.idle then say "idle"
+	is State.running, State.jumping then say "moving"   # expect: moving
+end
+
+# A set can be walked and counted like the map it is.
+for each choice in State do
+	say choice                                          # expect: idle
+end                                                     # expect: running
+                                                        # expect: jumping
+say State.length                                        # expect: 3
+
+# Choices are text, so they save and print as their names.
+say "state is {state}"                                  # expect: state is jumping
+say state is "jumping"                                  # expect: true
+
+# Two sets can share a choice name.
+choices Weather are sunny, rainy
+say Weather.sunny                                       # expect: sunny

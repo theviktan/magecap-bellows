@@ -87,6 +87,7 @@ A **name** starts with a letter (`a` to `z`, `A` to `Z`) or `_`, followed by let
 | `even`, `odd`, `whole` | number tests after `is`: `x is even`, `x is a whole number` |
 | `the`, `first`, `last`, `item` | list words in a value: `the length of items`, `first of items`, `item 2 of items` |
 | `every`, `any` | `every x in list is ...`, `any x in list is ...`; `every` also starts a timer |
+| `choices`, `are` | `choices State are idle, running` at the start of a line |
 | `as` | `use "helpers" as h` |
 | `match` | the start of a match block ([5.6](#56-match)) |
 
@@ -295,11 +296,13 @@ set name to expression
 set target to expression           target: a.b, a's b, my b, a[i]
 set name, name { , name } to expression
 constant NAME is expression
+choices NAME are name { , name } [ and name ]
 ```
 
 - `set name to` gives a variable a value, making it if needed (see [6](#6-names-and-scope) for where).
 - **Taking apart:** with two or more names, the value must be a list with exactly as many items as names, or a vector with 2 or 3 names (`x`, `y`, `z`). The value is worked out first, so `set a, b to [b, a]` swaps. A name may appear only once.
 - `constant` works only at the top level of a script. A constant cannot be changed afterward.
+- **Choices:** `choices NAME are a, b and c` is `constant NAME is {a: "a", b: "b", c: "c"}`, with the choices in order; each choice is its name as text. It works only at the top level of a script, starting a line, and the names must differ. A script phrase starting with `choices` takes the line instead. Where `NAME` isn't a local, `NAME.x` with `x` not a choice (and not `length`, `size`, `count` or a call) is a compile error, wherever the line is in the script. A `match` with no `otherwise` whose cases are all `NAME.choice` of one set gives a warning ([13](#13-mistakes-and-warnings)) for each choice it leaves out.
 
 ### 5.2 Changing values
 
@@ -565,6 +568,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 
 - A value named like a built-in function that the script also calls: `set max to 10` in a script that calls `max(a, b)`.
 - `show (menu)`, with a space before the bracket, for a host phrase that gives way to calls ([8](#8-phrases)): it is a call, not the phrase.
+- In 1.6.0: a `match` with no `otherwise` whose cases are all choices of one set ([5.1](#51-variables-and-constants)) and leave one out: "This match has no case for State.jumping, and no otherwise."
 
 ---
 
