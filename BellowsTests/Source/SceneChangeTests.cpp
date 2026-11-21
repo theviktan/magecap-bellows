@@ -233,3 +233,54 @@ TEST_CASE("A scene file without settings or a name gets a new scene's, not the o
 	CHECK(test.Play->GetSettings().Gravity.y == doctest::Approx(SceneSettings {}.Gravity.y));
 	CHECK(test.Play->GetName() == "Untitled");
 }
+
+namespace {
+
+	// Started in the old scene: the kept one's wait finishes in the new scene, the other's is cancelled.
+	const char* c_KeptWaiter = R"FORGE(
+when created
+	wait 0.25 seconds
+	set my name to "kept wait finished"
+end
+)FORGE";
+
+	const char* c_LeftWaiter = R"FORGE(
+when created
+	wait 0.25 seconds
+	set thing to find_entity("Level Thing")
+	set thing.name to "the old scene's wait ran"
+end
+)FORGE";
+
+}
+
+TEST_CASE("A kept ForgeScript script's wait finishes in the new scene; one that goes is cancelled")
+{
+	REQUIRE(ScriptEngine::IsInitialized());
+	ScriptEngine::ResetErrorCount();
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "SceneChangeWaits";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "KeptWaiter.forge", c_KeptWaiter));
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts" / "LeftWaiter.forge", c_LeftWaiter));
+	AssetManager::SetAssetDirectory(assets);
+
+	Ref<Scene> scene = CreateRef<Scene>();
+	Entity kept = scene->CreateEntity("Kept waiter");
+	kept.AddComponent<ScriptComponent>().ScriptPath = "Scripts/KeptWaiter.forge";
+	kept.GetComponent<TagComponent>().KeepAcrossScenes = true;
+	scene->CreateEntity("Left waiter").AddComponent<ScriptComponent>().ScriptPath = "Scripts/LeftWaiter.forge";
+	scene->OnRuntimeStart();
+	ScriptEngine::SetContextScene(scene.get());
+	scene->OnUpdateRuntime(1.0f / 60.0f);
+
+	REQUIRE(scene->ChangeScene(MakeLevel(UUID()), "Scenes/Level2.bscene"));
+	for (int frame = 0; frame < 30; frame++)
+		scene->OnUpdateRuntime(1.0f / 60.0f);
+	CHECK(kept.GetName() == "kept wait finished");
+	CHECK(scene->FindEntityByName("Level Thing"));
+	CHECK_FALSE(scene->FindEntityByName("the old scene's wait ran"));
+	CHECK(ScriptEngine::GetErrorCount() == 0);
+
+	scene->OnRuntimeStop();
+	ScriptEngine::SetContextScene(nullptr);
+	AssetManager::SetAssetDirectory({});
+}
