@@ -412,6 +412,8 @@ fail "out of arrows"
 
 `catch problem` gets the message as text for ForgeScript's own errors, or whatever value was given to `fail`.
 
+When a habit from Python or GDScript slips in (`x += 1`, `elif`, `True`, `len(items)`, `items.append(x)`), ForgeScript's error ends with the ForgeScript for it, so you learn the new way as you go.
+
 ## Events (signals)
 
 ```python

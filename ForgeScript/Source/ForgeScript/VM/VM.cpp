@@ -1419,7 +1419,7 @@ namespace ForgeScript {
 		if (!receiver.IsObject())
 		{
 			return Fail("Cannot use '" + name->Text + "' on " + (receiver.IsNothing() ? std::string("nothing") : "a " + TypeOf(receiver)) +
-				(receiver.IsNothing() ? ". The value has not been set yet." : "."));
+				(receiver.IsNothing() ? ". The value has not been set yet." : "." + OtherLanguageMethodHint(TypeOf(receiver), name->Text)));
 		}
 
 		// 'properties' are the type's values read without brackets, like a list's length.
@@ -1435,7 +1435,10 @@ namespace ForgeScript {
 						name->Text);
 				}
 				AddNames(properties, table);
-				return Fail(std::string("A ") + typeName + " has no function called '" + name->Text + "'." + DidYouMean(name->Text, properties));
+				std::string hint = OtherLanguageMethodHint(typeName, name->Text);
+				if (hint.empty())
+					hint = DidYouMean(name->Text, properties);
+				return Fail(std::string("A ") + typeName + " has no function called '" + name->Text + "'." + hint);
 			}
 			return CallNative(task, it->second, argCount, receiver);
 		};
@@ -2470,8 +2473,11 @@ namespace ForgeScript {
 					Value value;
 					if (!LookupGlobal(frame->Function->Fn->Owner, name, value))
 					{
-						// A typo of a known name is far more likely than a forgotten 'set', so name the match.
-						const std::string hint = DidYouMean(name->Text, GlobalNameCandidates(frame->Function->Fn));
+						// A name from another language ('True', 'len') gets the ForgeScript for it; otherwise a typo of
+						// a known name is far more likely than a forgotten 'set', so name the match.
+						std::string hint = OtherLanguageNameHint(name->Text);
+						if (hint.empty())
+							hint = DidYouMean(name->Text, GlobalNameCandidates(frame->Function->Fn));
 						FORGESCRIPT_FAIL("'" + name->Text + "' has not been given a value yet." +
 							(hint.empty() ? " Use: set " + name->Text + " to ..." : hint));
 					}

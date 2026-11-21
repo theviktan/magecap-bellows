@@ -330,6 +330,39 @@ TEST_CASE("ToolsSeeWaitForAndTimers")
 	CHECK_EQ(Output("set l to [2, 1]\nl.sort_by(function(x)\n\tafter 1 second\n\t\tsay x\n\tend\n\treturn x\nend)\nsay l\n"), std::string("[1, 2]\n"));
 }
 
+TEST_CASE("MistakesFromOtherLanguagesTeachTheForgeScript")
+{
+	// Each keeps its old message and adds the ForgeScript that does what was meant.
+	CHECK_CONTAINS(CompileFails("set x to 1\nincrease x by 2\n").Message, "Expected the end of the line, but found 'x'. To make a number bigger, write: add 2 to x");
+	CHECK_CONTAINS(CompileFails("set x to 1\ndecrease x by 3\n").Message, "To make a number smaller, write: take 3 from x");
+	CHECK_CONTAINS(CompileFails("def jump():\n\treturn 1\n").Message, "To make a function, write: function jump() ... end");
+	CHECK_CONTAINS(CompileFails("var score = 0\n").Message, "To make a variable, write: set score to ...");
+	CHECK_CONTAINS(CompileFails("const MAX = 3\n").Message, "To make a constant, write: constant MAX is ...");
+	CHECK_CONTAINS(CompileFails("if true then\n\tsay 1\nelif x is 2 then\n\tsay 2\nend\n").Message, "else if x is 2 then");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx += 2\n").Message, "Expected a value here, but found '='. To add to a value, write: add 2 to x");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx -= 2\n").Message, "write: take 2 from x");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx *= 2\n").Message, "write: multiply x by 2");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx /= 2\n").Message, "write: divide x by 2");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx++\n").Message, "ForgeScript has no ++. Write: add 1 to x");
+	CHECK_CONTAINS(CompileFails("set x to 1\nx--\n").Message, "ForgeScript has no --. Write: take 1 from x");
+	CHECK_CONTAINS(CompileFails("say 7 // 2\n").Message, "ForgeScript has no //. For a whole-number result, write: floor(a / b)");
+	CHECK_CONTAINS(CompileFails("set x to 1\nif x > 0:\n\tsay 1\nend\n").Message, "ForgeScript doesn't end a line with ':'");
+	CHECK_CONTAINS(CompileFails("set p to 1\nsay \"{p:.2}\"\n").Message, "write: {format_number(p, 2)}");
+	CHECK_CONTAINS(CompileFails("if 1 > 0 && 2 > 1 then\nend\n").Message, "ForgeScript writes 'and'");
+	CHECK_CONTAINS(CompileFails("if 1 > 0 || 2 > 1 then\nend\n").Message, "ForgeScript writes 'or'");
+	// The same words are still names: nothing that worked changes.
+	CompilesFine("set increase to 2\nset var to increase + 1\nfunction def(x)\n\treturn x\nend\nsay def(var)\n");
+
+	CHECK_CONTAINS(Output("try\n\tsay True\ncatch problem\n\tsay problem\nend\n"), "'True' has not been given a value yet. In ForgeScript, write: true");
+	CHECK_CONTAINS(Output("try\n\tsay len([1])\ncatch problem\n\tsay problem\nend\n"), "In ForgeScript, write: length(list)");
+	CHECK_CONTAINS(Output("try\n\t[1].append(2)\ncatch problem\n\tsay problem\nend\n"), "A list has no function called 'append'. In ForgeScript, write: add x to list");
+	CHECK_CONTAINS(Output("try\n\tsay \"a\".toUpperCase()\ncatch problem\n\tsay problem\nend\n"), "In ForgeScript, write: text.upper()");
+	CHECK_CONTAINS(Output("try\n\tsay (5).toString()\ncatch problem\n\tsay problem\nend\n"), "Cannot use 'toString' on a number. In ForgeScript, write: text(x)");
+	// A typo still gets its 'Did you mean', and a name nobody knows its 'Use: set'.
+	CHECK_CONTAINS(Output("set health to 1\ntry\n\tsay helth\ncatch problem\n\tsay problem\nend\n"), "Did you mean 'health'?");
+	CHECK_CONTAINS(Output("try\n\tsay zork\ncatch problem\n\tsay problem\nend\n"), "Use: set zork to ...");
+}
+
 TEST_CASE("InlineIfIsNotAPlainScriptVariable")
 {
 	// The Inspector only shows plain values; a value picked by a test depends on the script running.
