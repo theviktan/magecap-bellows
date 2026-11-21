@@ -23,16 +23,12 @@ namespace {
 		return output;
 	}
 
-	// Kept: counts its on_create calls, the goodbyes of entities that go, and the scenes loaded.
+	// Kept: counts the goodbyes of entities that go, and the scenes loaded.
 	const char* c_Keeper = R"PY(
 import bellows
 
-created = 0
-
 class Keeper(bellows.Script):
     def on_create(self):
-        global created
-        created += 1
         self.goodbyes = 0
         self.loads = []
 
@@ -134,6 +130,7 @@ TEST_CASE("load_scene keeps entities marked Keep Across Scenes, with their scrip
 	const float timeBefore = scene.GetTime();
 	const glm::vec3 velocityBefore = scene.GetPhysicsWorld()->GetLinearVelocity(test.Player);
 	REQUIRE(velocityBefore.y < -0.1f);
+	const std::string keeperScript = Evaluate("id(bellows.find_entity('Keeper').script)");
 	scene.SetGamePaused(true);
 
 	REQUIRE(scene.ChangeScene(MakeLevel(player), "Scenes/Level2.bscene"));
@@ -171,7 +168,7 @@ TEST_CASE("load_scene keeps entities marked Keep Across Scenes, with their scrip
 	SUBCASE("Kept scripts carry on, and every script hears the new scene")
 	{
 		const std::string script = "bellows.find_entity('Keeper').script";
-		CHECK(Evaluate("import sys; sys.modules[type(" + script + ").__module__].created") == "1");
+		CHECK(Evaluate("id(" + script + ")") == keeperScript);
 		CHECK(Evaluate(script + ".goodbyes") == "1");
 		CHECK(Evaluate(script + ".loads") == "[('Level 2', 'Scenes/Level2.bscene')]");
 		CHECK(scene.TryGetEntityByUUID(forgeKeeper).GetName() == "loaded Level 2 from Scenes/Level2.bscene");
