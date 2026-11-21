@@ -30,6 +30,8 @@ Everything in the language on one page. For explanations and examples, see the [
 | Event from one entity | `when "Start" is clicked ... end`: runs only when the entity named Start (any letter case) raised the event, like a UI widget's events on their way up to its parents' scripts |
 | Send an event | `trigger hit with 25`, `trigger "game over"` |
 | Wait | `wait 2 seconds`, `wait 250 ms`, `wait 3 frames`, `wait`, `wait until ready` |
+| Wait for an event | `wait for door opened`, `wait for hit with damage, source`, `wait for "Start" is clicked` (the script's `when` blocks run first; a wait begun during the event waits for the next one) |
+| Timers | `every 3 seconds ... end` (waits, runs, again; `stop` ends it), `after 2 seconds ... end` (once). Same units as `wait`; the line after runs right away |
 | Run as a task | `start patrol()`, `start guard.patrol(3)` |
 | Errors | `try ... catch problem ... end`, `fail "message"`, cleanup that always runs: `try ... catch problem ... finally ... end` (without `catch`, the error goes on after the finally code) |
 | Use another script | `use "helpers"`, `use "helpers" as h` |
@@ -102,7 +104,7 @@ These cannot be used as variable or function names (they can be used as property
 
 `add` `and` `by` `catch` `constant` `contains` `divide` `do` `each` `else` `end` `extends` `fail` `false` `for` `from` `function` `if` `in` `is` `kind` `multiply` `my` `new` `no` `not` `nothing` `of` `or` `otherwise` `parent` `phrase` `repeat` `return` `self` `set` `skip` `start` `stop` `take` `then` `to` `trigger` `true` `try` `until` `use` `wait` `when` `while` `with` `yes`
 
-Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`, `most`, `than`, `empty`, `match`, `a`, `an` and `as` only have a special meaning in their own spot, so you can still use them as names.
+Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`, `most`, `than`, `empty`, `match`, `every`, `after`, `a`, `an` and `as` only have a special meaning in their own spot, so you can still use them as names.
 
 ## Scope rules
 
@@ -114,7 +116,7 @@ Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`
 
 ## Tasks and time
 
-- Every `when` handler and every `start` runs as its own task.
+- Every `when` handler, every `start` and every timer (`every`, `after`) runs as its own task.
 - `wait` pauses only the current task. The engine moves time forward once per frame.
 - While the game is paused (`pause the game`), waits hold and `time()` stops, except in scripts marked Run While Paused, whose waits count down in real time. Held waits carry on with the time they had left (guide, [Pausing the game](LanguageGuide.md#pausing-the-game)).
 - Code called directly by the engine or by a built-in function (such as the function given to `sort_by`) must finish right away and cannot `wait`.

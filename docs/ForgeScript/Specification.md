@@ -1,6 +1,6 @@
 # ForgeScript Language Specification
 
-This is the exact description of ForgeScript **1.5.0**: what a script may contain and what it means. Use it when you need a precise answer, when you build a tool that reads ForgeScript, or when you change the language.
+This is the exact description of ForgeScript **1.6.0**: what a script may contain and what it means. Use it when you need a precise answer, when you build a tool that reads ForgeScript, or when you change the language.
 
 - To **learn** ForgeScript, read the [Language Guide](LanguageGuide.md), which explains everything with examples.
 - To **look something up** quickly, use the one-page [Quick Reference](Reference.md).
@@ -369,6 +369,10 @@ when "Entity Name" is event-name ...  block  end
 trigger event-name [ with expression { , expression } ]
 wait [ expression [unit] ]
 wait until expression
+wait for event-name [ (with | by) name { (, | and) name } ]
+wait for "Entity Name" is event-name [ (with | by) name { (, | and) name } ]
+every expression unit [do]  block  end
+after expression unit [do]  block  end
 start call
 ```
 
@@ -505,7 +509,9 @@ end
 
 - The host moves time forward, once per frame.
 - A host whose game is paused calls `VM::UpdatePaused` instead of `Update`. Time and the frame count stand still, so `time()` stops and every wait holds, except the waits of tasks in modules the host names (MageCap Bellows: scripts marked Run While Paused). Those count down by the real frame time. When the host calls `Update` again, the held waits carry on with the time they had left.
-- Code that a host or a built-in function calls directly and must finish right away (a function passed to `sort_by`, an object's `to_text`) cannot `wait`.
+- `wait for` *event-name* pauses the task until its module next gets the event, delivered as a `when` block would get it (to that module only, or to every module, as the host sends it); `wait for "Start" is clicked` needs the event's source to be that entity, ignoring letter case. The module's `when` blocks for the event run first, then its waiting tasks, in the order they began waiting. The waiting tasks are chosen before any block runs, so a wait that begins during the event waits for its next one. The names after `with` or `by` receive the event's values like a `when` block's names (missing ones are `nothing`); at the top of a script they are script variables, elsewhere variables of the function. An event wait is never ended by time, and ends when its event comes even while the host's game is paused. `VM::HasHandler` reports a module that waits for an event as one that has a handler for it.
+- `every` *expression unit* ... `end` and `after` *expression unit* ... `end` are **timers**. The unit is one of `second`, `seconds`, `ms`, `millisecond`, `milliseconds`, `minute`, `minutes`, `frame`, `frames`, and is required. Each timer runs as a task of its module, made from its block as from an anonymous function (it sees the variables around it), started where it is written; the line after the timer runs right away. `after` waits once (as `wait` *expression unit* would) and runs its block. `every` repeats forever: it works out the expression, waits, and runs its block; `stop` and `skip` inside the block (outside any inner loop) end or restart it. Timers are cancelled with their module. `every` and `after` are not reserved: a line is a timer when it starts a statement with one of them, a value follows, and the line ends in a unit. A script whose phrases (its own, the host's, or a used script's) start with that word calls the phrase instead.
+- Code that a host or a built-in function calls directly and must finish right away (a function passed to `sort_by`, an object's `to_text`) cannot `wait` or `wait for`. It can start a task or a timer, which runs on its own.
 
 ---
 

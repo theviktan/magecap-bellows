@@ -882,6 +882,53 @@ end
 | `wait 3 frames` | game frames |
 | `wait` | one frame |
 | `wait until door_open` | check every frame until true |
+| `wait for door opened` | until this script gets the event |
+
+### Waiting for an event with `wait for`
+
+`wait for` pauses the task until the script gets an event, the same one a `when` block would hear. It's how you write "do this, then wait until that happens" in one place:
+
+```forge
+when "Talk" is clicked
+	say "Guard: Halt! Show me your pass."
+	wait for pass shown with name
+	say "Guard: Welcome, {name}."
+end
+```
+
+- The names after `with` (or `by`) get the event's values, in order. Missing values are `nothing`.
+- `wait for "Start" is clicked` waits for the event from the entity named Start, like a `when "Start" is clicked` block.
+- The script's `when` blocks for the event run first, then the tasks waiting for it.
+- A `wait for` that starts while its event is being handled waits for the **next** time the event happens.
+- An event wait ends when its event comes, even while the game is paused, the same way `when` blocks still run then.
+
+### Timers with `every` and `after`
+
+`every` runs a block again and again on a timer, and `after` runs it once, later. The rest of the script carries on right away:
+
+```forge
+set spawned to 0
+
+every 3 seconds
+	add 1 to spawned
+	say "Spawned enemy number {spawned}"
+	if spawned is 5 then
+		stop
+	end
+end
+
+after 10 seconds
+	say "The gates are closing!"
+end
+```
+
+- They take the same times as `wait`: `every 500 ms`, `after 2 minutes`, `every 2 frames`.
+- `every` waits first, then runs the block. The next wait starts when the block finishes, so a slow block never piles up.
+- The time is worked out again each round, so `every delay seconds` speeds up when you lower `delay`.
+- `stop` inside `every` ends the timer. A timer also ends when its script goes, for example when its entity is destroyed.
+- Timers count game time. While the game is paused they hold, unless the script is marked Run While Paused.
+- They work at the top of a script and inside `when` blocks, functions and a kind's functions.
+- `every` and `after` are still fine as names. They only start a timer on a line that ends in a time word, like `seconds` or `frames`.
 
 ### Running things at the same time with `start`
 

@@ -213,12 +213,14 @@ namespace ForgeScript {
 
 		Value GetGlobal(Module* module, const std::string& name);
 		void SetGlobal(Module* module, const std::string& name, Value value);
+		// True when the module has a 'when' handler for the event, or a task waiting for it ('wait for').
 		bool HasHandler(Module* module, const std::string& event);
 
-		// Runs every "when <event>" handler in the module. Returns false if one of them failed. 'source' is
-		// the name of the entity that raised the event, for handlers written 'when "Start" is clicked':
-		// those run only when it matches their name, ignoring letter case, and never for an event
-		// without a source.
+		// Runs every "when <event>" handler in the module, then the module's tasks that wait for the event
+		// ('wait for'), in the order they began waiting. Returns false if one of them failed. 'source' is
+		// the name of the entity that raised the event, for handlers written 'when "Start" is clicked'
+		// (and 'wait for "Start" is clicked'): those run only when it matches their name, ignoring letter
+		// case, and never for an event without a source.
 		bool Emit(Module* module, const std::string& event, const std::vector<Value>& values = {}, const std::string& source = {});
 		// Sends an event to every loaded module.
 		void EmitAll(const std::string& event, const std::vector<Value>& values = {});
@@ -320,6 +322,8 @@ namespace ForgeScript {
 		void RunTask(Task* task);
 		void Execute(Task* task);
 		void RemovePending(Task* task);
+		// A task's 'wait for' ended (the event came, or the task was cancelled): it no longer counts.
+		void EndEventWait(Task* task);
 		// Runs the waiting tasks whose wait is over; with 'only', just those of the modules it accepts.
 		void ResumeFinishedWaits(const std::function<bool(const Module*)>* only);
 		NativeFunction* NativeMethod(const NativeType::MethodInfo& info, const std::string& name);

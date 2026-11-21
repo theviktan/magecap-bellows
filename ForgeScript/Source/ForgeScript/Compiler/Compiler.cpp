@@ -227,6 +227,9 @@ namespace ForgeScript {
 				// "match 5" may be a phrase's line when the engine, this script or one it uses has a phrase
 				// starting with 'match'; otherwise a match with no 'is' still pairs with its 'end'.
 				m_ChoicelessMatchIsBlock = m_Phrases.GetRoot()->Words.count("match") == 0;
+				// Likewise a phrase starting with 'every' or 'after' keeps its lines (timers came later).
+				m_EveryIsPhrase = m_Phrases.GetRoot()->Words.count("every") > 0;
+				m_AfterIsPhrase = m_Phrases.GetRoot()->Words.count("after") > 0;
 				PrescanModuleNames();
 
 				Function* fn = m_VM.NewFunction();
@@ -415,10 +418,11 @@ namespace ForgeScript {
 				case TokenType::If:
 					return !(i > 0 && (tokens[i - 1].Type == TokenType::Else || tokens[i - 1].Type == TokenType::Otherwise)) &&
 						!IfPicksAValue(tokens, i);
-				case TokenType::While: case TokenType::Repeat: case TokenType::For:
+				case TokenType::While: case TokenType::Repeat:
 				case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 					return true;
-				case TokenType::Until:
+				// 'wait until' and 'wait for' are waits, not loops.
+				case TokenType::Until: case TokenType::For:
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Wait);
 				case TokenType::Kind:
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Identifier &&
@@ -426,7 +430,8 @@ namespace ForgeScript {
 				case TokenType::Identifier:
 					// A match with no 'is' choice is a mistake, but its 'end' still belongs to it, so the
 					// rest of the script pairs up as written.
-					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i));
+					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i)) ||
+						IsTimerAt(tokens, i);
 				default:
 					return false;
 			}
@@ -565,8 +570,9 @@ namespace ForgeScript {
 				const Token& token = m_Tokens[i];
 				if (IsBlockOpener(m_Tokens, i))
 				{
+					// A timer's body is a function of its own, like a handler's.
 					bool functionLike = token.Type == TokenType::Function || token.Type == TokenType::Phrase ||
-						token.Type == TokenType::When || token.Type == TokenType::Kind;
+						token.Type == TokenType::When || token.Type == TokenType::Kind || (token.Type == TokenType::Identifier && IsTimerAt(m_Tokens, i));
 					if (functionLike)
 					{
 						if (isScript && (token.Type == TokenType::Function || token.Type == TokenType::Kind) &&
@@ -603,6 +609,12 @@ namespace ForgeScript {
 				{
 					// set x, y to ...: each name is set, so each is a variable here.
 					std::vector<std::string> names = UnpackNames(i + 1);
+					outNames.insert(outNames.end(), names.begin(), names.end());
+				}
+				else if (!afterMember && token.Type == TokenType::Wait)
+				{
+					// wait for hit with damage: the event's values are set into its names.
+					std::vector<std::string> names = WaitForNames(i);
 					outNames.insert(outNames.end(), names.begin(), names.end());
 				}
 				i++;
@@ -1164,6 +1176,8 @@ namespace ForgeScript {
 				default:
 					if (MatchOpensBlock(m_Tokens, m_Pos))
 						MatchStatement();
+					else if (IsTimerAt(m_Tokens, m_Pos))
+						TimerStatement();
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else if (MatchWithoutChoices())
@@ -1370,6 +1384,41 @@ namespace ForgeScript {
 		// 'match - 1' are left alone).
 		bool MatchWithoutChoices() const { return MatchWithoutChoicesAt(m_Pos); }
 
+
+		// A timer ('every 3 seconds', 'after 2 seconds') starts here, unless the script's phrases use its word.
+		bool IsTimerAt(const std::vector<Token>& tokens, size_t index) const
+		{
+			if (!TimerOpensBlock(tokens, index))
+				return false;
+			if (&tokens != &m_Tokens)
+				return true;
+			return tokens[index].Lexeme == "every" ? !m_EveryIsPhrase : !m_AfterIsPhrase;
+		}
+
+		// The names a 'wait for' line gives the event's values ('wait for hit with damage, source'), when the
+		// statement at tokens[index] is one.
+		std::vector<std::string> WaitForNames(size_t index) const
+		{
+			std::vector<std::string> names;
+			if (index + 1 >= m_Tokens.size() || m_Tokens[index].Type != TokenType::Wait || m_Tokens[index + 1].Type != TokenType::For)
+				return names;
+			size_t i = index + 2;
+			while (i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Newline && m_Tokens[i].Type != TokenType::Eof &&
+				m_Tokens[i].Type != TokenType::With && m_Tokens[i].Type != TokenType::By)
+				i++;
+			if (i >= m_Tokens.size() || (m_Tokens[i].Type != TokenType::With && m_Tokens[i].Type != TokenType::By))
+				return names;
+			// The names, separated by ',' or 'and'.
+			i++;
+			while (i < m_Tokens.size() && m_Tokens[i].Type == TokenType::Identifier)
+			{
+				names.emplace_back(m_Tokens[i].Lexeme);
+				if (i + 1 >= m_Tokens.size() || (m_Tokens[i + 1].Type != TokenType::Comma && m_Tokens[i + 1].Type != TokenType::And))
+					break;
+				i += 2;
+			}
+			return names;
+		}
 
 		bool MatchWithoutChoicesAt(size_t index) const
 		{
@@ -1779,7 +1828,7 @@ namespace ForgeScript {
 
 		// Compiles a parameter list and body into a function and emits a closure for it.
 		void FunctionBody(const std::string& name, ScopeKind kind, const std::vector<std::string>& params, const Token& opener, const char* what,
-			const std::string& eventSource = {}, const std::vector<DefaultValue>& defaults = {})
+			const std::string& eventSource = {}, const std::vector<DefaultValue>& defaults = {}, const std::function<void()>& body = {})
 		{
 			Function* fn = m_VM.NewFunction();
 			fn->Name = m_VM.Intern(name);
@@ -1821,7 +1870,10 @@ namespace ForgeScript {
 			}
 
 			fn->BodyIp = CurrentChunk().Size();
-			Block();
+			if (body)
+				body();
+			else
+				Block();
 			ConsumeEnd(opener, what);
 			// Returning at the end belongs to the body's last line; the closure made from it, and what
 			// the definition does with it, to the line that opened it.
@@ -2494,6 +2546,11 @@ namespace ForgeScript {
 		void WaitStatement()
 		{
 			Advance();
+			if (Match(TokenType::For))
+			{
+				WaitForEvent();
+				return;
+			}
 			if (Match(TokenType::Until))
 			{
 				// wait until door_open   ->   check every frame until it is true
@@ -2518,6 +2575,59 @@ namespace ForgeScript {
 				return;
 			}
 
+			WaitAmount();
+		}
+
+		// 'wait for hit with damage': waits until the script gets the event, then sets its values.
+		void WaitForEvent()
+		{
+			std::string source;
+			if (Check(TokenType::Interpolation))
+				ErrorAtCurrent("The text after 'wait for' must be plain, without { }: an event name, or an entity's name as in wait for \"Start\" is clicked.");
+			if (Check(TokenType::String) && Peek(1).Type == TokenType::Is)
+			{
+				source = Current().Text;
+				if (source.empty())
+					ErrorAtCurrent("Write the entity's name in the quotes, like: wait for \"Start\" is clicked");
+				Advance();
+				Advance();
+			}
+			std::string event = EventName(source.empty() ? "wait for door opened" : "wait for \"Start\" is clicked");
+			std::vector<std::string> names;
+			if (Match(TokenType::With) || Match(TokenType::By))
+			{
+				do
+				{
+					names.push_back(ConsumeName("Expected a name for the event value, like: wait for hit with damage"));
+				} while (Match(TokenType::Comma) || Match(TokenType::And));
+			}
+			if (names.size() > 255)
+				Error("An event can carry at most 255 values.");
+			EmitWithName(OpCode::WaitEvent, event);
+			EmitU16(NameConstant(source));
+			EmitByte(static_cast<uint8_t>(names.size()));
+			// The values are on the stack in order, so the last name takes the top one.
+			for (size_t i = names.size(); i > 0; i--)
+			{
+				const std::string& name = names[i - 1];
+				Target target;
+				if (m_State->Kind == ScopeKind::Script && ResolveLocal(m_State, name) == -1)
+				{
+					target.Type = TargetType::Global;
+					target.Name = NameConstant(name);
+				}
+				else
+				{
+					target = ResolveName(name);
+				}
+				EmitSet(target);
+				EmitOp(OpCode::Pop);
+			}
+		}
+
+		// The amount and unit of 'wait 2 seconds' (also a timer's), then the wait itself.
+		void WaitAmount()
+		{
 			Expression();
 			WaitMode mode = WaitMode::Seconds;
 			if (MatchWord("frame") || MatchWord("frames"))
@@ -2541,6 +2651,38 @@ namespace ForgeScript {
 			}
 			EmitOp(OpCode::Wait);
 			EmitByte(static_cast<uint8_t>(mode));
+		}
+
+		// 'every 3 seconds ... end' and 'after 2 seconds ... end': the body runs as a task of its own, made
+		// from a function like an anonymous one. 'every' waits, runs the body, and starts over; the time is
+		// worked out again each time, counted from when the body finished. 'stop' inside it ends it.
+		void TimerStatement()
+		{
+			Token opener = Current();
+			const bool every = opener.Lexeme == "every";
+			Advance();
+			FunctionBody(std::string(opener.Lexeme) + " timer", ScopeKind::Function, {}, opener, every ? "'every' timer" : "'after' timer", {}, {},
+				[this, every]
+				{
+					if (every)
+					{
+						size_t loopStart = CurrentChunk().Size();
+						PushLoop(loopStart, true);
+						WaitAmount();
+						Match(TokenType::Do);
+						ScopedBlock();
+						EmitLoop(loopStart);
+						PopLoop();
+					}
+					else
+					{
+						WaitAmount();
+						Match(TokenType::Do);
+						Block();
+					}
+				});
+			EmitOp(OpCode::Start);
+			EmitByte(0);
 		}
 
 		void StartStatement()
@@ -3492,6 +3634,8 @@ namespace ForgeScript {
 			Compiler& m_Compiler;
 		};
 		bool m_ChoicelessMatchIsBlock = false; // set once the phrases are known
+		bool m_EveryIsPhrase = false;          // set once the phrases are known
+		bool m_AfterIsPhrase = false;
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;

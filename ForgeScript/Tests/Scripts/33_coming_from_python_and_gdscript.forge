@@ -143,3 +143,22 @@ when hit by damage
 	say "Ouch, {damage}!"
 end
 trigger hit with 25                                      # expect: Ouch, 25!
+
+# Waiting for a signal, and timers
+set spawned to 0
+function spawn()
+	add 1 to spawned
+end
+start function()
+	wait for door opened
+	say "door opened"
+end()
+trigger door opened                                      # expect: door opened
+every 3 seconds
+	spawn()
+	if spawned is 2 then
+		stop
+	end
+end
+wait 7 seconds
+say spawned                                              # expect: 2

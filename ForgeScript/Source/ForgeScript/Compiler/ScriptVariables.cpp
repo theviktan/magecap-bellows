@@ -23,15 +23,16 @@ namespace ForgeScript {
 			// one of two values has no 'end'.
 			case TokenType::If:
 				return previous != TokenType::Else && previous != TokenType::Otherwise && !IfPicksAValue(tokens, i);
-			case TokenType::While: case TokenType::Repeat: case TokenType::For:
+			case TokenType::While: case TokenType::Repeat:
 			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 				return true;
-			case TokenType::Until:
+			// 'wait until' and 'wait for' are waits, not loops.
+			case TokenType::Until: case TokenType::For:
 				return previous != TokenType::Wait;
 			case TokenType::Kind:
 				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 			case TokenType::Identifier:
-				return MatchOpensBlock(tokens, i);
+				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i);
 			default:
 				return false;
 		}
@@ -192,7 +193,8 @@ namespace ForgeScript {
 					depth++;
 				else if (tokens[i].Type == TokenType::End && --depth == 0)
 					return i + 1;
-				if (tokens[i].Type == TokenType::Wait)
+				// A timer started from the handler holds while paused too, like a 'wait'.
+				if (tokens[i].Type == TokenType::Wait || TimerOpensBlock(tokens, i))
 					facts.Waits = true;
 				else if (tokens[i].Type == TokenType::Identifier && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::LeftParen
 					&& (i == 0 || (tokens[i - 1].Type != TokenType::Dot && tokens[i - 1].Type != TokenType::Possessive)))
