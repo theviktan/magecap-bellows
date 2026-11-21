@@ -230,6 +230,11 @@ namespace ForgeScript {
 				// Likewise a phrase starting with 'every' or 'after' keeps its lines (timers came later).
 				m_EveryIsPhrase = m_Phrases.GetRoot()->Words.count("every") > 0;
 				m_AfterIsPhrase = m_Phrases.GetRoot()->Words.count("after") > 0;
+				for (const char* verb : { "sort", "shuffle", "reverse" })
+				{
+					if (m_Phrases.GetRoot()->Words.count(verb) > 0)
+						m_ListVerbPhrases.insert(verb);
+				}
 				PrescanModuleNames();
 
 				Function* fn = m_VM.NewFunction();
@@ -1255,6 +1260,8 @@ namespace ForgeScript {
 						MatchStatement();
 					else if (IsTimerAt(m_Tokens, m_Pos))
 						TimerStatement();
+					else if (IsListVerbAt(m_Pos))
+						ListVerbStatement();
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else if (MatchWithoutChoices())
@@ -1470,6 +1477,20 @@ namespace ForgeScript {
 			if (&tokens != &m_Tokens)
 				return true;
 			return tokens[index].Lexeme == "every" ? !m_EveryIsPhrase : !m_AfterIsPhrase;
+		}
+
+		// 'sort items', 'shuffle my cards', 'reverse items': a list verb with a variable or field after it.
+		// Neither word is reserved, and such a line was always a mistake, so names, calls ('sort(x)') and a
+		// script's own phrases starting with the word keep their meaning.
+		bool IsListVerbAt(size_t index) const
+		{
+			const Token& token = m_Tokens[index];
+			if (token.Type != TokenType::Identifier || (token.Lexeme != "sort" && token.Lexeme != "shuffle" && token.Lexeme != "reverse"))
+				return false;
+			if (m_ListVerbPhrases.count(std::string(token.Lexeme)) > 0 || index + 1 >= m_Tokens.size())
+				return false;
+			const TokenType next = m_Tokens[index + 1].Type;
+			return next == TokenType::Identifier || next == TokenType::My || next == TokenType::Self;
 		}
 
 		// The names a 'wait for' line gives the event's values ('wait for hit with damage, source'), when the
@@ -2730,6 +2751,75 @@ namespace ForgeScript {
 			EmitByte(static_cast<uint8_t>(mode));
 		}
 
+		// 'sort items' is 'set items to items.sort()', and the same for shuffle and reverse, so 'reverse name' on
+		// a text changes the variable too (text can't be changed in place). 'sort enemies by health' sorts by
+		// each item's field or key; 'sort items by function(x) ... end' by what the function gives.
+		void ListVerbStatement()
+		{
+			const std::string verb(Current().Lexeme);
+			Advance();
+			TargetChain chain = ParseTarget();
+			const Target& target = chain.Final;
+			BeginWriteBack(chain);
+			if (target.Type == TargetType::Property)
+				EmitOp(OpCode::Dup);
+			else if (target.Type == TargetType::Index)
+				EmitOp(OpCode::Dup2);
+			EmitGet(target);
+			if (verb == "sort" && Match(TokenType::By))
+			{
+				if (Check(TokenType::Function))
+					Expression();
+				else if (Check(TokenType::Identifier) && (Peek(1).Type == TokenType::Newline || Peek(1).Type == TokenType::Eof || Peek(1).Type == TokenType::End))
+				{
+					EmitFieldGetter(std::string(Current().Lexeme));
+					Advance();
+				}
+				else
+				{
+					ErrorAtCurrent("After 'by', write a field name or a function, like: sort enemies by health, or: sort words by function(w) return w.length end");
+				}
+				EmitWithName(OpCode::Invoke, "sort_by");
+				EmitByte(1);
+			}
+			else
+			{
+				EmitWithName(OpCode::Invoke, verb);
+				EmitByte(0);
+			}
+			EmitSet(target);
+			EmitOp(OpCode::Pop);
+			FinishWriteBack(chain);
+		}
+
+		// A function that gives its value's field: the key of 'sort enemies by health'.
+		void EmitFieldGetter(const std::string& field)
+		{
+			Function* fn = m_VM.NewFunction();
+			fn->Name = m_VM.Intern("by " + field);
+			fn->Owner = m_Module;
+			fn->Arity = 1;
+			FunctionState state;
+			state.Enclosing = m_State;
+			state.Fn = fn;
+			state.Kind = ScopeKind::Function;
+			m_State = &state;
+			BeginScope();
+			state.Locals.push_back({ "", state.ScopeDepth, false });
+			NameLocal(0);
+			AddLocal("item");
+			fn->ParamNames = { "item" };
+			DefaultValues(fn, fn->ParamNames, {});
+			fn->BodyIp = CurrentChunk().Size();
+			EmitOp(OpCode::GetLocal);
+			EmitByte(1);
+			EmitWithName(OpCode::GetProperty, field);
+			EmitOp(OpCode::Return);
+			m_State = state.Enclosing;
+			EmitOp(OpCode::Closure);
+			EmitU16(MakeConstant(Value::FromObject(fn)));
+		}
+
 		// 'every 3 seconds ... end' and 'after 2 seconds ... end': the body runs as a task of its own, made
 		// from a function like an anonymous one. 'every' waits, runs the body, and starts over; the time is
 		// worked out again each time, counted from when the body finished. 'stop' inside it ends it.
@@ -3727,6 +3817,7 @@ namespace ForgeScript {
 		size_t m_StatementStart = 0;           // where the statement being compiled starts, for hints
 		bool m_EveryIsPhrase = false;          // set once the phrases are known
 		bool m_AfterIsPhrase = false;
+		std::set<std::string> m_ListVerbPhrases;  // 'sort', 'shuffle' or 'reverse' when a phrase starts with it
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;

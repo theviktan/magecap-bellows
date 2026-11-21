@@ -293,7 +293,12 @@ add expression to target            number: adds; text: joins; list: adds an ite
 take expression from target         number: subtracts; list: removes the first equal item
 multiply target by expression
 divide target by expression
+sort target [ by name | by function-expression ]
+shuffle target
+reverse target
 ```
+
+`sort`, `shuffle` and `reverse` are not reserved. A statement that starts with one of them followed by a name, `my` or `self` is `set target to target.sort()` (`.shuffle()`, `.reverse()`), so on a text `reverse` changes the variable. `sort target by name` is `target.sort_by(function(item) return item.name end)`: each item's field, or a map's key. `sort target by function(x) ... end` uses that function. A script whose phrases start with the word calls the phrase instead, and `sort(x)` stays a call.
 
 ### 5.3 Saying
 

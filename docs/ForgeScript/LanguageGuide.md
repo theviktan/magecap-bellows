@@ -527,6 +527,24 @@ say enemy_health.count(0)                                  # 2
 say scores.average()                                       # 68.333333333333
 ```
 
+Sorting, shuffling and turning a list around can also be written as sentences:
+
+```forge
+set scores to [40, 95, 70]
+sort scores                       # [40, 70, 95]
+reverse scores                    # [95, 70, 40]
+
+set deck to [1, 2, 3, 4, 5]
+shuffle deck
+
+kind Enemy
+	set health to 10
+end
+set enemies to [new Enemy, new Enemy]
+sort enemies by health            # by each enemy's health field (a map's key works too)
+sort deck by function(card) return card % 3 end
+```
+
 Lists are **shared**: `set b to a` makes both names point at the same list. Use `copy(a)` when you need a separate one.
 
 `is` compares what lists hold: `[1, 2] is [1, 2]` is `true`, and so is a list and its copy until one of them changes. `contains`, `is in`, `index_of`, `remove` and `take ... from` use the same rule, so `[[1, 2], [3, 4]] contains [3, 4]` is `true`.

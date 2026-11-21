@@ -12,6 +12,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Constant (top level only) | `constant MAX_HP is 100` |
 | Add / subtract | `add 5 to score`, `take 10 from health` |
 | Add to / remove from a list | `add "key" to items`, `take "key" from items` |
+| Sort, shuffle, turn around | `sort scores`, `sort enemies by health` (a field or key), `sort words by function(w) return w.length end`, `shuffle deck`, `reverse items` (on text, `reverse name` changes the variable) |
 | Multiply / divide | `multiply speed by 2`, `divide damage by 4` |
 | Show a value | `say "Hello"`, `print(a, b, c)` |
 | If | `if x is 1 then ... else if ... else ... end` (`otherwise` = `else`) |
