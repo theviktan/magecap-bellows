@@ -7,6 +7,8 @@
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -127,8 +129,8 @@ namespace Bellows {
 		for (entt::entity entity : view)
 		{
 			const UUID uuid = source->m_Registry.get<IDComponent>(entity).ID;
-			const std::string& name = source->m_Registry.get<TagComponent>(entity).Tag;
-			scene->CreateEntityWithUUID(uuid, name);
+			const TagComponent& tag = source->m_Registry.get<TagComponent>(entity);
+			scene->CreateEntityWithUUID(uuid, tag.Tag).GetComponent<TagComponent>() = tag;
 		}
 		CopyComponents(AllComponents {}, scene->m_Registry, source->m_Registry, scene->m_EntityMap);
 		scene->m_RootEntities = source->m_RootEntities;
@@ -247,6 +249,7 @@ namespace Bellows {
 		std::function<Entity(Entity, Entity)> duplicate = [&](Entity source, Entity parent) -> Entity
 		{
 			Entity copy = CreateEntity(source.GetName());
+			copy.GetComponent<TagComponent>() = source.GetComponent<TagComponent>();
 			CopyEntityComponents(AllComponents {}, copy, source);
 			if (parent)
 				SetParent(copy, parent, false);
@@ -434,6 +437,88 @@ namespace Bellows {
 		ResetUIInput();
 		if (s_ActiveScene == this)
 			s_ActiveScene = nullptr;
+	}
+
+	bool Scene::ChangeScene(const Json& json, const std::string& path)
+	{
+		if (!m_IsRunning || !json.is_object() || !json.contains("Entities") || !json["Entities"].is_array())
+			return false;
+
+		FlushPendingDestroys();
+
+		// The kept entities: those marked, with everything under them. A marked entity under one that
+		// goes moves to the top first, where it stays put in the world.
+		std::unordered_set<UUID> kept;
+		std::vector<Entity> marked;
+		for (entt::entity handle : m_Registry.view<TagComponent>())
+		{
+			if (m_Registry.get<TagComponent>(handle).KeepAcrossScenes)
+				marked.emplace_back(handle, this);
+		}
+		std::function<void(Entity)> keep = [&](Entity entity)
+		{
+			kept.insert(entity.GetUUID());
+			for (Entity child : entity.GetChildren())
+				keep(child);
+		};
+		for (Entity entity : marked)
+			keep(entity);
+		for (Entity entity : marked)
+		{
+			const UUID parent = entity.GetComponent<RelationshipComponent>().Parent;
+			if (parent.IsValid() && !kept.contains(parent))
+				Unparent(entity, true);
+		}
+
+		// on_destroy handlers may create entities; those go too, so only the kept ones reach the new scene.
+		for (int pass = 0;; pass++)
+		{
+			std::vector<Entity> roots;
+			for (entt::entity handle : m_Registry.view<RelationshipComponent>())
+			{
+				Entity entity(handle, this);
+				if (!entity.GetComponent<RelationshipComponent>().Parent.IsValid() && !kept.contains(entity.GetUUID()))
+					roots.push_back(entity);
+			}
+			if (roots.empty())
+				break;
+			if (pass == 16)
+			{
+				BW_CORE_WARN("load_scene: on_destroy handlers keep creating entities; {} of them come along to the new scene", roots.size());
+				break;
+			}
+			for (Entity entity : roots)
+			{
+				if (m_Registry.valid(entity))
+					DestroyEntityImmediate(entity);
+			}
+			FlushPendingDestroys();
+		}
+
+		// The new scene's settings and name, as a new scene would have them; a file may leave either out.
+		m_Settings = SceneSettings {};
+		m_Name = "Untitled";
+		SceneSerializer::DeserializeFromJson(*this, json, true);
+
+		std::vector<Entity> loaded;
+		for (entt::entity handle : m_Registry.view<IDComponent>())
+		{
+			if (!kept.contains(m_Registry.get<IDComponent>(handle).ID))
+				loaded.emplace_back(handle, this);
+		}
+
+		m_GamePaused = false;
+		ResetUIInput();
+		UpdateRuntimeCaches();
+		if (m_PhysicsWorld)
+			m_PhysicsWorld->SyncBodies();
+		if (ScriptEngine::IsInitialized())
+			ScriptEngine::InstantiatePendingScripts(*this);
+		if (m_Audio)
+			m_Audio->OnEntitiesLoaded(loaded);
+		if (ScriptEngine::IsInitialized())
+			Scripting::EmitSceneLoaded(m_Name, path);
+		return true;
 	}
 
 	void Scene::OnUpdateRuntime(Timestep timestep)

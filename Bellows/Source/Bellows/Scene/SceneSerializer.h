@@ -6,6 +6,7 @@
 #include "Bellows/Serialization/JsonUtils.h"
 
 #include <filesystem>
+#include <optional>
 
 namespace Bellows {
 
@@ -21,8 +22,13 @@ namespace Bellows {
 		static bool Serialize(Scene& scene, const std::filesystem::path& path);
 		static bool Deserialize(Scene& scene, const std::filesystem::path& path);
 
+		// A scene file's JSON, or nothing (with the reason logged) when it can't be read or parsed.
+		static std::optional<Json> ReadSceneFile(const std::filesystem::path& path);
+
 		static Json SerializeToJson(Scene& scene);
-		static bool DeserializeFromJson(Scene& scene, const Json& json);
+		// With skipExistingTrees, a tree whose root's ID is already in the scene is left out: the scene's
+		// own entity wins (Scene::ChangeScene's kept entities).
+		static bool DeserializeFromJson(Scene& scene, const Json& json, bool skipExistingTrees = false);
 
 		// One entity's components (without children).
 		static Json SerializeEntity(Entity entity);

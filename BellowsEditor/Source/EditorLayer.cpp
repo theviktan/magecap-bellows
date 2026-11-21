@@ -884,17 +884,15 @@ namespace Bellows {
 
 		if (m_PendingSceneLoad && m_SceneState != SceneState::Edit)
 		{
-			// bellows.load_scene() during play swaps the running scene, not the edited one.
+			// bellows.load_scene() during play loads into the running scene, never the edited one; entities
+			// marked Keep Across Scenes stay.
 			const std::string path = *m_PendingSceneLoad;
 			m_PendingSceneLoad.reset();
-			Ref<Scene> scene = CreateRef<Scene>();
-			if (SceneSerializer::Deserialize(*scene, AssetManager::GetAbsolutePath(path)))
-			{
-				m_RuntimeScene->OnRuntimeStop();
-				m_RuntimeScene = scene;
-				m_RuntimeScene->OnRuntimeStart();
+			const std::optional<Json> json = SceneSerializer::ReadSceneFile(AssetManager::GetAbsolutePath(path));
+			if (json && m_RuntimeScene->ChangeScene(*json, path))
 				m_Selection.clear();
-			}
+			else
+				BW_CORE_ERROR("Play: could not load scene '{}'", path);
 		}
 
 		Input::SetEnabled(IsViewportInputActive());

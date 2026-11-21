@@ -33,6 +33,7 @@ namespace Bellows {
 	struct TagComponent
 	{
 		std::string Tag;
+		bool KeepAcrossScenes = false;	// The entity and its children stay when load_scene changes the scene
 	};
 
 	// Local transform relative to the parent entity (or the world for root entities).

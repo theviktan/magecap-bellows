@@ -42,6 +42,7 @@ namespace Bellows {
 
 		void DeserializeComponents(Entity entity, const Json& json)
 		{
+			JsonRead(json, "KeepAcrossScenes", entity.GetComponent<TagComponent>().KeepAcrossScenes);
 			if (auto it = json.find("Transform"); it != json.end())
 			{
 				TransformComponent& transform = entity.GetComponent<TransformComponent>();
@@ -373,6 +374,8 @@ namespace Bellows {
 		json["ID"] = static_cast<uint64_t>(entity.GetUUID());
 		json["Name"] = entity.GetName();
 		json["Parent"] = static_cast<uint64_t>(entity.GetComponent<RelationshipComponent>().Parent);
+		if (entity.GetComponent<TagComponent>().KeepAcrossScenes)
+			json["KeepAcrossScenes"] = true;
 
 		{
 			const TransformComponent& transform = entity.GetComponent<TransformComponent>();
@@ -794,7 +797,7 @@ namespace Bellows {
 		return json;
 	}
 
-	bool SceneSerializer::DeserializeFromJson(Scene& scene, const Json& json)
+	bool SceneSerializer::DeserializeFromJson(Scene& scene, const Json& json, bool skipExistingTrees)
 	{
 		if (!json.is_object() || !json.contains("Entities"))
 		{
@@ -821,7 +824,10 @@ namespace Bellows {
 		Json tree = Json::array();
 		auto flush = [&]()
 		{
+			uint64_t rootID = 0;
 			if (!tree.empty())
+				JsonRead(tree.front(), "ID", rootID);
+			if (!tree.empty() && !(skipExistingTrees && rootID != 0 && scene.TryGetEntityByUUID(UUID(rootID))))
 				DeserializeEntityTree(scene, tree, false);
 			tree = Json::array();
 		};
@@ -848,21 +854,27 @@ namespace Bellows {
 		return true;
 	}
 
-	bool SceneSerializer::Deserialize(Scene& scene, const std::filesystem::path& path)
+	std::optional<Json> SceneSerializer::ReadSceneFile(const std::filesystem::path& path)
 	{
 		const std::optional<std::string> text = FileSystem::ReadTextFile(path);
 		if (!text)
 		{
 			BW_CORE_ERROR("Scene file '{}' could not be read", path.string());
-			return false;
+			return std::nullopt;
 		}
-		const Json json = Json::parse(*text, nullptr, false);
+		Json json = Json::parse(*text, nullptr, false);
 		if (json.is_discarded())
 		{
 			BW_CORE_ERROR("Scene file '{}' is not valid JSON", path.string());
-			return false;
+			return std::nullopt;
 		}
-		return DeserializeFromJson(scene, json);
+		return json;
+	}
+
+	bool SceneSerializer::Deserialize(Scene& scene, const std::filesystem::path& path)
+	{
+		const std::optional<Json> json = ReadSceneFile(path);
+		return json && DeserializeFromJson(scene, *json);
 	}
 
 	bool SceneSerializer::SavePrefab(Entity root, const std::filesystem::path& path)

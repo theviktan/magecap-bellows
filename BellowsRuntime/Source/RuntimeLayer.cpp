@@ -102,9 +102,14 @@ namespace Bellows {
 
 		if (m_PendingScene)
 		{
+			// load_scene loads into the running scene, so entities marked Keep Across Scenes stay.
 			const std::string next = *m_PendingScene;
 			m_PendingScene.reset();
-			LoadScene(next);
+			const std::optional<Json> json = SceneSerializer::ReadSceneFile(AssetManager::GetAbsolutePath(next));
+			if (json && m_Scene->ChangeScene(*json, next))
+				BW_CORE_INFO("Runtime: playing '{}'", next);
+			else
+				BW_CORE_ERROR("Runtime: could not load scene '{}'", next);
 		}
 
 		Application& application = Application::Get();

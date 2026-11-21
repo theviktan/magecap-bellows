@@ -1961,6 +1961,12 @@
 					"doc": ""
 				},
 				{
+					"name": "keep_across_scenes",
+					"kind": "property",
+					"type": "bool",
+					"doc": "The entity and its children stay when load_scene changes the scene, keeping their scripts, physics and sounds"
+				},
+				{
 					"name": "transform",
 					"kind": "property",
 					"type": "Transform",
