@@ -255,6 +255,11 @@ class Entity:
     @name.setter
     def name(self, value: str) -> None: ...
     @property
+    def keep_across_scenes(self) -> bool:
+        """The entity and its children stay when load_scene changes the scene, keeping their scripts, physics and sounds"""
+    @keep_across_scenes.setter
+    def keep_across_scenes(self, value: bool) -> None: ...
+    @property
     def transform(self) -> Transform: ...
     @property
     def position(self) -> Vec3:

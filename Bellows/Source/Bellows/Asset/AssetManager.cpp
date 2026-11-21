@@ -21,6 +21,7 @@ namespace Bellows {
 			std::unordered_map<std::string, Ref<Font>> Fonts;
 			std::unordered_map<std::string, Ref<const UITheme>> Themes;
 			std::unordered_set<std::string> ReportedMissing;
+			ModelFront DefaultModelFront = ModelFront::NegativeZ;
 		};
 
 		AssetCache& GetCache()
@@ -170,7 +171,7 @@ namespace Bellows {
 		}
 		else if (GetAssetType(assetPath) == AssetType::Mesh)
 		{
-			mesh = MeshImporter::ImportGLTF(GetAbsolutePath(assetPath));
+			mesh = MeshImporter::ImportGLTF(GetAbsolutePath(assetPath), GetMeshImportSettings(assetPath));
 		}
 
 		if (!mesh)
@@ -180,6 +181,30 @@ namespace Bellows {
 		}
 		cache.Meshes[assetPath] = mesh;
 		return mesh;
+	}
+
+	MeshImportSettings AssetManager::GetMeshImportSettings(const std::string& assetPath)
+	{
+		if (std::optional<MeshImportSettings> settings = MeshImportSettings::Load(GetAbsolutePath(assetPath)))
+			return *settings;
+		MeshImportSettings defaults;
+		defaults.Front = GetCache().DefaultModelFront;
+		return defaults;
+	}
+
+	void AssetManager::SetDefaultModelFront(ModelFront front)
+	{
+		AssetCache& cache = GetCache();
+		if (cache.DefaultModelFront == front)
+			return;
+		// Models already loaded were turned by the old default.
+		cache.DefaultModelFront = front;
+		cache.Meshes.clear();
+	}
+
+	ModelFront AssetManager::GetDefaultModelFront()
+	{
+		return GetCache().DefaultModelFront;
 	}
 
 	Ref<Material> AssetManager::GetMaterial(const std::string& assetPath)

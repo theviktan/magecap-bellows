@@ -187,6 +187,9 @@ namespace Bellows {
 			ImGui::SameLine();
 			ImGui::TextDisabled(ICON_PACKAGE " %s", prefab->PrefabPath.c_str());
 		}
+		ImGui::Checkbox("Keep Across Scenes", &entity.GetComponent<TagComponent>().KeepAcrossScenes);
+		ImGui::SetItemTooltip("This entity and its children stay when the game changes scene (load_scene), keeping their "
+			"scripts, physics and sounds. A scene that has it too doesn't add a second copy.");
 		ImGui::PopFont();
 		ImGui::Spacing();
 

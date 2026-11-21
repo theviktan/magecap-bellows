@@ -901,6 +901,7 @@ end
 - The script's `when` blocks for the event run first, then the tasks waiting for it.
 - A `wait for` that starts while its event is being handled waits for the **next** time the event happens.
 - An event wait ends when its event comes, even while the game is paused, the same way `when` blocks still run then.
+- A script marked Keep Across Scenes keeps its waits across `load_scene`, so `wait for scene loaded with name, path` waits for the next level.
 
 ### Timers with `every` and `after`
 

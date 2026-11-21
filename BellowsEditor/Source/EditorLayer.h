@@ -8,6 +8,7 @@
 #include "UIRectTool.h"
 #include "UndoHistory.h"
 
+#include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileWatcher.h"
 #include "Bellows/Core/Layer.h"
 #include "Bellows/Project/Project.h"
@@ -133,6 +134,11 @@ namespace Bellows {
 		Entity CreateEntity(const std::string& name, Entity parent = {});
 		Entity CreatePrimitive(const std::string& meshPath, const std::string& name);
 		Entity CreateMeshEntity(const std::string& meshPath, const glm::vec3& position);
+		// Writes a model's '.bimport' with this front and reloads it everywhere it is placed. False when
+		// the path isn't a model file or the settings can't be written.
+		bool SetModelFront(const std::string& meshPath, ModelFront front);
+		// Placed models load their mesh again (all of them when meshPath is empty), after import settings change.
+		void ReloadPlacedMeshes(const std::string& meshPath = {});
 		Entity InstantiatePrefab(const std::string& prefabPath, const glm::vec3& position);
 		void DeleteSelection();
 		void DuplicateSelection();

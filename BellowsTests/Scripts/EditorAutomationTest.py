@@ -74,6 +74,32 @@ check(copy is not None and copy.find_child("Hat") is not None, "prefab instantia
 copy.name = "Player Copy"
 editor.commit("Instantiate")
 
+# Model front: a +Z-front model is turned at import, by a setting kept beside it ------------
+import struct
+models = pathlib.Path(editor.asset_directory()) / "Models"
+models.mkdir(parents=True, exist_ok=True)
+(models / "Front.bin").write_bytes(struct.pack("<9f", -0.5, 0, 1, 0.5, 0, 1, 0, 1, 2))
+(models / "Front.gltf").write_text(
+    '{"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0}],'
+    ' "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],'
+    ' "buffers": [{"uri": "Front.bin", "byteLength": 36}], "bufferViews": [{"buffer": 0, "byteLength": 36}],'
+    ' "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",'
+    ' "min": [-0.5, 0, 1], "max": [0.5, 1, 2]}]}',
+    encoding="utf-8")
+check(editor.model_front("Models/Front.gltf") == "-Z", "models face -Z (as made) by default")
+editor.set_model_front("Models/Front.gltf", "+Z")
+check(editor.model_front("Models/Front.gltf") == "+Z", "set_model_front")
+check((models / "Front.gltf.bimport").is_file(), "the setting is saved beside the model")
+for bad_call in (lambda: editor.set_model_front("Models/Front.gltf", "up"),
+                 lambda: editor.set_model_front("Scenes/Main.bscene", "+Z"),
+                 lambda: editor.model_front("Builtin/Cube")):
+    try:
+        bad_call()
+        check(False, "bad model front calls raise ValueError")
+    except ValueError:
+        check(True, "bad model front calls raise ValueError")
+editor.set_model_front("Models/Front.gltf", "-Z")
+
 # Play mode ----------------------------------------------------------------------------
 scripts = pathlib.Path(editor.asset_directory()) / "Scripts"
 (scripts / "Mover.py").write_text(
@@ -118,7 +144,20 @@ stat = mover.stat()
 os.utime(mover, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
 editor.run_frames(45)
 check(bellows.find_entity("Reloaded Player") is not None, "a script saved during play is reloaded")
+
+# load_scene during play loads into the play copy: a kept entity stays, the rest is replaced.
+(pathlib.Path(editor.asset_directory()) / "Scenes" / "Next.bscene").write_text(
+    '{"Version": 1, "Scene": "Next", "Entities": [{"ID": 424242, "Name": "Next Level Thing", "Parent": 0}]}',
+    encoding="utf-8")
+bellows.find_entity("Reloaded Player").keep_across_scenes = True
+check(bellows.load_scene("Scenes/Next.bscene"), "load_scene during play")
+editor.run_frames(2)
+check(bellows.find_entity("Next Level Thing") is not None, "the next scene is loaded during play")
+check(bellows.find_entity("Reloaded Player") is not None, "a kept entity stays through load_scene")
+check(bellows.find_entity("Spawned during play") is None, "entities that aren't kept go with the old scene")
 editor.stop()
+check(bellows.find_entity("Next Level Thing") is None, "load_scene in play never changes the edited scene")
+check(not bellows.find_entity("Player").keep_across_scenes, "keep_across_scenes set in play stays in play")
 check(editor.state() == "edit", "stop")
 check(abs(bellows.find_entity("Player").transform.position.x - 1.0) < 1e-5, "stopping restores the edited scene")
 check(len(bellows.get_entities()) == edit_count, "entities spawned in play mode are discarded")
