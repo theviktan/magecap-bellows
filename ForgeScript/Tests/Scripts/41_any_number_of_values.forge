@@ -1,0 +1,40 @@
+# A last parameter written 'name...' collects the values left over, as a list.
+function total(numbers...)
+	set sum to 0
+	for each n in numbers do
+		add n to sum
+	end
+	return sum
+end
+say total(1, 2, 3)                                      # expect: 6
+say total()                                             # expect: 0
+say total of 5                                          # expect: 5
+
+function greet(greeting, names...)
+	set joined to names.join(" and ")
+	return "{greeting}, {joined}!"
+end
+say greet("Hi", "Ada", "Bo")                            # expect: Hi, Ada and Bo!
+
+# Defaults and names work for the values before it.
+function spawn(what, count is 1, tags...)
+	return "{what} x{count} {tags}"
+end
+say spawn("orc")                                        # expect: orc x1 []
+say spawn("orc", 3, "big", "red")                       # expect: orc x3 ["big", "red"]
+say spawn("orc", count: 2)                              # expect: orc x2 []
+
+# In kinds and function values.
+kind Bag
+	set items to []
+	function put(things...)
+		for each t in things do
+			add t to my items
+		end
+	end
+end
+set bag to new Bag()
+bag.put("rope", "lamp")
+say bag.items                                           # expect: ["rope", "lamp"]
+set count to function(xs...) return xs.length end
+say count(1, 2, 3)                                      # expect: 3

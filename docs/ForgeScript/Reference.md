@@ -23,7 +23,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Each | `for each item [, position] in list do ... end` (maps: `key, value`; objects made from a kind: `field, value`) |
 | While / until | `while x is below 5 do ... end`, `until done do ... end` |
 | Leave / skip a loop | `stop`, `skip` |
-| Function | `function name(a, b) ... return x ... end`; defaults: `function attack(target, damage is 10)` (worked out at each call that leaves the value out; defaults come last); named values in a call, after the others: `attack(goblin, crit: 5)` (not for built-in functions) |
+| Function | `function name(a, b) ... return x ... end`; defaults: `function attack(target, damage is 10)` (worked out at each call that leaves the value out; defaults come last); named values in a call, after the others: `attack(goblin, crit: 5)` (not for built-in functions); any number of values: `function total(numbers...)` (the last parameter gets the rest as a list, `[]` when none) |
 | Anonymous function | `function(x) return x * 2 end` |
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |

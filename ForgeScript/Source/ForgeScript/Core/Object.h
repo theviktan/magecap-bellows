@@ -114,6 +114,9 @@ namespace ForgeScript {
 		int MinArity = 0;
 		std::vector<size_t> DefaultIps;
 		std::vector<std::string> ParamNames; // For calls that name their values: attack(goblin, damage: 25).
+		// 'function total(numbers...)': the last parameter (counted in Arity) gets the values left over, as
+		// a list. MinArity and DefaultIps count only the parameters before it.
+		bool HasRest = false;
 		int UpvalueCount = 0;
 		String* Name = nullptr;
 		Module* Owner = nullptr;

@@ -375,6 +375,19 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("AnyNumberOfValuesExplainsMistakes")
+{
+	CHECK_CONTAINS(CompileFails("function f(a..., b)\nend\n").Message, "Only the last value can collect the rest, like: function total(first, others...)");
+	CHECK_CONTAINS(CompileFails("function f(a... is 3)\nend\n").Message, "'a...' gets the values left over, so it can't have a default.");
+	CHECK_CONTAINS(Output("function f(a, b...)\nend\ntry\n\tf()\ncatch problem\n\tsay problem\nend\n"), "'f' needs at least 1 value, but was given 0 values.");
+	CHECK_CONTAINS(Output("function f(a...)\nend\ntry\n\tf(a: [1])\ncatch problem\n\tsay problem\nend\n"),
+		"'f' collects the values left over in 'a', so it can't be named.");
+	// Each call gets a new list, and the values are the ones given, in order.
+	CHECK_EQ(Output("function f(xs...)\n\tadd 9 to xs\n\treturn xs\nend\nsay f(1)\nsay f()\n"), std::string("[1, 9]\n[9]\n"));
+	// A parameter list without '...' still says what it said.
+	CHECK_CONTAINS(CompileFails("function f(a b)\nend\n").Message, "Expected ')' after the parameters.");
+}
+
 TEST_CASE("ForEachOverAnObject")
 {
 	// Changing a field's value while going through them is seen; the loop ends after the last field.

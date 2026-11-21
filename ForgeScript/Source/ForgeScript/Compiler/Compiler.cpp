@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <set>
 #include <string_view>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -2055,9 +2056,12 @@ namespace ForgeScript {
 		void FunctionBody(const std::string& name, ScopeKind kind, const std::vector<std::string>& params, const Token& opener, const char* what,
 			const std::string& eventSource = {}, const std::vector<DefaultValue>& defaults = {}, const std::function<void()>& body = {})
 		{
+			// The parameter list just read ended with 'name...' (read before the body, which may hold more).
+			const bool rest = std::exchange(m_RestParam, false);
 			Function* fn = m_VM.NewFunction();
 			fn->Name = m_VM.Intern(name);
 			fn->EventSource = eventSource;
+			fn->HasRest = rest && !params.empty();
 			fn->Owner = m_Module;
 			fn->IsMethod = kind == ScopeKind::Method || kind == ScopeKind::FieldInit;
 			fn->Arity = static_cast<int>(params.size());
@@ -2080,7 +2084,15 @@ namespace ForgeScript {
 			if (params.size() > 255)
 				ErrorAt(opener, "A function can take at most 255 values.");
 			fn->ParamNames = params;
-			DefaultValues(fn, params, defaults);
+			if (fn->HasRest)
+			{
+				// Defaults belong to the values before the one that collects the rest.
+				const std::vector<std::string> fixed(params.begin(), params.end() - 1);
+				const std::vector<DefaultValue> fixedDefaults(defaults.begin(), defaults.begin() + std::min(defaults.size(), fixed.size()));
+				DefaultValues(fn, fixed, fixedDefaults);
+			}
+			else
+				DefaultValues(fn, params, defaults);
 
 			// Every name this function assigns with "set" becomes one of its own variables,
 			// unless it already belongs to the whole script or to an outer function.
@@ -2131,6 +2143,21 @@ namespace ForgeScript {
 					const Token& nameToken = Current();
 					params.push_back(ConsumeName("Expected a parameter name."));
 					DefaultValue value;
+					if (Check(TokenType::Dot) && Peek(1).Type == TokenType::Dot && Peek(2).Type == TokenType::Dot)
+					{
+						// 'numbers...': the last parameter gets the values left over, as a list.
+						Advance();
+						Advance();
+						Advance();
+						if (Check(TokenType::Is))
+							ErrorAtCurrent("'" + params.back() + "...' gets the values left over, so it can't have a default. It is an empty list when there are none.");
+						if (!Check(TokenType::RightParen))
+							ErrorAtCurrent("Only the last value can collect the rest, like: function total(first, others...)");
+						m_RestParam = true;
+						if (defaults)
+							defaults->push_back(value);
+						break;
+					}
 					if (Check(TokenType::Equal))
 						ErrorAtCurrent("Use 'is' for a default value, like: function attack(target, damage is 10)");
 					if (Match(TokenType::Is))
@@ -4120,6 +4147,8 @@ namespace ForgeScript {
 		// Each 'choices State are idle, running' of this script: the set's name and its choices, in order.
 		std::unordered_map<std::string, std::vector<std::string>> m_Choices;
 		bool m_ChoicesIsPhrase = false;
+		// Set by ParameterList when its last name ends in '...', for the FunctionBody that follows.
+		bool m_RestParam = false;
 		FunctionState* m_State = nullptr;
 		std::vector<const std::set<std::string>*> m_StopWords;
 		bool m_NoInvoke = false;
