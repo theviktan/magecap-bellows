@@ -142,6 +142,9 @@ constant MAX_HEALTH is 100
 
 Trying to `set MAX_HEALTH to 5` later is an error.
 
+For a fixed set of named options, like an enemy that is idle, patrolling or chasing, use
+`choices State are idle, patrol, chase` (see [Naming your choices](#naming-your-choices-with-choices)).
+
 **Names** may use letters, digits and `_`, and must start with a letter or `_`. Words that ForgeScript uses itself (like `if`, `end`, `set`, `to`, `from`, `by`, `with`) cannot be variable names. See the full list in [Reference.md](Reference.md#reserved-words).
 
 ---
@@ -606,6 +609,7 @@ say monsters                                               # ["rat", "wolf", "dr
 
 set enemy_health to [0, 0, 12]
 if enemy_health.all(function(h) return h is 0 end) then say "You win!" end
+if every h in enemy_health is 0 then say "You win!" end    # the same, as a sentence
 say enemy_health.count(0)                                  # 2
 say scores.average()                                       # 68.333333333333
 ```
@@ -716,7 +720,7 @@ say damage_after_armor(30, 12)     # 18
 **Good to know:**
 
 - You can call a function from anywhere in the script, even above the line that defines it.
-- A function must be given the number of values it asks for, except values with a default (below).
+- A function must be given the number of values it asks for, except values with a default, and a last value written with `...`, which takes any number (both below).
 - A function with no `return` gives back `nothing`.
 - `length of items` means `length(items)`. Any function that takes one value can be called with `of`: `sqrt of 16`, `abs of -3`.
 
@@ -1529,7 +1533,7 @@ FAIL armor lowers damage
 
 1. **Positions start at 1.** `list[1]` is the first item, `list[-1]` the last.
 2. **`set ... to` changes values. `is` compares them.** There is no `=`.
-3. **Every block ends with `end`:** `if`, `for`, `while`, `until`, `repeat`, `function`, `phrase`, `kind`, `when`, `try`.
+3. **Every block ends with `end`:** `if`, `for`, `while`, `until`, `repeat`, `match`, `function`, `phrase`, `kind`, `when`, `try`, timers (`every 3 seconds`, `after 2 seconds`) and `test`.
 4. **`then` and `do` are optional** but make code easier to read.
 5. **Only `false` and `nothing` are false.**
 6. **Long loops need `wait`.** Otherwise the game freezes.
