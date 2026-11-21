@@ -20,6 +20,10 @@ with new language or tool features, the patch number with fixes.
   it.
 - Nothing changes meaning: `wait for` was an error, and `every`/`after` start a timer only on a line
   that ends in a time word (they stay usable as names; a script phrase starting with them still wins).
+- **Keeping things across scenes** (MageCap Bellows 0.5.0). New engine phrase `keep (entity) across
+  scenes` (`keep self across scenes`), the same as `set entity.keep_across_scenes to true`. The
+  guide's "Moving between scenes" covers kept entities, their carried-over waits and timers, and
+  `when scene loaded with name, path`.
 - The language server, outline, `FindScriptVariables` and `FindHandlersThatWait` know both forms; a UI
   handler that starts a timer counts as one that waits. Help has entries for `every` and `after`.
 
