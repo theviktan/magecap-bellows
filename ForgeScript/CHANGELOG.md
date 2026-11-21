@@ -23,6 +23,11 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **List words** (Tier 1 #5): `the length of items`, `first of items`, `the last item of items`,
+  `item 2 of items` and `item (i + 1) of items`, the same as `length(items)`, `items.first`,
+  `items.last` and `items[2]`. `the` before a name in a value changes nothing (`say the score`).
+  Each was an error before; a script's own `the`, `first`, `last` or `item` (or a built-in of that
+  name) keeps its meaning.
 - **Number words** (Tier 1 #6): `x is even`, `x is odd` and `x is a whole number`, with `is not`
   forms. `even` and `odd` are whole numbers only (`2.5 is odd` is false), and need a number;
   `is a whole number` is false for anything that isn't one. The words aren't reserved: where a

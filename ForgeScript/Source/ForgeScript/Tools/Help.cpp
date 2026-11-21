@@ -64,7 +64,7 @@ namespace ForgeScript {
 				Keyword("no", "no", "The same as false."),
 				Keyword("not", "not x, x is not y", "Turns true into false and false into true."),
 				Keyword("nothing", "nothing", "No value. Missing values and empty results are nothing."),
-				Keyword("of", "length of list", "Calls a function with one value: length of list is length(list)."),
+				Keyword("of", "length of list, first of list, item 2 of list", "Calls a function with one value: length of list is length(list). first of list and last of list are list.first and list.last, and item 2 of list is list[2], unless the script has its own first, last or item."),
 				Keyword("or", "a or b", "True when either side is true."),
 				Keyword("otherwise", "if ... otherwise ... end", "The same as else. Also the second choice in value if test otherwise other."),
 				Keyword("parent", "parent.setup(name)", "Inside a kind that extends another, calls the other kind's version of a function."),
