@@ -140,6 +140,9 @@ jobs:
           $version = (Select-String -Path CMakeLists.txt -Pattern '^\s+VERSION\s+([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
           if ("v$version" -ne $env:GITHUB_REF_NAME) { Write-Output "::error::Tag $env:GITHUB_REF_NAME does not match the engine version $version"; exit 1 }
           if (-not (Test-Path "docs/ReleaseNotes/$version.md")) { Write-Output "::error::docs/ReleaseNotes/$version.md is missing"; exit 1 }
+          # The notes become the release text, so the line kept in them while the work lands must be gone.
+          if (Select-String -Path "docs/ReleaseNotes/$version.md" -SimpleMatch -Quiet "These notes grow") { Write-Output "::error::docs/ReleaseNotes/$version.md still says 'These notes grow'; remove that line before the release"; exit 1 }
+          if (Select-String -Path ForgeScript/CHANGELOG.md -SimpleMatch -Quiet "(not released yet)") { Write-Output "::error::ForgeScript/CHANGELOG.md still has a version '(not released yet)'; date it before the release"; exit 1 }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       # The zip itself, for the release job.
