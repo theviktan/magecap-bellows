@@ -2392,8 +2392,9 @@ namespace ForgeScript {
 				EmitOp(OpCode::Inherit);
 			}
 
-			// First pass: compile methods, remember where the field lines are.
+			// First pass: compile methods and shared values, remember where the field lines are.
 			std::vector<size_t> fieldLines;
+			std::set<std::string> sharedNames;
 			SkipNewlines();
 			while (!Check(TokenType::End))
 			{
@@ -2405,6 +2406,22 @@ namespace ForgeScript {
 					fieldLines.push_back(m_Pos);
 					while (!Check(TokenType::Newline) && !Check(TokenType::Eof) && !Check(TokenType::End))
 						Advance();
+				}
+				else if (CheckWord("shared") && Peek(1).Type == TokenType::Identifier &&
+					(Peek(2).Type == TokenType::Is || Peek(2).Type == TokenType::To))
+				{
+					// 'shared count is 0': worked out once, here, as the kind is made; read as Enemy.count.
+					Advance();
+					const Token nameToken = Current();
+					const std::string sharedName(nameToken.Lexeme);
+					if (sharedName == "name")
+						ErrorAt(nameToken, "A kind's 'name' is already its name (Enemy.name is \"Enemy\"). Choose another name for the shared value.");
+					if (!sharedNames.insert(sharedName).second)
+						ErrorAt(nameToken, "'" + sharedName + "' is shared twice in this kind.");
+					Advance();
+					Advance();
+					Expression();
+					EmitWithName(OpCode::SharedValue, sharedName);
 				}
 				else if (Check(TokenType::Function))
 				{
@@ -2418,7 +2435,7 @@ namespace ForgeScript {
 				}
 				else
 				{
-					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods.");
+					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods, or 'shared name is value' for one value all its objects share.");
 				}
 				EndOfStatement();
 				SkipNewlines();

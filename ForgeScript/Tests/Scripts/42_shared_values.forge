@@ -1,0 +1,32 @@
+# 'shared count is 0' in a kind: one value for the kind and all its objects.
+constant START is 10
+kind Enemy
+	shared count is 0
+	shared names is []
+	shared limit is START * 2
+	set health to 5
+	function setup(name)
+		add 1 to Enemy.count
+		add name to Enemy.names
+	end
+end
+new Enemy("Bo")
+new Enemy("Ada")
+say Enemy.count                                         # expect: 2
+say Enemy.names                                         # expect: ["Bo", "Ada"]
+say Enemy.limit                                         # expect: 20
+
+# A kind that extends it shares the same values, and can have its own.
+kind Boss extends Enemy
+	shared rage is 1
+end
+new Boss("Dragon")
+say Enemy.count                                         # expect: 3
+say Boss.count                                          # expect: 3
+say Boss.rage                                           # expect: 1
+
+# It can be changed from outside too.
+set Enemy.count to 0
+take 1 from Enemy.count
+say Enemy.count                                         # expect: -1
+say Enemy.name                                          # expect: Enemy

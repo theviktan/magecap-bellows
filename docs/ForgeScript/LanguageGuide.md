@@ -945,6 +945,32 @@ end
 say new Point        # (0, 0)
 ```
 
+### One value for the whole kind with `shared`
+
+Fields belong to each object: every goblin has its own `health`. Sometimes you want **one** value for
+the whole kind, like how many enemies there are. Write it with `shared`:
+
+```forge
+kind Enemy
+	shared count is 0
+	set health to 5
+	function setup()
+		add 1 to Enemy.count
+	end
+end
+
+new Enemy()
+new Enemy()
+say Enemy.count        # 2
+```
+
+- Read and change it through the kind's name, `Enemy.count`, everywhere, inside the kind's
+  functions too. (A plain `count` inside a function is a variable of its own, as always.)
+- It's worked out once, when the kind is made, so `shared names is []` gives one list for all.
+- A kind that `extends` Enemy shares the same value: `Boss.count` is `Enemy.count`.
+- `goblin.count` (through an object) is an error that tells you to write `Enemy.count`.
+- `shared` isn't reserved: `set shared to 2` still makes a field called `shared`.
+
 ### Going through an object's fields
 
 `for each` goes through an object's fields, like a map's keys and values:

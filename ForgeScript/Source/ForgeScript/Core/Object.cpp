@@ -60,6 +60,21 @@ namespace ForgeScript {
 		return nullptr;
 	}
 
+	Value* Kind::FindShared(String* name, Kind** owner)
+	{
+		for (Kind* kind = this; kind; kind = kind->Parent)
+		{
+			auto it = kind->Shared.find(name);
+			if (it != kind->Shared.end())
+			{
+				if (owner)
+					*owner = kind;
+				return &it->second;
+			}
+		}
+		return nullptr;
+	}
+
 	void Instance::SetField(String* name, const Value& value)
 	{
 		auto it = Fields.find(name);

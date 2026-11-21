@@ -495,6 +495,7 @@ The built-in phrases are `say (value)`, `random number from (a) to (b)`, `random
 ```
 kind Name [extends Name]
     { set field to expression }
+    { shared name is expression }
     { function name ( [parameters] )  block  end }
 end
 ```
@@ -504,6 +505,7 @@ end
 - Inside a method, `self` is the object and `my field` is `self.field`. A plain `set name to` inside a method makes a local variable, not a field.
 - `extends` makes a kind start from another's fields and methods. `parent.method(...)` calls the version of the kind it extends.
 - A `to_text()` method decides how the object prints.
+- **Shared values:** `shared name is expression` (or `to`) makes one value for the kind and all its objects, worked out once when the `kind` statement runs, in the scope around the kind. `Name.name2` reads it and `set Name.name2 to ...` (also `add`, `take` and the rest) changes it, inside the kind's methods too; a bare `name2` in a method is not the shared value. A kind that extends another reads and changes the parent's shared values through its own name (`Boss.count` is `Enemy.count`). Reading one through an object (`goblin.count`) is an error that says to write `Enemy.count`. A shared value can't be called `name` (a kind's `name` is its name), and a name can be shared once per kind. `shared` is a contextual word: only at the start of a line inside a kind, followed by a name and `is` or `to`.
 - Reading or calling a field or method an object doesn't have is an error that names the kind.
 
 ---

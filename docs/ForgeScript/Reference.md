@@ -27,6 +27,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Anonymous function | `function(x) return x * 2 end` |
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
+| Shared value | `shared count is 0` inside a kind: one value for the kind and all its objects, read and changed as `Enemy.count` (also inside its functions; `Boss.count` for a kind that extends it) |
 | New object | `new Enemy("Goblin")`, `new Point` |
 | Event handler | `when hit by damage ... end`, `when key pressed with key and shift ... end` |
 | Event from one entity | `when "Start" is clicked ... end`: runs only when the entity named Start (any letter case) raised the event, like a UI widget's events on their way up to its parents' scripts |
