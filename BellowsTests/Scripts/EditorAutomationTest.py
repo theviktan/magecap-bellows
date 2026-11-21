@@ -86,9 +86,9 @@ models.mkdir(parents=True, exist_ok=True)
     ' "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",'
     ' "min": [-0.5, 0, 1], "max": [0.5, 1, 2]}]}',
     encoding="utf-8")
-check(editor.model_front("Models/Front.gltf") == "-Z", "models face -Z (as made) by default")
-editor.set_model_front("Models/Front.gltf", "+Z")
-check(editor.model_front("Models/Front.gltf") == "+Z", "set_model_front")
+check(editor.model_front("Models/Front.gltf") == "+Z", "a new project turns +Z-front models by default")
+editor.set_model_front("Models/Front.gltf", "-Z")
+check(editor.model_front("Models/Front.gltf") == "-Z", "set_model_front")
 check((models / "Front.gltf.bimport").is_file(), "the setting is saved beside the model")
 for bad_call in (lambda: editor.set_model_front("Models/Front.gltf", "up"),
                  lambda: editor.set_model_front("Scenes/Main.bscene", "+Z"),
@@ -98,7 +98,7 @@ for bad_call in (lambda: editor.set_model_front("Models/Front.gltf", "up"),
         check(False, "bad model front calls raise ValueError")
     except ValueError:
         check(True, "bad model front calls raise ValueError")
-editor.set_model_front("Models/Front.gltf", "-Z")
+editor.set_model_front("Models/Front.gltf", "+Z")
 
 # Play mode ----------------------------------------------------------------------------
 scripts = pathlib.Path(editor.asset_directory()) / "Scripts"

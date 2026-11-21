@@ -6,6 +6,7 @@
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Project/Project.h"
+#include "Bellows/Serialization/JsonUtils.h"
 
 #include <array>
 
@@ -124,13 +125,23 @@ TEST_CASE("Model front names, and the project's ModelFrontFaces is saved and rea
 	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "ModelFrontProject";
 	Ref<Project> project = Project::Create(folder, "Fronts");
 	REQUIRE(project);
-	CHECK(project->GetConfig().ModelFrontFaces == ModelFront::NegativeZ);
-	project->GetConfig().ModelFrontFaces = ModelFront::PositiveZ;
+	// New projects start at +Z, and the setting is saved and read back.
+	CHECK(project->GetConfig().ModelFrontFaces == ModelFront::PositiveZ);
+	project->GetConfig().ModelFrontFaces = ModelFront::NegativeZ;
 	REQUIRE(project->Save());
 	Ref<Project> loaded = Project::Load(project->GetProjectFilePath());
 	REQUIRE(loaded);
-	CHECK(loaded->GetConfig().ModelFrontFaces == ModelFront::PositiveZ);
+	CHECK(loaded->GetConfig().ModelFrontFaces == ModelFront::NegativeZ);
+	loaded->GetConfig().ModelFrontFaces = ModelFront::PositiveZ;
 	loaded->ApplyImportSettings();
 	CHECK(AssetManager::GetDefaultModelFront() == ModelFront::PositiveZ);
 	AssetManager::SetDefaultModelFront(ModelFront::NegativeZ);
+
+	// A project file from before 0.5.0 has no setting: -Z, so its placed models don't turn around.
+	Json old = Json::parse(*FileSystem::ReadTextFile(project->GetProjectFilePath()));
+	old.erase("Import");
+	REQUIRE(FileSystem::WriteTextFile(project->GetProjectFilePath(), old.dump(1, '\t')));
+	Ref<Project> older = Project::Load(project->GetProjectFilePath());
+	REQUIRE(older);
+	CHECK(older->GetConfig().ModelFrontFaces == ModelFront::NegativeZ);
 }
