@@ -466,6 +466,29 @@ say "two seconds later"
 
 `wait` pauses only the code that's waiting; the rest of the game keeps running. There is no `await` or `async` to write. Every `when` block already runs on its own, and `start patrol()` runs a function on its own without waiting for it.
 
+Waiting for a signal, and timers:
+
+```gdscript
+# GDScript
+await door_opened                       # wait for a signal
+var timer = Timer.new()                 # repeat every 3 seconds
+timer.wait_time = 3.0
+timer.timeout.connect(_spawn)
+add_child(timer)
+timer.start()
+```
+
+```forge
+# ForgeScript
+wait for door opened
+
+every 3 seconds
+	spawn()
+end
+```
+
+`wait for` takes the event's values too (`wait for hit with damage`). `after 2 seconds ... end` runs a block once, later. `stop` inside `every` ends the timer.
+
 ## Other scripts
 
 ```python

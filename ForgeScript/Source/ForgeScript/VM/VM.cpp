@@ -476,8 +476,22 @@ namespace ForgeScript {
 
 	bool VM::HasHandler(Module* module, const std::string& event)
 	{
-		auto it = module->Handlers.find(Intern(event));
-		return it != module->Handlers.end() && !it->second.empty();
+		String* name = Intern(event);
+		auto it = module->Handlers.find(name);
+		if (it != module->Handlers.end() && !it->second.empty())
+			return true;
+		auto waits = module->EventWaits.find(name);
+		return waits != module->EventWaits.end() && waits->second > 0;
+	}
+
+	void VM::EndEventWait(Task* task)
+	{
+		if (task->Mode != WaitMode::Event || !task->WaitEvent || !task->Owner)
+			return;
+		auto it = task->Owner->EventWaits.find(task->WaitEvent);
+		if (it != task->Owner->EventWaits.end() && --it->second <= 0)
+			task->Owner->EventWaits.erase(it);
+		task->WaitEvent = nullptr;
 	}
 
 	bool VM::Check(std::string_view source, const std::string& fileName, CompileError& outError)
@@ -571,17 +585,37 @@ namespace ForgeScript {
 
 	bool VM::Emit(Module* module, const std::string& event, const std::vector<Value>& values, const std::string& source)
 	{
-		auto it = module->Handlers.find(Intern(event));
-		if (it == module->Handlers.end() || it->second.empty())
+		String* name = Intern(event);
+		auto fits = [&source](const std::string& wanted) { return wanted.empty() || (!source.empty() && SameTextIgnoringCase(wanted, source)); };
+
+		// The tasks waiting for this event are found before any handler runs, so a handler (or a woken task)
+		// that starts waiting for the same event waits for the next one.
+		std::vector<Task*> waiting;
+		if (auto waits = module->EventWaits.find(name); waits != module->EventWaits.end() && waits->second > 0)
+		{
+			for (Task* task : m_Tasks)
+			{
+				if (task->Owner == module && task->State == TaskState::Waiting && task->Mode == WaitMode::Event &&
+					task->WaitEvent == name && fits(task->WaitSource))
+				{
+					waiting.push_back(task);
+				}
+			}
+		}
+
+		auto it = module->Handlers.find(name);
+		if ((it == module->Handlers.end() || it->second.empty()) && waiting.empty())
 			return true;
 
 		// Create every task before running any, so all of them hold the values safely.
 		std::vector<Closure*> handlers;
-		for (Closure* handler : it->second)
+		if (it != module->Handlers.end())
 		{
-			const std::string& wanted = handler->Fn->EventSource;
-			if (wanted.empty() || (!source.empty() && SameTextIgnoringCase(wanted, source)))
-				handlers.push_back(handler);
+			for (Closure* handler : it->second)
+			{
+				if (fits(handler->Fn->EventSource))
+					handlers.push_back(handler);
+			}
 		}
 		std::vector<Task*> tasks;
 		const size_t depth = m_RunningTasks.empty() ? 0 : m_RunningTasks.back()->EventDepth + 1;
@@ -601,6 +635,24 @@ namespace ForgeScript {
 		for (Task* task : tasks)
 		{
 			StartCall(task, task->Stack.size() - 1);
+			RemovePending(task);
+			if (task->State == TaskState::Failed)
+				success = false;
+		}
+
+		// Then the waiting tasks, unless a handler ended them (cancelled, or the module unloaded).
+		for (Task* task : waiting)
+		{
+			auto found = std::find(m_Tasks.begin(), m_Tasks.end(), task);
+			if (found == m_Tasks.end() || task->State != TaskState::Waiting || task->Mode != WaitMode::Event || task->WaitEvent != name)
+				continue;
+			m_PendingTasks.push_back(task);
+			m_Tasks.erase(found);
+			EndEventWait(task);
+			for (size_t i = 0; i < task->WaitCount; i++)
+				task->Stack.push_back(i < values.size() ? values[i] : Value());
+			task->EventDepth = depth;
+			RunTask(task);
 			RemovePending(task);
 			if (task->State == TaskState::Failed)
 				success = false;
@@ -684,7 +736,7 @@ namespace ForgeScript {
 			return;
 		for (Task* task : m_Tasks)
 		{
-			if (task->State != TaskState::Waiting || !keepsRunning(task->Owner))
+			if (task->State != TaskState::Waiting || task->Mode == WaitMode::Event || !keepsRunning(task->Owner))
 				continue;
 			if (task->Mode == WaitMode::Seconds)
 				task->WakeTime -= std::max(0.0, deltaSeconds);
@@ -702,7 +754,9 @@ namespace ForgeScript {
 		{
 			if (task->State != TaskState::Waiting)
 				continue;
-			const bool due = task->Mode == WaitMode::Seconds ? m_Time >= task->WakeTime : m_Frame >= task->WakeFrame;
+			// A 'wait for' ends only when its event comes (in Emit).
+			const bool due = task->Mode == WaitMode::Seconds ? m_Time >= task->WakeTime :
+				task->Mode == WaitMode::Frames && m_Frame >= task->WakeFrame;
 			const bool wake = due && (!only || (*only)(task->Owner));
 			(wake ? ready : keep).push_back(task);
 		}
@@ -721,6 +775,7 @@ namespace ForgeScript {
 	{
 		auto cancel = [this](Task* task)
 		{
+			EndEventWait(task);
 			task->State = TaskState::Cancelled;
 			CloseUpvalues(task, 0);
 			ReleaseStep(task);
@@ -801,6 +856,7 @@ namespace ForgeScript {
 			ReleaseStep(task);
 		auto cancel = [this](Task* task)
 		{
+			EndEventWait(task);
 			task->State = TaskState::Cancelled;
 			CloseUpvalues(task, 0);
 			ReleaseStep(task);
@@ -3088,6 +3144,24 @@ namespace ForgeScript {
 					task->EventDepth = 0;
 					return;
 				}
+				case OpCode::WaitEvent:
+				{
+					String* event = FORGESCRIPT_READ_STRING();
+					String* source = FORGESCRIPT_READ_STRING();
+					uint8_t count = FORGESCRIPT_READ_BYTE();
+					if (!task->CanYield)
+						FORGESCRIPT_FAIL("'wait for' cannot be used here, because this code must finish right away. Use 'start' to run it as its own task.");
+					if (!task->Owner)
+						FORGESCRIPT_FAIL("'wait for' needs a script to wait in.");
+					task->Mode = WaitMode::Event;
+					task->WaitEvent = event;
+					task->WaitSource = source->Text;
+					task->WaitCount = count;
+					task->Owner->EventWaits[event]++;
+					task->State = TaskState::Waiting;
+					task->EventDepth = 0;
+					return;
+				}
 				case OpCode::OnEvent:
 				{
 					String* name = FORGESCRIPT_READ_STRING();
@@ -3332,6 +3406,8 @@ namespace ForgeScript {
 					MarkObject(upvalue);
 				MarkValue(task->Result);
 				MarkObject(task->Owner);
+				if (task->WaitEvent)
+					MarkObject(task->WaitEvent);
 				break;
 			}
 		}

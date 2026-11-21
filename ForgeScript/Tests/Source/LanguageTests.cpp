@@ -276,6 +276,60 @@ TEST_CASE("CompileErrorsInWhenWithAName")
 	CompilesFine("when \"Start\" is clicked\nend\nwhen \"Player Name\" is submitted with text\n\tsay text\nend\n");
 }
 
+TEST_CASE("CompileErrorsInWaitForAndTimers")
+{
+	CHECK_CONTAINS(CompileFails("wait for\n").Message, "Expected an event name, like: wait for door opened");
+	CHECK_CONTAINS(CompileFails("wait for hit with\n").Message, "Expected a name for the event value");
+	CHECK_CONTAINS(CompileFails("wait for \"{name}\" is clicked\n").Message, "must be plain, without { }");
+	CHECK_CONTAINS(CompileFails("wait for \"\" is clicked\n").Message, "Write the entity's name in the quotes");
+	CHECK_CONTAINS(CompileFails("every 3 seconds\n\tsay 1\n").Message, "This 'every' timer is missing its 'end'");
+	CHECK_CONTAINS(CompileFails("after 1 second\n\tsay 1\n").Message, "This 'after' timer is missing its 'end'");
+	CHECK_CONTAINS(CompileFails("after 1 second\n\tstop\nend\n").Message, "stop");
+	CompilesFine("when ready\n\twait for \"Start\" is clicked\n\twait for hit by damage and source\nend\n");
+	CompilesFine("if true then every 2 frames\n\tsay frame()\nend end\n");
+}
+
+TEST_CASE("EveryAndAfterKeepTheirOldMeanings")
+{
+	// Names, calls and a script's own phrases that start with the words work as they did before 1.6.
+	CHECK_EQ(Output("set every to 2\nset after to every + 1\nsay after\n"), std::string("3\n"));
+	CHECK_EQ(Output("function every(x)\n\treturn x * 2\nend\nsay every(4)\n"), std::string("8\n"));
+	CHECK_EQ(Output("phrase every (n) seconds\n\tsay \"phrase {n}\"\nend\nevery 3 seconds\n"), std::string("phrase 3\n"));
+	CHECK_EQ(Output("phrase after (n) seconds\n\tsay \"later {n}\"\nend\nafter 2 seconds\n"), std::string("later 2\n"));
+	CHECK_EQ(Output("set m to {every: 1}\nsay m.every\n"), std::string("1\n"));
+}
+
+TEST_CASE("ToolsSeeWaitForAndTimers")
+{
+	// 'wait for' is not a 'for' loop, and a timer opens a block: the tools pair every 'end' as the compiler does.
+	const char* script =
+		"set speed to 3\n"
+		"every 1 second\n"
+		"\tset inner to 1\n"
+		"end\n"
+		"when clicked\n"
+		"\twait for hit with damage\n"
+		"end\n"
+		"when submitted\n"
+		"\tafter 2 seconds\n"
+		"\t\tsay 1\n"
+		"\tend\n"
+		"end\n"
+		"set limit to 10\n";
+	std::vector<ScriptVariable> variables = FindScriptVariables(script);
+	REQUIRE(variables.size() == 2);
+	CHECK(variables[0].Name == "speed");
+	CHECK(variables[1].Name == "limit");
+	const std::vector<WaitingHandler> waiting = FindHandlersThatWait(script, { "clicked", "submitted" });
+	REQUIRE(waiting.size() == 2);
+	CHECK_EQ(waiting[0].Event, std::string("clicked"));
+	CHECK_EQ(waiting[1].Event, std::string("submitted"));
+	CompilesFine(script);
+	// Inside brackets too: an anonymous function that waits for an event still ends at its own 'end'.
+	CHECK_EQ(Output("set run to [function()\n\twait for go\n\tsay 1\nend, 2]\nsay run.length\n"), std::string("2\n"));
+	CHECK_EQ(Output("set l to [2, 1]\nl.sort_by(function(x)\n\tafter 1 second\n\t\tsay x\n\tend\n\treturn x\nend)\nsay l\n"), std::string("[1, 2]\n"));
+}
+
 TEST_CASE("InlineIfIsNotAPlainScriptVariable")
 {
 	// The Inspector only shows plain values; a value picked by a test depends on the script running.

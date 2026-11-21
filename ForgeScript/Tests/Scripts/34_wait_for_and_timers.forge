@@ -1,0 +1,91 @@
+# 'wait for' pauses a task until its script gets the event, like a 'when' handler would.
+start function()
+	wait for door opened with who
+	say "door opened by {who}"
+end()
+trigger door opened with "Ada"                          # expect: door opened by Ada
+
+# Handlers run first, then the waiting tasks. Missing values are nothing, extra ones are left out.
+when hit with damage
+	say "handler: {damage}"
+end
+start function()
+	wait for hit by damage, source, extra
+	say "waited: {damage} {source} {extra}"
+end()
+trigger hit with 25, "goblin"
+# expect: handler: 25
+# expect: waited: 25 goblin nothing
+
+# A wait that starts while its event is being handled waits for the next one.
+when ring
+	say "ring"
+	wait for ring
+	say "rang again"
+end
+trigger ring                                            # expect: ring
+trigger ring
+# expect: ring
+# expect: rang again
+
+# A wait for one event isn't ended by another.
+start function()
+	wait for "the bell"
+	say "bell"
+end()
+trigger "a knock"
+trigger "the bell"                                      # expect: bell
+
+# At the top of a script, the names become script variables.
+start function()
+	wait 1 second
+	trigger score changed with 10
+end()
+wait for score changed with new_score
+say "score is {new_score}"                              # expect: score is 10
+
+# 'after' runs its body once, later. 'every' runs its body again and again; 'stop' ends it.
+set log to []
+after 2 seconds
+	add "after" to log
+end
+set ticks to 0
+every 1 second
+	add 1 to ticks
+	add "tick {ticks}" to log
+	if ticks is 3 then
+		stop
+	end
+end
+wait 5 seconds
+say log.join(", ")                                      # expect: tick 1, after, tick 2, tick 3
+
+# Timers take the same units as wait, also inside functions and kinds.
+kind Lamp
+	set lit to false
+	function switch_on_later()
+		after 250 ms
+			set my lit to true
+		end
+	end
+end
+set lamp to new Lamp
+lamp.switch_on_later()
+say lamp.lit                                            # expect: false
+wait 1 second
+say lamp.lit                                            # expect: true
+
+set frames_seen to 0
+every 2 frames
+	add 1 to frames_seen
+	if frames_seen is 2 then
+		stop
+	end
+end
+wait 10 frames
+say frames_seen                                         # expect: 2
+
+# 'every' and 'after' are still names everywhere else.
+set every to 2
+set after to every + 1
+say after                                               # expect: 3

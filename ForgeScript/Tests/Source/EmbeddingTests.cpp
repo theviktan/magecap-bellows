@@ -297,6 +297,70 @@ TEST_CASE("PausedUpdateRunsOnlyTheModulesThatKeepRunning")
 	CHECK(h.Errors.empty());
 }
 
+TEST_CASE("WaitForEventFollowsDeliveryAndSource")
+{
+	Harness h;
+	Module* menu = h.Machine.CreateModule("menu.forge");
+	Module* other = h.Machine.CreateModule("other.forge");
+	CHECK(h.Machine.RunInModule(menu,
+		"start function()\n\twait for \"Start\" is clicked\n\tsay \"start clicked\"\nend()\n"
+		"start function()\n\twait for clicked with widget\n\tsay \"any click: {widget}\"\nend()\n", "menu.forge").Success);
+	CHECK(h.Machine.RunInModule(other, "start function()\n\twait for clicked\n\tsay \"other module\"\nend()\n", "other.forge").Success);
+
+	// A host sees the wait, even with no 'when' for the event.
+	CHECK(h.Machine.HasHandler(menu, "clicked"));
+	CHECK_FALSE(h.Machine.HasHandler(menu, "submitted"));
+
+	// An event for one module wakes only its tasks; 'wait for "Start" is clicked' needs that source.
+	h.Machine.Emit(menu, "clicked", { h.Machine.MakeText("Quit") }, "Quit");
+	CHECK_EQ(h.Output, std::string("any click: Quit\n"));
+	h.Machine.Emit(menu, "clicked", { h.Machine.MakeText("Start") }, "start");
+	CHECK_EQ(h.Output, std::string("any click: Quit\nstart clicked\n"));
+	CHECK_FALSE(h.Machine.HasHandler(menu, "clicked"));
+	CHECK(h.Machine.HasHandler(other, "clicked"));
+
+	// Unloading a module ends its waits.
+	h.Machine.UnloadModule(other);
+	CHECK_FALSE(h.Machine.HasHandler(other, "clicked"));
+	CHECK_EQ(h.Machine.GetTaskCount(), static_cast<size_t>(0));
+	CHECK(h.Errors.empty());
+}
+
+TEST_CASE("TimersAndEventWaitsWhilePaused")
+{
+	Harness h;
+	const char* script =
+		"every 1 second\n"
+		"\tsay \"{name} tick\"\n"
+		"end\n"
+		"start function()\n"
+		"\twait for resume pressed\n"
+		"\tsay \"{name} resumed\"\n"
+		"end()\n";
+	Module* menu = h.Machine.CreateModule("menu.forge");
+	Module* enemy = h.Machine.CreateModule("enemy.forge");
+	h.Machine.SetGlobal(menu, "name", h.Machine.MakeText("menu"));
+	h.Machine.SetGlobal(enemy, "name", h.Machine.MakeText("enemy"));
+	CHECK(h.Machine.RunInModule(menu, script, "timers.forge").Success);
+	CHECK(h.Machine.RunInModule(enemy, script, "timers.forge").Success);
+	const auto onlyMenu = [menu](const Module* module) { return module == menu; };
+
+	// Paused, only the marked script's timer counts; an event still ends an event wait, as it runs handlers.
+	h.Machine.UpdatePaused(1.0, onlyMenu);
+	CHECK_EQ(h.Output, std::string("menu tick\n"));
+	h.Machine.EmitAll("resume pressed");
+	CHECK_EQ(h.Output, std::string("menu tick\nmenu resumed\nenemy resumed\n"));
+	h.Machine.UpdatePaused(5.0, [](const Module*) { return false; });
+	CHECK_EQ(h.Output, std::string("menu tick\nmenu resumed\nenemy resumed\n"));
+	// Unpaused, both timers go on.
+	h.Output.clear();
+	h.Machine.Update(1.0);
+	CHECK_CONTAINS(h.Output, "menu tick\n");
+	CHECK_CONTAINS(h.Output, "enemy tick\n");
+	CHECK_EQ(h.Output.size(), std::string("menu tick\nenemy tick\n").size());
+	CHECK(h.Errors.empty());
+}
+
 TEST_CASE("UnloadCancelsWaitingTasks")
 {
 	Harness h;

@@ -258,3 +258,49 @@ TEST_CASE("ForgeScript while the game is paused: only Run While Paused scripts u
 	CHECK_EQ(info.WaitingUIHandlers[0].Event, std::string("\"Resume\" is clicked"));
 	CHECK_EQ(info.WaitingUIHandlers[0].Line, 4);
 }
+
+TEST_CASE("ForgeScript 'wait for' and timers in the engine")
+{
+	using Scripting::EmitScriptEventFrom;
+	using Scripting::ScriptEntity;
+	using Scripting::ScriptValue;
+	ReloadHarness h("ForgeWaitFor");
+	h.Write("Scripts/Menu.forge",
+		"when created\n"
+		"\twait for \"Start\" is clicked\n"
+		"\tset my name to \"started\"\n"
+		"\twait for collided with other\n"
+		"\tset my name to \"touched {other.name}\"\n"
+		"end\n");
+	h.Write("Scripts/Spawner.forge",
+		"set count to 0\n"
+		"every 0.25 seconds\n"
+		"\tadd 1 to count\n"
+		"\tset my name to \"spawned {count}\"\n"
+		"\tif count is 3 then\n"
+		"\t\tstop\n"
+		"\tend\n"
+		"end\n");
+	Entity menu = h.Spawn("Menu", "Scripts/Menu.forge");
+	Entity spawner = h.Spawn("Spawner", "Scripts/Spawner.forge");
+	Entity quit = h.PlayScene->CreateEntity("Quit");
+	Entity start = h.PlayScene->CreateEntity("Start");
+	h.PlayScene->SetParent(quit, menu);
+	h.PlayScene->SetParent(start, menu);
+	h.Start({ menu, spawner });
+
+	// A click climbs to the menu's script; only the Start button's ends the wait.
+	EmitScriptEventFrom(ScriptEntity(quit), "clicked", { ScriptValue(ScriptEntity(quit)) });
+	CHECK_EQ(menu.GetName(), std::string("Menu"));
+	EmitScriptEventFrom(ScriptEntity(start), "clicked", { ScriptValue(ScriptEntity(start)) });
+	CHECK_EQ(menu.GetName(), std::string("started"));
+
+	// A contact reaches a script that only waits for it, with no 'when collided'.
+	h.Runtime.Contact(menu.GetUUID(), quit, ContactEventType::CollisionEnter);
+	CHECK_EQ(menu.GetName(), std::string("touched Quit"));
+
+	// The timer ticks every quarter second, three times, then stops.
+	h.Frames(60);
+	CHECK_EQ(spawner.GetName(), std::string("spawned 3"));
+	CHECK(h.Errors.empty());
+}

@@ -181,6 +181,47 @@ namespace ForgeScript {
 		return i + 1 < tokens.size() && tokens[i].Type == TokenType::Newline && tokens[i + 1].Type == TokenType::Is;
 	}
 
+	bool IsTimeUnitWord(std::string_view word)
+	{
+		return word == "second" || word == "seconds" || word == "ms" || word == "millisecond" || word == "milliseconds" ||
+			word == "minute" || word == "minutes" || word == "frame" || word == "frames";
+	}
+
+	bool TimerOpensBlock(const std::vector<Token>& tokens, size_t index)
+	{
+		if (index >= tokens.size() || tokens[index].Type != TokenType::Identifier ||
+			(tokens[index].Lexeme != "every" && tokens[index].Lexeme != "after"))
+			return false;
+		if (index > 0)
+		{
+			switch (tokens[index - 1].Type)
+			{
+				case TokenType::Newline: case TokenType::Then: case TokenType::Do:
+				case TokenType::Else: case TokenType::Otherwise:
+					break;
+				default:
+					return false;
+			}
+		}
+		// A value must follow: not a member, an assignment's 'to', a comparison or the end of the line.
+		size_t i = index + 1;
+		if (i >= tokens.size())
+			return false;
+		switch (tokens[i].Type)
+		{
+			case TokenType::Newline: case TokenType::Eof: case TokenType::Dot: case TokenType::Possessive:
+			case TokenType::Colon: case TokenType::To: case TokenType::Is:
+				return false;
+			default:
+				break;
+		}
+		// The lexer keeps no newlines inside brackets, so the header ends at the next newline.
+		while (i < tokens.size() && tokens[i].Type != TokenType::Newline && tokens[i].Type != TokenType::Eof)
+			i++;
+		const Token& last = tokens[i - 1];
+		return i - 1 > index + 1 && last.Type == TokenType::Identifier && IsTimeUnitWord(last.Lexeme);
+	}
+
 	bool IfPicksAValue(const std::vector<Token>& tokens, size_t index)
 	{
 		if (index == 0 || index > tokens.size() || !EndsValue(tokens[index - 1]))
@@ -443,7 +484,7 @@ namespace ForgeScript {
 		// Track blocks that are written inside brackets, such as  list.map(function(x) ... end)
 		if (!m_Nesting.empty())
 		{
-			if (IsBlockOpenerWord(token.Type))
+			if (IsBlockOpenerWord(token.Type, token.Lexeme))
 				m_Nesting.push_back(Nesting::Block);
 			else if (token.Type == TokenType::End && m_PreviousType != TokenType::Dot &&
 				m_PreviousType != TokenType::Possessive && m_Nesting.back() == Nesting::Block)
@@ -461,7 +502,24 @@ namespace ForgeScript {
 			m_Nesting.pop_back();
 	}
 
-	bool Lexer::IsBlockOpenerWord(TokenType type) const
+	bool Lexer::RestOfLineIsTimer() const
+	{
+		// The same test as TimerOpensBlock, on the text: a value, then a time word at the end of the line.
+		size_t end = m_Current;
+		while (end < m_Source.size() && m_Source[end] != '\n' && m_Source[end] != '\r' && m_Source[end] != '#')
+			end++;
+		std::string_view rest(m_Source.data() + m_Current, end - m_Current);
+		while (!rest.empty() && (rest.back() == ' ' || rest.back() == '\t'))
+			rest.remove_suffix(1);
+		size_t wordStart = rest.size();
+		while (wordStart > 0 && IsWordPart(rest[wordStart - 1]))
+			wordStart--;
+		std::string_view before = rest.substr(0, wordStart);
+		const bool somethingBefore = before.find_first_not_of(" \t") != std::string_view::npos;
+		return somethingBefore && IsTimeUnitWord(rest.substr(wordStart));
+	}
+
+	bool Lexer::IsBlockOpenerWord(TokenType type, std::string_view lexeme) const
 	{
 		// Member names (list.repeat) and map keys ({if: 1}) are not blocks.
 		if (m_PreviousType == TokenType::Dot || m_PreviousType == TokenType::Possessive)
@@ -479,13 +537,24 @@ namespace ForgeScript {
 			case TokenType::If:
 				return m_PreviousType != TokenType::Else && m_PreviousType != TokenType::Otherwise &&
 					!IfPicksAValue(m_Tokens, m_Tokens.size());
-			case TokenType::While: case TokenType::Repeat: case TokenType::For:
+			case TokenType::While: case TokenType::Repeat:
 			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 				return true;
-			case TokenType::Until:
+			// 'wait until' and 'wait for' are waits, not loops.
+			case TokenType::Until: case TokenType::For:
 				return m_PreviousType != TokenType::Wait;
 			case TokenType::Kind:
 				return !(m_PreviousType == TokenType::Identifier && (m_PreviousLexeme == "a" || m_PreviousLexeme == "an"));
+			// A timer written inside an anonymous function within brackets: its 'end' is its own.
+			case TokenType::Identifier:
+				switch (m_PreviousType)
+				{
+					case TokenType::Newline: case TokenType::Then: case TokenType::Do:
+					case TokenType::Else: case TokenType::Otherwise:
+						return (lexeme == "every" || lexeme == "after") && RestOfLineIsTimer();
+					default:
+						return false;
+				}
 			default:
 				return false;
 		}

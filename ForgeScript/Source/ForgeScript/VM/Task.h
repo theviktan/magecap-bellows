@@ -80,6 +80,11 @@ namespace ForgeScript {
 		std::string FailureMessage;
 		Value Result;
 		Module* Owner = nullptr;
+		// 'wait for hit with damage': the event, the entity that must raise it ("wait for "Start" is clicked";
+		// empty for any), and how many of its values the task takes.
+		String* WaitEvent = nullptr;
+		std::string WaitSource;
+		uint8_t WaitCount = 0;
 
 		Task() : Object(ObjectType::Task) {}
 	};

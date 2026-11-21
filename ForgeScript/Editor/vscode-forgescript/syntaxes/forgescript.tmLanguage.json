@@ -90,6 +90,10 @@
 			"patterns": [
 				{
 					"name": "keyword.control.forge",
+					"match": "^\\s*(every|after)\\b(?=.*\\b(seconds?|ms|milliseconds?|minutes?|frames?)\\s*(#.*)?$)"
+				},
+				{
+					"name": "keyword.control.forge",
 					"match": "\\b(if|then|else|otherwise|match|end|while|until|do|repeat|times|forever|for|each|in|from|to|by|stop|skip|return|try|catch|finally|fail|when|trigger|wait|start|use|as|with)\\b"
 				},
 				{

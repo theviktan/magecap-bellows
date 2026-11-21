@@ -225,6 +225,9 @@ namespace ForgeScript {
 		std::vector<String*> GlobalOrder;
 		std::unordered_set<String*> Constants;
 		std::unordered_map<String*, std::vector<Closure*>> Handlers;
+		// How many of the module's tasks wait for each event ('wait for hit'), so a host can tell that the
+		// module wants the event without looking through every task.
+		std::unordered_map<String*, int> EventWaits;
 		bool HasRun = false;
 
 		explicit Module(std::string name) : Object(ObjectType::Module), Name(std::move(name)) {}

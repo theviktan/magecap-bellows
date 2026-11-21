@@ -59,6 +59,16 @@ namespace ForgeScript {
 	// that names something 'match' keeps its meaning. The compiler and the tools share this rule.
 	bool MatchOpensBlock(const std::vector<Token>& tokens, size_t index);
 
+	// Whether the word 'every' or 'after' at tokens[index] starts a timer block ("every 3 seconds",
+	// "after 2 seconds", then the body and 'end'). Neither word is a keyword: it only opens a block at the
+	// start of a statement, with a value after it, when the line ends in a time word (second, seconds,
+	// ms, millisecond, milliseconds, minute, minutes, frame, frames). Such a line was always a mistake, so
+	// every script keeps its meaning. The compiler and the tools share this rule; the compiler also lets
+	// a script's own phrase starting with 'every' or 'after' win.
+	bool TimerOpensBlock(const std::vector<Token>& tokens, size_t index);
+	// Whether a word is one of the time words that end a timer's first line.
+	bool IsTimeUnitWord(std::string_view word);
+
 	// Turns ForgeScript source code into a list of tokens.
 	// The whole file is tokenized up front so the compiler can look ahead (used for phrases).
 	class Lexer
@@ -109,7 +119,9 @@ namespace ForgeScript {
 		bool NewlinesMatter() const { return m_Nesting.empty() || m_Nesting.back() == Nesting::Block; }
 		void OpenBracket() { m_Nesting.push_back(Nesting::Bracket); }
 		void CloseBracket();
-		bool IsBlockOpenerWord(TokenType type) const;
+		bool IsBlockOpenerWord(TokenType type, std::string_view lexeme) const;
+		// Whether the rest of this source line, after the current word, is a timer's ("every 3 seconds").
+		bool RestOfLineIsTimer() const;
 
 		// Each open "{ }" inside text: the bracket depth inside it, and the long text it belongs to, if any.
 		struct Interpolation

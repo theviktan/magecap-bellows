@@ -5,6 +5,24 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.6.0 (not released yet)
+
+- **Waiting for an event** (Roadmap 2.0, Tier 1 #2). `wait for door opened` pauses the task until its
+  script gets the event; `wait for hit with damage, source` puts the event's values in the names, and
+  `wait for "Start" is clicked` waits for that entity's event. The script's `when` blocks run first,
+  then the waiting tasks; a wait begun during the event waits for the next one. It ends when the event
+  comes, even while the game is paused. `VM::HasHandler` now also reports a module that waits for the
+  event, so hosts send it events it has no `when` block for.
+- **Timers** (Tier 1 #3). `every 3 seconds ... end` runs its block again and again, and
+  `after 2 seconds ... end` runs it once, each as a task of its own; the line after runs right away.
+  They take `wait`'s units, work anywhere (also in functions and kinds), hold while the game is
+  paused unless the script is Run While Paused, and end with their script. `stop` inside `every` ends
+  it.
+- Nothing changes meaning: `wait for` was an error, and `every`/`after` start a timer only on a line
+  that ends in a time word (they stay usable as names; a script phrase starting with them still wins).
+- The language server, outline, `FindScriptVariables` and `FindHandlersThatWait` know both forms; a UI
+  handler that starts a timer counts as one that waits. Help has entries for `every` and `after`.
+
 ## 1.5.0 (2026-11-20)
 
 New checker and tool features (warnings, `--check` with the engine API) and new docs, so the minor
