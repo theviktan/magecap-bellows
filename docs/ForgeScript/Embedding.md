@@ -352,4 +352,19 @@ Everything a script can do goes through the functions, phrases and types you reg
 2. call `VM::Check` to catch mistakes with exact line and column numbers,
 3. run them in play mode and read the print and error handlers.
 
+Scripts can carry their own tests (`test "name" ... expect ... end`). They never run when a script runs; to run them, load the script and call `VM::RunTest` for each name `VM::GetTestNames` gives:
+
+```cpp
+ForgeScript::LoadResult loaded = vm.Load(source, "combat.forge");
+const std::vector<std::string> tests = vm.GetTestNames(loaded.LoadedModule);
+for (size_t i = 0; i < tests.size(); i++)
+{
+	std::string failure;
+	if (!vm.RunTest(loaded.LoadedModule, i, failure))
+		std::cout << "FAIL " << tests[i] << "\n" << failure << "\n";
+}
+```
+
+`RunTest` runs the test as a task and calls `Update` itself (1/60 second steps by default) until it ends, so a test may `wait`. The error handler still sees a failing test's error; `forgescript --test` quiets it and prints the failure itself.
+
 Register the same engine API for the editor's automation tools, and agents can build game logic (Tetris rules, enemy AI, UI flows) as ForgeScript scripts without touching C++.

@@ -32,7 +32,7 @@ namespace ForgeScript {
 			case TokenType::Kind:
 				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 			case TokenType::Identifier:
-				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i);
+				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i) || TestOpensBlock(tokens, i);
 			default:
 				return false;
 		}

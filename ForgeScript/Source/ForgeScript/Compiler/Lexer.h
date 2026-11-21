@@ -66,6 +66,10 @@ namespace ForgeScript {
 	// every script keeps its meaning. The compiler and the tools share this rule; the compiler also lets
 	// a script's own phrase starting with 'every' or 'after' win.
 	bool TimerOpensBlock(const std::vector<Token>& tokens, size_t index);
+	// Whether the word 'test' at tokens[index] starts a test block: 'test "name"' at the start of a line,
+	// then the end of the line (or 'do'). 'test' isn't a keyword, and such a line was always a mistake.
+	// The compiler and the tools share this rule; the compiler also lets a script's own phrase win.
+	bool TestOpensBlock(const std::vector<Token>& tokens, size_t index);
 	// Whether a word is one of the time words that end a timer's first line.
 	bool IsTimeUnitWord(std::string_view word);
 

@@ -1,0 +1,30 @@
+# 'test "name" ... end' blocks never run when the script runs; 'forgescript --test' runs them.
+function double(x)
+	return x * 2
+end
+
+test "double works"
+	say "this never prints in a normal run"
+	expect double(2) is 4
+end
+
+say "the script runs"                                   # expect: the script runs
+
+# 'expect' works anywhere: when it's true, nothing happens.
+expect double(3) is 6
+expect double(1) is below 3
+expect 2 is in [1, 2]
+expect not false
+
+# When it isn't, it's an error that says what it found.
+try
+	expect double(2) is 5
+catch problem
+	say problem                                         # expect: Expected double(2) is 5, but double(2) is 4.
+end
+try
+	set door to {open: false}
+	expect door.open
+catch problem
+	say problem                                         # expect: Expected door.open, but it is false.
+end

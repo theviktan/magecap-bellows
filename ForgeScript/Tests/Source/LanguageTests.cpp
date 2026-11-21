@@ -375,6 +375,49 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("TestsRunOnlyThroughRunTest")
+{
+	VM vm;
+	std::vector<std::string> printed;
+	vm.SetPrintHandler([&printed](const std::string& text) { printed.push_back(text); });
+	vm.SetErrorHandler([](const ScriptError&) {});
+	LoadResult loaded = vm.Load(
+		"set count to 0\n"
+		"test \"first\"\n\tadd 1 to count\n\texpect count is 1\nend\n"
+		"test \"waits\" do\n\twait 2 seconds\n\texpect count is 1\nend\n"
+		"test \"fails\"\n\texpect count is 5\n\tsay \"not reached\"\nend\n"
+		"test \"forever\"\n\twait until false\nend\n"
+		"say \"ran\"\n", "tests.forge");
+	REQUIRE(loaded.Success);
+	CHECK(printed == std::vector<std::string>{ "ran" });
+	CHECK(vm.GetTestNames(loaded.LoadedModule) == std::vector<std::string>{ "first", "waits", "fails", "forever" });
+
+	std::string failure;
+	CHECK(vm.RunTest(loaded.LoadedModule, 0, failure));
+	CHECK(vm.RunTest(loaded.LoadedModule, 1, failure));
+	CHECK_FALSE(vm.RunTest(loaded.LoadedModule, 2, failure));
+	CHECK_CONTAINS(failure, "Expected count is 5, but count is 1.");
+	CHECK_CONTAINS(failure, "tests.forge line 11");
+	CHECK_FALSE(vm.RunTest(loaded.LoadedModule, 3, failure, 1.0, 5.0));
+	CHECK_CONTAINS(failure, "still waiting after 5 seconds of game time");
+	CHECK_FALSE(vm.RunTest(loaded.LoadedModule, 9, failure));
+	CHECK(printed == std::vector<std::string>{ "ran" });
+}
+
+TEST_CASE("TestAndExpectKeepOldMeanings")
+{
+	CHECK_EQ(Output("set test to 3\nset expect to 4\nsay test + expect\n"), std::string("7\n"));
+	CHECK_EQ(Output("function expect(x)\n\treturn x + 1\nend\nsay expect(1)\nsay expect (2)\n"), std::string("2\n3\n"));
+	CHECK_EQ(Output("set expect to 5\nsay expect - 1\n"), std::string("4\n"));
+	CHECK_EQ(Output("phrase test (x)\n\tsay \"phrase {x}\"\nend\ntest \"a\"\n"), std::string("phrase a\n"));
+	CHECK_EQ(Output("phrase expect (x)\n\tsay \"phrase {x}\"\nend\nexpect 3\n"), std::string("phrase 3\n"));
+	CHECK_CONTAINS(CompileFails("function f()\n\ttest \"x\"\n\t\tsay 1\n\tend\nend\n").Message, "Write tests at the top level of the script");
+	// A test's own names stay inside it, and its 'end' pairs with it.
+	CHECK_EQ(Output("test \"t\"\n\tset inside to 1\nend\nsay \"after\"\n"), std::string("after\n"));
+	// 'expect' with logic shows the whole condition.
+	CHECK_CONTAINS(Output("try\n\texpect 1 is 1 and 2 is 3\ncatch problem\n\tsay problem\nend\n"), "Expected 1 is 1 and 2 is 3, but it is false.");
+}
+
 TEST_CASE("SharedValuesKeepOldMeaningsAndExplainMistakes")
 {
 	// 'shared' is still a name, also as a field.

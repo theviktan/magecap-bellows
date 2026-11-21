@@ -37,6 +37,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Timers | `every 3 seconds ... end` (waits, runs, again; `stop` ends it), `after 2 seconds ... end` (once). Same units as `wait`; the line after runs right away |
 | Run as a task | `start patrol()`, `start guard.patrol(3)` |
 | Errors | `try ... catch problem ... end`, `fail "message"`, cleanup that always runs: `try ... catch problem ... finally ... end` (without `catch`, the error goes on after the finally code) |
+| Tests | `test "name" ... end` at the top level (runs only with `forgescript --test file.forge`); `expect x is 5` anywhere: an error naming what was found unless it's true |
 | Use another script | `use "helpers"`, `use "helpers" as h` |
 | Comments | `# line`, `#[ block ]#` |
 

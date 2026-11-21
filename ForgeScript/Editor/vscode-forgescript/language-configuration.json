@@ -12,7 +12,7 @@
 	],
 	"surroundingPairs": [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""]],
 	"indentationRules": {
-		"increaseIndentPattern": "^\\s*((if|else|otherwise|match|while|until|repeat|for|function|phrase|kind|when|try|catch|is)\\b.*|finally\\s*|(every|after)\\b.*\\b(seconds?|ms|milliseconds?|minutes?|frames?)\\s*)$",
+		"increaseIndentPattern": "^\\s*((if|else|otherwise|match|while|until|repeat|for|function|phrase|kind|when|try|catch|is)\\b.*|finally\\s*|(every|after)\\b.*\\b(seconds?|ms|milliseconds?|minutes?|frames?)\\s*|test\\s+\"[^\"]*\"(\\s+do)?\\s*)$",
 		"decreaseIndentPattern": "^\\s*(end|else|otherwise|catch|is)\\b|^\\s*finally\\s*$"
 	},
 	"wordPattern": "[A-Za-z_][A-Za-z0-9_]*"

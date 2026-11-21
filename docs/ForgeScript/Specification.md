@@ -88,6 +88,8 @@ A **name** starts with a letter (`a` to `z`, `A` to `Z`) or `_`, followed by let
 | `the`, `first`, `last`, `item` | list words in a value: `the length of items`, `first of items`, `item 2 of items` |
 | `every`, `any` | `every x in list is ...`, `any x in list is ...`; `every` also starts a timer |
 | `choices`, `are` | `choices State are idle, running` at the start of a line |
+| `shared` | `shared count is 0` at the start of a line inside a kind |
+| `test`, `expect` | `test "name"` at the start of a line; `expect` followed by a value |
 | `as` | `use "helpers" as h` |
 | `match` | the start of a match block ([5.6](#56-match)) |
 
@@ -415,6 +417,17 @@ fail expression
 ```
 
 See [11](#11-errors).
+
+### 5.9.1 Tests
+
+```
+test text [do]  block  end
+expect expression
+```
+
+- `test` *text* at the start of a line, with nothing else after the text but `do`, makes a **test**: a function the module keeps, never run when the script runs. A host runs it with `VM::RunTest`, which `forgescript --test` uses: the script runs first, then each test in order, each as a task of its own that may wait (game time steps by 1/60 second, up to 600 seconds a test). A test passes if it ends without an error. Tests can only be written at the top level of a script.
+- `expect` *expression* works anywhere. When the expression is false or `nothing`, it is an error: "Expected *expression*, but *left* is *value*." when the expression is one comparison (no `and`, `or` or `not` at its top), with *left* the text and value of the comparison's left side, and otherwise "Expected *expression*, but it is *value*." The texts are the script's own.
+- `test` and `expect` are contextual words. `expect` takes this form only when followed by something that can start a value but can't follow a name (a number, text, a name, `true`, `false`, `yes`, `no`, `nothing`, `not`, `my`, `self`, `new`), so `expect(x)`, `expect - 1` and `expect[1]` keep their meanings. A script phrase starting with either word takes the line instead.
 
 ### 5.10 Using other scripts
 

@@ -233,6 +233,8 @@ namespace ForgeScript {
 				m_EveryIsPhrase = m_Phrases.GetRoot()->Words.count("every") > 0;
 				m_AfterIsPhrase = m_Phrases.GetRoot()->Words.count("after") > 0;
 				m_ChoicesIsPhrase = m_Phrases.GetRoot()->Words.count("choices") > 0;
+				m_TestIsPhrase = m_Phrases.GetRoot()->Words.count("test") > 0;
+				m_ExpectIsPhrase = m_Phrases.GetRoot()->Words.count("expect") > 0;
 				PrescanChoices();
 				for (const char* verb : { "sort", "shuffle", "reverse" })
 				{
@@ -516,7 +518,7 @@ namespace ForgeScript {
 					// A match with no 'is' choice is a mistake, but its 'end' still belongs to it, so the
 					// rest of the script pairs up as written.
 					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i)) ||
-						IsTimerAt(tokens, i);
+						IsTimerAt(tokens, i) || IsTestAt(tokens, i);
 				default:
 					return false;
 			}
@@ -657,7 +659,8 @@ namespace ForgeScript {
 				{
 					// A timer's body is a function of its own, like a handler's.
 					bool functionLike = token.Type == TokenType::Function || token.Type == TokenType::Phrase ||
-						token.Type == TokenType::When || token.Type == TokenType::Kind || (token.Type == TokenType::Identifier && IsTimerAt(m_Tokens, i));
+						token.Type == TokenType::When || token.Type == TokenType::Kind ||
+						(token.Type == TokenType::Identifier && (IsTimerAt(m_Tokens, i) || IsTestAt(m_Tokens, i)));
 					if (functionLike)
 					{
 						if (isScript && (token.Type == TokenType::Function || token.Type == TokenType::Kind) &&
@@ -1272,6 +1275,10 @@ namespace ForgeScript {
 						ListVerbStatement();
 					else if (IsChoicesAt(m_Tokens, m_Pos))
 						ChoicesStatement();
+					else if (IsTestAt(m_Tokens, m_Pos))
+						TestStatement();
+					else if (IsExpectAt(m_Pos))
+						ExpectStatement();
 					else if (TryPhrase(true))
 						EmitOp(OpCode::Pop);
 					else if (MatchWithoutChoices())
@@ -1572,6 +1579,120 @@ namespace ForgeScript {
 				candidates.push_back(choice);
 			}
 			ErrorAt(Peek(1), set + " has no choice '" + member + "'." + DidYouMean(member, candidates) + " Its choices are: " + list + ".");
+		}
+
+		bool IsTestAt(const std::vector<Token>& tokens, size_t index) const
+		{
+			return !m_TestIsPhrase && TestOpensBlock(tokens, index);
+		}
+
+		// 'expect' and then a value that can't follow a name ('expect x is 5', 'expect not done'): a line
+		// that was a mistake. 'expect(x)', 'expect - 1' and 'expect[1]' keep their meaning.
+		bool IsExpectAt(size_t index) const
+		{
+			if (m_ExpectIsPhrase || index + 1 >= m_Tokens.size())
+				return false;
+			const Token& word = m_Tokens[index];
+			if (word.Type != TokenType::Identifier || word.Lexeme != "expect")
+				return false;
+			switch (m_Tokens[index + 1].Type)
+			{
+				case TokenType::Number: case TokenType::String: case TokenType::Interpolation: case TokenType::Identifier:
+				case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No: case TokenType::Nothing:
+				case TokenType::Not: case TokenType::My: case TokenType::Self: case TokenType::New:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		// The script's text from tokens[first] to tokens[last], as written.
+		std::string SourceText(size_t first, size_t last) const
+		{
+			const std::string_view a = m_Tokens[first].Lexeme;
+			const std::string_view b = m_Tokens[last].Lexeme;
+			if (a.data() && b.data() && b.data() + b.size() > a.data())
+				return std::string(a.data(), static_cast<size_t>(b.data() + b.size() - a.data()));
+			return std::string(a);
+		}
+
+		// test "double works" ... end: a function kept by the module, run only by VM::RunTest
+		// ('forgescript --test'), never when the script runs.
+		void TestStatement()
+		{
+			const Token opener = Current();
+			if (m_State->Kind != ScopeKind::Script || m_State->ScopeDepth != 0)
+				ErrorAt(opener, "Write tests at the top level of the script, not inside a function, kind or block.");
+			Advance(); // test
+			const std::string name = Current().Text;
+			Advance();
+			Match(TokenType::Do);
+			FunctionBody("test \"" + name + "\"", ScopeKind::Function, {}, opener, "'test'");
+			EmitWithName(OpCode::AddTest, name);
+		}
+
+		// expect double(2) is 4: an error naming what was expected and what was found, unless it's true.
+		// For one comparison, the value on its left is kept to show in the message.
+		void ExpectStatement()
+		{
+			Advance(); // expect
+			const size_t first = m_Pos;
+			size_t last = first;
+			bool single = false;
+			size_t leftEnd = first;
+			{
+				// One comparison at the top: no 'and', 'or' or 'not' outside brackets, and an operator.
+				int depth = 0;
+				bool logic = m_Tokens[first].Type == TokenType::Not;
+				for (size_t i = first; i < m_Tokens.size(); i++)
+				{
+					const TokenType type = m_Tokens[i].Type;
+					if (type == TokenType::Newline || type == TokenType::Eof)
+						break;
+					last = i;
+					const bool afterBrace = !m_Tokens[i].Lexeme.empty() && m_Tokens[i].Lexeme.front() == '}';
+					if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace ||
+						(type == TokenType::Interpolation && !afterBrace))
+						depth++;
+					else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
+						(type == TokenType::String && afterBrace))
+						depth--;
+					else if (depth == 0 && (type == TokenType::And || type == TokenType::Or))
+						logic = true;
+					else if (depth == 0 && !single && i > first &&
+						(type == TokenType::Is || type == TokenType::Contains || type == TokenType::EqualEqual || type == TokenType::BangEqual ||
+						 type == TokenType::Less || type == TokenType::LessEqual || type == TokenType::Greater || type == TokenType::GreaterEqual))
+					{
+						single = true;
+						leftEnd = i - 1;
+					}
+				}
+				single = single && !logic;
+			}
+
+			const uint16_t text = NameConstant(SourceText(first, last));
+			if (single)
+			{
+				BeginScope();
+				Term();
+				const int left = AddLocal("");
+				EmitOp(OpCode::GetLocal);
+				EmitByte(static_cast<uint8_t>(left));
+				ComparisonRest();
+				EmitOp(OpCode::Expect);
+				EmitU16(text);
+				EmitU16(NameConstant(SourceText(first, leftEnd)));
+				EmitByte(1);
+				EndScope();
+			}
+			else
+			{
+				Expression();
+				EmitOp(OpCode::Expect);
+				EmitU16(text);
+				EmitU16(text);
+				EmitByte(0);
+			}
 		}
 
 		bool IsListVerbAt(size_t index) const
@@ -4164,6 +4285,8 @@ namespace ForgeScript {
 		// Each 'choices State are idle, running' of this script: the set's name and its choices, in order.
 		std::unordered_map<std::string, std::vector<std::string>> m_Choices;
 		bool m_ChoicesIsPhrase = false;
+		bool m_TestIsPhrase = false;
+		bool m_ExpectIsPhrase = false;
 		// Set by ParameterList when its last name ends in '...', for the FunctionBody that follows.
 		bool m_RestParam = false;
 		FunctionState* m_State = nullptr;

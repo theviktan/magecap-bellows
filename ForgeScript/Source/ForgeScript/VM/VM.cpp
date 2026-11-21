@@ -672,6 +672,53 @@ namespace ForgeScript {
 		}
 	}
 
+	std::vector<std::string> VM::GetTestNames(Module* module) const
+	{
+		std::vector<std::string> names;
+		if (module)
+		{
+			for (const auto& [name, test] : module->Tests)
+				names.push_back(name->Text);
+		}
+		return names;
+	}
+
+	bool VM::RunTest(Module* module, size_t index, std::string& outFailure, double step, double maxSeconds)
+	{
+		if (!module || index >= module->Tests.size())
+		{
+			outFailure = "There is no test " + std::to_string(index + 1) + " in this script.";
+			return false;
+		}
+		Task* task = NewTask(module);
+		// The task is kept while it waits between updates, and read after it ends.
+		Handle keep(*this, Value::FromObject(task));
+		task->Stack.push_back(Value::FromObject(module->Tests[index].second));
+		m_PendingTasks.push_back(task);
+		StartCall(task, 0);
+		RemovePending(task);
+
+		const double start = m_Time;
+		auto running = [task] { return task->State == TaskState::Ready || task->State == TaskState::Waiting || task->State == TaskState::Running; };
+		while (running() && m_Time - start < maxSeconds)
+			Update(step);
+
+		switch (task->State)
+		{
+			case TaskState::Done:
+				return true;
+			case TaskState::Failed:
+				outFailure = task->FailureMessage;
+				return false;
+			case TaskState::Cancelled:
+				outFailure = "The test was stopped before it finished.";
+				return false;
+			default:
+				outFailure = "The test was still waiting after " + Describe(Value::FromNumber(maxSeconds), false) + " seconds of game time.";
+				return false;
+		}
+	}
+
 	bool VM::Call(const Value& callee, const std::vector<Value>& args, Value* outResult)
 	{
 		Module* owner = nullptr;
@@ -3070,6 +3117,27 @@ namespace ForgeScript {
 					kind->Parent = As<Kind>(parent);
 					break;
 				}
+				case OpCode::AddTest:
+				{
+					String* name = FORGESCRIPT_READ_STRING();
+					Closure* test = As<Closure>(stack.back());
+					stack.pop_back();
+					frame->Function->Fn->Owner->Tests.emplace_back(name, test);
+					break;
+				}
+				case OpCode::Expect:
+				{
+					String* text = FORGESCRIPT_READ_STRING();
+					String* leftText = FORGESCRIPT_READ_STRING();
+					const bool hasLeft = FORGESCRIPT_READ_BYTE() != 0;
+					const Value condition = stack.back();
+					stack.pop_back();
+					if (condition.IsTruthy())
+						break;
+					if (hasLeft)
+						FORGESCRIPT_FAIL("Expected " + text->Text + ", but " + leftText->Text + " is " + Describe(stack.back(), true) + ".");
+					FORGESCRIPT_FAIL("Expected " + text->Text + ", but it is " + Describe(condition, true) + ".");
+				}
 				case OpCode::SharedValue:
 				{
 					String* name = FORGESCRIPT_READ_STRING();
@@ -3498,6 +3566,11 @@ namespace ForgeScript {
 					MarkObject(name);
 					for (Closure* handler : handlers)
 						MarkObject(handler);
+				}
+				for (auto& [name, test] : module->Tests)
+				{
+					MarkObject(name);
+					MarkObject(test);
 				}
 				break;
 			}

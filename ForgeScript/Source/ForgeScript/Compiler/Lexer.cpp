@@ -187,6 +187,17 @@ namespace ForgeScript {
 			word == "minute" || word == "minutes" || word == "frame" || word == "frames";
 	}
 
+	bool TestOpensBlock(const std::vector<Token>& tokens, size_t index)
+	{
+		if (index + 2 >= tokens.size() || tokens[index].Type != TokenType::Identifier || tokens[index].Lexeme != "test" ||
+			tokens[index + 1].Type != TokenType::String)
+			return false;
+		if (index > 0 && tokens[index - 1].Type != TokenType::Newline)
+			return false;
+		const TokenType after = tokens[index + 2].Type;
+		return after == TokenType::Newline || after == TokenType::Do || after == TokenType::Eof;
+	}
+
 	bool TimerOpensBlock(const std::vector<Token>& tokens, size_t index)
 	{
 		if (index >= tokens.size() || tokens[index].Type != TokenType::Identifier ||
