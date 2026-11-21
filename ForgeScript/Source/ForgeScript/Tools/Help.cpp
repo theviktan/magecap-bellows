@@ -53,7 +53,7 @@ namespace ForgeScript {
 				Keyword("false", "false", "The value for no. Only false and nothing count as false."),
 				Keyword("for", "for i from 1 to 10 ... end", "Counts through numbers, or goes through a list with for each."),
 				Keyword("from", "for i from 1 to 10, take 5 from health", "Part of counting loops and of take ... from."),
-				Keyword("function", "function name(a, b is 10) ... end", "Defines a function; 'is' gives a value a default for calls that leave it out, and calls can name values: attack(goblin, crit: 5). A last value written numbers... collects the rest as a list: function total(numbers...). Without a name it makes a function value: function(x) return x * 2 end."),
+				Keyword("function", "function name(a, b is 10) ... end", "Defines a function; 'is' gives a value a default for calls that leave it out, and calls can name values: attack(goblin, crit: 5). A last value written numbers... collects the rest as a list: function total(numbers...). 'as' gives a value a type for the checker: function heal(amount as number). Without a name it makes a function value: function(x) return x * 2 end."),
 				Keyword("if", "if condition then ... else ... end", "Runs a block only when the condition is true. After a value it picks one of two: \"big\" if x > 3 otherwise \"small\"."),
 				Keyword("in", "for each x in list, x is in list", "Names the list a loop goes through, or tests membership."),
 				Keyword("is", "a is b, x is above 3, x is between 1 and 10, x is a number, x is even", "Compares values. Lists and maps are equal when they hold the same items. 'between' includes both ends, in either order. 'is even', 'is odd' and 'is a whole number' test numbers, unless the script has its own value named even or odd."),

@@ -1,0 +1,22 @@
+# 'as' after a parameter says what type it should be. It never changes what runs.
+function heal(amount as number, who as text is "you")
+	return "{who} healed {amount}"
+end
+say heal(5)                                             # expect: you healed 5
+say heal(3, who: "Bo")                                  # expect: Bo healed 3
+
+# 'function' and 'kind' as types open no block.
+function apply(f as function, value as number)
+	return f(value)
+end
+say apply(function(x) return x * 10 end, 4)             # expect: 40
+
+kind Enemy
+	set health to 5
+	function hurt(amount as number)
+		take amount from my health
+	end
+end
+set goblin to new Enemy()
+goblin.hurt(2)
+say goblin.health                                       # expect: 3

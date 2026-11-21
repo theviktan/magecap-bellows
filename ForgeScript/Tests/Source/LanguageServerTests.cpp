@@ -770,6 +770,14 @@ TEST_CASE("FindOutlineListsAScriptsDefinitions")
 	CHECK(FindOutline("end\nend\nfunction (\n").empty());
 }
 
+TEST_CASE("OutlineShowsParameterTypes")
+{
+	const std::vector<OutlineItem> outline = FindOutline("function heal(amount as number, f as function)\n\treturn 1\nend\nsay 2\n");
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(1));
+	CHECK_EQ(outline[0].Detail, std::string("function heal(amount as number, f as function)"));
+	CHECK_EQ(outline[0].EndLine, 3);
+}
+
 TEST_CASE("OutlineListsTests")
 {
 	const std::vector<OutlineItem> outline = FindOutline("test \"adds\"\n\texpect 1 + 1 is 2\nend\nset test to 3\n");

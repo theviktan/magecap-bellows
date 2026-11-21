@@ -281,6 +281,7 @@ namespace ForgeScript {
 					SkipNewlines();
 				}
 
+				WarnTypesOfCalls();
 				if (m_AllErrors && !m_AllErrors->empty())
 					throw CompileAbort();
 				EmitOp(OpCode::Nothing);
@@ -496,6 +497,10 @@ namespace ForgeScript {
 			if (i > 0 && (tokens[i - 1].Type == TokenType::Dot || tokens[i - 1].Type == TokenType::Possessive))
 				return false;
 			if (i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Colon)
+				return false;
+			// A parameter's type ('f as function', 'k as kind') opens nothing.
+			if ((token.Type == TokenType::Function || token.Type == TokenType::Kind) && i > 0 &&
+				tokens[i - 1].Type == TokenType::Identifier && tokens[i - 1].Lexeme == "as")
 				return false;
 
 			switch (token.Type)
@@ -1878,6 +1883,138 @@ namespace ForgeScript {
 			m_Options.Warnings->push_back({ message, m_FileName, at.Line, at.Column });
 		}
 
+		// The type of a value that is written out plainly from tokens[first] to tokens[last] (a number,
+		// text without '{ }', true/false/yes/no, nothing, a list or a map), or "" for anything else.
+		std::string PlainValueType(size_t first, size_t last) const
+		{
+			const TokenType type = m_Tokens[first].Type;
+			if (first == last)
+			{
+				switch (type)
+				{
+					case TokenType::Number: return "number";
+					case TokenType::String: return "text";
+					case TokenType::True: case TokenType::False: case TokenType::Yes: case TokenType::No: return "boolean";
+					case TokenType::Nothing: return "nothing";
+					default: return {};
+				}
+			}
+			if (type == TokenType::Minus && last == first + 1 && m_Tokens[last].Type == TokenType::Number)
+				return "number";
+			if ((type == TokenType::LeftBracket && m_Tokens[last].Type == TokenType::RightBracket) ||
+				(type == TokenType::LeftBrace && m_Tokens[last].Type == TokenType::RightBrace))
+			{
+				// Only when the closing bracket closes the opening one: '[1] + [2]' isn't one list.
+				int depth = 0;
+				for (size_t i = first; i <= last; i++)
+				{
+					const TokenType t = m_Tokens[i].Type;
+					if (t == TokenType::LeftBracket || t == TokenType::LeftBrace || t == TokenType::LeftParen)
+						depth++;
+					else if (t == TokenType::RightBracket || t == TokenType::RightBrace || t == TokenType::RightParen)
+						depth--;
+					if (depth == 0 && i < last)
+						return {};
+				}
+				return type == TokenType::LeftBracket ? "list" : "map";
+			}
+			return {};
+		}
+
+		// Notes the plain values of the call whose '(' is tokens[open], for WarnTypesOfCalls.
+		void NoteCallValues(const std::string& function, size_t open)
+		{
+			NotedCall call;
+			call.Function = function;
+			size_t position = 0;
+			size_t start = open + 1;
+			int depth = 0;
+			for (size_t i = open + 1; i < m_Tokens.size(); i++)
+			{
+				const TokenType type = m_Tokens[i].Type;
+				const bool afterBrace = !m_Tokens[i].Lexeme.empty() && m_Tokens[i].Lexeme.front() == '}';
+				if (type == TokenType::Newline || type == TokenType::Eof)
+					return;
+				if (type == TokenType::LeftParen || type == TokenType::LeftBracket || type == TokenType::LeftBrace ||
+					(type == TokenType::Interpolation && !afterBrace))
+				{
+					depth++;
+					continue;
+				}
+				const bool closes = type == TokenType::RightParen && depth == 0;
+				if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
+					(type == TokenType::String && afterBrace))
+				{
+					if (!closes)
+					{
+						depth--;
+						continue;
+					}
+				}
+				if (depth > 0 || (type != TokenType::Comma && !closes))
+					continue;
+				if (i > start)
+				{
+					CallValue value;
+					size_t first = start;
+					if (m_Tokens[first].Type == TokenType::Identifier && first + 1 < i && m_Tokens[first + 1].Type == TokenType::Colon)
+					{
+						value.Name = std::string(m_Tokens[first].Lexeme);
+						first += 2;
+					}
+					value.Position = position++;
+					if (first < i)
+					{
+						value.Type = PlainValueType(first, i - 1);
+						value.Token = first;
+						if (!value.Type.empty())
+							call.Values.push_back(value);
+					}
+				}
+				start = i + 1;
+				if (closes)
+					break;
+			}
+			if (!call.Values.empty())
+				m_NotedCalls.push_back(std::move(call));
+		}
+
+		// 'heal("ten")' where heal is 'function heal(amount as number)': a warning on the value. Only
+		// plain values are compared, so a warning is never a guess.
+		void WarnTypesOfCalls()
+		{
+			for (const NotedCall& call : m_NotedCalls)
+			{
+				auto found = m_FunctionTypes.find(call.Function);
+				if (found == m_FunctionTypes.end())
+					continue;
+				const FunctionTypes& function = found->second;
+				for (const CallValue& value : call.Values)
+				{
+					size_t index = value.Position;
+					if (!value.Name.empty())
+					{
+						auto named = std::find(function.Params.begin(), function.Params.end(), value.Name);
+						if (named == function.Params.end())
+							continue;
+						index = static_cast<size_t>(named - function.Params.begin());
+					}
+					if (index >= function.Types.size() || function.Types[index].empty() || function.Types[index] == value.Type)
+						continue;
+					const std::string& wanted = function.Types[index];
+					const std::string& param = function.Params[index];
+					auto article = [](const std::string& word)
+					{
+						if (word == "text" || word == "nothing")
+							return word;
+						return std::string(std::string("aeiouAEIOU").find(word[0]) != std::string::npos ? "an " : "a ") + word;
+					};
+					Warn(m_Tokens[value.Token], "'" + call.Function + "' takes " + article(wanted) + " for '" + param + "' (" + param +
+						" as " + wanted + "), but this is " + article(value.Type) + ".");
+				}
+			}
+		}
+
 		bool IsBuiltinFunction(const std::string& name) const
 		{
 			if (m_VM.HasSharedGlobal(name))
@@ -2252,8 +2389,34 @@ namespace ForgeScript {
 
 		// The names in "(a, b is 10)". A default value ('is' and a value) is only noted here; FunctionBody
 		// compiles it inside the function, so it is worked out at each call that leaves the value out.
+		// 'as number' after a parameter's name: the type word (or a kind's name) for checkers. It never
+		// changes what runs. A misspelled type word ('nmber') is a mistake.
+		std::string ParameterType()
+		{
+			Advance(); // as
+			const Token& type = Current();
+			std::string name(type.Lexeme);
+			if (type.Type == TokenType::Function || type.Type == TokenType::Kind)
+			{
+				Advance();
+				return name;
+			}
+			if (type.Type != TokenType::Identifier)
+				ErrorAtCurrent("After 'as', write a type, like: amount as number (or text, boolean, list, map, function, vector, object, or a kind's name)");
+			static const std::vector<std::string_view> c_Types = { "number", "text", "boolean", "list", "map", "vector", "object" };
+			if (std::find(c_Types.begin(), c_Types.end(), name) == c_Types.end() && std::islower(static_cast<unsigned char>(name[0])))
+			{
+				const std::string closest = ClosestName(name, c_Types);
+				if (!closest.empty())
+					ErrorAtCurrent("'" + name + "' isn't a type. Did you mean '" + closest + "'?");
+			}
+			Advance();
+			return name;
+		}
+
 		std::vector<std::string> ParameterList(std::vector<DefaultValue>* defaults = nullptr)
 		{
+			m_ParamTypes.clear();
 			std::vector<std::string> params;
 			Consume(TokenType::LeftParen, "Expected '(' after the function name, like: function heal(amount)");
 			if (!Check(TokenType::RightParen))
@@ -2264,12 +2427,20 @@ namespace ForgeScript {
 					const Token& nameToken = Current();
 					params.push_back(ConsumeName("Expected a parameter name."));
 					DefaultValue value;
+					// 'amount as number': a type for checkers only (see ParameterType).
+					m_ParamTypes.resize(params.size());
+					if (CheckWord("as"))
+						m_ParamTypes.back() = ParameterType();
 					if (Check(TokenType::Dot) && Peek(1).Type == TokenType::Dot && Peek(2).Type == TokenType::Dot)
 					{
 						// 'numbers...': the last parameter gets the values left over, as a list.
+						if (!m_ParamTypes.back().empty())
+							ErrorAtCurrent("'" + params.back() + "...' is always a list of the values left over, so it can't have a type.");
 						Advance();
 						Advance();
 						Advance();
+						if (CheckWord("as"))
+							ErrorAtCurrent("'" + params.back() + "...' is always a list of the values left over, so it can't have a type.");
 						if (Check(TokenType::Is))
 							ErrorAtCurrent("'" + params.back() + "...' gets the values left over, so it can't have a default. It is an empty list when there are none.");
 						if (!Check(TokenType::RightParen))
@@ -2418,6 +2589,11 @@ namespace ForgeScript {
 
 			std::vector<DefaultValue> defaults;
 			std::vector<std::string> params = ParameterList(&defaults);
+			// A script function's parameter types, for checking calls by name (read before the body,
+			// whose own functions have parameter lists of their own).
+			if (!isLocal && m_Options.Warnings &&
+				std::any_of(m_ParamTypes.begin(), m_ParamTypes.end(), [](const std::string& type) { return !type.empty(); }))
+				m_FunctionTypes[name] = { params, m_ParamTypes };
 			FunctionBody(name, ScopeKind::Function, params, opener, "function", {}, defaults);
 
 			if (isLocal)
@@ -4200,7 +4376,11 @@ namespace ForgeScript {
 					const Target target = ResolveName(name);
 					WarnIfCallFindsOwnValue(name, target, nameIndex);
 					if (target.Type == TargetType::Global)
+					{
 						CheckChoiceName(name);
+						if (m_Options.Warnings && Check(TokenType::LeftParen))
+							NoteCallValues(name, m_Pos);
+					}
 					EmitGet(target);
 					return;
 				}
@@ -4289,6 +4469,29 @@ namespace ForgeScript {
 		bool m_ExpectIsPhrase = false;
 		// Set by ParameterList when its last name ends in '...', for the FunctionBody that follows.
 		bool m_RestParam = false;
+		// The types ('amount as number') of the parameter list ParameterList last read, one per parameter
+		// ("" for none); and, for checkers, each script function's names and types, and the plain values
+		// calls by name give, to compare once every function is known.
+		std::vector<std::string> m_ParamTypes;
+		struct FunctionTypes
+		{
+			std::vector<std::string> Params;
+			std::vector<std::string> Types;
+		};
+		std::unordered_map<std::string, FunctionTypes> m_FunctionTypes;
+		struct CallValue
+		{
+			std::string Name;      // the parameter's name, for a named value; empty when given in order
+			size_t Position = 0;   // its place among the values given in order
+			std::string Type;      // the plain value's type ("number", "text", ... "nothing")
+			size_t Token = 0;
+		};
+		struct NotedCall
+		{
+			std::string Function;
+			std::vector<CallValue> Values;
+		};
+		std::vector<NotedCall> m_NotedCalls;
 		FunctionState* m_State = nullptr;
 		std::vector<const std::set<std::string>*> m_StopWords;
 		bool m_NoInvoke = false;

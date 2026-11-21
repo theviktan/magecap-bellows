@@ -16,6 +16,10 @@ namespace ForgeScript {
 			return false;
 		if (i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::Colon)
 			return false;
+		// A parameter's type ('f as function', 'k as kind') opens nothing.
+		if ((tokens[i].Type == TokenType::Function || tokens[i].Type == TokenType::Kind) && previous == TokenType::Identifier &&
+			tokens[i - 1].Lexeme == "as")
+			return false;
 
 		switch (tokens[i].Type)
 		{
