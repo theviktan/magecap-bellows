@@ -471,12 +471,14 @@ The built-in functions (`print`, `max`, `random`, `time`, ...) and the host's fu
 
 ```
 function name ( [ parameter { , parameter } ] [ , name ... ] )  block  end
-parameter:  name [ is expression ]
+parameter:  name [ as type ] [ is expression ]
+type:       number | text | boolean | list | map | function | vector | object | kind | name
 ```
 
 - A call must give each parameter without a default exactly once. Too few or too many values is an error that says how many the function needs.
 - **Defaults** (`damage is 10`) come after the parameters without one. A default is worked out at each call that leaves its value out, and may use the parameters before it.
 - **Named values:** `attack(goblin, crit: 5)` gives values by name, after the values given in order. Built-in functions take values in order only.
+- **Types:** `as` *type* after a parameter's name is for checkers only and never changes what runs. A checker warns ([13](#13-mistakes-and-warnings)) for each value of a call to one of the script's own top-level functions, by name, that is written out plainly (a number, `-` and a number, text without `{ }`, `true`/`false`/`yes`/`no`, `nothing`, a list or a map) and isn't of the parameter's type; values given by name are matched to their parameters. A lowercase type that is one edit from a type word is a mistake. A `name...` parameter can't have a type. `function` and `kind` after `as` open no block.
 - **The rest:** a last parameter written `name...` gets the values given in order after the other parameters, as a new list (`[]` when there are none). The parameters before it work as above; a call needs at least as many values as they have without defaults, and too few is an error that says "at least". The `...` parameter can't have a default or be named.
 - `return` *expression* gives back a value and leaves the function. A function that ends without `return`, or with a bare `return`, gives back `nothing`.
 - Functions are values: they can be stored in variables, lists and maps, and passed to other functions.
@@ -584,6 +586,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 
 - A value named like a built-in function that the script also calls: `set max to 10` in a script that calls `max(a, b)`.
 - `show (menu)`, with a space before the bracket, for a host phrase that gives way to calls ([8](#8-phrases)): it is a call, not the phrase.
+- In 1.6.0: a call to one of the script's functions with a plain value of another type than its parameter's `as` type: "'heal' takes a number for 'amount' (amount as number), but this is text."
 - In 1.6.0: a `match` with no `otherwise` whose cases are all choices of one set ([5.1](#51-variables-and-constants)) and leave one out: "This match has no case for State.jumping, and no otherwise."
 
 ---

@@ -545,6 +545,10 @@ namespace ForgeScript {
 		if (look < m_Source.size() && m_Source[look] == ':')
 			return false;
 
+		// A parameter's type ('f as function', 'k as kind') names a type; it opens nothing.
+		if ((type == TokenType::Function || type == TokenType::Kind) && m_PreviousType == TokenType::Identifier && m_PreviousLexeme == "as")
+			return false;
+
 		switch (type)
 		{
 			// The 'if' of 'else if' continues the open 'if' and shares its 'end', and an 'if' that picks

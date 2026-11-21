@@ -512,6 +512,12 @@ namespace ForgeScript {
 						else if (type == TokenType::RightParen || type == TokenType::RightBracket || type == TokenType::RightBrace ||
 							(type == TokenType::String && afterBrace))
 							brackets--;
+						if (!expectName && brackets == 0 && !defaultStart && type == TokenType::Identifier && tokens[j].Lexeme == "as" &&
+							j + 1 < tokens.size())
+						{
+							params += " as " + std::string(tokens[j + 1].Lexeme);
+							continue;
+						}
 						if (expectName && type == TokenType::Identifier)
 						{
 							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme) + (CollectsTheRest(tokens, j) ? "..." : "");
@@ -1715,6 +1721,11 @@ namespace ForgeScript {
 				for (size_t j = i + 3; j < tokens.size() && tokens[i + 2].Type == TokenType::LeftParen && tokens[j].Type != TokenType::RightParen &&
 					tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
 				{
+					if (tokens[j].Type == TokenType::Identifier && tokens[j].Lexeme == "as" && j + 1 < tokens.size())
+					{
+						params += " as " + std::string(tokens[++j].Lexeme);
+						continue;
+					}
 					if (tokens[j].Type == TokenType::Identifier)
 						params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme) + (CollectsTheRest(tokens, j) ? "..." : "");
 				}

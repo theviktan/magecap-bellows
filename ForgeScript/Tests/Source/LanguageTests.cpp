@@ -375,6 +375,41 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("OptionalTypesWarnOnPlainValuesOnly")
+{
+	VM vm;
+	auto warnings = [&vm](const std::string& source) { return vm.FindWarnings(source, "test.forge", {}); };
+	const std::string heal = "function heal(amount as number, who as text is \"you\")\nend\n";
+	std::vector<CompileError> found = warnings("heal(\"ten\")\n" + heal);
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 1);
+	CHECK(found[0].Column == 6);
+	CHECK_EQ(found[0].Message, std::string("'heal' takes a number for 'amount' (amount as number), but this is text."));
+	CHECK_CONTAINS(warnings(heal + "heal(5, 3)\n").at(0).Message, "'heal' takes text for 'who' (who as text), but this is a number.");
+	CHECK_CONTAINS(warnings(heal + "heal(amount: [1])\n").at(0).Message, "but this is a list.");
+	CHECK_CONTAINS(warnings(heal + "heal(nothing)\n").at(0).Message, "but this is nothing.");
+	CHECK_CONTAINS(warnings("function f(k as Enemy)\nend\nf({a: 1})\n").at(0).Message, "'f' takes an Enemy for 'k' (k as Enemy), but this is a map.");
+	CHECK_CONTAINS(warnings("function f(g as function)\nend\nf(3)\n").at(0).Message, "'f' takes a function for 'g'");
+	// Right types, values from variables, worked-out values and a local of the same name: no warning.
+	CHECK(warnings(heal + "heal(5)\nheal(-2, who: \"Bo\")\nset x to \"a\"\nheal(x)\nheal(1 + 2)\nheal([1][1])\n").empty());
+	CHECK(warnings(heal + "function g(heal)\n\theal(\"x\")\nend\n").empty());
+	// Types never change what runs.
+	CHECK_EQ(Output(heal + "function twice(n as number)\n\treturn n * 2\nend\nsay twice(\"ab\")\n"), std::string("abab\n"));
+}
+
+TEST_CASE("OptionalTypesKeepOldMeaningsAndExplainMistakes")
+{
+	CHECK_EQ(Output("set as to 3\nsay as\n"), std::string("3\n"));
+	CHECK_EQ(Output("function f(a as number is 2)\n\treturn a\nend\nsay f()\n"), std::string("2\n"));
+	// 'function' and 'kind' after 'as' open no block, so the 'end's pair as written.
+	CHECK_EQ(Output("function f(g as function, k as kind)\n\treturn 1\nend\nsay f(2, 3)\nset h to function(x as function) return 4 end\nsay h(1)\n"),
+		std::string("1\n4\n"));
+	CHECK_CONTAINS(CompileFails("function f(a as nmber)\nend\n").Message, "'nmber' isn't a type. Did you mean 'number'?");
+	CHECK_CONTAINS(CompileFails("function f(a as)\nend\n").Message, "After 'as', write a type, like: amount as number");
+	CHECK_CONTAINS(CompileFails("function f(a... as number)\nend\n").Message, "'a...' is always a list of the values left over, so it can't have a type.");
+	CHECK_CONTAINS(CompileFails("function f(a as number...)\nend\n").Message, "'a...' is always a list of the values left over, so it can't have a type.");
+}
+
 TEST_CASE("TestsRunOnlyThroughRunTest")
 {
 	VM vm;

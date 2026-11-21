@@ -720,6 +720,30 @@ say damage_after_armor(30, 12)     # 18
 - A function with no `return` gives back `nothing`.
 - `length of items` means `length(items)`. Any function that takes one value can be called with `of`: `sqrt of 16`, `abs of -3`.
 
+### Saying what a value should be with `as`
+
+You can say what kind of value a function expects, with `as` after the name:
+
+```forge
+function heal(amount as number, who as text is "you")
+	say "{who} healed {amount}"
+end
+
+heal(5)
+heal("ten")      # the editor warns: 'heal' takes a number for 'amount' (amount as number), but this is text.
+```
+
+- The types are the words of `is a`: `number`, `text`, `boolean`, `list`, `map`, `function`, `vector`,
+  `object`, `kind`, or a kind's name (`target as Enemy`).
+- **It never changes what runs.** It's a note for you and for the editor (and `forgescript --check`),
+  which warns when a call to the function by name gives a plain value (like `"ten"`, `5`, `[1, 2]` or
+  `nothing`) of another type. A value from a variable isn't checked, so a warning is never a guess.
+- A misspelled type word, like `amount as nmber`, is a mistake: "'nmber' isn't a type. Did you mean
+  'number'?"
+- `as` goes before a default: `who as text is "you"`. A `...` value is always a list, so it has no type.
+- Types work in kinds' functions and function values too, as notes; calls are checked for the script's
+  own functions.
+
 ### Default values
 
 Give a value a default with `is`, and calls may leave it out:

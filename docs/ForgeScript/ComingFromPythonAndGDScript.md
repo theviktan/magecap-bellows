@@ -287,6 +287,9 @@ set double to function(x) return x * 2 end
 
 - A default is worked out at each call that leaves its value out, so `function add_to(list is [])` gives a new list every time. (In Python, that same default would be shared between calls.)
 - Named values use `:`, as in `crit: 2`, after the values given in order.
+- Type hints (Python's `damage: int`, GDScript's `damage: int`) are written `damage as number`. Like
+  Python's, they never change what runs: the checker and the editor warn when a call gives a plain
+  value of another type, such as `attack("goblin", "ten")`.
 
 ### Phrases: your own commands
 

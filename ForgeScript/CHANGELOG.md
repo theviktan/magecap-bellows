@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Optional types** (Tier 2 #11): `function heal(amount as number, who as text is "you")`. Types
+  never change what runs: `--check`, the language server and the editor warn when a call to one of
+  the script's functions gives a plain value of another type ("'heal' takes a number for 'amount'
+  (amount as number), but this is text."). The types are the words of `is a`, `kind`, or a kind's
+  name; a misspelled type word is a mistake. Signatures in the language server show them.
+  `function` and `kind` after `as` open no block. `as` after a parameter was an error before.
 - **Tests in scripts** (Tier 2 #13): `test "armor lowers damage" ... end` at the top level of a
   script, with `expect damage_after_armor(10, 3) is 7` lines. Tests never run when the script runs;
   `forgescript --test game.forge` runs the script, then each test (as a task, so it may `wait`),
