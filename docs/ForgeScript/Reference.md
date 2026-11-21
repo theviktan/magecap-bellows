@@ -59,6 +59,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Property | `player.health`, `player's health`, `my health` (= `self.health`) |
 | Index | `list[1]`, `list[-1]`, `map["key"]`, `text[1]` |
 | Call | `f(1, 2)`, `object.method()`, `length of list` (= `length(list)`) |
+| Every / any | `every x in list is above 0` (= `list.all(...)`), `any x in list contains "a"` (= `list.any(...)`), `every enemy in enemies is defeated` (the field is true). One comparison after the list; a name `every`/`any` of your own keeps its meaning |
 | List words | `the length of items`, `first of items` (= `items.first`), `the last item of items` (= `items.last`), `item 2 of items` (= `items[2]`), `item (i + 1) of items`; `the` before a name changes nothing. A name `the`/`first`/`last`/`item` of your own keeps its meaning |
 | Parent method | `parent.setup(name)` inside a kind |
 

@@ -3397,6 +3397,12 @@ namespace ForgeScript {
 		void Comparison()
 		{
 			Term();
+			ComparisonRest();
+		}
+
+		// The comparisons after a value already on the stack: 'is above 3', 'contains x', '< 5'.
+		void ComparisonRest()
+		{
 			while (true)
 			{
 				if (CheckOperator(TokenType::Is))
@@ -3749,6 +3755,95 @@ namespace ForgeScript {
 			return false;
 		}
 
+		// 'every enemy in enemies is above 0' and 'any word in words contains "a"': list.all and list.any
+		// with the comparison after the list, worked out for each item under the name. Only where
+		// 'every' or 'any' names nothing in reach, a name and 'in' follow, and the line isn't a timer
+		// ('every' with a time word at the end); each was an error before.
+		bool TryEveryOrAny()
+		{
+			const std::string word(Current().Lexeme);
+			if ((word != "every" && word != "any") || Peek(1).Type != TokenType::Identifier || Peek(2).Type != TokenType::In ||
+				!IsFreeWord(word))
+				return false;
+			const std::string name(Peek(1).Lexeme);
+			Advance();
+			Advance();
+			Advance();
+			Term();
+
+			Function* fn = m_VM.NewFunction();
+			fn->Name = m_VM.Intern(word + " " + name);
+			fn->Owner = m_Module;
+			fn->Arity = 1;
+			FunctionState state;
+			state.Enclosing = m_State;
+			state.Fn = fn;
+			state.Kind = ScopeKind::Function;
+			m_State = &state;
+			BeginScope();
+			state.Locals.push_back({ "", state.ScopeDepth, false });
+			NameLocal(0);
+			AddLocal(name);
+			fn->ParamNames = { name };
+			DefaultValues(fn, fn->ParamNames, {});
+			fn->BodyIp = CurrentChunk().Size();
+
+			const TokenType next = Current().Type;
+			if (next != TokenType::Is && next != TokenType::Contains && next != TokenType::EqualEqual && next != TokenType::BangEqual &&
+				next != TokenType::Less && next != TokenType::LessEqual && next != TokenType::Greater && next != TokenType::GreaterEqual)
+			{
+				ErrorAtCurrent("After '" + word + " " + name + " in ...', say what each one is, like: " + word + " " + name +
+					" in list is above 0");
+			}
+			EmitOp(OpCode::GetLocal);
+			EmitByte(1);
+			if (!TryFieldIsTrue())
+				ComparisonRest();
+			EmitOp(OpCode::Return);
+
+			m_State = state.Enclosing;
+			EmitOp(OpCode::Closure);
+			EmitU16(MakeConstant(Value::FromObject(fn)));
+			for (const UpvalueInfo& upvalue : state.Upvalues)
+			{
+				EmitByte(upvalue.IsLocal ? 1 : 0);
+				EmitByte(upvalue.Index);
+			}
+			EmitWithName(OpCode::Invoke, word == "every" ? "all" : "any");
+			EmitByte(1);
+			return true;
+		}
+
+		// Inside 'every'/'any': 'is defeated' (or 'is not defeated') with nothing after it, where
+		// 'defeated' names nothing in reach, reads the item's field: enemy.defeated.
+		bool TryFieldIsTrue()
+		{
+			if (!Check(TokenType::Is))
+				return false;
+			const bool negate = Peek(1).Type == TokenType::Not;
+			const size_t at = negate ? 2 : 1;
+			const Token& field = Peek(at);
+			if (field.Type != TokenType::Identifier || field.Lexeme == "empty" || field.Lexeme == "even" || field.Lexeme == "odd" ||
+				!IsFreeWord(std::string(field.Lexeme)))
+				return false;
+			switch (Peek(at + 1).Type)
+			{
+				case TokenType::Then: case TokenType::Do: case TokenType::And: case TokenType::Or: case TokenType::Newline:
+				case TokenType::Eof: case TokenType::RightParen: case TokenType::RightBracket: case TokenType::Comma:
+				case TokenType::Otherwise: case TokenType::Else:
+					break;
+				default:
+					return false;
+			}
+			const std::string name(field.Lexeme);
+			for (size_t i = 0; i <= at; i++)
+				Advance();
+			EmitWithName(OpCode::GetProperty, name);
+			if (negate)
+				EmitOp(OpCode::Not);
+			return true;
+		}
+
 		// The position of the first 'of' outside brackets from 'start' to the end of the line, or 0.
 		size_t FindOfOnThisLine(size_t start) const
 		{
@@ -3804,6 +3899,8 @@ namespace ForgeScript {
 					if (TryPhrase(false))
 						return;
 					if (TryOfPhrase())
+						return;
+					if (TryEveryOrAny())
 						return;
 					std::string name(token.Lexeme);
 					const size_t nameIndex = m_Pos;

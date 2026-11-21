@@ -497,6 +497,32 @@ say item 2 of item 1 of grid    # a list in a list: grid[1][2]
   yours, as it always did. For example, inside `items.map(function(item) ... end)`, `item` is the
   parameter.
 
+**Asking about every item, or any.** `every` and `any` ask a question about all the items of a list:
+
+```forge
+set scores to [80, 95, 72]
+if every score in scores is at least 70 then
+	say "Everyone passed"
+end
+if any score in scores is above 90 then
+	say "Someone did great"
+end
+say any word in words contains "a"     # true if one word has an "a"
+say every enemy in enemies is defeated  # each enemy's 'defeated' field is true
+say any enemy in enemies is not defeated
+```
+
+- After `every score in scores` comes one comparison about `score`: `is above 90`, `is 3`,
+  `is even`, `contains "a"`, `< 5`. An `and` or `or` after it belongs to the whole `if`:
+  `if every s in scores is above 0 and level is 2 then`.
+- `is defeated` with nothing after it reads the item's field `defeated` and checks it is true, unless
+  your script has its own `defeated`; then it compares with yours.
+- `every` is true for an empty list, and `any` is false, the same as `scores.all(...)` and
+  `scores.any(...)`.
+- `every 3 seconds ... end` is still a timer: a name and `in` after `every` make it the question.
+  And as with the list words, a variable or function of your own named `every` or `any` keeps its
+  meaning.
+
 **Taking a list apart.** When a list holds a few values that belong together, give each its own name in one line:
 
 ```forge
