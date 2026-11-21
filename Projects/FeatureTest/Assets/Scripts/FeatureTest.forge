@@ -203,6 +203,16 @@ function test_pause()
 	set_paused(false)
 end
 
+function test_keep_across_scenes()
+	set kept to create_entity("Kept")
+	check(not kept.keep_across_scenes, "a new entity isn't kept")
+	keep kept across scenes
+	check(kept.keep_across_scenes, "keep (entity) across scenes")
+	set kept.keep_across_scenes to false
+	check(not kept.keep_across_scenes, "keep_across_scenes turns off")
+	kept.destroy()
+end
+
 function test_saved_data()
 	delete_data("Feature Test")
 	check(load_data("Feature Test", 7) is 7, "load_data gives the default when nothing is saved")
@@ -277,6 +287,7 @@ function run_tests()
 		test_materials()
 		test_screenshots()
 		test_pause()
+		test_keep_across_scenes()
 		test_saved_data()
 		test_destruction()
 		test_physics()
