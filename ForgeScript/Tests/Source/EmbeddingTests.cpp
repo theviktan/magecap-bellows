@@ -753,8 +753,8 @@ TEST_CASE("TryEaseMatchesTheScriptsEase")
 	// Hosts (Bellows' tweens) share ease()'s curves through Core/Easing.h; both must agree exactly.
 	const std::vector<std::string_view>& names = EaseStyleNames();
 	REQUIRE_EQ(names.size(), size_t(11));
-	CHECK_EQ(names.front(), std::string_view("linear"));
-	CHECK_EQ(names.back(), std::string_view("elastic out"));
+	CHECK_EQ(std::string(names.front()), std::string("linear"));
+	CHECK_EQ(std::string(names.back()), std::string("elastic out"));
 
 	Harness h;
 	LoadResult result = h.Machine.Load("function eased(t, style)\n\treturn ease(t, style)\nend\n", "t.forge");
