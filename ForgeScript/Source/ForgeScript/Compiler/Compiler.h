@@ -20,6 +20,21 @@ namespace ForgeScript {
 		std::string ToString() const;
 	};
 
+	// One place a script names one of its variables, as the compiler resolved it (VM::FindNameUses).
+	// Two uses with the same Key mean the same variable, so an editor can find and rename them all.
+	struct NameUse
+	{
+		int Line = 0;      // 1-based
+		int Column = 0;    // 1-based bytes, as the lexer counts them
+		int Length = 0;    // in bytes
+		size_t Token = 0;  // its index in the script's tokens
+		// "L<n>": a local variable, parameter or loop variable (n tells them apart, even with the same
+		// name); "G:<name>": a script-level name, or a built-in or a used script's when not set here;
+		// "F:<name>": a field or method, of whichever kind has one by that name.
+		std::string Key;
+		bool Declares = false; // where it is made: a parameter, a loop name, 'set' at script level ...
+	};
+
 	struct CompileOptions
 	{
 		// Checkers that want warnings (VM::FindWarnings) point this at a list. A warning never stops a
@@ -33,6 +48,9 @@ namespace ForgeScript {
 		// Treat a 'use' whose script the module loader cannot find as a mistake now, instead of
 		// when the script runs. Checkers (VM::Check, VM::FindMistakes) turn this on.
 		bool ReportMissingScripts = false;
+		// Editors (the language server's references and rename) point this at a list to learn which
+		// variable each name means.
+		std::vector<NameUse>* NameUses = nullptr;
 	};
 
 	// Why 'use "path"' may not load that path, or "" when it may. A script can only use other ForgeScript

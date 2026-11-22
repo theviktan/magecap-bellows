@@ -199,6 +199,11 @@ namespace ForgeScript {
 		// Warnings never stop a script; FindMistakes and running don't report them.
 		std::vector<CompileError> FindWarnings(std::string_view source, const std::string& fileName,
 			const std::vector<std::string>& moreBuiltinFunctions = {});
+		// Which variable each name in a script means, in the order they are written (see NameUse),
+		// for an editor's find-all-references and rename. Fills outMistakes with FindMistakes' list; the
+		// uses of a script with mistakes may be incomplete.
+		std::vector<NameUse> FindNameUses(std::string_view source, const std::string& fileName,
+			std::vector<CompileError>* outMistakes = nullptr);
 		// Removes a module, cancels its tasks and lets the garbage collector free it.
 		void UnloadModule(Module* module);
 		// Forgets every script loaded with "use", so the next "use" reads the file again (hot reload).
