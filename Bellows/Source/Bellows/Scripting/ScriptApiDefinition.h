@@ -20,10 +20,13 @@
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/InputNames.h"
+#include "Bellows/Math/Easing.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scene/Tweens.h"
 #include "Bellows/Scripting/ScriptApi.h"
+#include "Bellows/Scripting/TweenProperties.h"
 #include "Bellows/Text/TextLayout.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIWidgets.h"
@@ -254,6 +257,91 @@ namespace Bellows::Scripting {
 		inline Entity ResolveOptional(const std::optional<ScriptEntity>& entity)
 		{
 			return entity ? entity->Resolve() : Entity();
+		}
+
+		// --- Tweens ----------------------------------------------------------
+
+		inline double RequireTweenSeconds(double seconds, const char* what)
+		{
+			if (!std::isfinite(seconds) || seconds < 0.0 || seconds > SceneTweens::c_MaxSeconds)
+				throw ScriptValueError(std::string("A tween's ") + what + " is a number of seconds from 0 to 1,000,000");
+			return seconds;
+		}
+
+		inline Math::EaseCurve RequireEaseCurve(const std::string& style)
+		{
+			if (Math::EaseCurve curve = Math::FindEaseCurve(style))
+				return curve;
+			std::string names;
+			for (const std::string& name : Math::GetEaseStyleNames())
+				names += (names.empty() ? "\"" : ", \"") + name + "\"";
+			throw ScriptValueError("'" + style + "' isn't an easing style. The styles are " + names);
+		}
+
+		// The value a script gave for a property, as the vec4 tweens work in: a number for a number,
+		// and a vector or a list of numbers of the property's size for a vector (colors take 4).
+		inline glm::vec4 ToTweenValue(const ScriptValue& value, const TweenProperty& property)
+		{
+			const int size = static_cast<int>(property.Type);
+			if (const double* number = std::get_if<double>(&value.Data))
+			{
+				if (size == 1 && std::isfinite(*number))
+					return glm::vec4(static_cast<float>(*number), 0.0f, 0.0f, 0.0f);
+			}
+			else if (const glm::vec3* vector = std::get_if<glm::vec3>(&value.Data))
+			{
+				if (size == 3 && std::isfinite(vector->x) && std::isfinite(vector->y) && std::isfinite(vector->z))
+					return glm::vec4(*vector, 0.0f);
+			}
+			else if (const ScriptValueList* list = std::get_if<ScriptValueList>(&value.Data))
+			{
+				glm::vec4 result(0.0f);
+				bool numbers = static_cast<int>(list->size()) == size && size > 1;
+				for (size_t i = 0; numbers && i < list->size(); i++)
+				{
+					const double* item = std::get_if<double>(&(*list)[i].Data);
+					numbers = item && std::isfinite(*item);
+					if (numbers)
+						result[static_cast<int>(i)] = static_cast<float>(*item);
+				}
+				if (numbers)
+					return result;
+			}
+			static constexpr const char* c_Kinds[] = { "", "a number", "a vector of 2 numbers", "a vector of 3 numbers", "4 numbers (red, green, blue, alpha)" };
+			throw ScriptValueError("Tweening '" + property.Name + "' needs " + c_Kinds[size] + ", in ordinary numbers");
+		}
+
+		inline ScriptTween StartTween(const ScriptEntity& target, const std::string& propertyName, const ScriptValue& value, double seconds,
+			const std::string& ease, double delay, bool relative)
+		{
+			Entity entity = target.Resolve();
+			SceneTweens* tweens = entity.GetScene()->GetTweens();
+			if (!tweens)
+				throw ScriptValueError("Tweens run while the game is playing");
+			const TweenProperty& property = FindTweenProperty(propertyName);
+			TweenSettings settings;
+			settings.Property = &property;
+			settings.Value = ToTweenValue(value, property);
+			settings.Relative = relative;
+			settings.Duration = RequireTweenSeconds(seconds, "length");
+			settings.Delay = RequireTweenSeconds(delay, "delay");
+			settings.Ease = RequireEaseCurve(ease);
+			uint64_t id = 0;
+			try
+			{
+				id = tweens->Start(target.ID, settings);
+			}
+			catch (const std::length_error& error)
+			{
+				throw ScriptValueError(error.what());
+			}
+			return ScriptTween { target.SceneID, id, target, property.Name };
+		}
+
+		inline SceneTweens* FindTweens(const ScriptTween& tween)
+		{
+			Scene* scene = Scene::GetSceneByID(tween.SceneID);
+			return scene ? scene->GetTweens() : nullptr;
 		}
 	}
 
@@ -917,6 +1005,60 @@ namespace Bellows::Scripting {
 				return ScriptEntity(scene.CreateChildEntity(Detail::ResolveOptional(parent), name));
 			}, "Creates an entity in the active scene", Arg("name", std::string("Entity")), Arg("parent", std::optional<ScriptEntity>()));
 		api.Function("destroy", [](const ScriptEntity& target) { if (Entity e = target.TryResolve()) e.GetScene()->DestroyEntity(e); }, "", Arg("entity"));
+
+		// --- Tweens ------------------------------------------------------------
+		auto tween = api.template Class<ScriptTween>("Tween",
+			"A property moving smoothly over time (what tween and tween_by return); 'tween finished' is sent when it reaches its end");
+		tween.ReadOnly("id", [](const ScriptTween& t) { return t.ID; }, "The ID sent with 'tween finished'");
+		tween.ReadOnly("entity", [](const ScriptTween& t) { return t.Target; }, "");
+		tween.ReadOnly("property", [](const ScriptTween& t) { return t.Property; }, "");
+		tween.ReadOnly("running", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->IsRunning(t.ID); },
+			"True until it ends (paused or waiting for its delay counts as running)");
+		tween.ReadOnly("finished", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->HasFinished(t.ID); },
+			"True once it reached its end; false when it was stopped or replaced");
+		tween.ReadOnly("progress", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens ? tweens->GetProgress(t.ID) : 0.0; },
+			"From 0 to 1 over every repeat (the current one when repeating forever)");
+		tween.Property("repeat", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens ? tweens->GetRepeat(t.ID) : int64_t(0); },
+			[](const ScriptTween& t, int64_t repeat)
+			{
+				if (repeat < -1 || repeat > SceneTweens::c_MaxRepeat)
+					throw ScriptValueError("A tween's repeat is a whole number from -1 (forever) to 1,000,000");
+				if (SceneTweens* tweens = Detail::FindTweens(t))
+					tweens->SetRepeat(t.ID, repeat);
+			}, "How many more times it runs after the first: 0, a count, or -1 for forever");
+		tween.Property("yoyo", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->GetYoyo(t.ID); },
+			[](const ScriptTween& t, bool yoyo) { if (SceneTweens* tweens = Detail::FindTweens(t)) tweens->SetYoyo(t.ID, yoyo); },
+			"Every other run goes back the way it came (needs repeat)");
+		tween.Property("while_paused", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->GetWhilePaused(t.ID); },
+			[](const ScriptTween& t, bool whilePaused) { if (SceneTweens* tweens = Detail::FindTweens(t)) tweens->SetWhilePaused(t.ID, whilePaused); },
+			"Keeps moving while the game is paused (set_paused), for pause menus");
+		tween.Method("stop", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->Stop(t.ID); },
+			"Stops it where it is, sending no 'tween finished'; false when it had already ended");
+		tween.Method("pause", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->Pause(t.ID); }, "");
+		tween.Method("resume", [](const ScriptTween& t) { SceneTweens* tweens = Detail::FindTweens(t); return tweens && tweens->Resume(t.ID); }, "");
+		tween.Method("complete", [](const ScriptTween& t)
+			{
+				Scene* scene = Scene::GetSceneByID(t.SceneID);
+				return scene && scene->GetTweens() && scene->GetTweens()->Complete(*scene, t.ID);
+			}, "Jumps to the end, repeats included (the current run when repeating forever); 'tween finished' follows next frame");
+
+		api.Function("tween", [](const ScriptEntity& target, const std::string& property, const ScriptValue& to, double seconds, const std::string& ease, double delay)
+			{ return Detail::StartTween(target, property, to, seconds, ease, delay, false); },
+			"Moves a property smoothly from where it is to 'to' over 'seconds': an entity's position, local_position, rotation or scale, "
+			"or a component's number or vector property as \"Component.property\" (\"UIImage.color\", \"AudioSource.volume\"). "
+			"A new tween of the same property replaces the running one",
+			Arg("entity"), Arg("property"), Arg("to"), Arg("seconds"), Arg("ease", std::string("in out")), Arg("delay", 0.0));
+		api.Function("tween_by", [](const ScriptEntity& target, const std::string& property, const ScriptValue& amount, double seconds, const std::string& ease, double delay)
+			{ return Detail::StartTween(target, property, amount, seconds, ease, delay, true); },
+			"Like tween, but adds 'amount' to the property; a rotation turns by the full amount, more than one turn too",
+			Arg("entity"), Arg("property"), Arg("amount"), Arg("seconds"), Arg("ease", std::string("in out")), Arg("delay", 0.0));
+		api.Function("stop_tweens", [](const ScriptEntity& target, const std::string& property)
+			{
+				Entity entity = target.Resolve();
+				SceneTweens* tweens = entity.GetScene()->GetTweens();
+				return static_cast<int64_t>(tweens ? tweens->StopAll(target.ID, property) : 0);
+			}, "Stops an entity's tweens, or only those of one property, sending no 'tween finished'; returns how many it stopped",
+			Arg("entity"), Arg("property", std::string()));
 		// Defined after Entity, so their return type has its script name.
 		api.Function("ui_focused", []() { return EntityOrNone(RequireContextScene().GetUIFocused()); },
 			"The UI entity with keyboard and gamepad focus, or None");

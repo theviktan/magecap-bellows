@@ -25,6 +25,7 @@ namespace Bellows {
 	class Entity;
 	class PhysicsWorld;
 	class SceneAudio;
+	class SceneTweens;
 	struct TextComponent;
 
 	struct SceneSettings
@@ -169,6 +170,8 @@ namespace Bellows {
 
 		PhysicsWorld* GetPhysicsWorld() const { return m_PhysicsWorld.get(); }
 		SceneAudio* GetAudio() const { return m_Audio.get(); }
+		// The running tweens; null when the scene isn't playing.
+		SceneTweens* GetTweens() const { return m_Tweens.get(); }
 		float GetTime() const { return m_Time; }
 		uint64_t GetFrameCount() const { return m_FrameCount; }
 
@@ -277,6 +280,7 @@ namespace Bellows {
 
 		Scope<PhysicsWorld> m_PhysicsWorld;
 		Scope<SceneAudio> m_Audio;
+		Scope<SceneTweens> m_Tweens;
 
 		static Scene* s_ActiveScene;
 

@@ -255,6 +255,18 @@ namespace Bellows::Scripting {
 		ScriptRef, AudioSourceRef, AudioListenerRef, TextRef, UICanvasRef, UIRectRef, UIImageRef, UILayoutRef, UIScrollRef,
 		UIButtonRef, UIToggleRef, UISliderRef, UIDropdownRef, UITextInputRef>;
 
+	// A handle to a tween (what tween and tween_by return). It keeps the entity and property it was
+	// made for, so they can still be read after the tween has ended.
+	struct ScriptTween
+	{
+		uint64_t SceneID = 0;
+		uint64_t ID = 0;
+		ScriptEntity Target;
+		std::string Property;
+
+		bool operator==(const ScriptTween& other) const { return SceneID == other.SceneID && ID == other.ID; }
+	};
+
 	struct ComponentInfo
 	{
 		const char* Name;

@@ -8,6 +8,7 @@
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scene/Tweens.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
@@ -411,6 +412,7 @@ namespace Bellows {
 
 		m_PhysicsWorld = CreateScope<PhysicsWorld>(*this);
 		m_PhysicsWorld->SyncBodies();
+		m_Tweens = CreateScope<SceneTweens>();
 
 		if (AudioEngine::IsInitialized())
 			m_Audio = CreateScope<SceneAudio>(*this);
@@ -431,6 +433,8 @@ namespace Bellows {
 			ScriptEngine::OnRuntimeStop(*this);
 
 		m_PendingDestroy.clear();
+		// After the scripts stopped, so a tween started in on_destroy goes too.
+		m_Tweens.reset();
 		m_Audio.reset();
 		m_PhysicsWorld.reset();
 		m_IsRunning = false;
@@ -541,6 +545,16 @@ namespace Bellows {
 
 		// The UI goes first, so scripts see this frame's UI events and only the input it left the game.
 		UpdateUIInput();
+
+		// Tweens next, so scripts see this frame's values; while the game is paused only those marked
+		// to run while paused move.
+		for (const FinishedTween& finished : m_Tweens->Update(*this, deltaTime, m_GamePaused))
+		{
+			Scripting::ScriptEntity entity;
+			entity.SceneID = m_SceneID;
+			entity.ID = finished.Entity;
+			Scripting::EmitScriptEvent("tween finished", { entity, finished.Property, static_cast<double>(finished.ID) });
+		}
 
 		if (ScriptEngine::IsInitialized())
 		{

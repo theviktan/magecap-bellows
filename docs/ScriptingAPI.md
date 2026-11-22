@@ -470,6 +470,70 @@ raise `ValueError`.
 | `set_bus_volume(bus, volume)` / `get_bus_volume(bus)` | A bus's volume (1 = normal, 0 = silent). |
 | `set_bus_muted(bus, muted=True)` / `is_bus_muted(bus)` | Mutes or unmutes a bus; its volume is kept for unmuting. |
 
+## Tweens
+
+A tween moves a property smoothly over time: a door swinging open, a menu sliding in, a sound
+fading out. Tweens run while the game plays.
+
+```python
+door_tween = bellows.tween_by(door, "rotation", (0, 90, 0), 1.0, "out")
+bellows.tween(menu, "UIRect.position", (0, 0, 0), 0.4, "back out")
+bellows.tween(music, "AudioSource.volume", 0.0, 2.0, "linear", delay=3.0)
+```
+
+| Function | Description |
+|----------|-------------|
+| `tween(entity, property, to, seconds, ease="in out", delay=0.0)` | Moves `property` from where it is to `to` over `seconds`, and returns a `Tween`. |
+| `tween_by(entity, property, amount, seconds, ease="in out", delay=0.0)` | The same, adding `amount` to the property. A rotation turns by the whole amount, so `(0, 720, 0)` spins twice. |
+| `stop_tweens(entity, property="")` | Stops the entity's tweens (only those of `property` when it is given); returns how many it stopped. |
+
+- **Properties** are named as scripts name them. On the entity: `position`, `local_position`,
+  `rotation` and `scale`. On a component: `"Component.property"` for any of its number or vector
+  properties, such as `"UIImage.color"`, `"Text.color"`, `"UIRect.position"`, `"UIRect.size"`,
+  `"AudioSource.volume"`, `"PointLight.intensity"` or `"Camera.fov"`. A name that can't be tweened
+  raises `ValueError` listing the ones that can.
+- **Values** fit the property: a number, a `Vec3` (or a list of 3 numbers), a `Vec2` (or 2 numbers),
+  and 4 numbers for a color, such as `Vec4(1, 1, 1, 0)` or `[1, 1, 1, 0]`.
+- **Easing styles** are ForgeScript's `ease()` styles: `"linear"`, `"in"`, `"out"`, `"in out"`,
+  `"sine in"`, `"sine out"`, `"sine in out"`, `"back in"`, `"back out"`, `"bounce out"` and
+  `"elastic out"`.
+- `seconds` and `delay` are from 0 to 1,000,000; `seconds=0` sets the value at once. A tween reads
+  its starting value when its delay ends, so tweens with growing delays follow on from each other.
+- **One at a time:** a new tween of the same entity and property replaces the running one, which
+  stops where it is. Euler-angle properties (`rotation`, `Transform.rotation`,
+  `Transform.rotation_degrees`) turn the shortest way.
+- Tweens run in game time before scripts' `on_update`, so `set_paused` holds them, except those with
+  `while_paused` set (for pause menus). They keep going through `load_scene` for kept entities; a
+  destroyed entity or a removed component ends its tween quietly. A scene can have 10,000 running.
+- Tweening a dynamic `RigidBody`'s position fights the physics; make the body kinematic.
+- When a tween reaches its end, every script gets the event **`tween finished`** with the entity,
+  the property and the tween's `id` (`on_event`, or ForgeScript's `when tween finished with ...`).
+  Stopped tweens and those repeating forever send none.
+
+`Tween` (what `tween` and `tween_by` return):
+
+| Member | Description |
+|--------|-------------|
+| `id`, `entity`, `property` | What it was made for (still readable once it has ended). |
+| `running` | True until it ends; paused, or waiting out its delay, counts as running. |
+| `finished` | True once it reached its end; false when it was stopped or replaced. |
+| `progress` | 0 to 1 over every repeat (the current run when repeating forever). |
+| `repeat` | How many more runs after the first: 0, a count, or -1 for forever. |
+| `yoyo` | Every other run goes back the way it came. |
+| `while_paused` | Keeps moving while the game is paused. |
+| `stop()`, `pause()`, `resume()` | `stop` sends no `tween finished`. Each returns `False` once the tween has ended. |
+| `complete()` | Jumps to the end, repeats included; `tween finished` follows with the next frame. |
+
+In ForgeScript, wait for a tween with `wait until`:
+
+```forge
+when clicked
+	set slide to tween(self, "UIRect.position", vector(0, 0, 0), 0.4, "back out")
+	wait until slide.finished
+	say "The menu is in"
+end
+```
+
 ## Materials
 
 ```python

@@ -274,6 +274,88 @@
 			"doc": ""
 		},
 		{
+			"name": "tween",
+			"params": [
+				{
+					"name": "entity",
+					"type": "Entity"
+				},
+				{
+					"name": "property",
+					"type": "str"
+				},
+				{
+					"name": "to",
+					"type": "Value"
+				},
+				{
+					"name": "seconds",
+					"type": "float"
+				},
+				{
+					"name": "ease",
+					"type": "str",
+					"default": "in out"
+				},
+				{
+					"name": "delay",
+					"type": "float",
+					"default": 0.0
+				}
+			],
+			"returns": "Tween",
+			"doc": "Moves a property smoothly from where it is to 'to' over 'seconds': an entity's position, local_position, rotation or scale, or a component's number or vector property as \"Component.property\" (\"UIImage.color\", \"AudioSource.volume\"). A new tween of the same property replaces the running one"
+		},
+		{
+			"name": "tween_by",
+			"params": [
+				{
+					"name": "entity",
+					"type": "Entity"
+				},
+				{
+					"name": "property",
+					"type": "str"
+				},
+				{
+					"name": "amount",
+					"type": "Value"
+				},
+				{
+					"name": "seconds",
+					"type": "float"
+				},
+				{
+					"name": "ease",
+					"type": "str",
+					"default": "in out"
+				},
+				{
+					"name": "delay",
+					"type": "float",
+					"default": 0.0
+				}
+			],
+			"returns": "Tween",
+			"doc": "Like tween, but adds 'amount' to the property; a rotation turns by the full amount, more than one turn too"
+		},
+		{
+			"name": "stop_tweens",
+			"params": [
+				{
+					"name": "entity",
+					"type": "Entity"
+				},
+				{
+					"name": "property",
+					"type": "str",
+					"default": ""
+				}
+			],
+			"returns": "int",
+			"doc": "Stops an entity's tweens, or only those of one property, sending no 'tween finished'; returns how many it stopped"
+		},
+		{
 			"name": "ui_focused",
 			"params": [],
 			"returns": "Entity | None",
@@ -2214,6 +2296,100 @@
 					"type": "float",
 					"readonly": true,
 					"doc": ""
+				}
+			]
+		},
+		{
+			"name": "Tween",
+			"doc": "A property moving smoothly over time (what tween and tween_by return); 'tween finished' is sent when it reaches its end",
+			"members": [
+				{
+					"name": "id",
+					"kind": "property",
+					"type": "int",
+					"readonly": true,
+					"doc": "The ID sent with 'tween finished'"
+				},
+				{
+					"name": "entity",
+					"kind": "property",
+					"type": "Entity",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "property",
+					"kind": "property",
+					"type": "str",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "running",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True until it ends (paused or waiting for its delay counts as running)"
+				},
+				{
+					"name": "finished",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True once it reached its end; false when it was stopped or replaced"
+				},
+				{
+					"name": "progress",
+					"kind": "property",
+					"type": "float",
+					"readonly": true,
+					"doc": "From 0 to 1 over every repeat (the current one when repeating forever)"
+				},
+				{
+					"name": "repeat",
+					"kind": "property",
+					"type": "int",
+					"doc": "How many more times it runs after the first: 0, a count, or -1 for forever"
+				},
+				{
+					"name": "yoyo",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Every other run goes back the way it came (needs repeat)"
+				},
+				{
+					"name": "while_paused",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Keeps moving while the game is paused (set_paused), for pause menus"
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": "Stops it where it is, sending no 'tween finished'; false when it had already ended"
+				},
+				{
+					"name": "pause",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": ""
+				},
+				{
+					"name": "resume",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": ""
+				},
+				{
+					"name": "complete",
+					"kind": "method",
+					"params": [],
+					"returns": "bool",
+					"doc": "Jumps to the end, repeats included (the current run when repeating forever); 'tween finished' follows next frame"
 				}
 			]
 		}
