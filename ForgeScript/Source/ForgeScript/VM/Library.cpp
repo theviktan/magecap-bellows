@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
@@ -414,7 +415,8 @@ namespace ForgeScript {
 		}
 
 		// format_date's pattern words, longest first so "Month" isn't read as "Mon" + "th".
-		std::string FormatDate(const CivilDate& date, std::string_view pattern)
+		// The date written by the pattern, or nothing when that text would be longer than the text limit.
+		std::optional<std::string> FormatDate(const CivilDate& date, std::string_view pattern)
 		{
 			auto twoDigits = [](int n) { return (n < 10 ? "0" : "") + std::to_string(n); };
 			std::string text;
@@ -434,6 +436,9 @@ namespace ForgeScript {
 				else if (starts("mm")) { text += twoDigits(date.Minute); at += 2; }
 				else if (starts("ss")) { text += twoDigits(date.Second); at += 2; }
 				else { text += pattern[at]; at++; }
+				// 'Month' and 'Weekday' grow into longer names, so a long pattern can outgrow the text limit.
+				if (text.size() > c_MaxTextBytes)
+					return std::nullopt;
 			}
 			return text;
 		}
@@ -1034,7 +1039,11 @@ namespace ForgeScript {
 			if (c.Count() < 1 || c.Count() > 2)
 				c.Error("format_date needs a moment from real_time() and maybe a pattern, like: format_date(real_time(), \"YYYY-MM-DD\")");
 			const CivilDate date = LocalDate(DateSeconds(c, 0, "format_date"));
-			return c.GetVM().MakeText(FormatDate(date, c.Count() > 1 ? c.Text(1) : std::string("YYYY-MM-DD hh:mm")));
+			std::optional<std::string> text = FormatDate(date, c.Count() > 1 ? c.Text(1) : std::string("YYYY-MM-DD hh:mm"));
+			if (!text)
+				c.Error("format_date would make more than " + FormatNumber(static_cast<double>(c_MaxTextBytes)) +
+					" bytes of text from this pattern. Use a shorter pattern.");
+			return c.GetVM().MakeText(*text);
 		});
 		// Whole calendar days from one moment to the next in local time: 1 from 11 PM to 1 AM, so a
 		// daily reward knows a new day began. Negative when 'to' is earlier.

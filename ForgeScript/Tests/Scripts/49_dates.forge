@@ -59,3 +59,15 @@ function own_date()
 	return date
 end
 say own_date()                                              # expect: my date
+
+# A pattern can't make more text than the text limit: 'Month' grows to 'September' (audit S-10).
+function too_long()
+	set pattern to "Month".repeat(12000000)
+	try
+		set text to format_date(1726000000, pattern)
+		return "no mistake"
+	catch problem
+		return problem
+	end
+end
+say too_long()                                                 # expect: format_date would make more than 100000000 bytes of text from this pattern. Use a shorter pattern.

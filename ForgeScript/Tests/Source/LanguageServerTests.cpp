@@ -890,6 +890,13 @@ TEST_CASE("LanguageServerRenameFindsScriptsThatArentOpen")
 	CHECK_EQ(error, std::string("'Level.forge' uses this script through 'Tools.forge' and says 'double' on line 2, and rename only "
 		"changes this script. Rename 'double' in both by hand."));
 
+	// Windows and macOS open Helpers.forge for 'use "scripts/helpers"', so a script that writes it in other
+	// capitals uses it too (audit S-11).
+	project.Write("Assets/Scripts/Level.forge", "use \"scripts/HELPERS\"\nsay double(2)\n");
+	CHECK(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
+	CHECK_EQ(error, std::string("'Level.forge' uses this script and says 'double' on line 2, and rename only changes this script. "
+		"Rename 'double' in both by hand."));
+
 	// A field of the same name in another script isn't this name.
 	project.Write("Assets/Scripts/Level.forge", "use \"Scripts/Tools\"\nset box to {}\nsay box.double\n");
 	CHECK_FALSE(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
