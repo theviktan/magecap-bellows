@@ -41,7 +41,7 @@ namespace Bellows {
 		bool Relative = false;
 		double Duration = 0.0;		// Seconds
 		double Delay = 0.0;			// Seconds before it starts (and reads its starting value)
-		Math::EaseCurve Ease = nullptr;
+		Math::EaseCurve Ease;
 	};
 
 	// A tween that ran to its end, for the 'tween finished' event.
