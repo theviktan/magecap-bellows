@@ -80,6 +80,15 @@ namespace Bellows::Scripting {
 			}
 		}
 
+		// A vector or color must hold ordinary numbers (1e308 * 10 is infinity, and 1e39 becomes one as a float).
+		template<typename Vector>
+		Vector Finite(const Vector& vector, const std::string& what)
+		{
+			if (!HasOnlyFiniteNumbers(vector))
+				throw FS::RuntimeError(what + " needs ordinary numbers, not NaN or infinity.");
+			return vector;
+		}
+
 		std::vector<double> NumberList(FS::VM& vm, const FS::Value& value, const std::string& what, size_t minimum, size_t maximum)
 		{
 			if (!FS::IsObjectType(value, FS::ObjectType::List))
@@ -209,12 +218,12 @@ namespace Bellows::Scripting {
 				if (FS::IsObjectType(value, FS::ObjectType::Vector))
 				{
 					const FS::Vector* v = FS::As<FS::Vector>(value);
-					return glm::vec3(static_cast<float>(v->X), static_cast<float>(v->Y), static_cast<float>(v->Z));
+					return Finite(glm::vec3(static_cast<float>(v->X), static_cast<float>(v->Y), static_cast<float>(v->Z)), what);
 				}
 				if (FS::IsObjectType(value, FS::ObjectType::List))
 				{
 					std::vector<double> n = NumberList(vm, value, what, 3, 3);
-					return glm::vec3(static_cast<float>(n[0]), static_cast<float>(n[1]), static_cast<float>(n[2]));
+					return Finite(glm::vec3(static_cast<float>(n[0]), static_cast<float>(n[1]), static_cast<float>(n[2])), what);
 				}
 				Mismatch(vm, what, "a vector", value);
 			}
@@ -229,12 +238,12 @@ namespace Bellows::Scripting {
 				if (FS::IsObjectType(value, FS::ObjectType::Vector))
 				{
 					const FS::Vector* v = FS::As<FS::Vector>(value);
-					return glm::vec2(static_cast<float>(v->X), static_cast<float>(v->Y));
+					return Finite(glm::vec2(static_cast<float>(v->X), static_cast<float>(v->Y)), what);
 				}
 				if (FS::IsObjectType(value, FS::ObjectType::List))
 				{
 					std::vector<double> n = NumberList(vm, value, what, 2, 2);
-					return glm::vec2(static_cast<float>(n[0]), static_cast<float>(n[1]));
+					return Finite(glm::vec2(static_cast<float>(n[0]), static_cast<float>(n[1])), what);
 				}
 				Mismatch(vm, what, "a vector", value);
 			}
@@ -269,7 +278,7 @@ namespace Bellows::Scripting {
 				if (!FS::IsObjectType(value, FS::ObjectType::List))
 					Mismatch(vm, what, "a color like [1, 0.5, 0]", value);
 				std::vector<double> n = NumberList(vm, value, what, 3, 4);
-				return ColorValue { glm::vec4(static_cast<float>(n[0]), static_cast<float>(n[1]), static_cast<float>(n[2]), n.size() > 3 ? static_cast<float>(n[3]) : 1.0f) };
+				return ColorValue { Finite(glm::vec4(static_cast<float>(n[0]), static_cast<float>(n[1]), static_cast<float>(n[2]), n.size() > 3 ? static_cast<float>(n[3]) : 1.0f), what) };
 			}
 		};
 

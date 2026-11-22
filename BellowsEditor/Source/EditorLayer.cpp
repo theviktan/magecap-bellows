@@ -556,6 +556,8 @@ namespace Bellows {
 		m_RuntimeScene.reset();
 		m_SceneState = SceneState::Edit;
 		m_PendingSceneLoad.reset();
+		// A game's bellows.set_python_time_limit lasts for its play only; the Console gets the editor's again.
+		Scripting::PythonWatchdog::ResetTimeLimit();
 		Input::ResetState();
 		ScriptEngine::SetContextScene(m_EditorScene.get());
 

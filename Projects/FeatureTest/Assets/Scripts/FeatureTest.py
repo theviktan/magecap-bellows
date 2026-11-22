@@ -181,6 +181,14 @@ class FeatureTest(bellows.Script):
         paused = bellows.is_paused()
         bellows.set_paused(False)
         self.check(paused and not bellows.is_paused(), "set_paused and is_paused")
+        # The editor's runs have a 10-second limit and a shipped game none; a game can set its own.
+        limit = bellows.python_time_limit()
+        self.check(limit in (0.0, 10.0), f"python_time_limit ({limit})")
+        bellows.set_python_time_limit(30)
+        raised = bellows.python_time_limit()
+        bellows.set_python_time_limit(limit)
+        self.check(raised == 30.0 and bellows.python_time_limit() == limit, "set_python_time_limit")
+        self.check(raises(lambda: bellows.set_python_time_limit(-1), ValueError), "a negative time limit is refused")
         # No device input is delivered in automated runs, but every query must work.
         self.check(not bellows.is_key_down(Key.Space) and not bellows.is_key_pressed(Key.W) and not bellows.is_key_released(Key.Escape), "keyboard queries")
         self.check(not bellows.is_key_down("A"), "keys by name")

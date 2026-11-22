@@ -14,6 +14,7 @@
 #include "Bellows/Core/Application.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Scripting/PythonWatchdog.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
@@ -79,6 +80,10 @@ int main(int argc, char** argv)
 	options.SceneOverride = args.GetValue("--scene");
 	options.SceneFile = args.GetValue("--scene-file");
 	options.StartedByEditor = args.Has("--editor");
+	// A shipped game has no Python time limit, so a long load (generating a world) is never cut off;
+	// a game started by the editor keeps the editor's, so a loop with no end can't hang it.
+	if (!options.StartedByEditor)
+		Scripting::PythonWatchdog::SetDefaultTimeLimit(0.0);
 	options.ScreenshotPath = args.GetValue("--screenshot");
 	if (!options.ScreenshotPath.empty())
 		options.ScreenshotFrame = specification.MaxFrames > 0 ? specification.MaxFrames : 1;

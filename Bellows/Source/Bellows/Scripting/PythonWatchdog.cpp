@@ -16,9 +16,15 @@ namespace Bellows::Scripting {
 		std::atomic<int> s_Depth = 0;					// Nesting of PythonRun; 0 when no Python is watched
 		std::atomic<uint64_t> s_RunID = 0;				// Changes with every outermost run
 		std::atomic<int64_t> s_StartTicks = 0;			// When the current run (or its last frame) started
-		std::atomic<double> s_TimeLimit = PythonWatchdog::DefaultTimeLimit;
+		std::atomic<double> s_TimeLimit = PythonWatchdog::EditorTimeLimit;
+		std::atomic<double> s_DefaultTimeLimit = PythonWatchdog::EditorTimeLimit;
 		std::atomic<uint64_t> s_RequestedRun = 0;		// The run a check was queued for (0 for none)
 		std::atomic<uint32_t> s_StopCount = 0;
+
+		// Main thread only: when the current run was first stopped, and whether every line now raises.
+		uint64_t s_StoppedRun = 0;
+		Clock::time_point s_FirstStopTime;
+		bool s_TraceInstalled = false;
 
 		std::thread s_Thread;
 		std::mutex s_Mutex;
@@ -26,6 +32,8 @@ namespace Bellows::Scripting {
 		bool s_Running = false;
 
 		constexpr auto c_CheckInterval = std::chrono::milliseconds(100);
+		// How long a stopped run may go on (handling the interrupt, cleaning up) before every line raises.
+		constexpr auto c_GraceTime = std::chrono::seconds(1);
 
 		int64_t Now()
 		{
@@ -34,8 +42,32 @@ namespace Bellows::Scripting {
 
 		bool IsOverLimit()
 		{
+			const double limit = s_TimeLimit.load();
+			if (limit <= 0.0)
+				return false;
 			const double elapsed = std::chrono::duration<double>(Clock::duration(Now() - s_StartTicks.load())).count();
-			return elapsed > s_TimeLimit.load();
+			return elapsed > limit;
+		}
+
+		std::string StopMessage(bool again)
+		{
+			if (again)
+			{
+				return fmt::format("Python was stopped after {:g} seconds but kept running (an 'except:' that catches everything?), "
+					"so it is being stopped on every line.", s_TimeLimit.load());
+			}
+			return fmt::format("Python ran for more than {:g} seconds without returning, so it was stopped (a loop with no end?). "
+				"Long work can be split over frames, or allowed with bellows.set_python_time_limit.", s_TimeLimit.load());
+		}
+
+		// The trace function of a run that swallowed its interrupt: each line raises it again, so it can't
+		// be caught where it is raised (an 'except:' block's own lines raise too).
+		int RaiseOnEveryLine(PyObject*, PyFrameObject*, int what, PyObject*)
+		{
+			if (what != PyTrace_LINE)
+				return 0;
+			PyErr_SetString(PyExc_KeyboardInterrupt, StopMessage(true).c_str());
+			return -1;
 		}
 
 		// Runs on the main thread between two Python instructions (a Python "pending call"). By then the
@@ -50,10 +82,19 @@ namespace Bellows::Scripting {
 
 			// The message travels with the exception into the traceback or the script error report, so the
 			// stop is logged once, where the code that was stopped reports its errors.
-			s_StopCount++;
-			const std::string message = fmt::format("Python ran for more than {:g} seconds without returning, so it was stopped "
-				"(a loop with no end?). Long work can be split over frames.", s_TimeLimit.load());
-			PyErr_SetString(PyExc_KeyboardInterrupt, message.c_str());
+			const bool again = s_StoppedRun == runID;
+			if (!again)
+			{
+				s_StoppedRun = runID;
+				s_FirstStopTime = Clock::now();
+				s_StopCount++;
+			}
+			else if (!s_TraceInstalled && Clock::now() - s_FirstStopTime > c_GraceTime)
+			{
+				PyEval_SetTrace(&RaiseOnEveryLine, nullptr);
+				s_TraceInstalled = true;
+			}
+			PyErr_SetString(PyExc_KeyboardInterrupt, StopMessage(again).c_str());
 			return -1;
 		}
 
@@ -101,12 +142,28 @@ namespace Bellows::Scripting {
 
 	void PythonWatchdog::SetTimeLimit(double seconds)
 	{
-		s_TimeLimit = std::max(seconds, 0.0);
+		s_TimeLimit = std::isfinite(seconds) ? std::max(seconds, 0.0) : 0.0;
 	}
 
 	double PythonWatchdog::GetTimeLimit()
 	{
 		return s_TimeLimit.load();
+	}
+
+	void PythonWatchdog::SetDefaultTimeLimit(double seconds)
+	{
+		s_DefaultTimeLimit = std::isfinite(seconds) ? std::max(seconds, 0.0) : 0.0;
+		ResetTimeLimit();
+	}
+
+	double PythonWatchdog::GetDefaultTimeLimit()
+	{
+		return s_DefaultTimeLimit.load();
+	}
+
+	void PythonWatchdog::ResetTimeLimit()
+	{
+		s_TimeLimit = s_DefaultTimeLimit.load();
 	}
 
 	void PythonWatchdog::Restart()
@@ -131,7 +188,12 @@ namespace Bellows::Scripting {
 
 	PythonRun::~PythonRun()
 	{
-		s_Depth--;
+		if (--s_Depth == 0 && s_TraceInstalled)
+		{
+			// The stuck run has ended: lines run normally again.
+			PyEval_SetTrace(nullptr, nullptr);
+			s_TraceInstalled = false;
+		}
 	}
 
 }

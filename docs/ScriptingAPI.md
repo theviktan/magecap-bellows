@@ -50,7 +50,7 @@ every function below.
 | Axes | Right-handed, **Y up**. An entity's *forward* is **-Z**. |
 | Angles | `Entity.rotation`, `Transform.rotation_degrees`, light angles, camera FOV and `SkyLight.rotation` are **degrees**. `Transform.rotation` and `Quat.from_euler` use **radians**. |
 | Colors | Linear RGB(A) floats, usually 0-1 (values above 1 are allowed for HDR emission). |
-| Vectors | Anywhere a `Vec2/Vec3/Vec4` is expected you may pass a tuple or list, e.g. `entity.position = (0, 1, 0)`. |
+| Vectors | Anywhere a `Vec2/Vec3/Vec4` is expected you may pass a tuple or list, e.g. `entity.position = (0, 1, 0)`. A vector or color holding NaN or infinity raises `ValueError` naming what it was for (in ForgeScript, a mistake), so it never reaches physics or a saved scene. |
 | Asset paths | Relative to the project's `Assets` folder with forward slashes, e.g. `"Models/Ship.glb"`. Built-in meshes: `Builtin/Cube`, `Builtin/Sphere`, `Builtin/Plane`, `Builtin/Capsule`, `Builtin/Cylinder`, `Builtin/Cone`, `Builtin/Quad`. |
 | Errors | Invalid arguments raise `ValueError`/`TypeError`; using a destroyed entity raises `RuntimeError`. A script that raises 10 times is disabled; errors are shown in the Console. |
 
@@ -92,14 +92,23 @@ assigned to the instance before `on_create`.
 
 `Script` also offers the shortcuts `self.transform` and `self.get_component(component)`.
 
-**Time limit.** A callback, a script's top-level code, or code typed in the editor's Console that runs
-for more than 10 seconds without returning is stopped with `KeyboardInterrupt` (which `except Exception`
-doesn't catch), and the Console says why. This keeps a loop with no end from freezing the editor or the
-game, like ForgeScript's "ran too long" guard. A script whose callback was stopped still gets its next
-callbacks (a script whose top-level code was stopped doesn't start). A
-single long call into C, such as `sum(range(10**10))`, is only stopped once it returns. Spread long work
-over frames. Automation that lets time pass with `bellows.editor.run_frames` is never stopped, and
-scripts run with `--run-script` have no limit.
+**Time limit.** In the editor, a callback, a script's top-level code, or code typed in the Console that
+runs for more than 10 seconds without returning is stopped with `KeyboardInterrupt` (which
+`except Exception` doesn't catch), and the Console says why. This keeps a loop with no end from
+freezing the editor, like ForgeScript's "ran too long" guard. Code that catches everything (a bare
+`except:`) and keeps going is stopped again on every line it runs, a moment later. A script whose
+callback was stopped still gets its next callbacks (a script whose top-level code was stopped doesn't
+start). A single long call into C, such as `sum(range(10**10))`, is only stopped once it returns.
+Automation that lets time pass with `bellows.editor.run_frames` is never stopped, and scripts run with
+`--run-script` have no limit.
+
+A shipped game has no limit, so a long load such as generating a world is never cut off; a game
+played from the editor has the editor's. A game can set its own for the rest of its play:
+
+| Function | Description |
+|----------|-------------|
+| `set_python_time_limit(seconds)` | Seconds Python may run without returning; `0` or `None` turns the limit off. The editor puts its 10 seconds back when play stops. |
+| `python_time_limit()` | The current limit in seconds; `0.0` when there is none. |
 
 **Hot reload.** Saving a `.py` or `.forge` script while the editor is playing swaps in its new code
 within half a second, and the Console shows `Reloaded <file>`. A Python script's module runs again and

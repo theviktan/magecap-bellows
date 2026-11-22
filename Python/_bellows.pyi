@@ -1540,6 +1540,9 @@ def play_sound(path: str, volume: float = 1.0, bus: str = 'Effects') -> bool:
 
 def primary_camera() -> Entity | None: ...
 
+def python_time_limit() -> float:
+    """How long Python may run without returning before it is stopped, in seconds; 0 when there is no limit"""
+
 def quit(exit_code: int = 0) -> None:
     """Quits the game (stops play mode in the editor)"""
 
@@ -1575,6 +1578,9 @@ def set_master_volume(volume: float) -> None: ...
 
 def set_paused(paused: bool = True) -> None:
     """Pauses or resumes the game: physics, time() and scripts stop, except scripts marked Run While Paused; the UI still answers. A new scene starts unpaused"""
+
+def set_python_time_limit(seconds: float | None) -> None:
+    """Sets how long Python may run without returning before it is stopped with KeyboardInterrupt, for the rest of this play: 0 or None turns the limit off. It is 10 seconds in the editor, and off in a shipped game"""
 
 def started_from_editor() -> bool:
     """True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"""

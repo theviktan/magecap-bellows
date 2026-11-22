@@ -16,7 +16,8 @@ API, see [ScriptingAPI.md](ScriptingAPI.md)) and `bellows.editor` available. In 
 through the agent server, a trailing expression prints its value, like the Python prompt.
 Console and agent-server code that runs 10 seconds without returning is stopped with
 `KeyboardInterrupt` (see "Time limit" in [ScriptingAPI.md](ScriptingAPI.md)); each `run_frames` frame
-restarts that clock, and `--run-script` has no limit.
+restarts that clock, and `--run-script` has no limit. A loop that catches everything (`except:`) is
+stopped again on every line it runs.
 
 On Windows the editor (like a game) is a GUI program, so it never opens a console window of its own.
 Its output still goes where it's sent: a pipe or a file (`> log.txt`), or the command prompt it was
