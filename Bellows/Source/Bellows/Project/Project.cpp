@@ -5,6 +5,7 @@
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/InputMap.h"
+#include "Bellows/Project/ProjectExporter.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Serialization/JsonUtils.h"
@@ -71,7 +72,9 @@ namespace Bellows {
 		Ref<Project> project = CreateRef<Project>();
 		project->m_ProjectDirectory = std::filesystem::absolute(directory);
 		project->m_Config.Name = name;
-		project->m_ProjectFileName = name + FileExtension;
+		// The file is named after the cleaned name: the name itself may hold anything ("../../Escape",
+		// "Tëst?"), and a file named after it could land outside the folder or not be allowed at all.
+		project->m_ProjectFileName = ProjectExporter::SanitizeName(name) + FileExtension;
 		project->m_Config.InputActions = InputMap::GetDefaultActions();
 		// New projects turn +Z-front models (Blender's and glTF's convention) to face forward; projects
 		// made before 0.5.0 have no setting and keep -Z, so nothing already placed turns around.

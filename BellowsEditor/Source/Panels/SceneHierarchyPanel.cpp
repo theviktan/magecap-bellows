@@ -12,11 +12,19 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 namespace Bellows {
 
 	namespace {
+
+		std::string ToLower(std::string text)
+		{
+			std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return text;
+		}
 
 		const char* EntityIcon(Entity entity)
 		{
@@ -91,8 +99,34 @@ namespace Bellows {
 
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 2.0f * Theme::GetScale()));
 		ImGui::BeginChild("##Tree");
+		// Only the rows on screen are drawn, so a scene with tens of thousands of entities stays as fast
+		// as a small one. The rows that are showing (inside open nodes, or matching the search) are
+		// listed first; that walk skips closed subtrees.
+		m_Rows.clear();
 		for (Entity root : scene->GetRootEntities())
-			DrawEntityNode(root);
+		{
+			if (m_Filter.empty())
+				CollectRows(root, 0);
+			else
+				CollectMatchingRows(root, 0, ToLower(m_Filter));
+		}
+		ImGuiListClipper clipper;
+		clipper.Begin(static_cast<int>(m_Rows.size()));
+		while (clipper.Step())
+		{
+			for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+				DrawEntityRow(m_Rows[static_cast<size_t>(i)]);
+		}
+		clipper.End();
+
+		// F2 renames the selected entity, wherever its row is scrolled to.
+		if (Entity selected = m_Editor.GetPrimarySelection(); selected && m_Editor.GetSelection().size() == 1
+			&& ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_F2, false))
+		{
+			m_RenamingEntity = selected.GetUUID();
+			m_RenameBuffer = selected.GetName();
+			m_RenameFocusPending = true;
+		}
 
 		// Dropping on empty space moves an entity to the root.
 		ImGui::Dummy(ImGui::GetContentRegionAvail());
@@ -132,54 +166,81 @@ namespace Bellows {
 		ImGui::End();
 	}
 
-	bool SceneHierarchyPanel::MatchesFilter(Entity entity) const
+	ImGuiID SceneHierarchyPanel::GetNodeID(UUID uuid)
 	{
-		if (m_Filter.empty())
-			return true;
-		std::string name = entity.GetName();
-		std::string filter = m_Filter;
-		std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-		std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
-		if (name.find(filter) != std::string::npos)
-			return true;
-		for (Entity child : entity.GetChildren())
-		{
-			if (MatchesFilter(child))
-				return true;
-		}
-		return false;
+		char id[24];
+		std::snprintf(id, sizeof(id), "%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(uuid)));
+		ImGui::PushID(id);
+		const ImGuiID nodeID = ImGui::GetID("##node");
+		ImGui::PopID();
+		return nodeID;
 	}
 
-	void SceneHierarchyPanel::DrawEntityNode(Entity entity)
+	void SceneHierarchyPanel::CollectRows(Entity entity, int depth)
 	{
-		if (!MatchesFilter(entity))
+		const std::vector<Entity> children = entity.GetChildren();
+		m_Rows.push_back({ entity, depth, !children.empty() });
+		// The tree node keeps whether it is open in the window's storage, under its ID.
+		if (children.empty() || ImGui::GetStateStorage()->GetInt(GetNodeID(entity.GetUUID()), 0) == 0)
+			return;
+		for (Entity child : children)
+		{
+			if (child)
+				CollectRows(child, depth + 1);
+		}
+	}
+
+	bool SceneHierarchyPanel::CollectMatchingRows(Entity entity, int depth, const std::string& filter)
+	{
+		// An entity shows when its name matches or something under it does, with every row open.
+		const size_t index = m_Rows.size();
+		const std::vector<Entity> children = entity.GetChildren();
+		m_Rows.push_back({ entity, depth, !children.empty() });
+		bool matched = ToLower(entity.GetName()).find(filter) != std::string::npos;
+		for (Entity child : children)
+		{
+			if (child)
+				matched |= CollectMatchingRows(child, depth + 1, filter);
+		}
+		if (!matched)
+			m_Rows.resize(index);
+		return matched;
+	}
+
+	void SceneHierarchyPanel::DrawEntityRow(const Row& row)
+	{
+		Entity entity = row.Target;
+		if (!entity)
 			return;
 
 		const Ref<Scene>& scene = m_Editor.GetActiveScene();
 		const UUID uuid = entity.GetUUID();
-		const std::vector<Entity> children = entity.GetChildren();
 		const bool selected = m_Editor.IsSelected(entity);
 
+		// Rows are drawn flat (no tree push), indented by their depth.
 		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanFullWidth
-			| ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap;
+			| ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 		if (selected)
 			flags |= ImGuiTreeNodeFlags_Selected;
-		if (children.empty())
-			flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		if (!row.HasChildren)
+			flags |= ImGuiTreeNodeFlags_Leaf;
 		if (!m_Filter.empty())
 			ImGui::SetNextItemOpen(true);
 
+		const float indent = static_cast<float>(row.Depth) * ImGui::GetStyle().IndentSpacing;
+		if (indent > 0.0f)
+			ImGui::Indent(indent);
 		char id[24];
 		std::snprintf(id, sizeof(id), "%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(uuid)));
 		ImGui::PushID(id);
 		const float rowRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
-		const bool open = ImGui::TreeNodeEx("##node", flags);
+		ImGui::TreeNodeEx("##node", flags);
 		ImGui::PopStyleVar();
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 			m_Editor.Select(entity, ImGui::GetIO().KeyCtrl);
-		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && children.empty())
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !row.HasChildren)
 			m_Editor.FocusSelection();
 
 		// Drag source / target for re-parenting
@@ -304,23 +365,9 @@ namespace Bellows {
 			ImGui::EndPopup();
 		}
 
-		if (selected && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_F2, false))
-		{
-			m_RenamingEntity = uuid;
-			m_RenameBuffer = entity.GetName();
-			m_RenameFocusPending = true;
-		}
-
-		if (open && !children.empty())
-		{
-			for (Entity child : children)
-			{
-				if (child)
-					DrawEntityNode(child);
-			}
-			ImGui::TreePop();
-		}
 		ImGui::PopID();
+		if (indent > 0.0f)
+			ImGui::Unindent(indent);
 	}
 
 	void SceneHierarchyPanel::DrawCreateMenu(Entity parent)

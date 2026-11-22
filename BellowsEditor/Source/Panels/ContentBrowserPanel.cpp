@@ -19,6 +19,9 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include <cmath>
+#include <optional>
+
 namespace Bellows {
 
 	namespace {
@@ -160,7 +163,8 @@ namespace Bellows {
 		ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Filter", &m_Filter);
 		ImGui::SameLine();
 		ImGui::SetNextItemWidth(-FLT_MIN);
-		ImGui::SliderFloat("##size", &m_ThumbnailSize, 56.0f, 160.0f, "");
+		if (ImGui::SliderFloat("##size", &m_ThumbnailSize, 56.0f, 160.0f, "", ImGuiSliderFlags_AlwaysClamp) && !std::isfinite(m_ThumbnailSize))
+			m_ThumbnailSize = 84.0f;
 		UI::Tooltip("Thumbnail size");
 		ImGui::Separator();
 
@@ -587,6 +591,8 @@ namespace Bellows {
 		{
 			ImGui::OpenPopup("Rename Asset");
 			m_OpenRename = false;
+			m_RenameError.clear();
+			m_RenameFailedName.clear();
 		}
 		ImGui::SetNextWindowSize(ImVec2(380.0f * scale, 0.0f));
 		if (ImGui::BeginPopupModal("Rename Asset", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize))
@@ -595,18 +601,38 @@ namespace Bellows {
 				ImGui::SetKeyboardFocusHere();
 			ImGui::SetNextItemWidth(-FLT_MIN);
 			const bool enter = ImGui::InputText("##name", &m_RenameBuffer, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-			ImGui::Spacing();
-			if (ImGui::Button("Rename", ImVec2(110.0f * scale, 0.0f)) || enter)
+
+			// Why a name can't be used is shown here, as it is typed, and the dialog stays open.
+			const std::optional<std::string> problem = AssetFiles::CheckNewName(m_RenameBuffer);
+			const std::string reason = problem ? *problem : m_RenameBuffer == m_RenameFailedName ? m_RenameError : std::string();
+			if (!reason.empty())
 			{
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+				ImGui::TextWrapped("This name can't be used: %s.", reason.c_str());
+				ImGui::PopStyleColor();
+			}
+			ImGui::Spacing();
+			ImGui::BeginDisabled(problem.has_value());
+			const bool confirmed = ImGui::Button("Rename", ImVec2(110.0f * scale, 0.0f)) || (enter && !problem);
+			ImGui::EndDisabled();
+			if (confirmed)
+			{
+				bool renamed = true;
 				if (m_RenameBuffer != m_RenamePath.filename().string())
 				{
 					AssetManager::Invalidate(AssetManager::GetAssetPath(m_RenamePath));
 					std::string error;
-					if (!AssetFiles::Rename(m_RenamePath, m_RenameBuffer, error))
+					renamed = AssetFiles::Rename(m_RenamePath, m_RenameBuffer, error);
+					if (!renamed)
+					{
 						BW_ERROR("Could not rename '{}': {}", m_RenamePath.filename().string(), error);
+						m_RenameError = error;
+						m_RenameFailedName = m_RenameBuffer;
+					}
 				}
 				m_LastRefreshTime = -1.0;
-				ImGui::CloseCurrentPopup();
+				if (renamed)
+					ImGui::CloseCurrentPopup();
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Cancel", ImVec2(110.0f * scale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))

@@ -1,6 +1,8 @@
 #include "bwpch.h"
 #include "Bellows/Core/FileSystem.h"
 
+#include <cctype>
+
 namespace Bellows {
 
 	std::optional<std::string> FileSystem::ReadTextFile(const std::filesystem::path& path)
@@ -81,6 +83,19 @@ namespace Bellows {
 		std::error_code error;
 		std::filesystem::create_directories(path, error);
 		return !error && std::filesystem::is_directory(path, error);
+	}
+
+	bool FileSystem::IsWindowsDeviceName(std::string_view fileName)
+	{
+		// Windows also ignores trailing spaces and dots before the extension ("CON .txt").
+		std::string_view stem = fileName.substr(0, fileName.find('.'));
+		while (!stem.empty() && stem.back() == ' ')
+			stem.remove_suffix(1);
+		std::string upper(stem);
+		std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+		if (upper == "CON" || upper == "PRN" || upper == "AUX" || upper == "NUL")
+			return true;
+		return upper.size() == 4 && (upper.starts_with("COM") || upper.starts_with("LPT")) && upper[3] >= '1' && upper[3] <= '9';
 	}
 
 	std::string FileSystem::MakeRelativeGenericPath(const std::filesystem::path& path, const std::filesystem::path& base)

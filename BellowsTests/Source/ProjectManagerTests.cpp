@@ -145,6 +145,18 @@ TEST_CASE("The New Project dialog explains where the project will go")
 		CHECK(CheckNewProjectLocation("Game", "relative/folder", true).Status == NewProjectCheck::Level::Error);
 	}
 
+	SUBCASE("Windows' device names are refused")
+	{
+		for (const char* name : { "CON", "con", "Nul", "COM1", "lpt9", "AUX.game", "PRN " })
+		{
+			const NewProjectCheck check = CheckNewProjectLocation(name, root, true);
+			CHECK_MESSAGE(check.Status == NewProjectCheck::Level::Error, name);
+			CHECK(check.Message.find("device name") != std::string::npos);
+		}
+		CHECK(CheckNewProjectLocation("Console", root, true).Status == NewProjectCheck::Level::Ok);
+		CHECK(CheckNewProjectLocation("COM10", root, true).Status == NewProjectCheck::Level::Ok);
+	}
+
 	SUBCASE("A new folder is created for the project")
 	{
 		const NewProjectCheck check = CheckNewProjectLocation("  My Game  ", root, true);

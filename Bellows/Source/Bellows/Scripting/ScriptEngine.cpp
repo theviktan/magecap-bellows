@@ -6,6 +6,7 @@
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
+#include "Bellows/Scripting/PythonWatchdog.h"
 #include "Bellows/Scripting/ScriptGlue.h"
 
 #include <pybind11/embed.h>
@@ -199,7 +200,11 @@ namespace Bellows {
 				throw std::runtime_error("Script file '" + scriptPath + "' could not be imported");
 			py::object module = importlibUtil.attr("module_from_spec")(spec);
 			py::module_::import("sys").attr("modules")[py::str(moduleName)] = module;
-			spec.attr("loader").attr("exec_module")(module);
+			{
+				// A script's top level runs here, when play starts or it is reloaded.
+				Scripting::PythonRun run;
+				spec.attr("loader").attr("exec_module")(module);
+			}
 
 			s_Data->Modules[scriptPath] = { module, writeTime };
 			return module;
@@ -283,6 +288,7 @@ namespace Bellows {
 				return;
 			try
 			{
+				Scripting::PythonRun run;
 				instance.Object.attr(method)(std::forward<Args>(args)...);
 			}
 			catch (const std::exception& exception)
@@ -331,6 +337,7 @@ namespace Bellows {
 			{
 				try
 				{
+					Scripting::PythonRun run;
 					importlib.attr("reload")(module);
 				}
 				catch (const py::error_already_set& exception)
@@ -490,7 +497,11 @@ namespace Bellows {
 			{
 				py::object module = LoadScriptModule(component.ScriptPath);
 				py::object cls = FindScriptClass(module, component.ClassName);
-				py::object object = cls();
+				py::object object;
+				{
+					Scripting::PythonRun run;
+					object = cls();
+				}
 				object.attr("entity") = Scripting::ScriptEntity(entity);
 
 				for (const auto& [name, value] : component.Fields)
@@ -678,6 +689,7 @@ sys.stderr = _BellowsLogWriter(2)
 		}
 
 		s_Data->Initialized = true;
+		Scripting::PythonWatchdog::Start();
 		const std::string version = py::module_::import("sys").attr("version").cast<std::string>();
 		BW_CORE_INFO("Python {} ready", version.substr(0, version.find(' ')));
 		return true;
@@ -688,6 +700,7 @@ sys.stderr = _BellowsLogWriter(2)
 		if (!s_Data)
 			return;
 
+		Scripting::PythonWatchdog::Stop();
 		Scripting::RemoveScriptEventListener(s_Data->EventListener);
 		s_Data->ForgeScript->Stop();
 		s_Data->Instances.clear();
@@ -1060,6 +1073,8 @@ sys.stderr = _BellowsLogWriter(2)
 				lastExpression = ast.attr("Expression")(body.attr("pop")().attr("value"));
 				ast.attr("fix_missing_locations")(lastExpression);
 			}
+			// The Console and agent requests are watched: a loop with no end is stopped, not the editor.
+			Scripting::PythonRun run;
 			builtins.attr("exec")(builtins.attr("compile")(tree, filename, "exec"), globals);
 			if (!lastExpression.is_none())
 			{

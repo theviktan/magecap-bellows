@@ -1,5 +1,6 @@
 #include "ScriptEditorPanel.h"
 
+#include "AssetFiles.h"
 #include "EditorLayer.h"
 #include "EditorTheme.h"
 #include "EditorUI.h"
@@ -21,6 +22,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 
 namespace Bellows {
 
@@ -790,6 +792,9 @@ namespace Bellows {
 		const bool inProject = !trimmedPath.empty() && !AssetManager::GetAssetPath(absolute).empty() && !std::filesystem::path(trimmedPath).is_absolute();
 		const bool rightExtension = GetScriptLanguage(absolute) == m_CreateLanguage;
 		const bool exists = inProject && FileSystem::Exists(absolute);
+		// A new file's folders and name follow the Content panel's rules (no Windows device names such
+		// as NUL, which Windows tools can't open or delete).
+		const std::optional<std::string> nameProblem = inProject && !exists ? AssetFiles::CheckNewPath(trimmedPath) : std::nullopt;
 
 		ImGui::AlignTextToFramePadding();
 		UI::TextMuted("Template");
@@ -810,12 +815,17 @@ namespace Bellows {
 
 		// Explains what the button will do, like Godot's Attach Node Script dialog.
 		ImGui::Spacing();
-		const bool valid = inProject && rightExtension;
-		const char* message;
+		const bool valid = inProject && rightExtension && !nameProblem;
+		std::string message;
 		ImU32 color = Theme::TextMuted;
 		if (!inProject)
 		{
 			message = "Enter a path inside the project's Assets folder, like Scripts/Player.forge.";
+			color = Theme::Error;
+		}
+		else if (nameProblem)
+		{
+			message = "This path can't be used: " + *nameProblem + ".";
 			color = Theme::Error;
 		}
 		else if (!rightExtension)
@@ -834,7 +844,7 @@ namespace Bellows {
 			color = Theme::Success;
 		}
 		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(color));
-		ImGui::TextWrapped("%s", message);
+		ImGui::TextWrapped("%s", message.c_str());
 		ImGui::PopStyleColor();
 		ImGui::Spacing();
 

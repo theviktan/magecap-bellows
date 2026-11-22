@@ -2,11 +2,12 @@
 //
 // Usage: <Game> [--project <path>] [--scene <asset path>] [--headless] [--width N] [--height N]
 //               [--frames N] [--screenshot <file.png>] [--validation]
-//               [--scene-file <path>] [--title <text>] [--editor]
+//               [--scene-file <path>] [--title <text>] [--editor] [--console]
 //
 // The last three are what the editor's Play in a game window passes: the scene being edited (saved
 // to a file outside the assets, so unsaved changes play), the window title, and --editor: a console
 // log with levels that the editor reads into its Console (even in shipping builds), and F8 to stop.
+// On Windows a game never opens a console window; --console opens one for its log.
 
 #include "RuntimeLayer.h"
 
@@ -21,12 +22,13 @@ using namespace Bellows;
 int main(int argc, char** argv)
 {
 	const ApplicationCommandLineArgs args = ApplicationCommandLineArgs::FromArgv(argc, argv);
+	Platform::ConnectConsole(args.Has("--console"));
 
 	// The log file opens once the project is known: it goes in the game's user folder (see below).
 	Log::Specification logSpecification;
 #ifdef BW_DIST
-	// Shipped games log to Game.log only; headless (automated) runs also print to the console.
-	logSpecification.EnableConsole = args.Has("--headless");
+	// Shipped games log to Game.log only; headless (automated) runs and --console also print to the console.
+	logSpecification.EnableConsole = args.Has("--headless") || args.Has("--console");
 #endif
 	if (args.Has("--editor"))
 	{

@@ -3,6 +3,7 @@
 #include "EditorTheme.h"
 #include "IconsLucide.h"
 
+#include "Bellows/Core/Log.h"
 #include "Bellows/UI/UILayout.h"
 
 #include <imgui_internal.h>
@@ -11,11 +12,55 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+
 namespace Bellows::UI {
 
 	namespace {
 
 		float s_LabelWidthRatio = 0.38f;
+
+		// The last property row that refused a number that isn't finite, so it can say why for a moment.
+		ImGuiID s_RefusedRow = 0;
+		double s_RefusedTime = 0.0;
+		constexpr double c_RefusedMessageSeconds = 3.0;
+		constexpr const char* c_RefusedMessage = "Only finite numbers can be used here (not NaN or infinity), so the old value was kept.";
+
+		ImGuiID CurrentRowID()
+		{
+			return ImGui::GetID("##row");
+		}
+
+		// Typing "nan" or "inf" into a field (ImGui parses both) would put a value in the scene that
+		// saves as JSON null and that physics can't use. Puts the old values back when any is not
+		// finite and returns true, so the caller reports no change.
+		bool RefuseNonFinite(float* values, const float* before, int count, const char* label)
+		{
+			bool finite = true;
+			for (int i = 0; i < count; i++)
+				finite &= std::isfinite(values[i]);
+			if (finite)
+				return false;
+			std::copy(before, before + count, values);
+			if (s_RefusedRow != CurrentRowID() || ImGui::GetTime() - s_RefusedTime > c_RefusedMessageSeconds)
+				BW_WARN("{}: {}", label, c_RefusedMessage);
+			s_RefusedRow = CurrentRowID();
+			s_RefusedTime = ImGui::GetTime();
+			return true;
+		}
+
+		template<typename Widget>
+		bool FiniteEdit(float* values, int count, const char* label, Widget&& widget)
+		{
+			float before[4];
+			std::copy(values, values + count, before);
+			const bool changed = widget();
+			return !RefuseNonFinite(values, before, count, label) && changed;
+		}
+
+		const char* s_CurrentLabel = "";
 
 		void BeginRow(const char* label, const char* tooltip)
 		{
@@ -30,11 +75,50 @@ namespace Bellows::UI {
 			ImGui::TableSetColumnIndex(1);
 			ImGui::SetNextItemWidth(-FLT_MIN);
 			ImGui::PushID(label);
+			s_CurrentLabel = label;
 		}
 
 		void EndRow()
 		{
+			if (s_RefusedRow == CurrentRowID() && ImGui::GetTime() - s_RefusedTime <= c_RefusedMessageSeconds)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+				ImGui::TextWrapped("%s", c_RefusedMessage);
+				ImGui::PopStyleColor();
+			}
 			ImGui::PopID();
+		}
+
+		// How a vector's fields are placed: side by side when each value fits in its field, otherwise one
+		// under the other at full width, so a number is never shown cut off ("0.5(" for 0.500).
+		struct VectorLayout
+		{
+			float Width = 0.0f;
+			bool Stacked = false;
+		};
+
+		VectorLayout GetVectorLayout(const float* values, int count)
+		{
+			const ImGuiStyle& style = ImGui::GetStyle();
+			const float available = ImGui::GetContentRegionAvail().x;
+			const float sideBySide = (available - style.ItemInnerSpacing.x * static_cast<float>(count - 1)) / static_cast<float>(count);
+			float widest = ImGui::CalcTextSize("-0.000").x;
+			char text[64];
+			for (int i = 0; i < count; i++)
+			{
+				std::snprintf(text, sizeof(text), "%.3f", values[i]);
+				widest = std::max(widest, ImGui::CalcTextSize(text).x);
+			}
+			const float needed = ImGui::GetFrameHeight() * 0.85f + widest + style.FramePadding.x * 2.0f;
+			if (sideBySide >= needed)
+				return { sideBySide, false };
+			return { available, true };
+		}
+
+		void NextAxis(const VectorLayout& layout)
+		{
+			if (!layout.Stacked)
+				ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
 		}
 
 		// One colored component of a vector field.
@@ -61,7 +145,7 @@ namespace Bellows::UI {
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(std::max(width - lineHeight * 0.85f, 10.0f));
 			std::string id = std::string("##") + axis;
-			changed |= ImGui::DragFloat(id.c_str(), &value, speed, 0.0f, 0.0f, "%.3f");
+			changed |= FiniteEdit(&value, 1, s_CurrentLabel, [&] { return ImGui::DragFloat(id.c_str(), &value, speed, 0.0f, 0.0f, "%.3f"); });
 			ImGui::PopStyleVar();
 			return changed;
 		}
@@ -87,7 +171,8 @@ namespace Bellows::UI {
 	bool Property(const char* label, float& value, float speed, float min, float max, const char* format, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
-		const bool changed = ImGui::DragFloat("##value", &value, speed, min, max, format, min < max ? ImGuiSliderFlags_AlwaysClamp : 0);
+		const bool changed = FiniteEdit(&value, 1, label,
+			[&] { return ImGui::DragFloat("##value", &value, speed, min, max, format, min < max ? ImGuiSliderFlags_AlwaysClamp : 0); });
 		EndRow();
 		return changed;
 	}
@@ -137,7 +222,7 @@ namespace Bellows::UI {
 	bool PropertySlider(const char* label, float& value, float min, float max, const char* format, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
-		const bool changed = ImGui::SliderFloat("##value", &value, min, max, format);
+		const bool changed = FiniteEdit(&value, 1, label, [&] { return ImGui::SliderFloat("##value", &value, min, max, format); });
 		EndRow();
 		return changed;
 	}
@@ -146,8 +231,9 @@ namespace Bellows::UI {
 	{
 		float degrees = glm::degrees(radians);
 		BeginRow(label, tooltip);
-		const bool changed = ImGui::DragFloat("##value", &degrees, 0.25f, minDegrees, maxDegrees, "%.1f°",
-			minDegrees < maxDegrees ? ImGuiSliderFlags_AlwaysClamp : 0);
+		const bool changed = FiniteEdit(&degrees, 1, label, [&] {
+			return ImGui::DragFloat("##value", &degrees, 0.25f, minDegrees, maxDegrees, "%.1f°", minDegrees < maxDegrees ? ImGuiSliderFlags_AlwaysClamp : 0);
+		});
 		EndRow();
 		if (changed)
 			radians = glm::radians(degrees);
@@ -157,10 +243,10 @@ namespace Bellows::UI {
 	bool PropertyVec2(const char* label, glm::vec2& value, float speed, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
-		const float width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemInnerSpacing.x) / 2.0f;
-		bool changed = AxisDrag("X", value.x, 0.0f, speed, Theme::AxisX, width);
-		ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-		changed |= AxisDrag("Y", value.y, 0.0f, speed, Theme::AxisY, width);
+		const VectorLayout layout = GetVectorLayout(glm::value_ptr(value), 2);
+		bool changed = AxisDrag("X", value.x, 0.0f, speed, Theme::AxisX, layout.Width);
+		NextAxis(layout);
+		changed |= AxisDrag("Y", value.y, 0.0f, speed, Theme::AxisY, layout.Width);
 		EndRow();
 		return changed;
 	}
@@ -168,13 +254,12 @@ namespace Bellows::UI {
 	bool PropertyVec3(const char* label, glm::vec3& value, float resetValue, float speed, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
-		const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-		const float width = (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f;
-		bool changed = AxisDrag("X", value.x, resetValue, speed, Theme::AxisX, width);
-		ImGui::SameLine(0.0f, spacing);
-		changed |= AxisDrag("Y", value.y, resetValue, speed, Theme::AxisY, width);
-		ImGui::SameLine(0.0f, spacing);
-		changed |= AxisDrag("Z", value.z, resetValue, speed, Theme::AxisZ, width);
+		const VectorLayout layout = GetVectorLayout(glm::value_ptr(value), 3);
+		bool changed = AxisDrag("X", value.x, resetValue, speed, Theme::AxisX, layout.Width);
+		NextAxis(layout);
+		changed |= AxisDrag("Y", value.y, resetValue, speed, Theme::AxisY, layout.Width);
+		NextAxis(layout);
+		changed |= AxisDrag("Z", value.z, resetValue, speed, Theme::AxisZ, layout.Width);
 		EndRow();
 		return changed;
 	}
@@ -182,7 +267,7 @@ namespace Bellows::UI {
 	bool PropertyVec4(const char* label, glm::vec4& value, float speed, const char* tooltip)
 	{
 		BeginRow(label, tooltip);
-		const bool changed = ImGui::DragFloat4("##value", glm::value_ptr(value), speed);
+		const bool changed = FiniteEdit(glm::value_ptr(value), 4, label, [&] { return ImGui::DragFloat4("##value", glm::value_ptr(value), speed); });
 		EndRow();
 		return changed;
 	}
@@ -193,7 +278,7 @@ namespace Bellows::UI {
 		ImGuiColorEditFlags flags = ImGuiColorEditFlags_Float;
 		if (hdr)
 			flags |= ImGuiColorEditFlags_HDR;
-		const bool changed = ImGui::ColorEdit3("##value", glm::value_ptr(color), flags);
+		const bool changed = FiniteEdit(glm::value_ptr(color), 3, label, [&] { return ImGui::ColorEdit3("##value", glm::value_ptr(color), flags); });
 		EndRow();
 		return changed;
 	}
@@ -204,7 +289,7 @@ namespace Bellows::UI {
 		ImGuiColorEditFlags flags = ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar;
 		if (hdr)
 			flags |= ImGuiColorEditFlags_HDR;
-		const bool changed = ImGui::ColorEdit4("##value", glm::value_ptr(color), flags);
+		const bool changed = FiniteEdit(glm::value_ptr(color), 4, label, [&] { return ImGui::ColorEdit4("##value", glm::value_ptr(color), flags); });
 		EndRow();
 		return changed;
 	}

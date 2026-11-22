@@ -14,6 +14,41 @@ namespace Bellows {
 
 	namespace {
 
+		// Plain letters for the accented Latin letters U+00C0 to U+017F ("é" is "e", "ß" is "ss"), so a
+		// name keeps its words in a file name every system and tool can handle. "" for × and ÷.
+		constexpr const char* c_PlainLatin[] = {
+			"A", "A", "A", "A", "A", "A", "AE", "C", "E", "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O",
+			"O", "", "O", "U", "U", "U", "U", "Y", "Th", "ss", "a", "a", "a", "a", "a", "a", "ae", "c", "e", "e", "e",
+			"e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "", "o", "u", "u", "u", "u", "y", "th", "y", "A",
+			"a", "A", "a", "A", "a", "C", "c", "C", "c", "C", "c", "C", "c", "D", "d", "D", "d", "E", "e", "E", "e", "E",
+			"e", "E", "e", "E", "e", "G", "g", "G", "g", "G", "g", "G", "g", "H", "h", "H", "h", "I", "i", "I", "i", "I",
+			"i", "I", "i", "I", "i", "IJ", "ij", "J", "j", "K", "k", "k", "L", "l", "L", "l", "L", "l", "L", "l", "L",
+			"l", "N", "n", "N", "n", "N", "n", "n", "N", "n", "O", "o", "O", "o", "O", "o", "OE", "oe", "R", "r", "R",
+			"r", "R", "r", "S", "s", "S", "s", "S", "s", "S", "s", "T", "t", "T", "t", "T", "t", "U", "u", "U", "u", "U",
+			"u", "U", "u", "U", "u", "U", "u", "W", "w", "Y", "y", "Y", "Z", "z", "Z", "z", "Z", "z", "s"
+		};
+		constexpr uint32_t c_PlainLatinFirst = 0xC0;
+
+		// Reads one UTF-8 character at 'i' and moves past it; U+FFFD for bytes that aren't valid UTF-8.
+		uint32_t NextCodePoint(const std::string& text, size_t& i)
+		{
+			const unsigned char lead = static_cast<unsigned char>(text[i++]);
+			if (lead < 0x80)
+				return lead;
+			const int extra = lead >= 0xF0 && lead < 0xF5 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC2 && lead < 0xE0 ? 1 : -1;
+			if (extra < 0 || lead >= 0xF5)
+				return 0xFFFD;
+			uint32_t codePoint = lead & (0x3F >> extra);
+			for (int k = 0; k < extra; k++)
+			{
+				if (i >= text.size() || (static_cast<unsigned char>(text[i]) & 0xC0) != 0x80)
+					return 0xFFFD;
+				codePoint = (codePoint << 6) | (static_cast<unsigned char>(text[i++]) & 0x3F);
+			}
+			return codePoint;
+		}
+
+
 		// Standard-library folders a game never needs.
 		const std::unordered_set<std::string> c_ExcludedPythonFolders = {
 			"test", "tests", "idlelib", "tkinter", "turtledemo", "ensurepip", "site-packages", "dist-packages",
@@ -147,14 +182,29 @@ namespace Bellows {
 	std::string ProjectExporter::SanitizeName(const std::string& name)
 	{
 		std::string result;
-		for (char c : name)
+		for (size_t i = 0; i < name.size();)
 		{
-			if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == ' ')
-				result += c;
+			const uint32_t c = NextCodePoint(name, i);
+			if (c < 0x80)
+			{
+				if (std::isalnum(static_cast<int>(c)) || c == '-' || c == '_' || c == ' ')
+					result += static_cast<char>(c);
+			}
+			else if (c >= c_PlainLatinFirst && c - c_PlainLatinFirst < std::size(c_PlainLatin))
+			{
+				result += c_PlainLatin[c - c_PlainLatinFirst];
+			}
 		}
 		while (!result.empty() && result.back() == ' ')
 			result.pop_back();
-		return result.empty() ? std::string("Game") : result;
+		while (!result.empty() && result.front() == ' ')
+			result.erase(result.begin());
+		if (result.empty())
+			return "Game";
+		// "CON" can't be a folder or program name on Windows, but "CON Game" can.
+		if (FileSystem::IsWindowsDeviceName(result))
+			result += " Game";
+		return result;
 	}
 
 	ExportResult ProjectExporter::Export(const Project& project, const ExportOptions& options)

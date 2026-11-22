@@ -144,6 +144,20 @@ TEST_CASE("Renames stay in their folder, and nothing moves out of the assets or 
 	CHECK_FALSE(FileSystem::Exists(assets.Root / "Models" / "Free.glb"));
 }
 
+TEST_CASE("A new file's path follows the same name rules in every folder")
+{
+	for (const char* path : { "Scripts/NUL.forge", "Scripts/con.py", "CON/Player.forge", "Scripts\\Aux\\Enemy.forge", "Scripts//Player.forge",
+		"Scripts/Player?.forge", "Scripts/../Player.forge", "Scripts/" })
+	{
+		CAPTURE(path);
+		CHECK(AssetFiles::CheckNewPath(path));
+	}
+	CHECK(AssetFiles::CheckNewPath("Scripts/NUL.forge")->find("'NUL.forge'") != std::string::npos);
+	CHECK_FALSE(AssetFiles::CheckNewPath("Scripts/Player.forge"));
+	CHECK_FALSE(AssetFiles::CheckNewPath("Scripts\\Enemies\\Bat.py"));
+	CHECK_FALSE(AssetFiles::CheckNewPath("Console.forge"));
+}
+
 TEST_CASE("Deleting an asset moves it and its import settings to the Trash, where they can be restored")
 {
 	TestAssets assets("AssetFilesDelete");

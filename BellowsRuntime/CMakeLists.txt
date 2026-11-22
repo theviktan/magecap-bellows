@@ -10,8 +10,10 @@ bellows_set_compile_options(BellowsRuntime)
 bellows_copy_python_runtime(BellowsRuntime)
 
 if(WIN32)
-	set_target_properties(BellowsRuntime PROPERTIES WIN32_EXECUTABLE $<CONFIG:Dist>)
-	target_link_options(BellowsRuntime PRIVATE $<$<CONFIG:Dist>:/ENTRY:mainCRTStartup>)
+	# A GUI program in every configuration, so a game (an exported copy of this program) never opens a
+	# console window. Platform::ConnectConsole reconnects output when it's started from a command prompt.
+	set_target_properties(BellowsRuntime PROPERTIES WIN32_EXECUTABLE ON)
+	target_link_options(BellowsRuntime PRIVATE /ENTRY:mainCRTStartup)
 else()
 	# Exported games ship their Python runtime next to the executable.
 	set_target_properties(BellowsRuntime PROPERTIES BUILD_RPATH "\$ORIGIN;\$ORIGIN/PythonRuntime/lib" INSTALL_RPATH "\$ORIGIN;\$ORIGIN/PythonRuntime/lib")

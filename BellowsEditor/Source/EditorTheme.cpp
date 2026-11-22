@@ -3,6 +3,9 @@
 #include "IconsLucide.h"
 
 #include "Bellows/Core/Log.h"
+#include "Bellows/Core/Platform.h"
+
+#include <vector>
 
 namespace Bellows::Theme {
 
@@ -10,6 +13,34 @@ namespace Bellows::Theme {
 
 		Fonts s_Fonts;
 		float s_Scale = 1.0f;
+
+		// A system font with plain (not color) emoji outlines, which stb_truetype can draw, or an empty
+		// path. Using the system's copy keeps a large font out of the editor's files. Color-only emoji
+		// fonts (Noto Color Emoji's bitmaps) can't be drawn, so they aren't on the list.
+		const std::filesystem::path& FindEmojiFont()
+		{
+			static const std::filesystem::path s_Font = []
+			{
+				std::vector<std::filesystem::path> candidates;
+#if defined(BW_PLATFORM_WINDOWS)
+				const std::string windows = Platform::GetEnvVar("WINDIR");
+				const std::filesystem::path fonts = std::filesystem::path(windows.empty() ? "C:\\Windows" : windows) / "Fonts";
+				candidates = { fonts / "seguiemj.ttf", fonts / "seguisym.ttf" };
+#else
+				candidates = { "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf", "/usr/share/fonts/noto/NotoEmoji-Regular.ttf",
+					"/usr/share/fonts/google-noto-emoji/NotoEmoji-Regular.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+					"/usr/share/fonts/dejavu/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans.ttf" };
+#endif
+				for (const std::filesystem::path& candidate : candidates)
+				{
+					std::error_code error;
+					if (std::filesystem::is_regular_file(candidate, error))
+						return candidate;
+				}
+				return std::filesystem::path();
+			}();
+			return s_Font;
+		}
 
 		ImFont* LoadFont(const std::filesystem::path& path, float size, bool mergeIcons, const std::filesystem::path& iconFont)
 		{
@@ -37,6 +68,17 @@ namespace Bellows::Theme {
 				iconConfig.GlyphMinAdvanceX = size;
 				iconConfig.GlyphOffset = ImVec2(0.0f, size * 0.12f);
 				io.Fonts->AddFontFromFileTTF(iconFont.string().c_str(), size, &iconConfig);
+			}
+
+			// Emoji and symbols the text font doesn't have (an entity named with an emoji) come from the
+			// system's emoji font instead of showing as "?". Merged last, so it only fills gaps.
+			if (const std::filesystem::path& emojiFont = FindEmojiFont(); font && !emojiFont.empty())
+			{
+				static const ImWchar s_EmojiRanges[] = { 0x2000, 0x2BFF, 0xFE00, 0xFE0F, 0x1F000, 0x1FAFF, 0 };
+				ImFontConfig emojiConfig;
+				emojiConfig.MergeMode = true;
+				emojiConfig.GlyphRanges = s_EmojiRanges;
+				io.Fonts->AddFontFromFileTTF(emojiFont.string().c_str(), size, &emojiConfig);
 			}
 			return font;
 		}

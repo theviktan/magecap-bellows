@@ -33,7 +33,9 @@ namespace Bellows {
 	public:
 		static ExportResult Export(const Project& project, const ExportOptions& options);
 
-		// File-system safe version of a project name ("My Game!" -> "My Game").
+		// File-system safe version of a project name, for its folder and its game's program: letters,
+		// digits, spaces, - and _ ("My Game!" -> "My Game"), accented letters as plain ones ("Tëst" ->
+		// "Test"), and never a Windows device name ("CON" -> "CON Game"). "Game" when nothing is left.
 		static std::string SanitizeName(const std::string& name);
 	};
 

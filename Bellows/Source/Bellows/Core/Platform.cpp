@@ -4,6 +4,8 @@
 #if defined(BW_PLATFORM_WINDOWS)
 	#include <Windows.h>
 	#include <shellapi.h>
+
+	#include <cstdio>
 #else
 	#include <unistd.h>
 	#include <cctype>
@@ -31,6 +33,35 @@ namespace Bellows {
 			}
 		}
 		return false;
+#endif
+	}
+
+	void Platform::ConnectConsole(bool openIfNone)
+	{
+#if defined(BW_PLATFORM_WINDOWS)
+		auto isConnected = [](DWORD which)
+		{
+			const HANDLE handle = ::GetStdHandle(which);
+			return handle != nullptr && handle != INVALID_HANDLE_VALUE && ::GetFileType(handle) != FILE_TYPE_UNKNOWN;
+		};
+		const bool output = isConnected(STD_OUTPUT_HANDLE);
+		const bool error = isConnected(STD_ERROR_HANDLE);
+		const bool input = isConnected(STD_INPUT_HANDLE);
+		if (output && error)
+			return;
+		if (!::AttachConsole(ATTACH_PARENT_PROCESS) && !(openIfNone && ::AllocConsole()))
+			return;
+
+		// Only the streams that had nowhere to go move to the console; a redirected one stays redirected.
+		FILE* stream = nullptr;
+		if (!output)
+			freopen_s(&stream, "CONOUT$", "w", stdout);
+		if (!error)
+			freopen_s(&stream, "CONOUT$", "w", stderr);
+		if (!input)
+			freopen_s(&stream, "CONIN$", "r", stdin);
+#else
+		(void)openIfNone;
 #endif
 	}
 

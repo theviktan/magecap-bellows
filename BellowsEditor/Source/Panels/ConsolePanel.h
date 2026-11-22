@@ -31,6 +31,7 @@ namespace Bellows {
 			LogSource Source = LogSource::Core;
 			std::string Text;
 			bool IsCommand = false;		// Echo of a Python prompt line
+			bool Continues = false;		// A later line of the entry before it (a traceback): not counted again
 		};
 
 		EditorLayer& m_Editor;

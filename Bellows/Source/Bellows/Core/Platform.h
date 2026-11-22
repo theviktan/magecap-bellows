@@ -11,6 +11,13 @@ namespace Bellows {
 	public:
 		static bool IsDebuggerAttached();
 
+		// On Windows the editor and games are GUI programs, so starting one never opens a console window.
+		// Output still reaches a pipe (tests, the editor's game window, MageCap Forge) or a file it was
+		// sent to. When there is neither, this connects stdout and stderr to the console of the program
+		// that started it (a command prompt), and with 'openIfNone' (the --console flag) opens a new
+		// console when there is no such console. Does nothing on other systems.
+		static void ConnectConsole(bool openIfNone);
+
 		// Absolute path of the running executable and its folder.
 		static std::filesystem::path GetExecutablePath();
 		static std::filesystem::path GetExecutableDirectory();
