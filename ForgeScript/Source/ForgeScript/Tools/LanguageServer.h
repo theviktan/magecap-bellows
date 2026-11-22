@@ -123,6 +123,8 @@ namespace ForgeScript {
 		Json DocumentSymbols(const Json& params);
 		Json SignatureHelp(const Json& params);
 		Json References(const Json& params);
+		// The whole document laid out by FormatScript, or a reason in outError.
+		Json Format(const Json& params, std::string& outError);
 		// Rename and its check: a reason in outError when the name can't be renamed (then the reply is
 		// an error the editor shows).
 		Json PrepareRename(const Json& params, std::string& outError);

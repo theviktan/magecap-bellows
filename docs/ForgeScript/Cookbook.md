@@ -784,13 +784,13 @@ kind Monster
 
 	function think(sees_player)
 		match my mood
-			is Mood.idle then
-				if sees_player then set my mood to Mood.chasing end
-			is Mood.chasing then
-				if my health is below 3 then set my mood to Mood.fleeing end
-				if not sees_player then set my mood to Mood.idle end
-			is Mood.fleeing then
-				if my health is at least 3 then set my mood to Mood.idle end
+		is Mood.idle then
+			if sees_player then set my mood to Mood.chasing end
+		is Mood.chasing then
+			if my health is below 3 then set my mood to Mood.fleeing end
+			if not sees_player then set my mood to Mood.idle end
+		is Mood.fleeing then
+			if my health is at least 3 then set my mood to Mood.idle end
 		end
 	end
 end

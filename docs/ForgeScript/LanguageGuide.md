@@ -1509,6 +1509,10 @@ Things worth knowing:
 
 The debugger works in play mode in the MageCap Bellows editor. For checking a script without playing it, the editor (and `forgescript --check` outside it) underlines every mistake as you type. Once there are none, it also marks **warnings**: code that runs but probably doesn't do what you meant. For example, `set max to 10` in a script that also uses `max(a, b)` takes the name `max` away from the built-in, so `max(a, b)` would try to call 10. The warning says so and suggests another name, like `max_value`. A warning never stops a script. For a quick look at a value, `say` still works: it prints to the Console.
 
+### Tidying a script's layout
+
+`forgescript --format game.forge` fixes the indentation of a whole script: a tab for each block it's in, with `else`, `otherwise`, `catch` and a `match`'s `is` lines one level out, the way this guide writes them. It also removes spaces at the ends of lines and extra blank lines. It never changes your text, your comments or what the script does. In an editor connected to `forgescript --lsp`, its Format Document command does the same.
+
 ### Testing your scripts with `test` and `expect`
 
 A **test** is a small check that your code does what you meant. Write it in the same script, with
