@@ -1469,6 +1469,29 @@ end
 - An entity can't be saved, because entities only exist while the game plays. Save its name, or the values you need from it.
 - `real_time()` is real-world seconds since 1970; `time()` is seconds since play started.
 
+**Dates.** `date(moment)` turns a `real_time()` moment into a map you can read (`today.weekday`, `today.month_name`, `today.hour` ...), in the player's time zone; `date()` alone is now. `format_date(moment, "Weekday, Month DD")` writes one as text, and `days_between(from, to)` counts calendar days, which is what a daily reward needs:
+
+```forge
+when created
+	set save to load_data("rewards", { last_claim: 0, streak: 0 })
+	set days to days_between(save.last_claim, real_time())
+	if days is 1 then
+		add 1 to save.streak
+		say "Day {save.streak} in a row! Come back tomorrow."
+	else if days > 1 then
+		set save.streak to 1
+		say "Welcome back! Your streak starts again."
+	end
+	if days >= 1 then
+		set save.last_claim to real_time()
+		save_data("rewards", save)
+	end
+	say "Today is " + format_date(real_time(), "Weekday, Month DD")
+end
+```
+
+`utc_date(moment)` is the same as `date` but in UTC, so it gives the same answer on every computer (good for tests and leaderboards).
+
 ---
 
 ## 18. Finding bugs with the debugger

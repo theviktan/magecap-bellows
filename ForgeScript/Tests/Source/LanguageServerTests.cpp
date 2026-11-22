@@ -328,6 +328,49 @@ TEST_CASE("LanguageServerKnowsEnginePhrasesFromTheApiFile")
 	CHECK(replies[1].Get("params").GetString("message").find("not valid JSON") != std::string::npos);
 }
 
+TEST_CASE("LanguageServerOffersABuiltInTheEngineAlsoHasOnce")
+{
+	// real_time is a ForgeScript built-in and an engine function: completion lists it once, as the
+	// engine's, which is the one that runs in the game.
+	TempFolder folder("engine-builtin");
+	folder.Write("api.json", "{ \"functions\": [ { \"name\": \"real_time\", \"params\": [], \"returns\": \"float\", "
+		"\"doc\": \"Real-world seconds.\" } ], \"types\": [], \"phrases\": [] }");
+	LanguageServer server(LanguageServer::Options { folder.Path / "api.json" });
+	auto request = [&server](int id, const std::string& method, const Json& params)
+	{
+		Json message;
+		message.Set("jsonrpc", "2.0").Set("id", id).Set("method", method).Set("params", params);
+		for (const Json& reply : server.Handle(message))
+		{
+			if (!reply.Get("id").IsNull())
+				return reply.Get("result");
+		}
+		return Json();
+	};
+	request(1, "initialize", Json(Json::Object()));
+	const std::string uri = "file:///tmp/engine-builtin.forge";
+	Json document;
+	document.Set("uri", uri).Set("languageId", "forgescript").Set("version", 1).Set("text", "say real_t\n");
+	Json open;
+	open.Set("jsonrpc", "2.0").Set("method", "textDocument/didOpen").Set("params", Json().Set("textDocument", document));
+	server.Handle(open);
+	Json where;
+	where.Set("uri", uri);
+	Json position;
+	position.Set("line", 0).Set("character", 10);
+	Json params;
+	params.Set("textDocument", where).Set("position", position);
+	const Json result = request(2, "textDocument/completion", params);
+	const Json& items = result.IsArray() ? result : result.Get("items");
+	int realTime = 0;
+	for (const Json& entry : items.AsArray())
+	{
+		if (entry.GetString("label") == "real_time")
+			realTime++;
+	}
+	CHECK_EQ(realTime, 1);
+}
+
 TEST_CASE("LanguageServerResolvesUseLikeTheEngine")
 {
 	TempFolder project("project");

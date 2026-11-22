@@ -7,6 +7,13 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Dates and the real clock** (the last of Roadmap 2.0 Tier 4 #3's built-ins): `real_time()` is
+  seconds since 1970 by the computer's clock, which keeps counting while the game is paused or
+  closed; `date([moment])` and `utc_date([moment])` give a map of year, month, day, hour, minute,
+  second, weekday, weekday_number, month_name and day_of_year; `format_date(moment [, pattern])`
+  writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
+  rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
+  not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
 - **Text and lists that outgrow memory are a script error, not a crash** (audit S-8, older than 1.6.0).
   A loop doing `set s to s + s` or `set s to "{s}{s}"` now stops at 100 million bytes with "Joining
   this text would make more than 100000000 bytes of text", the same limit as repeating text. A
