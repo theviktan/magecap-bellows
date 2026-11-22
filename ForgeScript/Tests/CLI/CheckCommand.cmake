@@ -45,6 +45,11 @@ expect_run("json warnings" 0
 	"{\"file\":\"${warns}\",\"diagnostics\":[{\"line\":1,\"column\":5,\"endColumn\":14,\"severity\":\"warning\",\"message\":\"Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'.\"}]}"
 	ARGS --check --json "${warns}")
 expect_run("json no mistakes" 0 "{\"file\":\"${good}\",\"diagnostics\":[]}" ARGS --check --json "${good}")
+# A mistake whose message names the change carries it as "fix", for editors that read the JSON.
+set(fixable "${FOLDER}/fixable.forge")
+expect_run("json fix" 65
+	"{\"file\":\"${fixable}\",\"diagnostics\":[{\"line\":2,\"column\":11,\"endColumn\":14,\"severity\":\"error\",\"message\":\"Use 'to' instead of '=', like: set health to 100\",\"fix\":{\"title\":\"Change '=' to 'to'\",\"line\":2,\"column\":11,\"endLine\":2,\"endColumn\":12,\"newText\":\"to\"}}]}"
+	ARGS --check --json "${fixable}")
 
 # --api gives --check the engine's phrases and functions, as --lsp gets them: "hide menu" is an engine
 # phrase, not a mistake, and "hide (menu)" gets the bracket warning.

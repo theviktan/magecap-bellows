@@ -482,15 +482,158 @@ namespace ForgeScript {
 			return {};
 		}
 
+		// The quick fix for GuessedValueHint's 'x += 5', 'x++' and 'x--', when the whole statement is just that:
+		// the statement becomes 'add 5 to x' (and so on).
+		void FixGuessedValue(size_t targetIndex, const std::string& replacement, const std::string& title)
+		{
+			if (targetIndex != m_StatementStart || targetIndex >= m_Tokens.size() || m_Tokens[targetIndex].Type != TokenType::Identifier)
+				return;
+			size_t last = targetIndex;
+			while (last + 1 < m_Tokens.size() && m_Tokens[last + 1].Type != TokenType::Newline && m_Tokens[last + 1].Type != TokenType::Eof)
+				last++;
+			FixTokens(m_Tokens[targetIndex], m_Tokens[last], title, replacement);
+		}
+
+		void FixGuessedValueAtCurrent()
+		{
+			const Token& token = Current();
+			const Token& before = Previous();
+			if (m_Pos < 2)
+				return;
+			const size_t target = m_Pos - 2;
+			const std::string name(m_Tokens[target].Lexeme);
+			if (token.Type == TokenType::Equal)
+			{
+				const std::string amount = LineText(m_Pos + 1);
+				if (amount.empty())
+					return;
+				switch (before.Type)
+				{
+					case TokenType::Plus:  FixGuessedValue(target, "add " + amount + " to " + name, "Write: add " + amount + " to " + name); break;
+					case TokenType::Minus: FixGuessedValue(target, "take " + amount + " from " + name, "Write: take " + amount + " from " + name); break;
+					case TokenType::Star:  FixGuessedValue(target, "multiply " + name + " by " + amount, "Write: multiply " + name + " by " + amount); break;
+					case TokenType::Slash: FixGuessedValue(target, "divide " + name + " by " + amount, "Write: divide " + name + " by " + amount); break;
+					default: break;
+				}
+			}
+			else if (token.Type == TokenType::Plus && before.Type == TokenType::Plus)
+				FixGuessedValue(target, "add 1 to " + name, "Write: add 1 to " + name);
+		}
+
 		// ------------------------------------------------------------------ Errors
 
 		[[noreturn]] void ErrorAt(const Token& token, const std::string& message)
 		{
+			m_Error = CompileError();
 			m_Error.Message = message;
 			m_Error.File = m_FileName;
 			m_Error.Line = token.Line;
 			m_Error.Column = token.Column;
+			if (m_Fix.HasFix())
+			{
+				m_Error.FixTitle = std::move(m_Fix.FixTitle);
+				m_Error.FixLine = m_Fix.FixLine;
+				m_Error.FixColumn = m_Fix.FixColumn;
+				m_Error.FixEndLine = m_Fix.FixEndLine;
+				m_Error.FixEndColumn = m_Fix.FixEndColumn;
+				m_Error.FixText = std::move(m_Fix.FixText);
+			}
+			m_Fix = CompileError();
 			throw CompileAbort();
+		}
+
+		// --------------------------------------------------------------- Quick fixes
+		// A mistake that says exactly what to write instead carries that change for editors (CompileError's
+		// Fix fields). Set it right before the ErrorAt it belongs to.
+
+		static int EndColumnOf(const Token& token) { return token.Column + static_cast<int>(token.Lexeme.size()); }
+
+		// Replace the tokens from 'first' to 'last' (both included, on one line) with 'text'.
+		void FixTokens(const Token& first, const Token& last, std::string title, std::string text)
+		{
+			if (first.Line != last.Line || first.Lexeme.empty() || last.Lexeme.empty())
+				return;
+			m_Fix.FixTitle = std::move(title);
+			m_Fix.FixLine = m_Fix.FixEndLine = first.Line;
+			m_Fix.FixColumn = first.Column;
+			m_Fix.FixEndColumn = EndColumnOf(last);
+			m_Fix.FixText = std::move(text);
+		}
+
+		// The spaces or tabs a line starts with, read from the source the tokens point into.
+		static std::string IndentOf(const Token& onLine)
+		{
+			if (onLine.Lexeme.empty() || onLine.Column < 1)
+				return {};
+			const char* lineStart = onLine.Lexeme.data() - (onLine.Column - 1);
+			std::string indent;
+			for (const char* c = lineStart; c < onLine.Lexeme.data() && (*c == ' ' || *c == '\t'); c++)
+				indent += *c;
+			return indent;
+		}
+
+		// For "This 'if' is missing its 'end'": insert 'end', at the opener's indent, after the last line
+		// indented deeper than the opener (or the last line of the script).
+		size_t IndexOfToken(const Token& token) const
+		{
+			size_t index = 0;
+			while (index < m_Tokens.size() && !(m_Tokens[index].Line == token.Line && m_Tokens[index].Column == token.Column))
+				index++;
+			return index;
+		}
+
+		// The first word on the line of m_Tokens[index].
+		const Token& FirstOnLine(size_t index) const
+		{
+			while (index > 0 && m_Tokens[index - 1].Line == m_Tokens[index].Line && m_Tokens[index - 1].Type != TokenType::Newline)
+				index--;
+			return m_Tokens[index];
+		}
+
+		void FixMissingEnd(const Token& reported)
+		{
+			// When a block inside this one took an 'end' indented less than its own line, that 'end' was
+			// meant for an outer block, and the inner one is the block missing its 'end'.
+			const Token opener = m_MisplacedEndOpener.Line > reported.Line ? m_MisplacedEndOpener : reported;
+			m_MisplacedEndOpener = Token();
+			const size_t openerIndex = IndexOfToken(opener);
+			if (openerIndex >= m_Tokens.size())
+				return;
+			const Token& openerLine = FirstOnLine(openerIndex);
+			const Token* last = &opener;
+			bool lineStart = false;
+			for (size_t i = openerIndex + 1; i < m_Tokens.size(); i++)
+			{
+				const Token& token = m_Tokens[i];
+				if (token.Type == TokenType::Eof)
+					break;
+				if (token.Type == TokenType::Newline)
+				{
+					lineStart = true;
+					continue;
+				}
+				if (lineStart && token.Column <= openerLine.Column)
+					break;
+				lineStart = false;
+				last = &token;
+			}
+			if (last->Lexeme.empty())
+				return;
+			// The end of that line in the source, which ends where the Eof token points.
+			const char* sourceEnd = m_Tokens.back().Type == TokenType::Eof ? m_Tokens.back().Lexeme.data() : nullptr;
+			const char* lineEnd = last->Lexeme.data() + last->Lexeme.size();
+			if (!sourceEnd || lineEnd > sourceEnd)
+				return;
+			int column = EndColumnOf(*last);
+			while (lineEnd < sourceEnd && *lineEnd != '\n' && *lineEnd != '\r')
+			{
+				lineEnd++;
+				column++;
+			}
+			m_Fix.FixTitle = "Add the missing 'end'";
+			m_Fix.FixLine = m_Fix.FixEndLine = last->Line;
+			m_Fix.FixColumn = m_Fix.FixEndColumn = column;
+			m_Fix.FixText = "\n" + IndentOf(openerLine) + "end";
 		}
 
 		[[noreturn]] void ErrorAtCurrent(const std::string& message) { ErrorAt(Current(), message); }
@@ -1385,11 +1528,19 @@ namespace ForgeScript {
 		{
 			if (Check(TokenType::End))
 			{
+				// Cheap test first (the opener's line starts at or before the opener), the token search only then.
+				if (Current().Line > opener.Line && Current().Column < opener.Column)
+				{
+					const size_t openerIndex = IndexOfToken(opener);
+					if (openerIndex < m_Tokens.size() && Current().Column < FirstOnLine(openerIndex).Column)
+						m_MisplacedEndOpener = opener;
+				}
 				Advance();
 				m_ClosingPos = m_Pos;
 				m_ClosingLine = opener.Line;
 				return;
 			}
+			FixMissingEnd(opener);
 			ErrorAt(opener, std::string("This ") + what + " is missing its 'end'.");
 		}
 
@@ -1478,7 +1629,10 @@ namespace ForgeScript {
 
 			TargetChain target = ParseTarget();
 			if (Check(TokenType::Equal))
+			{
+				FixTokens(Current(), Current(), "Change '=' to 'to'", "to");
 				ErrorAtCurrent("Use 'to' instead of '=', like: set health to 100");
+			}
 			Consume(TokenType::To, "Expected 'to' after the name, like: set health to 100");
 			EmitAssign(target, [&]() { Expression(); });
 		}
@@ -1649,6 +1803,9 @@ namespace ForgeScript {
 				list += (list.empty() ? "" : ", ") + choice;
 				candidates.push_back(choice);
 			}
+			const std::string closest = ClosestName(member, candidates);
+			if (!closest.empty())
+				FixTokens(Peek(1), Peek(1), "Change to '" + closest + "'", closest);
 			ErrorAt(Peek(1), set + " has no choice '" + member + "'." + DidYouMean(member, candidates) + " Its choices are: " + list + ".");
 		}
 
@@ -1947,7 +2104,12 @@ namespace ForgeScript {
 				if (existing.Line == at.Line && existing.Column == at.Column && existing.Message == message)
 					return;
 			}
-			m_Options.Warnings->push_back({ message, m_FileName, at.Line, at.Column });
+			CompileError warning;
+			warning.Message = message;
+			warning.File = m_FileName;
+			warning.Line = at.Line;
+			warning.Column = at.Column;
+			m_Options.Warnings->push_back(std::move(warning));
 		}
 
 		// The type of a value that is written out plainly from tokens[first] to tokens[last] (a number,
@@ -2261,7 +2423,17 @@ namespace ForgeScript {
 			}
 
 			if (Check(TokenType::While) || Check(TokenType::Until))
+			{
+				const Token& repeatWord = Previous();
+				if (repeatWord.Line == Current().Line)
+				{
+					m_Fix.FixTitle = "Remove 'repeat'";
+					m_Fix.FixLine = m_Fix.FixEndLine = repeatWord.Line;
+					m_Fix.FixColumn = repeatWord.Column;
+					m_Fix.FixEndColumn = Current().Column;
+				}
 				ErrorAtCurrent("Write 'while ... do' or 'until ... do' without 'repeat' in front.");
+			}
 
 			BeginScope();
 			Expression();
@@ -2512,7 +2684,10 @@ namespace ForgeScript {
 			{
 				const std::string closest = ClosestName(name, c_Types);
 				if (!closest.empty())
+				{
+					FixTokens(Current(), Current(), "Change to '" + closest + "'", closest);
 					ErrorAtCurrent("'" + name + "' isn't a type. Did you mean '" + closest + "'?");
+				}
 			}
 			Advance();
 			return name;
@@ -2555,7 +2730,10 @@ namespace ForgeScript {
 						break;
 					}
 					if (Check(TokenType::Equal))
+					{
+						FixTokens(Current(), Current(), "Change '=' to 'is'", "is");
 						ErrorAtCurrent("Use 'is' for a default value, like: function attack(target, damage is 10)");
+					}
 					if (Match(TokenType::Is))
 					{
 						value.Start = m_Pos;
@@ -2808,7 +2986,10 @@ namespace ForgeScript {
 			while (!Check(TokenType::End))
 			{
 				if (Check(TokenType::Eof))
+				{
+					FixMissingEnd(opener);
 					ErrorAt(opener, "This kind is missing its 'end'.");
+				}
 
 				if (Check(TokenType::Set))
 				{
@@ -4044,6 +4225,7 @@ namespace ForgeScript {
 					case TokenType::Greater:      op = OpCode::Greater; break;
 					case TokenType::GreaterEqual: op = OpCode::GreaterEqual; break;
 					case TokenType::Equal:
+						FixTokens(Current(), Current(), "Change '=' to 'is'", "is");
 						ErrorAtCurrent("'=' is not used in ForgeScript. Use 'is' to compare, like: if health is 0");
 					default:
 						return;
@@ -4596,8 +4778,12 @@ namespace ForgeScript {
 				case TokenType::Eof:
 					// 'x--' ends the line after the second '-'.
 					if (Previous().Type == TokenType::Minus && m_Pos >= 2 && m_Tokens[m_Pos - 2].Type == TokenType::Minus && m_Pos >= 3)
+					{
+						const std::string target(m_Tokens[m_Pos - 3].Lexeme);
+						FixGuessedValue(m_Pos - 3, "take 1 from " + target, "Write: take 1 from " + target);
 						ErrorAtCurrent("Expected a value here, but the line ended. ForgeScript has no --. Write: take 1 from " +
 							std::string(m_Tokens[m_Pos - 3].Lexeme));
+					}
 					ErrorAtCurrent("Expected a value here, but the line ended.");
 				default:
 					break;
@@ -4605,6 +4791,7 @@ namespace ForgeScript {
 
 			if (token.IsWord())
 				ErrorAtCurrent("Expected a value here, but found the keyword '" + std::string(token.Lexeme) + "'.");
+			FixGuessedValueAtCurrent();
 			ErrorAtCurrent("Expected a value here, but found '" + std::string(token.Lexeme) + "'." + GuessedValueHint());
 		}
 
@@ -4717,6 +4904,8 @@ namespace ForgeScript {
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;
+		CompileError m_Fix;   // only its Fix fields: the change the next ErrorAt offers (see FixTokens)
+		Token m_MisplacedEndOpener;   // the last block that took an 'end' indented less than itself (see FixMissingEnd)
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.
 		static constexpr size_t c_MaxCollectedErrors = 100;

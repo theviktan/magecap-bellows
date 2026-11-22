@@ -125,6 +125,9 @@ namespace ForgeScript {
 		Json References(const Json& params);
 		// The whole document laid out by FormatScript, or a reason in outError.
 		Json Format(const Json& params, std::string& outError);
+		// textDocument/codeAction: the quick fixes of this script's mistakes on the asked lines.
+		Json CodeActions(const Json& params);
+		static Json MistakeRange(const std::string& text, const CompileError& mistake);
 		// Rename and its check: a reason in outError when the name can't be renamed (then the reply is
 		// an error the editor shows).
 		Json PrepareRename(const Json& params, std::string& outError);

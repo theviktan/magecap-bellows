@@ -437,7 +437,7 @@ namespace {
 	}
 
 	// The same shape as "BellowsEditor --check-script --json", so editors read both tools alike:
-	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message" } ] }.
+	// { "file": ..., "diagnostics": [ { "line", "column", "endColumn", "severity", "message", "fix"? } ] }.
 	// endColumn is one past the end of the mistake's line, since the checker reports where it starts.
 	// Warnings come after the mistakes, with "severity":"warning"; they never change the exit code.
 	std::string MistakesToJson(const std::string& fileName, const std::string& source, const std::vector<ForgeScript::CompileError>& mistakes,
@@ -470,7 +470,14 @@ namespace {
 				json += ",";
 			json += "{\"line\":" + std::to_string(line) + ",\"column\":" + std::to_string(column) +
 				",\"endColumn\":" + std::to_string(std::max(lineLength + 1, column + 1)) +
-				",\"severity\":\"" + (warning ? "warning" : "error") + "\",\"message\":" + JsonString(mistake.Message) + "}";
+				",\"severity\":\"" + (warning ? "warning" : "error") + "\",\"message\":" + JsonString(mistake.Message);
+			// A change the message names exactly, for an editor's quick-fix button (columns are 1-based bytes,
+			// the end not included; equal ends insert "newText").
+			if (mistake.HasFix())
+				json += ",\"fix\":{\"title\":" + JsonString(mistake.FixTitle) + ",\"line\":" + std::to_string(mistake.FixLine) +
+					",\"column\":" + std::to_string(mistake.FixColumn) + ",\"endLine\":" + std::to_string(mistake.FixEndLine) +
+					",\"endColumn\":" + std::to_string(mistake.FixEndColumn) + ",\"newText\":" + JsonString(mistake.FixText) + "}";
+			json += "}";
 		}
 		return json + "]}";
 	}

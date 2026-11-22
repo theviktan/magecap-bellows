@@ -959,6 +959,8 @@ namespace ForgeScript {
 			replies.push_back(Response(*id, SignatureHelp(params)));
 		else if (method == "textDocument/references")
 			replies.push_back(Response(*id, References(params)));
+		else if (method == "textDocument/codeAction")
+			replies.push_back(Response(*id, CodeActions(params)));
 		else if (method == "textDocument/formatting")
 		{
 			std::string error;
@@ -992,6 +994,9 @@ namespace ForgeScript {
 		capabilities.Set("documentSymbolProvider", true);
 		capabilities.Set("referencesProvider", true);
 		capabilities.Set("documentFormattingProvider", true);
+		Json codeActions;
+		codeActions.Set("codeActionKinds", Json(Json::Array { Json("quickfix") }));
+		capabilities.Set("codeActionProvider", std::move(codeActions));
 		Json rename;
 		rename.Set("prepareProvider", true);
 		capabilities.Set("renameProvider", std::move(rename));
@@ -1066,16 +1071,7 @@ namespace ForgeScript {
 		};
 
 		for (const CompileError& mistake : FindMistakesIn(document.Path, document.Text))
-		{
-			// The checker reports where a mistake starts; mark from there to the end of the line, the same
-			// span as the JSON check output's endColumn.
-			Json range = RangeOf(document.Text, mistake.Line, mistake.Column, 0);
-			const size_t index = static_cast<size_t>(std::clamp(mistake.Line - 1, 0, static_cast<int>(lines.size()) - 1));
-			const int start = static_cast<int>(range.Get("start").Get("character").AsNumber());
-			const int end = ToUtf16(lines[index], lines[index].size());
-			range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
-			add(std::move(range), mistake.Message);
-		}
+			add(MistakeRange(document.Text, mistake), mistake.Message);
 
 		// Warnings mark the word they are about. A script with mistakes gets none: fix those first.
 		if (diagnostics.AsArray().empty())
@@ -2319,6 +2315,60 @@ namespace ForgeScript {
 		Json result;
 		result.Set("changes", std::move(changes));
 		return result;
+	}
+
+	Json LanguageServer::MistakeRange(const std::string& text, const CompileError& mistake)
+	{
+		// The checker reports where a mistake starts; mark from there to the end of the line, the same
+		// span as the JSON check output's endColumn.
+		const std::vector<std::string_view> lines = SplitLines(text);
+		Json range = RangeOf(text, mistake.Line, mistake.Column, 0);
+		const size_t index = static_cast<size_t>(std::clamp(mistake.Line - 1, 0, static_cast<int>(lines.size()) - 1));
+		const int start = static_cast<int>(range.Get("start").Get("character").AsNumber());
+		const int end = ToUtf16(lines[index], lines[index].size());
+		range.Set("end", Position(static_cast<int>(index), std::max(end, start)));
+		return range;
+	}
+
+	Json LanguageServer::CodeActions(const Json& params)
+	{
+		Json actions = Json(Json::Array());
+		const std::string uri = params.Get("textDocument").GetString("uri");
+		const Document* document = FindDocument(uri);
+		if (!document)
+			return actions;
+		const int fromLine = static_cast<int>(params.Get("range").Get("start").Get("line").AsNumber());
+		const int toLine = static_cast<int>(params.Get("range").Get("end").Get("line").AsNumber());
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		auto position = [&lines](int line, int column)
+		{
+			const int index = std::clamp(line - 1, 0, static_cast<int>(lines.size()) - 1);
+			return Position(index, ToUtf16(lines[static_cast<size_t>(index)], static_cast<size_t>(std::max(column - 1, 0))));
+		};
+
+		const std::string fileName = PathToUtf8(document->Path.filename());
+		for (const CompileError& mistake : FindMistakesIn(document->Path, document->Text))
+		{
+			// A fix belongs to this script's own mistakes, offered on the line the mistake is shown on.
+			if (!mistake.HasFix() || mistake.File != fileName || mistake.Line - 1 < fromLine || mistake.Line - 1 > toLine)
+				continue;
+			Json diagnostic;
+			diagnostic.Set("range", MistakeRange(document->Text, mistake)).Set("severity", c_SeverityError).Set("source", "forgescript")
+				.Set("message", mistake.Message);
+			Json range;
+			range.Set("start", position(mistake.FixLine, mistake.FixColumn)).Set("end", position(mistake.FixEndLine, mistake.FixEndColumn));
+			Json edit;
+			edit.Set("range", std::move(range)).Set("newText", mistake.FixText);
+			Json changes;
+			changes.Set(uri, Json(Json::Array { std::move(edit) }));
+			Json workspaceEdit;
+			workspaceEdit.Set("changes", std::move(changes));
+			Json action;
+			action.Set("title", mistake.FixTitle).Set("kind", "quickfix").Set("isPreferred", true)
+				.Set("diagnostics", Json(Json::Array { std::move(diagnostic) })).Set("edit", std::move(workspaceEdit));
+			actions.Add(std::move(action));
+		}
+		return actions;
 	}
 
 	Json LanguageServer::Format(const Json& params, std::string& outError)

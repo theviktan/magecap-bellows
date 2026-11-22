@@ -14,6 +14,12 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **Quick fixes in the editor** (`textDocument/codeAction`). A mistake whose message says exactly
+  what to write instead comes with a one-click fix: `=` to `to` in `set`, `=` to `is` in a comparison
+  or a parameter's default, `x += 5` / `x++` / `x--` to `add 5 to x` / `add 1 to x` / `take 1 from x`,
+  `repeat while` to `while`, a misspelled type or choice to the suggested one, and a missing `end`
+  after the block's last indented line. `forgescript --check --json` gives the same change as a
+  `"fix"` field, for editors that read the JSON. Messages and what scripts do are unchanged.
 - **Fixed: `format_date` could make more text than the 100 MB limit** (audit S-10). A long pattern of
   `Month` or `Weekday` grows into longer names (up to 171 MB in the audit). It now stops with
   "format_date would make more than 100000000 bytes of text from this pattern", which `try` can

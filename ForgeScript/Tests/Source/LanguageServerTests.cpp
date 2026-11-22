@@ -908,6 +908,67 @@ TEST_CASE("LanguageServerRenameFindsScriptsThatArentOpen")
 	CHECK_FALSE(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
 }
 
+TEST_CASE("LanguageServerOffersQuickFixes")
+{
+	Session session;
+	const std::string uri = "file:///tmp/fixes.forge";
+	auto actionsOn = [&session, &uri](int line)
+	{
+		Json document;
+		document.Set("uri", uri);
+		Json position;
+		position.Set("line", line).Set("character", 0);
+		Json range;
+		range.Set("start", position).Set("end", position);
+		Json params;
+		params.Set("textDocument", document).Set("range", std::move(range)).Set("context", Json(Json::Object()));
+		return session.Request("textDocument/codeAction", params);
+	};
+	auto onlyEdit = [&uri](const Json& action)
+	{
+		const Json& edits = action.Get("edit").Get("changes").Get(uri);
+		REQUIRE_EQ(edits.AsArray().size(), static_cast<size_t>(1));
+		return edits.AsArray()[0];
+	};
+
+	// 'set x = 5': change '=' to 'to'.
+	session.Open(uri, "set x = 5\n");
+	Json actions = actionsOn(0);
+	REQUIRE_EQ(actions.AsArray().size(), static_cast<size_t>(1));
+	const Json& action = actions.AsArray()[0];
+	CHECK_EQ(action.GetString("title"), std::string("Change '=' to 'to'"));
+	CHECK_EQ(action.GetString("kind"), std::string("quickfix"));
+	CHECK_EQ(action.Get("diagnostics").AsArray()[0].GetString("message"), std::string("Use 'to' instead of '=', like: set health to 100"));
+	Json edit = onlyEdit(action);
+	CHECK_EQ(edit.GetString("newText"), std::string("to"));
+	CHECK_EQ(edit.Get("range").Get("start").Get("character").AsNumber(), 6.0);
+	CHECK_EQ(edit.Get("range").Get("end").Get("character").AsNumber(), 7.0);
+	// Not on other lines.
+	session.Change(uri, "say 1\nset x = 5\n", 2);
+	CHECK(actionsOn(0).AsArray().empty());
+	CHECK_EQ(actionsOn(1).AsArray().size(), static_cast<size_t>(1));
+
+	// A missing 'end' goes after the block's last indented line, at the opener's indent.
+	session.Change(uri, "set h to 1\nif h > 0 then\n\tsay \"\u00e9t\u00e9\"\nsay 2\n", 3);
+	actions = actionsOn(1);
+	REQUIRE_EQ(actions.AsArray().size(), static_cast<size_t>(1));
+	edit = onlyEdit(actions.AsArray()[0]);
+	CHECK_EQ(edit.GetString("newText"), std::string("\nend"));
+	CHECK_EQ(edit.Get("range").Get("start").Get("line").AsNumber(), 2.0);
+	// The end of the line in UTF-16 units (10), not bytes (12): a tab, "say ", and "été" in quotes.
+	CHECK_EQ(edit.Get("range").Get("start").Get("character").AsNumber(), 10.0);
+
+	// 'x++' becomes 'add 1 to x'.
+	session.Change(uri, "set x to 1\nx++\n", 4);
+	actions = actionsOn(1);
+	REQUIRE_EQ(actions.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(onlyEdit(actions.AsArray()[0]).GetString("newText"), std::string("add 1 to x"));
+
+	// No mistake, no fixes.
+	session.Change(uri, "set x to 1\n", 5);
+	CHECK(actionsOn(0).AsArray().empty());
+}
+
 TEST_CASE("LanguageServerFormatsADocument")
 {
 	Session session;
