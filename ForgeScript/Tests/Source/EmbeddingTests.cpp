@@ -705,3 +705,25 @@ TEST_CASE("WarningsForBracketsThatHideAPhrase")
 	// A script that makes its own 'hide' function means to call it.
 	CHECK(warnings("function hide(x)\n\treturn x\nend\nhide (5)\n").empty());
 }
+
+TEST_CASE("VMCountsInstructionsWhenAsked")
+{
+	const char* source = "set total to 0\nfor i from 1 to 100 do\n\tadd i to total\nend\n";
+	VM quiet;
+	REQUIRE(quiet.Load(source, "count.forge").Success);
+	CHECK_EQ(quiet.GetInstructionsRun(), static_cast<uint64_t>(0));
+
+	VMConfig config;
+	config.CountInstructions = true;
+	VM first(config);
+	VM second(config);
+	REQUIRE(first.Load(source, "count.forge").Success);
+	REQUIRE(second.Load(source, "count.forge").Success);
+	CHECK(first.GetInstructionsRun() > 300);
+	CHECK_EQ(first.GetInstructionsRun(), second.GetInstructionsRun());
+	// A run that ends in an error still counts what it did.
+	VM failing(config);
+	failing.SetErrorHandler([](const ScriptError&) {});
+	failing.Load("set x to 1\nfail \"stop\"\n", "fail.forge");
+	CHECK(failing.GetInstructionsRun() > 0);
+}

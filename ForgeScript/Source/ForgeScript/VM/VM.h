@@ -134,6 +134,9 @@ namespace ForgeScript {
 		// Stop a single run after this many instructions without a wait (0 = unlimited).
 		// Protects the game from frozen frames caused by "while true do ... end" without a wait.
 		uint64_t InstructionLimit = 0;
+		// Count every instruction executed, for GetInstructionsRun ('forgescript --benchmark'). Off by
+		// default: counting costs a little time on every instruction.
+		bool CountInstructions = false;
 	};
 
 	class VM
@@ -257,6 +260,10 @@ namespace ForgeScript {
 		uint64_t GetFrame() const { return m_Frame; }
 
 		size_t GetTaskCount() const { return m_Tasks.size(); }
+		// How many instructions every script of this VM has executed so far, when
+		// VMConfig::CountInstructions is on (or an InstructionLimit is set). The same script does the same
+		// count on every machine, which is what 'forgescript --benchmark' compares.
+		uint64_t GetInstructionsRun() const { return m_InstructionsRun; }
 		void CancelTasks(Module* module);
 
 		// ---------------------------------------------------------- Debugger
@@ -445,6 +452,7 @@ namespace ForgeScript {
 		DebugHandler m_DebugHandler;
 		std::unordered_map<std::string, std::vector<int>> m_Breakpoints; // Sorted lines per script.
 		bool m_DebugActive = false;
+		uint64_t m_InstructionsRun = 0;
 		bool m_PauseRequested = false;
 		size_t m_SteppingTasks = 0;
 		Task* m_StoppedTask = nullptr;

@@ -114,6 +114,7 @@ namespace {
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --test <script.forge>   run the script, then its tests ('test \"name\" ... end')\n"
 			"  forgescript --format <script.forge> lay the script out the standard way (rewrites the file)\n"
+			"  forgescript --benchmark <scripts>   run each script 5 times: its instructions and median time\n"
 			"      --check                         change nothing; exit with 1 when it needs formatting\n"
 			"      --stdin                         read the script from standard input, print the result\n"
 			"  forgescript --version               show the version\n";
@@ -239,6 +240,69 @@ namespace {
 			}
 		}
 		return hadError ? 70 : 0;
+	}
+
+	// forgescript --benchmark: runs each script five times, each in a new VM with game time stepping by
+	// 1/60 second, and prints one line per script: the instructions it executed (the same on every
+	// machine, so tests can compare them) and the median wall time (which isn't). 70 when a script
+	// fails or doesn't do the same count every run, 66 when one can't be read.
+	int RunBenchmarks(const std::vector<std::string>& fileNames)
+	{
+		constexpr int c_Runs = 5;
+		int exitCode = 0;
+		for (const std::string& fileName : fileNames)
+		{
+			std::string source;
+			if (!ReadFile(fileName, source))
+			{
+				std::cerr << "Could not open '" << fileName << "'." << std::endl;
+				return 66;
+			}
+			const std::filesystem::path path(fileName);
+			std::vector<double> milliseconds;
+			uint64_t instructions = 0;
+			bool failed = false;
+			for (int run = 0; run < c_Runs && !failed; run++)
+			{
+				ForgeScript::VMConfig config;
+				config.CountInstructions = true;
+				ForgeScript::VM vm(config);
+				InstallFileLoader(vm, ForgeScript::FindUseFolder(fileName));
+				vm.SetErrorHandler([&failed](const ForgeScript::ScriptError& error)
+				{
+					failed = true;
+					std::cerr << error.ToString() << std::endl;
+				});
+				// What the script says isn't part of the measurement.
+				vm.SetPrintHandler([](const std::string&) {});
+				const auto start = std::chrono::steady_clock::now();
+				if (!vm.Load(source, ForgeScript::PathToUtf8(path.filename())).Success)
+				{
+					failed = true;
+					break;
+				}
+				while (vm.GetTaskCount() > 0 && vm.GetTime() < 60.0 * 60.0)
+					vm.Update(1.0 / 60.0);
+				milliseconds.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+				if (run > 0 && vm.GetInstructionsRun() != instructions)
+				{
+					std::cerr << fileName << ": ran " << vm.GetInstructionsRun() << " instructions, but " << instructions <<
+						" the first time. A benchmark must do the same work every run (use random_seed)." << std::endl;
+					failed = true;
+				}
+				instructions = vm.GetInstructionsRun();
+			}
+			if (failed)
+			{
+				exitCode = 70;
+				continue;
+			}
+			std::sort(milliseconds.begin(), milliseconds.end());
+			char time[32];
+			std::snprintf(time, sizeof(time), "%.1f", milliseconds[milliseconds.size() / 2]);
+			std::cout << ForgeScript::PathToUtf8(path.filename()) << " instructions " << instructions << " median " << time << " ms" << std::endl;
+		}
+		return exitCode;
 	}
 
 	// Runs the script, then each of its tests in order: PASS or FAIL with the reason, then a summary.
@@ -477,6 +541,8 @@ int main(int argc, char** argv)
 	bool check = false;
 	bool test = false;
 	bool format = false;
+	bool benchmark = false;
+	std::vector<std::string> files;
 	bool lsp = false;
 	std::filesystem::path apiFile;
 	bool apiGiven = false;
@@ -502,6 +568,8 @@ int main(int argc, char** argv)
 			test = true;
 		else if (std::strcmp(argv[i], "--format") == 0)
 			format = true;
+		else if (std::strcmp(argv[i], "--benchmark") == 0)
+			benchmark = true;
 		else if (std::strcmp(argv[i], "--lsp") == 0)
 			lsp = true;
 		else if (std::strcmp(argv[i], "--api") == 0)
@@ -534,7 +602,20 @@ int main(int argc, char** argv)
 			return 64;
 		}
 		else
+		{
 			file = argv[i];
+			files.push_back(argv[i]);
+		}
+	}
+
+	if (benchmark)
+	{
+		if (check || test || format || lsp || realtime || apiGiven || checkOptions.Json || checkOptions.FromStdin || files.empty())
+		{
+			std::cerr << "--benchmark takes only the scripts to measure, like: forgescript --benchmark calls.forge lists.forge" << std::endl;
+			return 64;
+		}
+		return RunBenchmarks(files);
 	}
 
 	if (format)
