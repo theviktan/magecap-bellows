@@ -73,6 +73,9 @@ namespace Bellows {
 		project->m_Config.Name = name;
 		project->m_ProjectFileName = name + FileExtension;
 		project->m_Config.InputActions = InputMap::GetDefaultActions();
+		// New projects turn +Z-front models (Blender's and glTF's convention) to face forward; projects
+		// made before 0.5.0 have no setting and keep -Z, so nothing already placed turns around.
+		project->m_Config.ModelFrontFaces = ModelFront::PositiveZ;
 
 		const std::filesystem::path assets = project->GetAssetDirectory();
 		for (const char* folder : { "Scenes", "Scripts", "Models", "Materials", "Textures", "Environments", "Audio", "Prefabs" })

@@ -28,7 +28,8 @@ namespace Bellows {
 		// Named input actions scripts ask for (is_action_down("jump")); new projects get InputMap's defaults.
 		InputActionMap InputActions;
 
-		// Which way the front of a model with no '.bimport' file faces (see MeshImportSettings).
+		// Which way the front of a model with no '.bimport' file faces (see MeshImportSettings). New
+		// projects start at +Z; a project file without the setting (made before 0.5.0) means -Z.
 		ModelFront ModelFrontFaces = ModelFront::NegativeZ;
 	};
 
