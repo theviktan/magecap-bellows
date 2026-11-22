@@ -2230,11 +2230,18 @@ namespace ForgeScript {
 		if (op == OpCode::Multiply && IsObjectType(a, ObjectType::String) && b.IsNumber())
 		{
 			double count = b.AsNumber();
-			if (count < 0 || count != std::floor(count))
+			if (count < 0 || count != std::floor(count) || !std::isfinite(count))
 				return Fail("Text can only be repeated a whole number of times.");
+			const std::string& text = As<String>(a)->Text;
+			// One step must not build gigabytes (or loop forever on infinity) where the instruction limit
+			// can't stop it.
+			if (!text.empty() && count > static_cast<double>(c_MaxRepeatedTextBytes / text.size()))
+				return Fail("Repeating this text " + FormatNumber(count) + " times would make more than " +
+					FormatNumber(static_cast<double>(c_MaxRepeatedTextBytes)) + " bytes of text.");
 			std::string result;
-			for (double i = 0; i < count; i++)
-				result += As<String>(a)->Text;
+			result.reserve(text.size() * static_cast<size_t>(count));
+			for (double i = 0; i < count && !text.empty(); i++)
+				result += text;
 			outValue = MakeText(result);
 			return true;
 		}

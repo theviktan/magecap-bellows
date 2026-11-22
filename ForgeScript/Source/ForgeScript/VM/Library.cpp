@@ -731,7 +731,7 @@ namespace ForgeScript {
 		// true with chance p (0 never, 1 always): if random_chance(0.25) then drop a coin.
 		RegisterFunction("random_chance", 1, [](CallContext& c)
 		{
-			const double chance = c.Number(0);
+			const double chance = FiniteNumber(c, 0, "random_chance");
 			return Value::FromBool(std::uniform_real_distribution<double>(0.0, 1.0)(c.GetVM().GetRandom()) < chance);
 		});
 		// A direction of length 1, any way round with the same chance.
@@ -809,8 +809,8 @@ namespace ForgeScript {
 			}
 			if (c.Count() < 3 || c.Count() > 4)
 				c.Error("color needs red, green and blue (and alpha) from 0 to 1, like: color(1, 0.5, 0), or a text like color(\"#ff8800\").");
-			return vm.MakeList({ Value::FromNumber(c.Number(0)), Value::FromNumber(c.Number(1)), Value::FromNumber(c.Number(2)),
-				Value::FromNumber(c.Count() > 3 ? c.Number(3) : 1.0) });
+			return vm.MakeList({ Value::FromNumber(FiniteNumber(c, 0, "color")), Value::FromNumber(FiniteNumber(c, 1, "color")),
+				Value::FromNumber(FiniteNumber(c, 2, "color")), Value::FromNumber(c.Count() > 3 ? FiniteNumber(c, 3, "color") : 1.0) });
 		});
 		// hsv(hue, saturation, value [, alpha]), each from 0 to 1, as an [r, g, b, a] color. The hue goes
 		// round the color wheel: 0 red, 1/3 green, 2/3 blue, and 1 red again.
@@ -831,7 +831,7 @@ namespace ForgeScript {
 			const double t = value * (1 - saturation * (1 - part));
 			const double table[6][3] = { { value, t, p }, { q, value, p }, { p, value, t }, { p, q, value }, { t, p, value }, { value, p, q } };
 			return c.GetVM().MakeList({ Value::FromNumber(table[index][0]), Value::FromNumber(table[index][1]),
-				Value::FromNumber(table[index][2]), Value::FromNumber(c.Count() > 3 ? c.Number(3) : 1.0) });
+				Value::FromNumber(table[index][2]), Value::FromNumber(c.Count() > 3 ? FiniteNumber(c, 3, "hsv") : 1.0) });
 		});
 
 		// ------------------------------------------------------------------ Time
@@ -1516,9 +1516,14 @@ namespace ForgeScript {
 			int64_t count = c.Integer(0);
 			if (count < 0)
 				c.Error("repeat needs a count of 0 or more.");
+			const std::string& text = selfText(c);
+			if (!text.empty() && static_cast<uint64_t>(count) > c_MaxRepeatedTextBytes / text.size())
+				c.Error("Repeating this text " + std::to_string(count) + " times would make more than " +
+					FormatNumber(static_cast<double>(c_MaxRepeatedTextBytes)) + " bytes of text.");
 			std::string result;
-			for (int64_t i = 0; i < count; i++)
-				result += selfText(c);
+			result.reserve(text.size() * static_cast<size_t>(count));
+			for (int64_t i = 0; i < count && !text.empty(); i++)
+				result += text;
 			return c.GetVM().MakeText(result);
 		});
 		// "7".pad_start(3, "0") is "007". Widths count letters, not bytes, so "é" is one.

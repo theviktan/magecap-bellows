@@ -131,6 +131,16 @@ for each bad in ["#", "#ff", "#gggggg", "#ff00ff00f", "-fff", "+fff", "#ff 0f0",
 	if problem_of(function() color(bad) end).starts_with("'") then add 1 to refused end
 end
 say refused                                                 # expect: 8
+say problem_of(function() color(1, infinity, 0) end)        # expect: color needs ordinary numbers, but value 2 is infinity.
+say problem_of(function() color(1, 0, 0, infinity - infinity) end)   # expect: color needs ordinary numbers, but value 4 is not a number.
+say problem_of(function() hsv(0, 1, 1, infinity) end)       # expect: hsv needs ordinary numbers, but value 4 is infinity.
+say problem_of(function() random_chance(infinity - infinity) end)   # expect: random_chance needs ordinary numbers, but value 1 is not a number.
+# Repeating text can't build gigabytes in one step, or loop forever (audit S-6).
+say problem_of(function() "ab" * infinity end)              # expect: Text can only be repeated a whole number of times.
+say problem_of(function() "ab" * 1e9 end)                   # expect: Repeating this text 1000000000 times would make more than 100000000 bytes of text.
+say problem_of(function() "ab".repeat(1e9) end)             # expect: Repeating this text 1000000000 times would make more than 100000000 bytes of text.
+say ("" * 1e15).length                                      # expect: 0
+say ("ab" * 3)                                              # expect: ababab
 say "émile".capitalize()                                    # expect: émile
 say "été à paris".title()                                   # expect: été à Paris
 
