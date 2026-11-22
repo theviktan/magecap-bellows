@@ -23,6 +23,11 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Fixed before release (Audit 4):** the list words (`the`, `first of`, `item 2 of`) and
+  `every`/`any` count toward the 256-level nesting limit, so a very long chain is a mistake
+  instead of a crash (S-4). A function with many different values, like a long `choices` list, no
+  longer takes quadratic time to compile: 20,000 choices check in a fraction of a second instead
+  of half a minute (S-5). A timer with a negative time (`every -1 seconds`) gets a warning.
 - **Optional types** (Tier 2 #11): `function heal(amount as number, who as text is "you")`. Types
   never change what runs: `--check`, the language server and the editor warn when a call to one of
   the script's functions gives a plain value of another type ("'heal' takes a number for 'amount'

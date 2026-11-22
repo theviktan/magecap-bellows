@@ -12,6 +12,11 @@
 
 namespace ForgeScript {
 
+	bool ComparedByContents(const Object* object)
+	{
+		return object->GetType() == ObjectType::Vector || object->GetType() == ObjectType::NativeObject;
+	}
+
 	bool Value::operator==(const Value& other) const
 	{
 		if (m_Type != other.m_Type)
