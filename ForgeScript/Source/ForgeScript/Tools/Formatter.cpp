@@ -59,15 +59,6 @@ namespace ForgeScript {
 			return true;
 		}
 
-		// TokenOpensBlock, except that 'is a function' (a type test) opens nothing, as 'is a kind' doesn't.
-		bool OpensBlock(const std::vector<Token>& tokens, size_t i)
-		{
-			if (tokens[i].Type == TokenType::Function && i > 0 && tokens[i - 1].Type == TokenType::Identifier &&
-				(tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"))
-				return false;
-			return TokenOpensBlock(tokens, i);
-		}
-
 		// Something open when a line starts: a block (with the kinds whose middle lines sit one level
 		// out) or a bracket, and the line that opened it.
 		struct Open
@@ -255,7 +246,7 @@ namespace ForgeScript {
 						}
 						break;
 					default:
-						if (OpensBlock(tokens, i))
+						if (TokenOpensBlock(tokens, i))
 						{
 							Open::Type kind = Open::Type::Block;
 							if (token.Type == TokenType::If)

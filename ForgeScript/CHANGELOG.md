@@ -13,6 +13,12 @@ with new language or tool features, the patch number with fixes.
   `ForgeScriptBenchmarks` test fails when one's instruction count grows by more than 5%. Hosts can
   count too: `VMConfig::CountInstructions` and `VM::GetInstructionsRun` (off by default, since
   counting costs a little time).
+- **Fixed: `is a function` inside a function hid the rest of the script.** The compiler's look-ahead
+  read the `function` of the type test `x is a function` as the start of a function block, so the
+  `end` that closed the real function was taken as that block's, and every line after the function
+  silently never ran (with no mistake reported). `is a function` and `is an function` now open
+  nothing, as `is a kind` already didn't, in the compiler, the lexer and the editor tools. Scripts
+  that never wrote `is a function` inside a function or kind are unchanged.
 - **`forgescript --format`** (Roadmap 2.0 Tier 4 #4) lays a script out the standard way: a tab per
   open block or bracket, `else`/`otherwise`/a match's `is`/`catch`/`finally` one level out, carried-on
   lines one further, no spaces at line ends, at most two blank lines, one line break at the end. It

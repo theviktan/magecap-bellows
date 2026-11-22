@@ -49,8 +49,8 @@ namespace Bellows {
 	};
 
 	// A font loaded from a TrueType or OpenType file (.ttf, .otf), with a multi-channel signed distance
-	// field (MSDF) atlas of its characters: glyph outlines come from stb_truetype, the distance fields
-	// from msdfgen, and the atlas is packed with stb_rect_pack. Text drawn from it stays crisp at any
+	// field (MSDF) atlas of its characters: metrics and outlines come from FontFile (which checks every
+	// read, so a damaged file is refused rather than crashing), the distance fields from msdfgen, and the atlas is packed with stb_rect_pack. Text drawn from it stays crisp at any
 	// size, in screen and world space. The atlas is RGBA: RGB hold the multi-channel distance, A the
 	// true distance (for outlines and shadows). The GPU texture is made on first use. Use a font from
 	// the main thread (it remembers which missing characters it has reported).
@@ -93,7 +93,7 @@ namespace Bellows {
 		bool Build(const FontAtlasSettings& settings);
 	private:
 		std::string m_Name;
-		std::vector<uint8_t> m_FileData;
+		std::vector<uint8_t> m_FileData;	// The file's bytes, which m_Info's FontFile reads (kerning looks them up later)
 		struct FontInfo;
 		Scope<FontInfo> m_Info;
 		float m_Scale = 1.0f;	// Font units to ems

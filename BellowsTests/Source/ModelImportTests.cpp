@@ -145,3 +145,33 @@ TEST_CASE("Model front names, and the project's ModelFrontFaces is saved and rea
 	REQUIRE(older);
 	CHECK(older->GetConfig().ModelFrontFaces == ModelFront::NegativeZ);
 }
+
+TEST_CASE("Damaged glTF sizes and offsets are refused before anything is read or allocated")
+{
+	const std::filesystem::path folder = MakeModelFolder("DamagedModels");
+	const auto import = [&](const char* name, const std::string& buffers, const std::string& accessors)
+	{
+		const std::filesystem::path model = folder / name;
+		REQUIRE(FileSystem::WriteTextFile(model, R"({
+			"asset": { "version": "2.0" },
+			"nodes": [ { "mesh": 0 } ],
+			"meshes": [ { "primitives": [ { "attributes": { "POSITION": 0 } } ] } ],
+			"buffers": )" + buffers + R"(,
+			"bufferViews": [ { "buffer": 0, "byteLength": 36 } ],
+			"accessors": )" + accessors + "}"));
+		return MeshImporter::ImportGLTF(model);
+	};
+	const std::string triangle = R"([ { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [ -0.5, 0, 1 ], "max": [ 0.5, 1, 2 ] } ])";
+	const std::string bin = R"([ { "uri": "Front.bin", "byteLength": 36 } ])";
+	REQUIRE(import("Valid.gltf", bin, triangle));
+
+	// A buffer bigger than its file (here 2^62 bytes) would be allocated in full before the read failed.
+	CHECK_FALSE(import("HugeBuffer.gltf", R"([ { "uri": "Front.bin", "byteLength": 4611686018427387904 } ])", triangle));
+	// The same for base64 data: 3 bytes per 4 characters, at most.
+	CHECK_FALSE(import("HugeDataBuffer.gltf", R"([ { "uri": "data:application/octet-stream;base64,AAAA", "byteLength": 36 } ])", triangle));
+	// An accessor without a buffer view is all zeros and may claim any count.
+	CHECK_FALSE(import("HugeCount.gltf", bin, R"([ { "componentType": 5126, "count": 4000000000, "type": "VEC3", "min": [ 0, 0, 0 ], "max": [ 0, 0, 0 ] } ])"));
+	// Floats must start on a multiple of 4 bytes.
+	CHECK_FALSE(import("Misaligned.gltf", R"([ { "uri": "Front.bin", "byteLength": 36 } ])",
+		R"([ { "bufferView": 0, "byteOffset": 2, "componentType": 5126, "count": 2, "type": "VEC3", "min": [ 0, 0, 0 ], "max": [ 1, 1, 1 ] } ])"));
+}

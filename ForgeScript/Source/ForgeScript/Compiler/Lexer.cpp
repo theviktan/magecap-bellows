@@ -557,12 +557,13 @@ namespace ForgeScript {
 				return m_PreviousType != TokenType::Else && m_PreviousType != TokenType::Otherwise &&
 					!IfPicksAValue(m_Tokens, m_Tokens.size());
 			case TokenType::While: case TokenType::Repeat:
-			case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
+			case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 				return true;
 			// 'wait until' and 'wait for' are waits, not loops.
 			case TokenType::Until: case TokenType::For:
 				return m_PreviousType != TokenType::Wait;
-			case TokenType::Kind:
+			// 'x is a function' and 'x is a kind' test a value's type; they open nothing.
+			case TokenType::Function: case TokenType::Kind:
 				return !(m_PreviousType == TokenType::Identifier && (m_PreviousLexeme == "a" || m_PreviousLexeme == "an"));
 			// A timer written inside an anonymous function within brackets: its 'end' is its own.
 			case TokenType::Identifier:

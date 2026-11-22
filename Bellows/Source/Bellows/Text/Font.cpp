@@ -4,11 +4,10 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Renderer/Texture.h"
+#include "Bellows/Text/FontFile.h"
 
 #include <msdfgen.h>
-// The packer first, as in VendorImplementations.cpp.
 #include <stb_rect_pack.h>
-#include <stb_truetype.h>
 
 #include <algorithm>
 #include <atomic>
@@ -19,8 +18,8 @@ namespace Bellows {
 
 	struct Font::FontInfo
 	{
-		stbtt_fontinfo Info{};
-		std::unordered_map<uint32_t, int> GlyphIndices;	// Code point to the font's glyph index
+		FontFile File;
+		std::unordered_map<uint32_t, uint32_t> GlyphIndices;	// Code point to the font's glyph index
 	};
 
 	namespace {
@@ -39,44 +38,39 @@ namespace Bellows {
 			std::vector<uint8_t> Pixels;	// RGBA8, rows from the top
 		};
 
-		// Turns stb_truetype's outline into msdfgen's shape, in ems.
-		bool BuildShape(const stbtt_fontinfo& info, int glyphIndex, float scale, msdfgen::Shape& shape)
+		// Turns a glyph's outline into msdfgen's shape, in ems.
+		bool BuildShape(const FontFile& file, uint32_t glyphIndex, float scale, msdfgen::Shape& shape)
 		{
-			stbtt_vertex* vertices = nullptr;
-			const int count = stbtt_GetGlyphShape(&info, glyphIndex, &vertices);
-			if (count <= 0)
+			std::vector<OutlineStep> steps;
+			if (!file.GetOutline(glyphIndex, steps) || steps.empty())
 				return false;
 
 			msdfgen::Contour* contour = nullptr;
 			msdfgen::Point2 pen;
-			const auto point = [scale](float x, float y) { return msdfgen::Point2(x * scale, y * scale); };
-			for (int i = 0; i < count; i++)
+			const auto point = [scale](int32_t x, int32_t y) { return msdfgen::Point2(static_cast<float>(x) * scale, static_cast<float>(y) * scale); };
+			for (const OutlineStep& step : steps)
 			{
-				const stbtt_vertex& vertex = vertices[i];
-				const msdfgen::Point2 to = point(vertex.x, vertex.y);
-				switch (vertex.type)
+				const msdfgen::Point2 to = point(step.X, step.Y);
+				switch (step.Type)
 				{
-					case STBTT_vmove:
+					case OutlineSegment::Move:
 						contour = &shape.addContour();
 						break;
-					case STBTT_vline:
+					case OutlineSegment::Line:
 						if (contour && to != pen)
 							contour->addEdge(msdfgen::EdgeHolder(pen, to));
 						break;
-					case STBTT_vcurve:
+					case OutlineSegment::Quadratic:
 						if (contour)
-							contour->addEdge(msdfgen::EdgeHolder(pen, point(vertex.cx, vertex.cy), to));
+							contour->addEdge(msdfgen::EdgeHolder(pen, point(step.ControlX, step.ControlY), to));
 						break;
-					case STBTT_vcubic:
+					case OutlineSegment::Cubic:
 						if (contour)
-							contour->addEdge(msdfgen::EdgeHolder(pen, point(vertex.cx, vertex.cy), point(vertex.cx1, vertex.cy1), to));
-						break;
-					default:
+							contour->addEdge(msdfgen::EdgeHolder(pen, point(step.ControlX, step.ControlY), point(step.Control2X, step.Control2Y), to));
 						break;
 				}
 				pen = to;
 			}
-			stbtt_FreeShape(&info, vertices);
 
 			// Drop contours a stray move left empty, then fix outlines drawn in the wrong direction.
 			shape.contours.erase(std::remove_if(shape.contours.begin(), shape.contours.end(),
@@ -130,15 +124,15 @@ namespace Bellows {
 		Ref<Font> font(new Font());
 		font->m_Name = name;
 		font->m_FileData = std::move(data);
-		font->m_Info = CreateScope<FontInfo>();
 
-		const unsigned char* bytes = font->m_FileData.data();
-		const int offset = font->m_FileData.empty() ? -1 : stbtt_GetFontOffsetForIndex(bytes, 0);
-		if (offset < 0 || !stbtt_InitFont(&font->m_Info->Info, bytes, offset))
+		std::string error;
+		std::optional<FontFile> file = FontFile::Parse(font->m_FileData.data(), font->m_FileData.size(), error);
+		if (!file)
 		{
-			BW_CORE_ERROR("Font: '{}' is not a TrueType or OpenType font", name);
+			BW_CORE_ERROR("Font: '{}' can't be read: {}", name, error);
 			return nullptr;
 		}
+		font->m_Info = CreateScope<FontInfo>(FontInfo { std::move(*file), {} });
 		if (!font->Build(settings))
 			return nullptr;
 		return font;
@@ -149,14 +143,13 @@ namespace Bellows {
 
 	bool Font::Build(const FontAtlasSettings& settings)
 	{
-		const stbtt_fontinfo& info = m_Info->Info;
-		m_Scale = stbtt_ScaleForMappingEmToPixels(&info, 1.0f);
+		const FontFile& file = m_Info->File;
+		m_Scale = 1.0f / static_cast<float>(file.GetUnitsPerEm());
 		m_GlyphSize = std::max(settings.GlyphSize, 8.0f);
 		m_DistanceRange = std::max(settings.DistanceRange, 1.0f);
 
 		int ascent = 0, descent = 0, lineGap = 0;
-		if (!stbtt_GetFontVMetricsOS2(&info, &ascent, &descent, &lineGap))
-			stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
+		file.GetVerticalMetrics(ascent, descent, lineGap);
 		m_Ascender = static_cast<float>(ascent) * m_Scale;
 		m_Descender = static_cast<float>(descent) * m_Scale;
 		m_LineHeight = static_cast<float>(ascent - descent + lineGap) * m_Scale;
@@ -166,13 +159,13 @@ namespace Bellows {
 		const float padding = m_DistanceRange * 0.5f + 1.0f;
 		const double range = m_DistanceRange / m_GlyphSize;
 
-		std::vector<std::pair<uint32_t, int>> wanted;	// Code point, glyph index (0 = the missing glyph)
-		wanted.emplace_back(0u, 0);
+		std::vector<std::pair<uint32_t, uint32_t>> wanted;	// Code point, glyph index (0 = the missing glyph)
+		wanted.emplace_back(0u, 0u);
 		for (const CodepointRange& codepoints : settings.Ranges)
 		{
 			for (uint32_t codepoint = codepoints.First; codepoint <= codepoints.Last && codepoint <= 0x10FFFF; codepoint++)
 			{
-				const int glyphIndex = stbtt_FindGlyphIndex(&info, static_cast<int>(codepoint));
+				const uint32_t glyphIndex = file.FindGlyph(codepoint);
 				if (glyphIndex != 0 && !m_Info->GlyphIndices.contains(codepoint))
 				{
 					m_Info->GlyphIndices[codepoint] = glyphIndex;
@@ -189,16 +182,22 @@ namespace Bellows {
 			const auto [codepoint, glyphIndex] = wanted[index];
 			FontGlyph& glyph = glyphList[index];
 			glyph.Codepoint = codepoint;
-			int advance = 0, leftBearing = 0;
-			stbtt_GetGlyphHMetrics(&info, glyphIndex, &advance, &leftBearing);
-			glyph.Advance = static_cast<float>(advance) * m_Scale;
+			glyph.Advance = static_cast<float>(file.GetAdvance(glyphIndex)) * m_Scale;
 
 			msdfgen::Shape shape;
-			if (!BuildShape(info, glyphIndex, m_Scale, shape))
+			if (!BuildShape(file, glyphIndex, m_Scale, shape))
 				return;
 			const msdfgen::Shape::Bounds bounds = shape.getBounds();
-			const int width = static_cast<int>(std::ceil((bounds.r - bounds.l) * m_GlyphSize + 2.0f * padding));
-			const int height = static_cast<int>(std::ceil((bounds.t - bounds.b) * m_GlyphSize + 2.0f * padding));
+			const double fieldWidth = std::ceil((bounds.r - bounds.l) * m_GlyphSize + 2.0f * padding);
+			const double fieldHeight = std::ceil((bounds.t - bounds.b) * m_GlyphSize + 2.0f * padding);
+			// A glyph bigger than the largest atlas (a damaged outline) could never be placed in one.
+			if (!(fieldWidth >= 1.0 && fieldWidth <= c_MaxAtlasSize && fieldHeight >= 1.0 && fieldHeight <= c_MaxAtlasSize))
+			{
+				BW_CORE_WARN("Font: '{}' has a glyph for U+{:04X} too big for its atlas; it is drawn as empty", m_Name, codepoint);
+				return;
+			}
+			const int width = static_cast<int>(fieldWidth);
+			const int height = static_cast<int>(fieldHeight);
 			const msdfgen::Vector2 translate(-bounds.l + padding / m_GlyphSize, -bounds.b + padding / m_GlyphSize);
 
 			msdfgen::Bitmap<float, 4> field(width, height);
@@ -330,7 +329,7 @@ namespace Bellows {
 		const auto leftIndex = m_Info->GlyphIndices.find(left);
 		const auto rightIndex = m_Info->GlyphIndices.find(right);
 		if (leftIndex != m_Info->GlyphIndices.end() && rightIndex != m_Info->GlyphIndices.end())
-			kerning = static_cast<float>(stbtt_GetGlyphKernAdvance(&m_Info->Info, leftIndex->second, rightIndex->second)) * m_Scale;
+			kerning = static_cast<float>(m_Info->File.GetKerning(leftIndex->second, rightIndex->second)) * m_Scale;
 		m_KerningCache[key] = kerning;
 		return kerning;
 	}
