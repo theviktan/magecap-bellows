@@ -18,9 +18,9 @@ namespace Bellows {
 
 		bool DeserializeScriptField(const Json& json, ScriptFieldValue& outValue)
 		{
-			if (!json.is_object() || !json.contains("Type") || !json.contains("Value"))
+			if (!json.is_object() || !json.contains("Type") || !json.contains("Value") || !json["Type"].is_string())
 				return false;
-			const std::string type = json["Type"].get<std::string>();
+			const std::string& type = json["Type"].get_ref<const std::string&>();
 			const Json& value = json["Value"];
 			try
 			{
@@ -321,7 +321,8 @@ namespace Bellows {
 				// Only the colors a button sets are saved; the others come from the theme.
 				const auto readColor = [&](const char* key, std::optional<glm::vec4>& color)
 				{
-					if (auto value = it->find(key); value != it->end() && value->is_array() && value->size() == 4)
+					if (auto value = it->find(key); value != it->end() && value->is_array() && value->size() == 4
+						&& std::all_of(value->begin(), value->end(), [](const Json& channel) { return channel.is_number(); }))
 						color = value->get<glm::vec4>();
 				};
 				readColor("NormalColor", component.NormalColor);

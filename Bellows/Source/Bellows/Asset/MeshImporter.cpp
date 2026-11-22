@@ -12,6 +12,12 @@ namespace Bellows {
 
 	namespace {
 
+		// The most a model may have: far past any game model, and below what 32-bit indices and memory
+		// allow. An accessor without data is all zeros and may claim any count, so a damaged one could
+		// otherwise ask for billions of vertices.
+		constexpr size_t c_MaxModelVertices = size_t(1) << 25;
+		constexpr size_t c_MaxModelIndices = size_t(1) << 27;
+
 		struct GLTFImportContext
 		{
 			std::filesystem::path BaseDirectory;
@@ -28,6 +34,10 @@ namespace Bellows {
 
 			const char* base64 = comma + 1;
 			const size_t length = std::strlen(base64);
+			// Base64 comes in groups of 4 characters; anything else is damaged (and would give a size
+			// below zero, which wraps to a huge one).
+			if (length == 0 || length % 4 != 0)
+				return {};
 			size_t padding = 0;
 			if (length >= 1 && base64[length - 1] == '=') padding++;
 			if (length >= 2 && base64[length - 2] == '=') padding++;
@@ -40,6 +50,72 @@ namespace Bellows {
 			std::vector<uint8_t> bytes(static_cast<uint8_t*>(decoded), static_cast<uint8_t*>(decoded) + size);
 			std::free(decoded);
 			return bytes;
+		}
+
+		// cgltf reads each buffer at the size the file gives it, so a damaged size asks for gigabytes
+		// before the read fails. Each must fit in what holds it: its file, or its base64 text.
+		bool CheckBufferSizes(const cgltf_data& data, const std::filesystem::path& baseDirectory, std::string& outError)
+		{
+			for (cgltf_size i = 0; i < data.buffers_count; i++)
+			{
+				const cgltf_buffer& buffer = data.buffers[i];
+				if (!buffer.uri)
+					continue;	// The .glb's own binary chunk, which cgltf checks
+				if (std::strncmp(buffer.uri, "data:", 5) == 0)
+				{
+					const char* comma = std::strchr(buffer.uri, ',');
+					const size_t available = comma ? std::strlen(comma + 1) / 4 * 3 : 0;
+					if (buffer.size > available)
+					{
+						outError = "buffer " + std::to_string(i) + " says it has " + std::to_string(buffer.size) + " bytes, more than its data holds";
+						return false;
+					}
+					continue;
+				}
+				std::string uri = buffer.uri;
+				cgltf_decode_uri(uri.data());
+				uri.resize(std::strlen(uri.c_str()));
+				const std::filesystem::path file = baseDirectory / std::filesystem::path(reinterpret_cast<const char8_t*>(uri.c_str()));
+				std::error_code error;
+				const uintmax_t fileSize = std::filesystem::file_size(file, error);
+				if (error || fileSize < buffer.size)
+				{
+					outError = "buffer file '" + uri + "' " + (error ? std::string("can't be read") : "has " + std::to_string(fileSize) + " bytes; the model says "
+						+ std::to_string(buffer.size));
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// glTF requires every accessor's data to start on a multiple of its component size; cgltf reads
+		// the values in place, and a misaligned read is undefined behavior in C++.
+		bool CheckAccessorAlignment(const cgltf_data& data, std::string& outError)
+		{
+			const auto aligned = [](const cgltf_buffer_view* view, cgltf_size offset, cgltf_size componentSize)
+			{
+				if (!view || !view->buffer || !view->buffer->data || componentSize <= 1)
+					return true;
+				const uintptr_t address = reinterpret_cast<uintptr_t>(view->buffer->data) + view->offset + offset;
+				return address % componentSize == 0 && view->stride % componentSize == 0;
+			};
+			for (cgltf_size i = 0; i < data.accessors_count; i++)
+			{
+				const cgltf_accessor& accessor = data.accessors[i];
+				const cgltf_size componentSize = cgltf_component_size(accessor.component_type);
+				bool ok = aligned(accessor.buffer_view, accessor.offset, componentSize);
+				if (accessor.is_sparse)
+				{
+					ok = ok && aligned(accessor.sparse.indices_buffer_view, accessor.sparse.indices_byte_offset, cgltf_component_size(accessor.sparse.indices_component_type))
+						&& aligned(accessor.sparse.values_buffer_view, accessor.sparse.values_byte_offset, componentSize);
+				}
+				if (!ok)
+				{
+					outError = "accessor " + std::to_string(i) + "'s data isn't aligned to its " + std::to_string(componentSize) + "-byte values, as glTF requires";
+					return false;
+				}
+			}
+			return true;
 		}
 
 		Ref<Texture2D> LoadTexture(GLTFImportContext& context, const cgltf_texture_view& view, TextureColorSpace colorSpace)
@@ -143,6 +219,14 @@ namespace Bellows {
 			}
 			if (!positions || positions->count == 0)
 				return false;
+			const size_t indexCount = primitive.indices ? primitive.indices->count : positions->count;
+			if (positions->count > c_MaxModelVertices - std::min(vertices.size(), c_MaxModelVertices)
+				|| indexCount > c_MaxModelIndices - std::min(indices.size(), c_MaxModelIndices))
+			{
+				BW_CORE_ERROR("glTF: a mesh has {} vertices and {} indices; a model can have up to {} and {}", positions->count, indexCount,
+					c_MaxModelVertices, c_MaxModelIndices);
+				return false;
+			}
 
 			const size_t vertexCount = positions->count;
 			std::vector<Vertex> primitiveVertices(vertexCount);
@@ -291,10 +375,21 @@ namespace Bellows {
 
 		std::unique_ptr<cgltf_data, decltype(&cgltf_free)> dataGuard(data, &cgltf_free);
 
+		std::string error;
+		if (!CheckBufferSizes(*data, path.parent_path(), error))
+		{
+			BW_CORE_ERROR("glTF: '{}' can't be loaded: {}", pathString, error);
+			return nullptr;
+		}
 		result = cgltf_load_buffers(&options, data, pathString.c_str());
 		if (result != cgltf_result_success)
 		{
 			BW_CORE_ERROR("glTF: failed to load buffers of '{}' (error {})", pathString, static_cast<int>(result));
+			return nullptr;
+		}
+		if (!CheckAccessorAlignment(*data, error))
+		{
+			BW_CORE_ERROR("glTF: '{}' can't be loaded: {}", pathString, error);
 			return nullptr;
 		}
 		if (cgltf_validate(data) != cgltf_result_success)
