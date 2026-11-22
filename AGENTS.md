@@ -13,7 +13,7 @@ fully scriptable so agents can build games through it.
 
 | Folder | Contents |
 |--------|----------|
-| `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui, Text: fonts with MSDF atlases and text layout, UI: game UI layout math) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
+| `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Animation: skeletons and clips, Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui, Text: fonts with MSDF atlases and text layout, UI: game UI layout math) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
 | `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport, Scene/Script workspaces), `Panels/` (including `ScriptEditorPanel`, the built-in code editor and Attach Script dialog), `ProjectManager` (the window shown when no project is open, and the New Project dialog), UI-free logic compiled into `BellowsTests` (`ScriptDocument`: script languages, templates, outlines, syntax checks; `ProjectList`: project names, scanning, sorting, new-project checks; `UITemplates`: what Create → UI makes, and the anchor presets, shared with `bellows.editor`; `ForgeScriptAssist`: ForgeScript completion and hover from the language server; `ScriptDebugger`: the ForgeScript debugger's breakpoints, stops and stepping; `GameWindowSession`: Play in a game window, running `BellowsRuntime` as a child process (`Core/Process`) and moving its log into the Console; `EditorSettings`), `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
 | `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
@@ -21,7 +21,7 @@ fully scriptable so agents can build games through it.
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -88,6 +88,8 @@ cd build/asan/bin && ASAN_OPTIONS=detect_leaks=0 BELLOWS_FUZZ_ITERATIONS=20000 .
 
 `BELLOWS_FUZZ_SEED=<number>` tries different mutations. `BellowsTests/Data/CFFTest.otf`, the CFF font
 the font tests read, is written by `Tools/GenerateTestFonts.py` (needs `pip install fonttools`).
+`BellowsTests/Data/SkinnedColumn.glb`, the skinned and animated model the import, animation and fuzz
+tests read, is written by `Tools/GenerateTestModels.py` (standard library only).
 GPU tests run with Vulkan validation enabled and fail on any validation message.
 
 ## Versions and releases

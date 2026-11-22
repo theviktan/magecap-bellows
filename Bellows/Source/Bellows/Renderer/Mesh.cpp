@@ -7,6 +7,22 @@
 
 namespace Bellows {
 
+	Ref<AnimationClip> MeshSkin::FindClip(std::string_view name) const
+	{
+		for (const Ref<AnimationClip>& clip : Clips)
+		{
+			if (clip->GetName() == name)
+				return clip;
+		}
+		return nullptr;
+	}
+
+	void Mesh::SetSkin(MeshSkin skin)
+	{
+		BW_CORE_ASSERT(skin.Rig && skin.Vertices.size() == m_Vertices.size(), "A skin needs a skeleton and a SkinVertex per vertex");
+		m_Skin = CreateScope<MeshSkin>(std::move(skin));
+	}
+
 	Mesh::Mesh(std::string name, std::vector<Vertex> vertices, std::vector<uint32_t> indices,
 		std::vector<Submesh> submeshes, std::vector<Ref<Material>> materials)
 		: m_Name(std::move(name)), m_Vertices(std::move(vertices)), m_Indices(std::move(indices)),

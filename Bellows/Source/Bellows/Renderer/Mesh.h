@@ -1,13 +1,17 @@
 #pragma once
 
+#include "Bellows/Animation/AnimationClip.h"
+#include "Bellows/Animation/Skeleton.h"
 #include "Bellows/Core/Base.h"
 #include "Bellows/Math/AABB.h"
 #include "Bellows/Renderer/Material.h"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/type_precision.hpp>
 #include <nvrhi/nvrhi.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Bellows {
@@ -21,6 +25,27 @@ namespace Bellows {
 	};
 	static_assert(sizeof(Vertex) == 48, "Vertex layout must match Mesh.vert");
 
+	// A skinned vertex's joints and how much each moves it (the weights add up to 1). Kept in a second
+	// stream so static meshes keep their 48-byte vertex.
+	struct SkinVertex
+	{
+		glm::u8vec4 Joints { 0 };
+		glm::vec4 Weights { 1.0f, 0.0f, 0.0f, 0.0f };
+	};
+	static_assert(sizeof(SkinVertex) == 20, "SkinVertex layout must match the skinned vertex shaders");
+
+	// What makes a mesh animatable: its skeleton, a SkinVertex for every vertex of the mesh (those of
+	// submeshes that aren't skinned are never read), and the clips that came with it.
+	struct MeshSkin
+	{
+		Ref<Skeleton> Rig;
+		std::vector<SkinVertex> Vertices;
+		std::vector<Ref<AnimationClip>> Clips;
+
+		// The clip with that name, or null.
+		Ref<AnimationClip> FindClip(std::string_view name) const;
+	};
+
 	// A draw range inside a mesh's shared vertex/index buffers.
 	struct Submesh
 	{
@@ -32,6 +57,7 @@ namespace Bellows {
 		glm::mat4 Transform { 1.0f };	// Node transform relative to the mesh origin
 		AABB BoundingBox;				// Local bounds (before Transform)
 		std::string Name;
+		bool Skinned = false;			// Moved by the mesh's skeleton; Transform is then only the model's turn (its rest pose)
 	};
 
 	// Geometry with its default materials. CPU data is kept for physics and picking.
@@ -48,6 +74,10 @@ namespace Bellows {
 		const std::vector<Ref<Material>>& GetMaterials() const { return m_Materials; }
 		const AABB& GetBoundingBox() const { return m_BoundingBox; }
 
+		// The skeleton, weights and clips of a skinned model, or null for a static mesh.
+		const MeshSkin* GetSkin() const { return m_Skin ? m_Skin.get() : nullptr; }
+		void SetSkin(MeshSkin skin);
+
 		nvrhi::IBuffer* GetVertexBuffer() const { return m_VertexBuffer; }
 		nvrhi::IBuffer* GetIndexBuffer() const { return m_IndexBuffer; }
 
@@ -62,6 +92,7 @@ namespace Bellows {
 		std::vector<Submesh> m_Submeshes;
 		std::vector<Ref<Material>> m_Materials;
 		AABB m_BoundingBox;
+		Scope<MeshSkin> m_Skin;
 
 		nvrhi::BufferHandle m_VertexBuffer;
 		nvrhi::BufferHandle m_IndexBuffer;

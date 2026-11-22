@@ -413,6 +413,54 @@ namespace {
 			for (uint32_t i = 0; i < submesh.IndexCount; i++)
 				REQUIRE(mesh->GetIndices()[submesh.BaseIndex + i] < submesh.VertexCount);
 		}
+
+		const MeshSkin* skin = mesh->GetSkin();
+		if (!skin)
+			return;
+		const Skeleton& skeleton = *skin->Rig;
+		REQUIRE(skeleton.GetJointCount() > 0);
+		REQUIRE(skeleton.GetJointCount() <= Skeleton::MaxJoints);
+		REQUIRE(skin->Vertices.size() == vertexCount);
+		for (const SkinVertex& vertex : skin->Vertices)
+		{
+			for (int k = 0; k < 4; k++)
+			{
+				REQUIRE(vertex.Joints[k] < skeleton.GetJointCount());
+				REQUIRE(std::isfinite(vertex.Weights[k]));
+			}
+		}
+		REQUIRE(skin->Clips.size() <= AnimationClip::MaxClips);
+		// Every clip samples to a pose the skeleton can turn into matrices.
+		std::vector<JointPose> pose = skeleton.GetRestPose();
+		std::vector<glm::mat4> model;
+		for (const Ref<AnimationClip>& clip : skin->Clips)
+		{
+			REQUIRE(std::isfinite(clip->GetDuration()));
+			for (const AnimationTrack& track : clip->GetTracks())
+				REQUIRE(track.Joint < skeleton.GetJointCount());
+			clip->Sample(clip->GetDuration() * 0.37f, pose);
+			skeleton.ComputeModelMatrices(pose, model);
+			REQUIRE(model.size() == skeleton.GetJointCount());
+		}
+	}
+
+	// A .glb split into its JSON and its binary chunk (the model the skinning tests read).
+	GLTFSeed SplitGLB(const Bytes& glb)
+	{
+		const auto readU32 = [&](size_t offset)
+		{
+			REQUIRE(offset + 4 <= glb.size());
+			return static_cast<uint32_t>(glb[offset]) | static_cast<uint32_t>(glb[offset + 1]) << 8
+				| static_cast<uint32_t>(glb[offset + 2]) << 16 | static_cast<uint32_t>(glb[offset + 3]) << 24;
+		};
+		const uint32_t jsonSize = readU32(12);
+		const size_t binOffset = 20 + jsonSize;
+		const uint32_t binSize = readU32(binOffset);
+		REQUIRE(binOffset + 8 + binSize <= glb.size());
+		GLTFSeed seed;
+		seed.Document = Json::parse(glb.begin() + 20, glb.begin() + 20 + jsonSize);
+		seed.Buffer.assign(glb.begin() + static_cast<std::ptrdiff_t>(binOffset + 8), glb.begin() + static_cast<std::ptrdiff_t>(binOffset + 8 + binSize));
+		return seed;
 	}
 
 	// A 16-bit mono WAV of a short tone.
@@ -496,6 +544,53 @@ TEST_CASE("Fuzz: damaged glTF and .glb models are imported or refused, never cra
 		else if (target == 1)
 		{
 			const std::string text = seed.Document.dump();
+			const Bytes buffer = mutator.MutateBytes(seed.Buffer);
+			WriteInput(gltfPath, text.data(), text.size());
+			WriteInput(binPath, buffer.data(), buffer.size());
+			mesh = MeshImporter::ImportGLTF(gltfPath);
+		}
+		else
+		{
+			const Bytes bytes = mutator.MutateBytes(glb);
+			WriteInput(glbPath, bytes.data(), bytes.size());
+			mesh = MeshImporter::ImportGLTF(glbPath);
+		}
+		CheckMesh(mesh);
+	});
+}
+
+TEST_CASE("Fuzz: damaged skinned models are imported or refused, never crash")
+{
+	const Bytes glb = ReadFile(BellowsTests::GetSourceDirectory() / "BellowsTests" / "Data" / "SkinnedColumn.glb");
+	GLTFSeed seed = SplitGLB(glb);
+	seed.Document["buffers"][0]["uri"] = "Skinned.bin";
+	const std::string text = seed.Document.dump();
+	const std::filesystem::path folder = GetFuzzDirectory("SkinnedModels");
+	const std::filesystem::path gltfPath = folder / "Skinned.gltf";
+	const std::filesystem::path glbPath = folder / "Skinned.glb";
+	const std::filesystem::path binPath = folder / "Skinned.bin";
+
+	WriteInput(gltfPath, text.data(), text.size());
+	WriteInput(binPath, seed.Buffer.data(), seed.Buffer.size());
+	WriteInput(glbPath, glb.data(), glb.size());
+	const Ref<Mesh> asIs = MeshImporter::ImportGLTF(gltfPath);
+	REQUIRE(asIs);
+	REQUIRE(asIs->GetSkin());
+	REQUIRE(MeshImporter::ImportGLTF(glbPath));
+
+	// 0: the JSON (skin, joints, animations), 1: the buffer (weights, matrices, keys), 2: the .glb's bytes.
+	RunFuzzer(0x534Bu, 900, 3, [&](Mutator& mutator, size_t target)
+	{
+		Ref<Mesh> mesh;
+		if (target == 0)
+		{
+			const std::string mutated = mutator.MutateJson(seed.Document);
+			WriteInput(gltfPath, mutated.data(), mutated.size());
+			WriteInput(binPath, seed.Buffer.data(), seed.Buffer.size());
+			mesh = MeshImporter::ImportGLTF(gltfPath);
+		}
+		else if (target == 1)
+		{
 			const Bytes buffer = mutator.MutateBytes(seed.Buffer);
 			WriteInput(gltfPath, text.data(), text.size());
 			WriteInput(binPath, buffer.data(), buffer.size());
