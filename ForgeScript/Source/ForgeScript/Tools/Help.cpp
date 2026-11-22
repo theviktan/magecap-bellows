@@ -180,8 +180,8 @@ namespace ForgeScript {
 				Method("text", "characters", "text.characters()", "A list of the text's characters."),
 				Method("text", "is_number", "text.is_number()", "True when the text is a number, like \"3.5\"."),
 				Method("text", "is_empty", "text.is_empty()", "True when the text has no characters."),
-				Method("text", "capitalize", "text.capitalize()", "The text with its first letter in capitals: \"sword of fire\".capitalize() is \"Sword of fire\"."),
-				Method("text", "title", "text.title()", "The text with the first letter of each word in capitals: \"sword of fire\".title() is \"Sword Of Fire\"."),
+				Method("text", "capitalize", "text.capitalize()", "The text with its first letter in capitals (a to z only): \"sword of fire\".capitalize() is \"Sword of fire\"."),
+				Method("text", "title", "text.title()", "The text with the first letter of each word in capitals (a to z only): \"sword of fire\".title() is \"Sword Of Fire\"."),
 				Method("text", "count", "text.count(part)", "How many times part is in the text, without overlapping: \"banana\".count(\"an\") is 2."),
 
 				// Lists

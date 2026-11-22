@@ -221,6 +221,17 @@ namespace ForgeScript {
 			context.Error("sort can only order numbers with numbers or text with text. Use sort_by with a function for anything else.");
 		}
 
+		// A number argument that must be finite: infinity, or a not-a-number made from it, would turn into
+		// an int with undefined behavior inside noise and hsv, and means nothing for a point or a curve.
+		double FiniteNumber(CallContext& c, size_t index, const char* name)
+		{
+			const double number = c.Number(index);
+			if (!std::isfinite(number))
+				c.Error(std::string(name) + " needs ordinary numbers, but value " + std::to_string(index + 1) + " is " +
+					(std::isnan(number) ? "not a number." : "infinity."));
+			return number;
+		}
+
 		// Ken Perlin's improved noise (2002), from his reference permutation, so the same position gives
 		// the same value on every machine and every run.
 		double PerlinNoise(double x, double y, double z)
@@ -736,7 +747,7 @@ namespace ForgeScript {
 		// chance: add it to a position to spawn around it.
 		RegisterFunction("random_point_in_circle", 1, [](CallContext& c)
 		{
-			const double radius = c.Number(0);
+			const double radius = FiniteNumber(c, 0, "random_point_in_circle");
 			if (radius < 0)
 				c.Error("random_point_in_circle needs a radius of 0 or more.");
 			std::mt19937_64& random = c.GetVM().GetRandom();
@@ -757,20 +768,22 @@ namespace ForgeScript {
 			if (c.Count() == 1 && c.Arg(0).IsObject() && IsObjectType(c.Arg(0), ObjectType::Vector))
 			{
 				const Vector* at = c.VectorArg(0);
+				if (!std::isfinite(at->X) || !std::isfinite(at->Y) || !std::isfinite(at->Z))
+					c.Error("noise needs ordinary numbers, but the position has infinity or not a number in it.");
 				return Value::FromNumber(PerlinNoise(at->X, at->Y, at->Z));
 			}
 			// A left-out coordinate is a fixed fraction, not 0: noise is 0 on whole-number grid lines, so
 			// noise(x) along y = 0 would hardly move.
-			const double x = c.Number(0);
-			const double y = c.Count() > 1 ? c.Number(1) : 0.318;
-			const double z = c.Count() > 2 ? c.Number(2) : 0.627;
+			const double x = FiniteNumber(c, 0, "noise");
+			const double y = c.Count() > 1 ? FiniteNumber(c, 1, "noise") : 0.318;
+			const double z = c.Count() > 2 ? FiniteNumber(c, 2, "noise") : 0.627;
 			return Value::FromNumber(PerlinNoise(x, y, z));
 		});
 		// ease(t, "out"): t from 0 to 1 bent into a curve, for smooth movement and animation. t is
 		// clamped to 0 to 1.
 		RegisterFunction("ease", 2, [](CallContext& c)
 		{
-			const double t = std::clamp(c.Number(0), 0.0, 1.0);
+			const double t = std::clamp(FiniteNumber(c, 0, "ease"), 0.0, 1.0);
 			const std::string style = Lower(Trim(c.Text(1)));
 			for (const EaseStyle& candidate : EaseStyles())
 			{
@@ -805,11 +818,11 @@ namespace ForgeScript {
 		{
 			if (c.Count() < 3 || c.Count() > 4)
 				c.Error("hsv needs hue, saturation and value (and alpha) from 0 to 1, like: hsv(0.6, 1, 1)");
-			double hue = std::fmod(c.Number(0), 1.0);
+			double hue = std::fmod(FiniteNumber(c, 0, "hsv"), 1.0);
 			if (hue < 0)
 				hue += 1.0;
-			const double saturation = std::clamp(c.Number(1), 0.0, 1.0);
-			const double value = std::clamp(c.Number(2), 0.0, 1.0);
+			const double saturation = std::clamp(FiniteNumber(c, 1, "hsv"), 0.0, 1.0);
+			const double value = std::clamp(FiniteNumber(c, 2, "hsv"), 0.0, 1.0);
 			const double sector = hue * 6;
 			const int index = static_cast<int>(sector) % 6;
 			const double part = sector - std::floor(sector);

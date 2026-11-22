@@ -111,6 +111,29 @@ say problem_of(function() [1].chunk(0) end)              # expect: chunk needs a
 say problem_of(function() [1].max_by(5) end)             # expect: max_by needs a function that gives a number for each item, like: enemies.max_by(function(enemy) return enemy.health end)
 say problem_of(function() ["a"].min_by(function(w) return w end) end)   # expect: min_by's function must give a number for each item, but gave text.
 
+# Edge cases that must give a mistake (or a plain answer), never a hang or a crash.
+set loop to [1]
+add loop to loop
+say loop.flatten().length                                   # expect: 3
+say [1, 2, 3].chunk(1e18)                                   # expect: [[1, 2, 3]]
+say problem_of(function() [1].chunk(-1) end)                # expect: chunk needs a size of 1 or more, like: items.chunk(3)
+say problem_of(function() [1].chunk(0.5) end)               # expect: chunk needs a whole number for value 1, but got 0.5.
+say problem_of(function() [1].chunk(infinity) end)          # expect: chunk needs a whole number between -9.2e18 and 9.2e18 for value 1, but got infinity.
+say problem_of(function() noise(infinity) end)              # expect: noise needs ordinary numbers, but value 1 is infinity.
+say problem_of(function() noise(1, infinity - infinity) end)   # expect: noise needs ordinary numbers, but value 2 is not a number.
+say problem_of(function() noise(vector(infinity, 0, 0)) end)   # expect: noise needs ordinary numbers, but the position has infinity or not a number in it.
+say problem_of(function() hsv(infinity - infinity, 1, 1) end)  # expect: hsv needs ordinary numbers, but value 1 is not a number.
+say problem_of(function() ease(infinity, "in") end)         # expect: ease needs ordinary numbers, but value 1 is infinity.
+say problem_of(function() random_point_in_circle(infinity) end)   # expect: random_point_in_circle needs ordinary numbers, but value 1 is infinity.
+say problem_of(function() random(infinity) end)             # expect: random needs a whole number between -9.2e18 and 9.2e18 for value 1, but got infinity.
+set refused to 0
+for each bad in ["#", "#ff", "#gggggg", "#ff00ff00f", "-fff", "+fff", "#ff 0f0", "#" + "f".repeat(5000)] do
+	if problem_of(function() color(bad) end).starts_with("'") then add 1 to refused end
+end
+say refused                                                 # expect: 8
+say "émile".capitalize()                                    # expect: émile
+say "été à paris".title()                                   # expect: été à Paris
+
 # A script's own names still win over the new built-ins.
 function own_ease()
 	set ease to function(t) return "mine" end
