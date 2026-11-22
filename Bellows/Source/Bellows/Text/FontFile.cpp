@@ -848,8 +848,8 @@ namespace Bellows {
 			// The arguments are an offset, or (rarely) points to line up, which are read as no offset.
 			if (flags & 0x0002)
 			{
-				offsetX = (flags & 0x0001) ? data.S16(at) : static_cast<int8_t>(data.U8(at));
-				offsetY = (flags & 0x0001) ? data.S16(at + 2) : static_cast<int8_t>(data.U8(at + 1));
+				offsetX = static_cast<float>((flags & 0x0001) ? data.S16(at) : static_cast<int8_t>(data.U8(at)));
+				offsetY = static_cast<float>((flags & 0x0001) ? data.S16(at + 2) : static_cast<int8_t>(data.U8(at + 1)));
 			}
 			at += argumentSize;
 
