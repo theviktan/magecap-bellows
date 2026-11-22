@@ -831,7 +831,10 @@ namespace ForgeScript {
 					PhrasePattern pattern;
 					std::string error;
 					if (PatternFromTokens(tokens, cursor, pattern, error))
+					{
 						m_Phrases.Add(pattern);
+						m_ScriptPhraseWords.insert(pattern.Parts.front());
+					}
 				}
 				else if (tokens[i].Type == TokenType::Use && i + 1 < tokens.size() && tokens[i + 1].Type == TokenType::String)
 				{
@@ -2079,6 +2082,39 @@ namespace ForgeScript {
 			}
 		}
 
+		// Whether the tokens from 'begin' to 'end' (a loop's body) may wait or leave the loop: a 'wait',
+		// 'stop', 'return' or 'fail', or a call that might wait (the script's own functions, phrases and
+		// methods). Built-in and engine functions never wait. Used only for a warning, so when in doubt
+		// it says yes.
+		bool MayPauseOrLeave(size_t begin, size_t end) const
+		{
+			for (size_t i = begin; i < end && i < m_Tokens.size(); i++)
+			{
+				const Token& token = m_Tokens[i];
+				switch (token.Type)
+				{
+					case TokenType::Wait: case TokenType::Stop: case TokenType::Return: case TokenType::Fail:
+						return true;
+					case TokenType::Identifier:
+					{
+						std::string name(token.Lexeme);
+						if (m_ScriptPhraseWords.count(name) > 0)
+							return true;
+						if (i + 1 < m_Tokens.size() && m_Tokens[i + 1].Type == TokenType::LeftParen)
+						{
+							bool method = i > 0 && (m_Tokens[i - 1].Type == TokenType::Dot || m_Tokens[i - 1].Type == TokenType::Possessive);
+							if (method || !IsBuiltinFunction(name))
+								return true;
+						}
+						break;
+					}
+					default:
+						break;
+				}
+			}
+			return false;
+		}
+
 		bool IsBuiltinFunction(const std::string& name) const
 		{
 			if (m_VM.HasSharedGlobal(name))
@@ -2212,10 +2248,14 @@ namespace ForgeScript {
 			{
 				Match(TokenType::Do);
 				size_t loopStart = CurrentChunk().Size();
+				size_t bodyStart = m_Pos;
 				PushLoop(loopStart, true);
 				ScopedBlock();
 				EmitLoop(loopStart);
 				PopLoop();
+				if (m_Options.Warnings && !MayPauseOrLeave(bodyStart, m_Pos))
+					Warn(opener, "This 'repeat forever' loop never waits, so nothing else in the game can run while it "
+						"does. Add a 'wait' inside it, like: wait 1 frame");
 				ConsumeEnd(opener, "'repeat' loop");
 				return;
 			}
@@ -4673,6 +4713,7 @@ namespace ForgeScript {
 		bool m_EveryIsPhrase = false;          // set once the phrases are known
 		bool m_AfterIsPhrase = false;
 		std::set<std::string> m_ListVerbPhrases;  // 'sort', 'shuffle' or 'reverse' when a phrase starts with it
+		std::set<std::string> m_ScriptPhraseWords; // first words of phrases the scripts make (those may wait)
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;
