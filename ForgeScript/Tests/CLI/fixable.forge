@@ -1,0 +1,2 @@
+# A mistake with a one-click fix, for the --check --json "fix" field.
+set lives = 3

@@ -17,6 +17,17 @@ namespace ForgeScript {
 		int Line = 0;
 		int Column = 0;
 
+		// A mistake whose message says exactly what to write instead can carry that change, so an editor
+		// can offer it as a quick fix: replace FixLine:FixColumn up to FixEndLine:FixEndColumn (1-based
+		// bytes, the end not included; equal ends insert) with FixText. FixTitle is empty when there is none.
+		std::string FixTitle;
+		int FixLine = 0;
+		int FixColumn = 0;
+		int FixEndLine = 0;
+		int FixEndColumn = 0;
+		std::string FixText;
+		bool HasFix() const { return !FixTitle.empty(); }
+
 		std::string ToString() const;
 	};
 

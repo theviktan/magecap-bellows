@@ -443,6 +443,60 @@ TEST_CASE("NegativeTimerTimesWarn")
 	CHECK_CONTAINS(found[1].Message, "runs as soon as it can. Use a time above 0, like: after 1 second");
 }
 
+TEST_CASE("MistakesThatNameTheirFixCarryIt")
+{
+	// Applying each fix must leave a script with no mistakes: the fix does what the message says.
+	auto apply = [](const std::string& source, const CompileError& mistake)
+	{
+		auto offset = [&source](int line, int column)
+		{
+			size_t at = 0;
+			for (int l = 1; l < line; l++)
+				at = source.find('\n', at) + 1;
+			return at + static_cast<size_t>(column - 1);
+		};
+		const size_t from = offset(mistake.FixLine, mistake.FixColumn);
+		const size_t to = offset(mistake.FixEndLine, mistake.FixEndColumn);
+		return source.substr(0, from) + mistake.FixText + source.substr(to);
+	};
+	struct Case { const char* Source; const char* Title; const char* Fixed; };
+	const Case cases[] = {
+		{ "set x = 5\nsay x\n", "Change '=' to 'to'", "set x to 5\nsay x\n" },
+		{ "set h to 1\nif h = 1 then\n\tsay 1\nend\n", "Change '=' to 'is'", "set h to 1\nif h is 1 then\n\tsay 1\nend\n" },
+		{ "function hit(t, damage = 10)\n\treturn damage\nend\n", "Change '=' to 'is'", "function hit(t, damage is 10)\n\treturn damage\nend\n" },
+		{ "set n to 0\nrepeat while n < 3 do\n\tadd 1 to n\nend\n", "Remove 'repeat'", "set n to 0\nwhile n < 3 do\n\tadd 1 to n\nend\n" },
+		{ "function f(a as numbr)\n\treturn a\nend\n", "Change to 'number'", "function f(a as number)\n\treturn a\nend\n" },
+		{ "set x to 1\nx += 5\n", "Write: add 5 to x", "set x to 1\nadd 5 to x\n" },
+		{ "set x to 1\nx *= 2\n", "Write: multiply x by 2", "set x to 1\nmultiply x by 2\n" },
+		{ "set x to 1\nx++\n", "Write: add 1 to x", "set x to 1\nadd 1 to x\n" },
+		{ "set x to 1\nx--\n", "Write: take 1 from x", "set x to 1\ntake 1 from x\n" },
+		{ "set x to 1\nif x > 0 then\n\tsay 1\n\tsay 2\nsay 3\n", "Add the missing 'end'", "set x to 1\nif x > 0 then\n\tsay 1\n\tsay 2\nend\nsay 3\n" },
+		{ "function f()\n\trepeat 2 times\n\t\tsay 1\n\tsay 2\nend\n", "Add the missing 'end'", "function f()\n\trepeat 2 times\n\t\tsay 1\n\tend\n\tsay 2\nend\n" },
+		{ "kind Box\n\tset w to 1\n", "Add the missing 'end'", "kind Box\n\tset w to 1\nend\n" },
+		{ "choices Color are red, green\nsay Color.gren\n", "Change to 'green'", "choices Color are red, green\nsay Color.green\n" },
+	};
+	for (const Case& test : cases)
+	{
+		CAPTURE(test.Source);
+		VM vm;
+		const std::vector<CompileError> mistakes = vm.FindMistakes(test.Source, "t.forge");
+		REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+		REQUIRE(mistakes[0].HasFix());
+		CHECK_EQ(mistakes[0].FixTitle, std::string(test.Title));
+		const std::string fixed = apply(test.Source, mistakes[0]);
+		CHECK_EQ(fixed, std::string(test.Fixed));
+		CHECK(vm.FindMistakes(fixed, "t.forge").empty());
+	}
+
+	// A message that doesn't say exactly what to write has no fix.
+	VM vm;
+	const std::vector<CompileError> mistakes = vm.FindMistakes("say )\n", "t.forge");
+	REQUIRE_FALSE(mistakes.empty());
+	CHECK_FALSE(mistakes[0].HasFix());
+	// 'x += 5' inside a longer line is only a hint: replacing the line could lose the rest of it.
+	CHECK_FALSE(vm.FindMistakes("set x to 1\nsay x += 5\n", "t.forge")[0].HasFix());
+}
+
 TEST_CASE("RepeatForeverWithoutAWaitWarns")
 {
 	VM vm;
