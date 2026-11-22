@@ -1524,13 +1524,15 @@ namespace ForgeScript {
 			{
 				if (!IsChoicesAt(m_Tokens, i))
 					continue;
-				std::vector<std::string>& names = m_Choices[std::string(m_Tokens[i + 1].Lexeme)];
+				const std::string set(m_Tokens[i + 1].Lexeme);
+				std::vector<std::string>& names = m_Choices[set];
 				names.clear();
 				for (size_t j = i + 3; j < m_Tokens.size() && m_Tokens[j].Type != TokenType::Newline && m_Tokens[j].Type != TokenType::Eof; j++)
 				{
 					if (m_Tokens[j].Type == TokenType::Identifier)
 						names.emplace_back(m_Tokens[j].Lexeme);
 				}
+				m_ChoiceSets[set] = std::unordered_set<std::string>(names.begin(), names.end());
 			}
 		}
 
@@ -1544,16 +1546,15 @@ namespace ForgeScript {
 			const std::string name(Current().Lexeme);
 			Advance(); // the name
 			Advance(); // are
-			std::vector<std::string> names;
+			std::unordered_set<std::string> names;
 			EmitOp(OpCode::NewMap);
 			while (true)
 			{
 				if (!Check(TokenType::Identifier))
 					ErrorAtCurrent("Each choice is a name, like: choices " + name + " are idle, running");
 				const std::string choice(Current().Lexeme);
-				if (std::find(names.begin(), names.end(), choice) != names.end())
+				if (!names.insert(choice).second)
 					ErrorAtCurrent("'" + choice + "' is in " + name + "'s choices twice.");
-				names.push_back(choice);
 				Advance();
 				Value text = Value::FromObject(m_VM.Intern(choice));
 				EmitConstant(text);
@@ -1574,7 +1575,7 @@ namespace ForgeScript {
 				return;
 			const std::string member(Peek(1).Lexeme);
 			const std::vector<std::string>& names = found->second;
-			if (std::find(names.begin(), names.end(), member) != names.end() || member == "length" || member == "size" || member == "count")
+			if (m_ChoiceSets[set].count(member) || member == "length" || member == "size" || member == "count")
 				return;
 			std::string list;
 			std::vector<std::string_view> candidates;
@@ -1856,9 +1857,10 @@ namespace ForgeScript {
 			}
 			if (!hasOtherwise && allChoices && !choiceSet.empty())
 			{
+				const std::unordered_set<std::string> covered(named.begin(), named.end());
 				for (const std::string& choice : m_Choices[choiceSet])
 				{
-					if (std::find(named.begin(), named.end(), choice) == named.end())
+					if (!covered.count(choice))
 						Warn(opener, "This match has no case for " + choiceSet + "." + choice + ", and no otherwise.");
 				}
 			}
@@ -3296,6 +3298,13 @@ namespace ForgeScript {
 			Token opener = Current();
 			const bool every = opener.Lexeme == "every";
 			Advance();
+			// A time written as a negative number runs like 0: 'every' then runs once a frame.
+			if (Check(TokenType::Minus) && Peek(1).Type == TokenType::Number)
+			{
+				Warn(Current(), std::string("A negative time works like 0, so this timer ") +
+					(every ? "runs as often as it can" : "runs as soon as it can") + ". Use a time above 0, like: " +
+					std::string(opener.Lexeme) + " 1 second");
+			}
 			FunctionBody(std::string(opener.Lexeme) + " timer", ScopeKind::Function, {}, opener, every ? "'every' timer" : "'after' timer", {}, {},
 				[this, every]
 				{
@@ -4179,8 +4188,10 @@ namespace ForgeScript {
 		bool TryOfPhrase()
 		{
 			const std::string word(Current().Lexeme);
+			// Each form reads another value inside itself, so each counts as a level (audit S-4).
 			if (word == "the" && Peek(1).Type == TokenType::Identifier && IsFreeWord(word))
 			{
+				Nested nested(*this);
 				Advance();
 				Primary();
 				return true;
@@ -4191,6 +4202,7 @@ namespace ForgeScript {
 				const size_t ofAt = CheckWordAt(1, "item") ? 2 : 1;
 				if (Peek(ofAt).Type != TokenType::Of)
 					return false;
+				Nested nested(*this);
 				for (size_t i = 0; i <= ofAt; i++)
 					Advance();
 				Unary();
@@ -4208,6 +4220,7 @@ namespace ForgeScript {
 					return false;
 
 				// The list goes on the stack before the position, so read it first, then come back.
+				Nested nested(*this);
 				const size_t indexStart = m_Pos + 1;
 				m_Pos = ofPos + 1;
 				Unary();
@@ -4233,6 +4246,7 @@ namespace ForgeScript {
 			if ((word != "every" && word != "any") || Peek(1).Type != TokenType::Identifier || Peek(2).Type != TokenType::In ||
 				!IsFreeWord(word))
 				return false;
+			Nested nested(*this);
 			const std::string name(Peek(1).Lexeme);
 			Advance();
 			Advance();
@@ -4464,6 +4478,7 @@ namespace ForgeScript {
 		std::unordered_set<std::string> m_ModuleNames;
 		// Each 'choices State are idle, running' of this script: the set's name and its choices, in order.
 		std::unordered_map<std::string, std::vector<std::string>> m_Choices;
+		std::unordered_map<std::string, std::unordered_set<std::string>> m_ChoiceSets; // the same names, to look up
 		bool m_ChoicesIsPhrase = false;
 		bool m_TestIsPhrase = false;
 		bool m_ExpectIsPhrase = false;

@@ -2,7 +2,11 @@
 
 #include "ForgeScript/Core/Value.h"
 
+#include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <optional>
+#include <unordered_map>
 #include <vector>
 
 namespace ForgeScript {
@@ -155,9 +159,20 @@ namespace ForgeScript {
 
 		size_t AddConstant(Value value)
 		{
+			// Reuse identical constants (numbers, interned text) to keep chunks small. Most are found
+			// through an index, so a function with many different constants doesn't take quadratic time
+			// (audit S-5); the rest are compared one by one, as before.
+			if (const std::optional<ConstantKey> key = IndexKey(value))
+			{
+				auto found = m_ConstantIndex.find(*key);
+				if (found != m_ConstantIndex.end())
+					return found->second;
+				m_Constants.push_back(value);
+				m_ConstantIndex.emplace(*key, m_Constants.size() - 1);
+				return m_Constants.size() - 1;
+			}
 			for (size_t i = 0; i < m_Constants.size(); i++)
 			{
-				// Reuse identical constants (numbers, interned text) to keep chunks small.
 				if (m_Constants[i] == value && m_Constants[i].GetType() == value.GetType())
 					return i;
 			}
@@ -200,6 +215,50 @@ namespace ForgeScript {
 		std::vector<uint8_t> m_Code;
 		std::vector<int> m_Lines;
 		std::vector<Value> m_Constants;
+
+		// A constant's type and bits, for values whose == is exactly "the same type and bits": nothing,
+		// booleans, numbers other than NaN (0 and -0 share a key, as 0 == -0), and objects other than
+		// vectors and engine objects, which == compares by their contents.
+		struct ConstantKey
+		{
+			ValueType Type;
+			uint64_t Bits;
+			bool operator==(const ConstantKey& other) const { return Type == other.Type && Bits == other.Bits; }
+		};
+		struct ConstantKeyHash
+		{
+			size_t operator()(const ConstantKey& key) const
+			{
+				return std::hash<uint64_t>()(key.Bits) ^ (static_cast<size_t>(key.Type) * 0x9e3779b97f4a7c15ull);
+			}
+		};
+		static std::optional<ConstantKey> IndexKey(const Value& value)
+		{
+			switch (value.GetType())
+			{
+				case ValueType::Nothing:
+					return ConstantKey{ ValueType::Nothing, 0 };
+				case ValueType::Boolean:
+					return ConstantKey{ ValueType::Boolean, value.AsBool() ? 1u : 0u };
+				case ValueType::Number:
+				{
+					const double number = value.AsNumber() == 0.0 ? 0.0 : value.AsNumber();
+					if (std::isnan(number))
+						return std::nullopt;
+					uint64_t bits = 0;
+					std::memcpy(&bits, &number, sizeof(bits));
+					return ConstantKey{ ValueType::Number, bits };
+				}
+				case ValueType::Object:
+				{
+					if (ComparedByContents(value.AsObject()))
+						return std::nullopt;
+					return ConstantKey{ ValueType::Object, static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(value.AsObject())) };
+				}
+			}
+			return std::nullopt;
+		}
+		std::unordered_map<ConstantKey, size_t, ConstantKeyHash> m_ConstantIndex;
 	};
 
 }

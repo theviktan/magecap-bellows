@@ -375,6 +375,34 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("BigChoiceSetsStayQuick")
+{
+	// Audit S-5: 20,000 choices, each used once and all but one in a match, check and run without
+	// quadratic work (the constant table, the duplicate check and the lookups use hash sets).
+	std::string choices = "choices Big are ";
+	std::string uses;
+	std::string match = "set s to Big.c0\nmatch s\n";
+	for (int i = 0; i < 20000; i++)
+	{
+		choices += (i ? ", c" : "c") + std::to_string(i);
+		uses += "set x to Big.c" + std::to_string(i) + "\n";
+	}
+	VM vm;
+	CHECK(vm.FindMistakes(choices + "\n" + uses + "say x\n", "big.forge").empty());
+	CHECK_EQ(Output(choices + "\nsay Big.c19999\nsay Big.length\n"), std::string("c19999\n20000\n"));
+	CHECK_CONTAINS(CompileFails(choices + ", c5\n").Message, "'c5' is in Big's choices twice.");
+}
+
+TEST_CASE("NegativeTimerTimesWarn")
+{
+	VM vm;
+	std::vector<CompileError> found = vm.FindWarnings("every -1 seconds\n\tstop\nend\nafter -2 seconds\nend\nevery 0 seconds\n\tstop\nend\n", "t.forge", {});
+	REQUIRE(found.size() == 2);
+	CHECK_EQ(found[0].Message, std::string("A negative time works like 0, so this timer runs as often as it can. Use a time above 0, like: every 1 second"));
+	CHECK(found[1].Line == 4);
+	CHECK_CONTAINS(found[1].Message, "runs as soon as it can. Use a time above 0, like: after 1 second");
+}
+
 TEST_CASE("OptionalTypesWarnOnPlainValuesOnly")
 {
 	VM vm;
@@ -875,6 +903,11 @@ TEST_CASE("NestingTooDeepIsAMistakeNotACrash")
 		"say " + repeated("not ", 100000) + "yes\n",
 		"say " + repeated("2 ^ ", 100000) + "1\n",
 		repeated("if yes then\n", 100000) + "say 1\n" + repeated("end\n", 100000),
+		// Audit S-4: the 1.6.0 sentence forms read a value inside themselves, so each is a level too.
+		"say " + repeated("item 1 of ", 30000) + "x\n",
+		"say " + repeated("first of ", 30000) + "x\n",
+		"say " + repeated("the ", 30000) + "x\n",
+		"say " + repeated("every a in ", 30000) + "x is 1\n",
 	};
 	for (const std::string& source : hostile)
 	{
