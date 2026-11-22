@@ -14,6 +14,13 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **Fixed: a letter like `é` outside text gave one mistake per byte** (audit S-12, older). `set café
+  to 5` reported "Unexpected character" twice, each with half of the letter, so `--check --json` and
+  the language server sent text that wasn't valid UTF-8. It's now one mistake: "'é' can only be used
+  inside text, like "café". Names use the letters a to z, the digits 0 to 9 and _, like: set cafe to
+  5". A byte that isn't UTF-8 at all says "This byte isn't readable text. Save the script as UTF-8."
+- **Fixed: the missing-`end` quick fix kept Windows line ends** (audit S-13). In a file saved with
+  CRLF line ends it inserted a bare LF; it now inserts CRLF there.
 - **A warning for names that are never set** (asked for by MFC and MCBellows). `say helth`, in a
   script that sets `health`, passed `--check` and failed only when the line ran. It now warns:
   "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean

@@ -488,6 +488,20 @@ TEST_CASE("MistakesThatNameTheirFixCarryIt")
 		CHECK(vm.FindMistakes(fixed, "t.forge").empty());
 	}
 
+	// A script with Windows line ends (CRLF) gets a CRLF before its new 'end' (audit S-13).
+	{
+		VM vm;
+		const std::string crlf = "if true then\r\n\tsay 1\r\nsay 2\r\n";
+		const std::vector<CompileError> mistakes = vm.FindMistakes(crlf, "t.forge");
+		REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+		CHECK_EQ(mistakes[0].FixText, std::string("\r\nend"));
+		CHECK_EQ(mistakes[0].FixLine, 2);
+		CHECK_EQ(mistakes[0].FixColumn, 7);
+		const std::string fixed = apply(crlf, mistakes[0]);
+		CHECK_EQ(fixed, std::string("if true then\r\n\tsay 1\r\nend\r\nsay 2\r\n"));
+		CHECK(vm.FindMistakes(fixed, "t.forge").empty());
+	}
+
 	// A message that doesn't say exactly what to write has no fix.
 	VM vm;
 	const std::vector<CompileError> mistakes = vm.FindMistakes("say )\n", "t.forge");
@@ -495,6 +509,27 @@ TEST_CASE("MistakesThatNameTheirFixCarryIt")
 	CHECK_FALSE(mistakes[0].HasFix());
 	// 'x += 5' inside a longer line is only a hint: replacing the line could lose the rest of it.
 	CHECK_FALSE(vm.FindMistakes("set x to 1\nsay x += 5\n", "t.forge")[0].HasFix());
+}
+
+TEST_CASE("ALetterOutsideTextIsReportedOnce")
+{
+	// 'é' is two bytes of UTF-8. It used to give two mistakes, each with one byte of it, which isn't
+	// valid UTF-8 in the checkers' JSON (audit S-12).
+	VM vm;
+	std::vector<CompileError> mistakes = vm.FindMistakes("set caf\xC3\xA9 = 5\n", "t.forge");
+	REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+	CHECK_EQ(mistakes[0].Message, std::string("'\xC3\xA9' can only be used inside text, like \"caf\xC3\xA9\". Names use the letters a to z, "
+		"the digits 0 to 9 and _, like: set cafe to 5"));
+	CHECK_EQ(mistakes[0].Column, 8);
+	// A three-byte dash, and a byte that isn't UTF-8 at all.
+	mistakes = vm.FindMistakes("set x to 1 \xE2\x80\x94 2\n", "t.forge");
+	REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+	CHECK_EQ(mistakes[0].Message.substr(0, 5), std::string("'\xE2\x80\x94'"));
+	mistakes = vm.FindMistakes("say 1 \xFF\n", "t.forge");
+	REQUIRE_EQ(mistakes.size(), static_cast<size_t>(1));
+	CHECK_EQ(mistakes[0].Message, std::string("This byte isn't readable text. Save the script as UTF-8."));
+	// Inside text it's fine, as always.
+	CHECK(vm.FindMistakes("say \"caf\xC3\xA9\"\n", "t.forge").empty());
 }
 
 TEST_CASE("ANameThatIsNeverSetWarns")
