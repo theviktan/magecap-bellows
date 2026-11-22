@@ -5,7 +5,7 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
-## 1.6.0 (not released yet)
+## 1.6.0 (2026-11-22)
 
 - **Repeating text has a limit** (audit S-6, older than 1.6.0): `"ab" * 1e9` built 2 GB of text in
   one step, and `"ab" * infinity` looped until memory ran out, where the instruction limit can't stop
