@@ -94,6 +94,7 @@ Long text: `"""` ... `"""`, over any number of lines. `"` needs no escape; `{ }`
 | Easing and noise | `ease(t, style)` with style `"linear"`, `"in"`, `"out"`, `"in out"`, `"sine in"`, `"sine out"`, `"sine in out"`, `"back in"`, `"back out"`, `"bounce out"`, `"elastic out"` (t from 0 to 1); `noise(x [, y [, z]])` or `noise(position)`: smooth, -1 to 1, the same every run |
 | Colors | `color(r, g, b [, a])`, `color("#ff8800")` (also `"#f80"`, and with alpha), `hsv(hue, saturation, value [, alpha])`: each an `[r, g, b, a]` list from 0 to 1 |
 | Time | `time()` (seconds since start), `frame()` |
+| Dates and the real clock | `real_time()` (seconds since 1970, keeps counting while paused or closed), `date([moment])` and `utc_date([moment])` (a map: year, month, day, hour, minute, second, weekday, weekday_number, month_name, day_of_year), `format_date(moment [, pattern])` (`YYYY` `MM` `DD` `hh` `mm` `ss` `Month` `Mon` `Weekday` `Wkd`; default `"YYYY-MM-DD hh:mm"`), `days_between(from, to)` (calendar days, local time) |
 | Vectors | `vector(x, y [, z])`, `distance(a, b)`, `distance from (a) to (b)` |
 
 ## Methods

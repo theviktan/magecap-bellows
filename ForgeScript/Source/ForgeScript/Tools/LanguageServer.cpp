@@ -1457,7 +1457,13 @@ namespace ForgeScript {
 			if (help.EntryKind == HelpEntry::Kind::Keyword)
 				item(help.Name, c_CompletionKeyword, help.Signature, help.Doc);
 			else if (help.EntryKind == HelpEntry::Kind::Function)
-				item(help.Name, c_CompletionFunction, help.Signature, help.Doc);
+			{
+				// A built-in the engine also gives (real_time) is offered once, as the engine's.
+				const bool engineHasIt = std::any_of(m_ApiFunctions.begin(), m_ApiFunctions.end(),
+					[&help](const ApiFunction& function) { return function.Name == help.Name; });
+				if (!engineHasIt)
+					item(help.Name, c_CompletionFunction, help.Signature, help.Doc);
+			}
 			else if (help.EntryKind == HelpEntry::Kind::Phrase)
 				item(help.Name, c_CompletionFunction, help.Signature, help.Doc, PhraseInsertText(help.Name));
 		}
