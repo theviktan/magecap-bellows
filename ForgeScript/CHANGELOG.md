@@ -7,6 +7,12 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **`forgescript --benchmark`** (Roadmap 2.0 Tier 4 #5, step 1): runs scripts five times and prints the
+  instructions each executed (exact, the same on every machine) and the median time. Seven benchmarks
+  in `Benchmarks/` cover calls, methods, closures, lists, text, events and tasks, and the
+  `ForgeScriptBenchmarks` test fails when one's instruction count grows by more than 5%. Hosts can
+  count too: `VMConfig::CountInstructions` and `VM::GetInstructionsRun` (off by default, since
+  counting costs a little time).
 - **`forgescript --format`** (Roadmap 2.0 Tier 4 #4) lays a script out the standard way: a tab per
   open block or bracket, `else`/`otherwise`/a match's `is`/`catch`/`finally` one level out, carried-on
   lines one further, no spaces at line ends, at most two blank lines, one line break at the end. It

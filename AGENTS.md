@@ -55,6 +55,7 @@ The tests:
 | `ForgeScriptTests` | The ForgeScript language: lexer, compiler errors, embedding API, and every `ForgeScript/Tests/Scripts/*.forge` script (also under GC stress). |
 | `ForgeScriptEngineExample` | The small stand-alone host in `ForgeScript/Examples/EngineIntegration`. |
 | `ForgeScriptCheckCommand` | `forgescript --check` text, `--json`, `--stdin`/`--name` output and exit codes, which editors and MageCap Forge depend on (`ForgeScript/Tests/CLI`). |
+| `ForgeScriptBenchmarks` | `forgescript --benchmark` on `ForgeScript/Benchmarks/*.forge`: each one's instruction count stays within 5% of `Benchmarks/instructions.txt` (times are printed, not tested). |
 | `ForgeScriptLspCommand` | `forgescript --lsp`, the language server, over standard input and output with a recorded session (`ForgeScript/Tests/LSP`). |
 | `ForgeScriptDocExamples` | Every ```` ```forge ```` example in `docs/ForgeScript`, `docs/ScriptingAPI.md` and `ForgeScript/README.md` passes `forgescript --check` with the engine API, and an example with `test` blocks (the Cookbook's) also passes `forgescript --test` (`ForgeScript/Tests/Docs`). Examples with a `use` line are left out. |
 | `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings, the agent server over loopback (no GPU). |

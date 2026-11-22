@@ -1,0 +1,12 @@
+# Text: joining, filling in values, splitting and searching.
+set parts to []
+for i from 1 to 20000 do
+	add "item {i} of {i * 2}" to parts
+end
+set joined to parts.join(";")
+set pieces to joined.split(";")
+set found to 0
+for each piece in pieces do
+	if piece.ends_with("0") then add 1 to found end
+end
+say found

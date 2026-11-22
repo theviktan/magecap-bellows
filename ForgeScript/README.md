@@ -41,6 +41,7 @@ forgescript --check game.forge       check a script for mistakes without running
 forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
 forgescript --test game.forge        run the script, then its 'test "..." ... end' blocks
 forgescript --format game.forge      lay the script out the standard way
+forgescript --benchmark a.forge ...  measure scripts: instructions executed and median time
 forgescript --version                show the version (see CHANGELOG.md)
 ```
 
@@ -102,6 +103,18 @@ forgescript --format --stdin < game.forge   print the laid-out script (--name gi
 ```
 
 Exit codes: `0` laid out (or already was), `1` with `--check` when it isn't, `65` when it can't be laid out (a block missing its `end`, an extra `end` or bracket, or text the lexer can't read; the message gives the line), `66` when the file can't be read or written, `64` for options that don't go together. It doesn't need the engine API: a script with mistakes that still adds up is laid out too. Every example in the docs is kept laid out this way by the `ForgeScriptDocExamples` test.
+
+### Measuring speed
+
+`--benchmark` runs each script five times, each in a new VM with game time stepping by 1/60 second (so `wait` takes no real time), and prints one line per script:
+
+```text
+calls.forge instructions 1800594 median 10.9 ms
+```
+
+The instruction count is exact and the same on every computer; the time is the median of the five runs. What the scripts print is left out. Exit codes: `0`, `70` when a script fails or executes a different number of instructions on another run (a benchmark must use `random_seed`), `66` when one can't be read.
+
+The scripts in [`Benchmarks`](Benchmarks) measure calls, methods, closures, lists, text, events and tasks. The `ForgeScriptBenchmarks` test compares their instruction counts with `Benchmarks/instructions.txt` and fails when one grows by more than 5%, which catches changes that make the compiler emit more work. It can't catch a slower VM doing the same instructions, so the times are printed for people to compare, not tested. When a change lowers a count, lower its line in `instructions.txt` in the same pull request.
 
 ### Language server for editors
 

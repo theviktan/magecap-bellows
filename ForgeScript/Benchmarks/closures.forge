@@ -1,0 +1,11 @@
+# Function values: made, kept, passed to list methods and called.
+function adder(amount)
+	return function(x) return x + amount end
+end
+set numbers to range(1, 20000)
+set total to 0
+for i from 1 to 5 do
+	set add_i to adder(i)
+	set total to total + numbers.map(add_i).filter(function(x) return x % 2 is 0 end).sum()
+end
+say total

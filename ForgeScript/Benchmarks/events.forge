@@ -1,0 +1,16 @@
+# Events: one 'trigger' reaching several 'when' handlers.
+set hits to 0
+set damage_total to 0
+when hit with damage
+	add 1 to hits
+end
+when hit with damage
+	add damage to damage_total
+end
+when hit with damage
+	if damage > 100 then say "big" end
+end
+repeat 20000 times
+	trigger hit with 3
+end
+say [hits, damage_total]
