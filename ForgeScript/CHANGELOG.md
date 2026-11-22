@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **The Cookbook** (`docs/ForgeScript/Cookbook.md`, Roadmap 2.0 Tier 4 #2): thirty recipes for
+  common game tasks (moving, combat, items, saving, state machines, quests, menus, easing), each with
+  how it works and how to go further. All are checked against the engine API, and the seventeen
+  that don't need the engine carry `test` blocks. `ForgeScriptDocExamples` now also runs the tests
+  of any doc example that has them, so a recipe whose results change fails the build.
 - **Find all uses, and rename** in the language server (Roadmap 2.0, Tier 4 #1):
   `textDocument/references` and `textDocument/rename` (with `prepareRename`). They work from what
   the compiler resolved, not from spelling, so two parameters both named `amount` are two different
