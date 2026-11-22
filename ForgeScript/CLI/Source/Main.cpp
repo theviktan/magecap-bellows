@@ -1,4 +1,5 @@
 #include "ForgeScript/ForgeScript.h"
+#include "ForgeScript/Tools/Formatter.h"
 #include "ForgeScript/Tools/LanguageServer.h"
 #include "ForgeScript/Tools/ProjectPaths.h"
 
@@ -112,7 +113,86 @@ namespace {
 			"                                      next to this program)\n"
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --test <script.forge>   run the script, then its tests ('test \"name\" ... end')\n"
+			"  forgescript --format <script.forge> lay the script out the standard way (rewrites the file)\n"
+			"      --check                         change nothing; exit with 1 when it needs formatting\n"
+			"      --stdin                         read the script from standard input, print the result\n"
 			"  forgescript --version               show the version\n";
+	}
+
+	// forgescript --format: 0 when the script is laid out (or already was), 1 when --check finds it
+	// isn't, 65 when it can't be formatted, 66 when it can't be read or written.
+	int FormatFile(const std::string& fileName, bool fromStdin, bool checkOnly)
+	{
+		std::string source;
+		if (fromStdin)
+		{
+#ifdef _WIN32
+			// The text goes back out byte for byte, keeping its own line breaks.
+			_setmode(_fileno(stdin), _O_BINARY);
+			_setmode(_fileno(stdout), _O_BINARY);
+#endif
+			source.assign(std::istreambuf_iterator<char>(std::cin), std::istreambuf_iterator<char>());
+		}
+		else if (!ReadFile(fileName, source))
+		{
+			std::cerr << "Could not open '" << fileName << "'." << std::endl;
+			return 66;
+		}
+		const std::string shownName = fromStdin ? (fileName.empty() ? std::string("stdin") : fileName) : fileName;
+		const ForgeScript::FormatResult result = ForgeScript::FormatScript(source);
+		if (!result.Error.empty())
+		{
+			std::cerr << shownName;
+			if (result.ErrorLine > 0)
+				std::cerr << ":" << result.ErrorLine;
+			std::cerr << ": " << result.Error << std::endl;
+			return 65;
+		}
+		if (checkOnly)
+		{
+			if (result.Changed)
+			{
+				std::cerr << shownName << ": not formatted. Run: forgescript --format " << shownName << std::endl;
+				return 1;
+			}
+			std::cout << shownName << ": already formatted." << std::endl;
+			return 0;
+		}
+		if (fromStdin)
+		{
+			std::cout << result.Text << std::flush;
+			return 0;
+		}
+		if (!result.Changed)
+		{
+			std::cout << shownName << ": already formatted." << std::endl;
+			return 0;
+		}
+		// Written next to the script first, then moved over it, so a failed write never leaves half a file.
+		const std::filesystem::path path(fileName);
+		std::filesystem::path temporary = path;
+		temporary += ".formatting";
+		{
+			std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+			out << result.Text;
+			if (!out.flush())
+			{
+				std::cerr << "Could not write '" << fileName << "'." << std::endl;
+				std::error_code ignored;
+				std::filesystem::remove(temporary, ignored);
+				return 66;
+			}
+		}
+		std::error_code error;
+		std::filesystem::rename(temporary, path, error);
+		if (error)
+		{
+			std::cerr << "Could not write '" << fileName << "': " << error.message() << std::endl;
+			std::filesystem::remove(temporary, error);
+			return 66;
+		}
+		std::cout << shownName << ": formatted." << std::endl;
+		return 0;
 	}
 
 	int RunFile(const std::string& fileName, bool realtime)
@@ -396,6 +476,7 @@ int main(int argc, char** argv)
 	bool realtime = false;
 	bool check = false;
 	bool test = false;
+	bool format = false;
 	bool lsp = false;
 	std::filesystem::path apiFile;
 	bool apiGiven = false;
@@ -419,6 +500,8 @@ int main(int argc, char** argv)
 			check = true;
 		else if (std::strcmp(argv[i], "--test") == 0)
 			test = true;
+		else if (std::strcmp(argv[i], "--format") == 0)
+			format = true;
 		else if (std::strcmp(argv[i], "--lsp") == 0)
 			lsp = true;
 		else if (std::strcmp(argv[i], "--api") == 0)
@@ -454,6 +537,20 @@ int main(int argc, char** argv)
 			file = argv[i];
 	}
 
+	if (format)
+	{
+		if (lsp || test || realtime || apiGiven || checkOptions.Json)
+		{
+			std::cerr << "--format works on its own, with --check or --stdin (and --name)." << std::endl;
+			return 64;
+		}
+		if (file.empty() && !checkOptions.FromStdin)
+		{
+			PrintUsage();
+			return 64;
+		}
+		return FormatFile(file, checkOptions.FromStdin, check);
+	}
 	if (lsp)
 	{
 		if (check || !file.empty())

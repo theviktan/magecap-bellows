@@ -7,6 +7,14 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **`forgescript --format`** (Roadmap 2.0 Tier 4 #4) lays a script out the standard way: a tab per
+  open block or bracket, `else`/`otherwise`/a match's `is`/`catch`/`finally` one level out, carried-on
+  lines one further, no spaces at line ends, at most two blank lines, one line break at the end. It
+  changes only whitespace around lines, never text, long text, comments or spacing inside a line,
+  and checks that the result reads as the same tokens. `--format --check` exits with 1 when a file
+  isn't laid out (for CI), and `--format --stdin` prints the result. The language server answers
+  `textDocument/formatting`. `ForgeScriptDocExamples` now also checks that every doc example is laid
+  out this way.
 - **New built-ins** (Roadmap 2.0 Tier 4 #3): `ease(t, style)` with eleven easing curves; `noise(x [, y
   [, z]])`, smooth Perlin noise from -1 to 1 that is the same every run; `color(r, g, b [, a])`,
   `color("#ff8800")` and `hsv(h, s, v [, a])`, each the `[r, g, b, a]` list engine colors take;

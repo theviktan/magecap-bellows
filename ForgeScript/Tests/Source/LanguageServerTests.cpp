@@ -819,6 +819,28 @@ TEST_CASE("LanguageServerLeavesNamesOfOtherScriptsAlone")
 		(std::vector<std::string> { "0:16-17", "1:8-9" }));
 }
 
+TEST_CASE("LanguageServerFormatsADocument")
+{
+	Session session;
+	const std::string uri = "file:///tmp/format.forge";
+	session.Open(uri, "if ready then\n  say \"go\"   \nend\n");
+	Json document;
+	document.Set("uri", uri);
+	Json params;
+	params.Set("textDocument", document).Set("options", Json(Json::Object()));
+	const Json edits = session.Request("textDocument/formatting", params);
+	REQUIRE_EQ(edits.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(edits.AsArray()[0].GetString("newText"), std::string("if ready then\n\tsay \"go\"\nend\n"));
+	CHECK_EQ(edits.AsArray()[0].Get("range").Get("end").Get("line").AsNumber(), 3.0);
+
+	// Already laid out: no edits. Blocks that don't add up: a reason instead.
+	session.Change(uri, "if ready then\n\tsay \"go\"\nend\n", 2);
+	CHECK(session.Request("textDocument/formatting", params).AsArray().empty());
+	session.Change(uri, "if ready then\n", 3);
+	const Json refused = session.Request("textDocument/formatting", params);
+	CHECK_NE(refused.Get("error").GetString("message").find("missing its 'end'"), std::string::npos);
+}
+
 TEST_CASE("FindScriptSymbolsSeesPastElseIf")
 {
 	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols(
