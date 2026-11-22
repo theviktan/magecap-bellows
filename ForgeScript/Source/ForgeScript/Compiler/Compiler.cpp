@@ -518,12 +518,13 @@ namespace ForgeScript {
 					return !(i > 0 && (tokens[i - 1].Type == TokenType::Else || tokens[i - 1].Type == TokenType::Otherwise)) &&
 						!IfPicksAValue(tokens, i);
 				case TokenType::While: case TokenType::Repeat:
-				case TokenType::Function: case TokenType::Phrase: case TokenType::When: case TokenType::Try:
+				case TokenType::Phrase: case TokenType::When: case TokenType::Try:
 					return true;
 				// 'wait until' and 'wait for' are waits, not loops.
 				case TokenType::Until: case TokenType::For:
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Wait);
-				case TokenType::Kind:
+				// 'x is a function' and 'x is a kind' test a value's type; they open nothing.
+				case TokenType::Function: case TokenType::Kind:
 					return !(i > 0 && tokens[i - 1].Type == TokenType::Identifier &&
 						(tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 				case TokenType::Identifier:
