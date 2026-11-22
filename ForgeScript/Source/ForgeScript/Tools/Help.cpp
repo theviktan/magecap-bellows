@@ -143,6 +143,13 @@ namespace ForgeScript {
 				Function("pi", "pi", "The number pi, about 3.14159."),
 				Function("infinity", "infinity", "A number larger than every other number."),
 				Function("random", "random(), random(n), random(a, b)", "A random number: from 0 to 1, a whole number from 1 to n, or from a to b."),
+				Function("random_chance", "random_chance(chance)", "True with that chance, from 0 (never) to 1 (always): if random_chance(0.25) then drop a coin."),
+				Function("random_direction", "random_direction()", "A random direction of length 1, any way round with the same chance."),
+				Function("random_point_in_circle", "random_point_in_circle(radius)", "A random point on the ground (y is 0) within radius of (0, 0, 0), every spot with the same chance. Add it to a position to spawn around it."),
+				Function("noise", "noise(x), noise(x, y), noise(x, y, z) or noise(position)", "Smooth noise from -1 to 1 that changes gently as the position moves, for terrain, wobble and camera shake. The same position always gives the same value."),
+				Function("ease", "ease(t, style)", "t from 0 to 1 bent into a curve, for smooth animation: ease(t, \"out\"). Styles: \"linear\", \"in\", \"out\", \"in out\", \"sine in\", \"sine out\", \"sine in out\", \"back in\", \"back out\", \"bounce out\", \"elastic out\"."),
+				Function("color", "color(r, g, b, a) or color(\"#ff8800\")", "A color as the [r, g, b, a] list engine colors take, from 0 to 1 each (alpha is 1 when left out), or from hex text like \"#ff8800\" or \"#ff880080\"."),
+				Function("hsv", "hsv(hue, saturation, value, alpha)", "A color from hue, saturation and value, each from 0 to 1, as an [r, g, b, a] list. The hue goes round the color wheel: 0 red, 1/3 green, 2/3 blue."),
 				Function("time", "time()", "Seconds since the game started."),
 				Function("frame", "frame()", "Frames since the game started."),
 				Function("vector", "vector(x, y, z)", "A position or direction with x, y and z (z is 0 when left out)."),
@@ -173,6 +180,9 @@ namespace ForgeScript {
 				Method("text", "characters", "text.characters()", "A list of the text's characters."),
 				Method("text", "is_number", "text.is_number()", "True when the text is a number, like \"3.5\"."),
 				Method("text", "is_empty", "text.is_empty()", "True when the text has no characters."),
+				Method("text", "capitalize", "text.capitalize()", "The text with its first letter in capitals (a to z only): \"sword of fire\".capitalize() is \"Sword of fire\"."),
+				Method("text", "title", "text.title()", "The text with the first letter of each word in capitals (a to z only): \"sword of fire\".title() is \"Sword Of Fire\"."),
+				Method("text", "count", "text.count(part)", "How many times part is in the text, without overlapping: \"banana\".count(\"an\") is 2."),
 
 				// Lists
 				Property("list", "length", "list.length", "How many items the list has (also size and count)."),
@@ -207,6 +217,11 @@ namespace ForgeScript {
 				Method("list", "filter", "list.filter(function)", "A new list of the items for which the function gives back true."),
 				Method("list", "find", "list.find(function)", "The first item for which the function gives back true, or nothing."),
 				Method("list", "each", "list.each(function)", "Calls the function with every item."),
+				Method("list", "unique", "list.unique()", "A new list with each item once, where it first comes: [3, 1, 3, 2].unique() is [3, 1, 2]."),
+				Method("list", "flatten", "list.flatten()", "A new list with the items of the lists inside, one level deep: [[1, 2], [3], 4].flatten() is [1, 2, 3, 4]."),
+				Method("list", "chunk", "list.chunk(size)", "The list cut into lists of size items (the last may be shorter): [1, 2, 3, 4, 5].chunk(2) is [[1, 2], [3, 4], [5]]."),
+				Method("list", "max_by", "list.max_by(function)", "The item for which the function gives the biggest number (the first on a tie), or nothing for an empty list."),
+				Method("list", "min_by", "list.min_by(function)", "The item for which the function gives the smallest number (the first on a tie), or nothing for an empty list: enemies.min_by(function(e) return e.position.distance_to(my position) end)."),
 
 				// Maps
 				Property("map", "length", "map.length", "How many keys the map has (also size and count)."),

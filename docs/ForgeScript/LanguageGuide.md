@@ -1350,6 +1350,25 @@ say snapped(17, 5)                    # 15: lining things up on a grid
 | `zip(first, second)` | two lists paired up by position |
 | `random_seed(n)` | the same random numbers every time for the same n |
 
+### Easing, noise and colors
+
+```forge
+# A menu that pops up in half a second, overshooting a little.
+set t to 0.3
+say ease(t, "back out")               # a curve from 0 to 1; also "in", "out", "in out", "bounce out" ...
+
+# Gentle wobble: noise changes smoothly as its input moves, from -1 to 1.
+set wobble to noise(time() * 2) * 0.1
+
+set orange to color("#ff8800")        # [1, 0.53, 0, 1], the list engine colors take
+set sky to hsv(0.6, 0.5, 1)           # hue, saturation and value, each from 0 to 1
+
+if random_chance(0.25) then say "A rare drop!" end
+set spot to random_point_in_circle(5) # a point on the ground within 5 units
+```
+
+`noise` gives the same value for the same position every time, so a level built from it looks the same on every run; move to another part of it (`noise(x + 100)`) for a different pattern. A script's own function or variable named `ease`, `noise`, `color` or `hsv` still wins over the built-in one.
+
 **Engine positions:** `set my position.x to 5` works on engine objects too. ForgeScript reads the position, changes `x`, and gives the new position back to the engine automatically.
 
 ---
