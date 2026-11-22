@@ -18,8 +18,8 @@ with new language or tool features, the patch number with fixes.
   names, and a function inside a function changes with the outer variable it uses. Rename covers a
   script's variables, parameters, loop and `catch` names, functions and kinds, in that script. It
   refuses, saying why, instead of guessing: fields and methods (`my health`, `goblin.health`; the
-  kind isn't known), names a script doesn't make, a script with mistakes, a keyword or built-in
-  function as the new name, a new name that already means something where the old one is used, a
+  kind isn't known), names a script doesn't make, a script with mistakes, a keyword, built-in
+  function or name over 255 characters as the new name, a new name that already means something where the old one is used, a
   name also written in a phrase's words, and a script-level name of a script another open script
   `use`s. Each rename is checked by compiling the renamed script: every name must mean what it
   meant, with no new mistake or warning. Hosts get the compiler's answer from `VM::FindNameUses`.

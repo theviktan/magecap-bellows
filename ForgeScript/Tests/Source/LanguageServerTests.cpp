@@ -786,6 +786,8 @@ TEST_CASE("LanguageServerRenamesWhatTheCompilerSees")
 	refused(1, 15, "end", "is a ForgeScript keyword");
 	refused(1, 15, "two words", "isn't one name");
 	refused(1, 15, "9lives", "isn't");
+	refused(1, 15, std::string(256, 'a'), "at most 255 characters");
+	CHECK(RenameAt(session, "textDocument/rename", uri, 1, 15, std::string(255, 'a'), error).Get("changes").AsObject().size() == 1);
 	refused(1, 15, "print", "is a built-in function");
 	refused(1, 15, "find_entity", "is a built-in function");
 
