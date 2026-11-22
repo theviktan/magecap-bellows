@@ -14,6 +14,14 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **Fixed: Rename could break a script that wasn't open** (reported by MFC). Renaming a function or
+  variable checked only the scripts open in the editor, so with `Main.forge` closed, renaming
+  `double` in the `Helpers.forge` it uses went through and left Main calling a name that was gone.
+  The language server now looks at every script in the game's folder (open or not, and scripts that
+  reach this one through other scripts' `use`), and refuses only when one of them actually says the
+  name: "'Main.forge' uses this script and says 'double' on line 2, and rename only changes this
+  script. Rename 'double' in both by hand." The old advice to close that script first is gone,
+  since closing it didn't help.
 - **A warning for `repeat forever` with no `wait`** (audit B-18): the editor, the language server
   and `forgescript --check` now warn "This 'repeat forever' loop never waits, so nothing else in
   the game can run while it does" when the loop has no `wait`, `stop`, `return` or `fail` and calls
