@@ -7,6 +7,13 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **New built-ins** (Roadmap 2.0 Tier 4 #3): `ease(t, style)` with eleven easing curves; `noise(x [, y
+  [, z]])`, smooth Perlin noise from -1 to 1 that is the same every run; `color(r, g, b [, a])`,
+  `color("#ff8800")` and `hsv(h, s, v [, a])`, each the `[r, g, b, a]` list engine colors take;
+  `random_chance(p)`, `random_direction()` and `random_point_in_circle(radius)`, which follow
+  `random_seed`. Text gets `capitalize()`, `title()` and `count(part)`; lists get `unique()`,
+  `flatten()`, `chunk(size)`, `max_by(f)` and `min_by(f)`. No new words: a script's own function
+  or variable with one of these names still wins, as with every built-in.
 - **The Cookbook** (`docs/ForgeScript/Cookbook.md`, Roadmap 2.0 Tier 4 #2): thirty recipes for
   common game tasks (moving, combat, items, saving, state machines, quests, menus, easing), each with
   how it works and how to go further. All are checked against the engine API, and the seventeen
