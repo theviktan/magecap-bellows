@@ -897,6 +897,12 @@ TEST_CASE("LanguageServerRenameFindsScriptsThatArentOpen")
 	CHECK_EQ(error, std::string("'Level.forge' uses this script and says 'double' on line 2, and rename only changes this script. "
 		"Rename 'double' in both by hand."));
 
+	// Scripts too big to read through in all: rename says so instead of skipping them (audit S-11).
+	project.Write("Assets/Scripts/Huge.forge", "use \"Scripts/Helpers\"\n" + std::string(65'000'000, '#') + "\n");
+	CHECK(RenameAt(session, "textDocument/rename", helpersUri, 3, 10, "halve", error).IsNull());
+	CHECK_NE(error.find("are too big to read through"), std::string::npos);
+	std::filesystem::remove(project.Path / "Assets/Scripts/Huge.forge");
+
 	// A field of the same name in another script isn't this name.
 	project.Write("Assets/Scripts/Level.forge", "use \"Scripts/Tools\"\nset box to {}\nsay box.double\n");
 	CHECK_FALSE(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());

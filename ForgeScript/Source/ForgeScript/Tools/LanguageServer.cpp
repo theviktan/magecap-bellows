@@ -2106,8 +2106,10 @@ namespace ForgeScript {
 		for (const auto& [otherUri, other] : m_Documents)
 			scripts[keyOf(other.Path)] = { other.Path.lexically_normal(), other.Text };
 		const std::filesystem::path useFolder = document.Path.is_absolute() ? FindUseFolder(document.Path) : std::filesystem::path();
+		// Limits so a huge folder can't stall the editor. Past either one, rename refuses rather than guess.
 		constexpr size_t c_MaxEntries = 200'000;
-		constexpr uintmax_t c_MaxScriptBytes = 4'000'000;
+		constexpr uintmax_t c_MaxTotalBytes = 64'000'000;
+		uintmax_t totalBytes = 0;
 		size_t entries = 0;
 		std::error_code error;
 		if (!useFolder.empty())
@@ -2119,12 +2121,19 @@ namespace ForgeScript {
 					return "There are too many files in '" + PathToUtf8(useFolder) + "' to find every script that uses this one, so rename "
 						"can't be sure it changes them all. Rename '" + oldName + "' by hand.";
 				std::error_code fileError;
-				if (it->path().extension() != ".forge" || !it->is_regular_file(fileError) || it->file_size(fileError) > c_MaxScriptBytes)
+				if (it->path().extension() != ".forge" || !it->is_regular_file(fileError))
 					continue;
 				const std::filesystem::path path = it->path().lexically_normal();
 				const std::string key = keyOf(path);
+				if (scripts.count(key) > 0)
+					continue;
+				const uintmax_t size = it->file_size(fileError);
+				totalBytes += fileError ? 0 : size;
+				if (totalBytes > c_MaxTotalBytes)
+					return "The scripts in '" + PathToUtf8(useFolder) + "' are too big to read through, so rename can't be sure it "
+						"changes every script that uses this one. Rename '" + oldName + "' by hand.";
 				std::string text;
-				if (scripts.count(key) == 0 && ReadTextFile(path, text))
+				if (ReadTextFile(path, text))
 					scripts[key] = { path, std::move(text) };
 			}
 		}

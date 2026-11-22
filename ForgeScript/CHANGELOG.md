@@ -20,7 +20,8 @@ with new language or tool features, the patch number with fixes.
   catch.
 - **Fixed: on Windows, Rename could miss a script that names this one in other capitals** (audit
   S-11). `use "helpers"` opens Helpers.forge on Windows and macOS, so Rename now matches script
-  paths in any letter case, and refuses when such a script says the name.
+  paths in any letter case, and refuses when such a script says the name. A big script is no
+  longer skipped: past 64 MB of scripts in all, Rename refuses and says why.
 - **Fixed: Rename could break a script that wasn't open** (reported by MFC). Renaming a function or
   variable checked only the scripts open in the editor, so with `Main.forge` closed, renaming
   `double` in the `Helpers.forge` it uses went through and left Main calling a name that was gone.
