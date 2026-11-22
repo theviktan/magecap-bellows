@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <charconv>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <random>
 #include <string>
 #include <string_view>
@@ -219,6 +221,147 @@ namespace ForgeScript {
 			if (IsObjectType(a, ObjectType::String) && IsObjectType(b, ObjectType::String))
 				return As<String>(a)->Text < As<String>(b)->Text;
 			context.Error("sort can only order numbers with numbers or text with text. Use sort_by with a function for anything else.");
+		}
+
+		// ---- Dates. Calendar math from days since 1970 (Howard Hinnant's civil-from-days), which is
+		// the same on every platform; only local time asks the system for the time zone.
+
+		// The seconds date functions accept: from 1970 to the end of 9999.
+		constexpr double c_LastDateSecond = 253402300799.0;
+
+		struct CivilDate
+		{
+			int64_t Year = 1970;
+			int Month = 1;  // 1 to 12
+			int Day = 1;    // 1 to 31
+			int Hour = 0;
+			int Minute = 0;
+			int Second = 0;
+			int Weekday = 4; // 1 = Monday ... 7 = Sunday (1970-01-01 was a Thursday)
+			int DayOfYear = 1;
+		};
+
+		int64_t DaysFromCivil(int64_t year, int month, int day)
+		{
+			year -= month <= 2;
+			const int64_t era = (year >= 0 ? year : year - 399) / 400;
+			const int64_t yearOfEra = year - era * 400;
+			const int64_t dayOfYear = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+			const int64_t dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+			return era * 146097 + dayOfEra - 719468;
+		}
+
+		CivilDate CivilFromSeconds(int64_t seconds)
+		{
+			CivilDate date;
+			int64_t days = seconds / 86400;
+			int64_t rest = seconds % 86400;
+			if (rest < 0)
+			{
+				rest += 86400;
+				days--;
+			}
+			date.Hour = static_cast<int>(rest / 3600);
+			date.Minute = static_cast<int>(rest / 60 % 60);
+			date.Second = static_cast<int>(rest % 60);
+			date.Weekday = static_cast<int>(((days % 7) + 7 + 3) % 7) + 1;
+
+			const int64_t z = days + 719468;
+			const int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+			const int64_t dayOfEra = z - era * 146097;
+			const int64_t yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+			const int64_t dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+			const int64_t monthIndex = (5 * dayOfYear + 2) / 153;
+			date.Day = static_cast<int>(dayOfYear - (153 * monthIndex + 2) / 5 + 1);
+			date.Month = static_cast<int>(monthIndex < 10 ? monthIndex + 3 : monthIndex - 9);
+			date.Year = yearOfEra + era * 400 + (date.Month <= 2);
+			date.DayOfYear = static_cast<int>(days - DaysFromCivil(date.Year, 1, 1)) + 1;
+			return date;
+		}
+
+		// The offset of local time from UTC at that moment, in seconds (daylight saving included).
+		int64_t LocalOffsetSeconds(int64_t seconds)
+		{
+			const std::time_t moment = static_cast<std::time_t>(seconds);
+			std::tm local {};
+#ifdef _WIN32
+			if (localtime_s(&local, &moment) != 0)
+				return 0;
+#else
+			if (!localtime_r(&moment, &local))
+				return 0;
+#endif
+			const int64_t localDays = DaysFromCivil(local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
+			const int64_t localSeconds = localDays * 86400 + local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec;
+			return localSeconds - seconds;
+		}
+
+		// The seconds argument at 'index' (or now, when there is none), checked: a date function's
+		// moment must be a real time between 1970 and the end of 9999.
+		int64_t DateSeconds(CallContext& c, size_t index, const char* name)
+		{
+			double seconds;
+			if (c.Count() <= index)
+				seconds = std::floor(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::system_clock::now().time_since_epoch()).count()) / 1000.0);
+			else
+				seconds = c.Number(index);
+			if (!std::isfinite(seconds) || seconds < 0 || seconds > c_LastDateSecond)
+				c.Error(std::string(name) + " needs a moment from real_time(): seconds from 1970 to the end of 9999, but got " +
+					FormatNumber(seconds) + ".");
+			return static_cast<int64_t>(std::floor(seconds));
+		}
+
+		CivilDate LocalDate(int64_t seconds)
+		{
+			return CivilFromSeconds(seconds + LocalOffsetSeconds(seconds));
+		}
+
+		const char* const c_MonthNames[12] = { "January", "February", "March", "April", "May", "June", "July", "August",
+			"September", "October", "November", "December" };
+		const char* const c_WeekdayNames[7] = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+
+		Value DateMap(VM& vm, const CivilDate& date)
+		{
+			Value map = vm.MakeMap();
+			Map* fields = As<Map>(map);
+			auto set = [&vm, fields](const char* key, const Value& value) { fields->Set(vm.MakeText(key), value); };
+			set("year", Value::FromNumber(static_cast<double>(date.Year)));
+			set("month", Value::FromNumber(date.Month));
+			set("day", Value::FromNumber(date.Day));
+			set("hour", Value::FromNumber(date.Hour));
+			set("minute", Value::FromNumber(date.Minute));
+			set("second", Value::FromNumber(date.Second));
+			set("weekday", vm.MakeText(c_WeekdayNames[date.Weekday - 1]));
+			set("weekday_number", Value::FromNumber(date.Weekday));
+			set("month_name", vm.MakeText(c_MonthNames[date.Month - 1]));
+			set("day_of_year", Value::FromNumber(date.DayOfYear));
+			return map;
+		}
+
+		// format_date's pattern words, longest first so "Month" isn't read as "Mon" + "th".
+		std::string FormatDate(const CivilDate& date, std::string_view pattern)
+		{
+			auto twoDigits = [](int n) { return (n < 10 ? "0" : "") + std::to_string(n); };
+			std::string text;
+			size_t at = 0;
+			while (at < pattern.size())
+			{
+				const std::string_view rest = pattern.substr(at);
+				auto starts = [&rest](std::string_view word) { return rest.substr(0, word.size()) == word; };
+				if (starts("YYYY")) { text += std::to_string(date.Year); at += 4; }
+				else if (starts("Weekday")) { text += c_WeekdayNames[date.Weekday - 1]; at += 7; }
+				else if (starts("Month")) { text += c_MonthNames[date.Month - 1]; at += 5; }
+				else if (starts("Wkd")) { text += std::string(c_WeekdayNames[date.Weekday - 1]).substr(0, 3); at += 3; }
+				else if (starts("Mon")) { text += std::string(c_MonthNames[date.Month - 1]).substr(0, 3); at += 3; }
+				else if (starts("MM")) { text += twoDigits(date.Month); at += 2; }
+				else if (starts("DD")) { text += twoDigits(date.Day); at += 2; }
+				else if (starts("hh")) { text += twoDigits(date.Hour); at += 2; }
+				else if (starts("mm")) { text += twoDigits(date.Minute); at += 2; }
+				else if (starts("ss")) { text += twoDigits(date.Second); at += 2; }
+				else { text += pattern[at]; at++; }
+			}
+			return text;
 		}
 
 		// A number argument that must be finite: infinity, or a not-a-number made from it, would turn into
@@ -838,6 +981,48 @@ namespace ForgeScript {
 
 		RegisterFunction("time", 0, [](CallContext& c) { return Value::FromNumber(c.GetVM().GetTime()); });
 		RegisterFunction("frame", 0, [](CallContext& c) { return Value::FromNumber(static_cast<double>(c.GetVM().GetFrame())); });
+
+		// ------------------------------------------------------------------ Dates and the real clock
+
+		// Seconds since the start of 1970 (UTC) by the computer's clock. Unlike time() it keeps going
+		// while the game is paused or closed: for daily rewards, streaks and save stamps.
+		RegisterFunction("real_time", 0, [](CallContext&)
+		{
+			return Value::FromNumber(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count()) / 1000.0);
+		});
+		// The date and time as a map (year, month, day, hour, minute, second, weekday, weekday_number,
+		// month_name, day_of_year): now, or at a moment from real_time(). date() is local time,
+		// utc_date() is the same everywhere.
+		RegisterFunction("date", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() > 1)
+				c.Error("date takes one moment from real_time() at most, like: date(saved_at)");
+			return DateMap(c.GetVM(), LocalDate(DateSeconds(c, 0, "date")));
+		});
+		RegisterFunction("utc_date", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() > 1)
+				c.Error("utc_date takes one moment from real_time() at most, like: utc_date(saved_at)");
+			return DateMap(c.GetVM(), CivilFromSeconds(DateSeconds(c, 0, "utc_date")));
+		});
+		// A moment as text in local time: "2026-11-22 02:00" by default, or by a pattern of YYYY, MM, DD,
+		// hh, mm, ss, Month, Mon, Weekday and Wkd: format_date(saved_at, "Weekday, Month DD").
+		RegisterFunction("format_date", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() < 1 || c.Count() > 2)
+				c.Error("format_date needs a moment from real_time() and maybe a pattern, like: format_date(real_time(), \"YYYY-MM-DD\")");
+			const CivilDate date = LocalDate(DateSeconds(c, 0, "format_date"));
+			return c.GetVM().MakeText(FormatDate(date, c.Count() > 1 ? c.Text(1) : std::string("YYYY-MM-DD hh:mm")));
+		});
+		// Whole calendar days from one moment to the next in local time: 1 from 11 PM to 1 AM, so a
+		// daily reward knows a new day began. Negative when 'to' is earlier.
+		RegisterFunction("days_between", 2, [](CallContext& c)
+		{
+			const CivilDate from = LocalDate(DateSeconds(c, 0, "days_between"));
+			const CivilDate to = LocalDate(DateSeconds(c, 1, "days_between"));
+			return Value::FromNumber(static_cast<double>(DaysFromCivil(to.Year, to.Month, to.Day) - DaysFromCivil(from.Year, from.Month, from.Day)));
+		});
 
 		// ------------------------------------------------------------------ Vectors
 
