@@ -21,6 +21,7 @@ ForgeScript runs on its own virtual machine, the way GDScript runs inside Godot.
 |---|---|
 | [Language Guide](../docs/ForgeScript/LanguageGuide.md) | Learn ForgeScript step by step. |
 | [Quick Reference](../docs/ForgeScript/Reference.md) | Every statement, operator, function and method on one page. |
+| [Cookbook](../docs/ForgeScript/Cookbook.md) | Thirty tested recipes for common game tasks: movement, combat, inventories, saving, timers, menus. |
 | [Specification](../docs/ForgeScript/Specification.md) | The exact rules of the language, for precise answers and for tools. |
 | [Coming from Python or GDScript](../docs/ForgeScript/ComingFromPythonAndGDScript.md) | The same code side by side in Python, GDScript and ForgeScript, and the differences that catch people out. |
 | [C++ API](../docs/ForgeScript/Embedding.md) | How C++ code hosts the language: types, functions, phrases, events. |

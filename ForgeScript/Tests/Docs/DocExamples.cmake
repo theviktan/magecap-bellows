@@ -4,7 +4,9 @@
 #         -DDOCS=<file|file|...> -P DocExamples.cmake
 #
 # An example is a block that starts with a ```forge line and ends with a ``` line. Examples with a
-# 'use' line are left out: the scripts they use exist only in the reader's project.
+# 'use' line are left out: the scripts they use exist only in the reader's project. An example with
+# its own tests (a 'test "..."' line, as in the Cookbook) is also run with 'forgescript --test', so
+# what it teaches is what it does.
 
 cmake_minimum_required(VERSION 3.24)
 
@@ -12,6 +14,7 @@ file(REMOVE_RECURSE "${OUT}")
 file(MAKE_DIRECTORY "${OUT}")
 
 set(checked 0)
+set(tested 0)
 set(failures "")
 string(REPLACE "|" ";" DOCS "${DOCS}")
 foreach(doc IN LISTS DOCS)
@@ -58,6 +61,14 @@ foreach(doc IN LISTS DOCS)
 		if(NOT exitCode EQUAL 0)
 			string(STRIP "${out}${err}" said)
 			list(APPEND failures "${docName}:${line}: ${said}")
+		elseif(code MATCHES "(^|\n)test \"")
+			execute_process(COMMAND "${FORGESCRIPT}" --test "${file}"
+				RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
+			math(EXPR tested "${tested} + 1")
+			if(NOT exitCode EQUAL 0)
+				string(STRIP "${out}${err}" said)
+				list(APPEND failures "${docName}:${line}: its tests fail:\n${said}")
+			endif()
 		endif()
 	endwhile()
 endforeach()
@@ -69,4 +80,4 @@ if(failures)
 	list(JOIN failures "\n" all)
 	message(FATAL_ERROR "Examples in the docs that forgescript --check refuses:\n${all}")
 endif()
-message(STATUS "${checked} examples in the docs pass forgescript --check")
+message(STATUS "${checked} examples in the docs pass forgescript --check, and the tests of ${tested} of them pass")
