@@ -1,5 +1,7 @@
 #include "ForgeScript/Compiler/Lexer.h"
 
+#include "ForgeScript/Core/Utf8.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -483,6 +485,22 @@ namespace ForgeScript {
 			return MakeError("Unexpected character '&'. ForgeScript writes 'and', like: if x > 0 and x < 5 then");
 		if (c == '|')
 			return MakeError("Unexpected character '|'. ForgeScript writes 'or', like: if x is 0 or y is 0 then");
+		// A letter like 'é' is several bytes of UTF-8: report it once, as itself, never one byte at a time
+		// (that would put broken UTF-8 into the checkers' JSON, audit S-12).
+		if (static_cast<unsigned char>(c) >= 0x80)
+		{
+			const size_t length = Utf8::CharLength(static_cast<unsigned char>(c));
+			bool valid = length > 1 && m_Current - 1 + length <= m_Source.size();
+			for (size_t i = 0; valid && i + 1 < length; i++)
+				valid = (static_cast<unsigned char>(m_Source[m_Current + i]) & 0xC0) == 0x80;
+			if (!valid)
+				return MakeError("This byte isn't readable text. Save the script as UTF-8.");
+			const std::string character(m_Source.substr(m_Current - 1, length));
+			for (size_t i = 1; i < length; i++)
+				Advance();
+			return MakeError("'" + character + "' can only be used inside text, like \"caf\xC3\xA9\". Names use the letters a to z, "
+				"the digits 0 to 9 and _, like: set cafe to 5");
+		}
 		return MakeError(std::string("Unexpected character '") + c + "'.");
 	}
 

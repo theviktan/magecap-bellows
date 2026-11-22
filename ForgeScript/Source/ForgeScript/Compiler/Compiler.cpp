@@ -634,7 +634,9 @@ namespace ForgeScript {
 			m_Fix.FixTitle = "Add the missing 'end'";
 			m_Fix.FixLine = m_Fix.FixEndLine = last->Line;
 			m_Fix.FixColumn = m_Fix.FixEndColumn = column;
-			m_Fix.FixText = "\n" + IndentOf(openerLine) + "end";
+			// The file's own line ending: a script saved with Windows line ends (CRLF) keeps them (audit S-13).
+			const bool crlf = lineEnd < sourceEnd && *lineEnd == '\r';
+			m_Fix.FixText = (crlf ? "\r\n" : "\n") + IndentOf(openerLine) + "end";
 		}
 
 		[[noreturn]] void ErrorAtCurrent(const std::string& message) { ErrorAt(Current(), message); }
