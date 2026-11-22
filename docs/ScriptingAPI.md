@@ -650,11 +650,32 @@ engine sends these events, which the script handles with `when`:
   | `resume the game` | `set_paused(False)` |
   | `the game is paused` | `is_paused()` |
   | `keep (entity) across scenes` | `entity.keep_across_scenes = True` |
+  | `move (entity) to (position) over (seconds) seconds` | `tween(entity, "position", position, seconds)` |
+  | `move (entity) by (offset) over (seconds) seconds` | `tween_by(entity, "position", offset, seconds)` |
+  | `turn (entity) to (angles) over (seconds) seconds` | `tween(entity, "rotation", angles, seconds)`, in degrees |
+  | `turn (entity) by (angles) over (seconds) seconds` | `tween_by(entity, "rotation", angles, seconds)` |
+  | `scale (entity) to (size) over (seconds) seconds` | `tween(entity, "scale", size, seconds)`; a number scales all three axes |
+  | `fade (entity) to (opacity) over (seconds) seconds` | `tween` of `"UIImage.color"` (or `"Text.color"`) to the same color with that alpha, 0 to 1 |
+  | `push (entity) by (impulse)` | `entity.rigid_body.add_impulse(impulse)` |
+
+  Every tween phrase also takes `second` (`over 1 second`) and ends with an optional
+  `with (style)` for the easing, which is `"in out"` otherwise: `move door to p over 2 seconds with
+  "bounce out"`. They give back the `Tween`, so a script can wait for it (example below). A
+  script's own `move` function or `fade` variable still works, but where it is visible, it hides the
+  phrase that starts with the same word.
 
   Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works. The widget
   phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still
   ForgeScript's `show` function, which prints the value. A non-entity gets "'hide' needs a UI entity,
   like: hide find_entity("Pause Menu")".
+
+```forge
+when clicked
+	set slide to move self to vector(0, 2, 0) over 0.5 seconds with "back out"
+	wait until slide.finished
+	fade self to 0 over 1 second
+end
+```
 
 How values look in ForgeScript:
 

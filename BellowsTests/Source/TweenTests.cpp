@@ -380,6 +380,86 @@ TEST_CASE("A scene runs at most 10,000 tweens, and tweens go when play stops")
 	CHECK(test.Play->GetTweens()->GetCount() == 0);
 }
 
+TEST_CASE("Tween phrases do what their tween() calls do and give back the Tween")
+{
+	TweenScene test;
+	test.Box.AddComponent<UIRectComponent>();
+	test.Box.AddComponent<UIImageComponent>().Color = glm::vec4(0.25f, 0.5f, 0.75f, 1.0f);
+	ForgeScriptRunner forge(*test.Play);
+	const auto run = [&](const std::string& source)
+	{
+		forge.Output.clear();
+		forge.Run(source, test.Box);
+		REQUIRE(forge.Errors.empty());
+		return forge.Output;
+	};
+
+	// The phrase is a value too, so its Tween can be kept; "with" picks the easing.
+	CHECK(run("set t to move self to vector(0, 4, 0) + vector(0, 0, 2) over 1 + 1 seconds with \"linear\"\nsay t.property\nsay t.running\n")
+		== "position\ntrue\n");
+	test.Run(1.0);
+	CHECK(test.Position().y == doctest::Approx(2.0f));
+	CHECK(test.Position().z == doctest::Approx(1.0f));
+	test.Run(1.0);
+	CHECK(test.Position() == glm::vec3(0.0f, 4.0f, 2.0f));
+
+	// "by" adds, and "second" reads right for one.
+	run("move self by vector(1, 0, 0) over 1 second\n");
+	test.Run(1.0);
+	CHECK(test.Position() == glm::vec3(1.0f, 4.0f, 2.0f));
+
+	// Angles are degrees, as the rotation property is; "by" may pass a full turn.
+	run("turn self to vector(0, 90, 0) over 0.5 seconds with \"out\"\n");
+	test.Run(1.0);
+	CHECK(run("say round(self.rotation.y)\n") == "90\n");
+	run("turn self by vector(0, 360, 0) over 1 second\n");
+	test.Run(0.5);
+	CHECK(run("say round(self.rotation.y)\n") == "-90\n");
+	test.Run(0.5);
+	// The end is set exactly, as tween_by sets it: 90 plus a full turn, facing the same way as 90.
+	CHECK(run("say round(self.rotation.y)\n") == "450\n");
+
+	// A number scales all three axes; a vector each one.
+	run("scale self to 2 over 1 second\n");
+	test.Run(1.0);
+	CHECK(test.Box.GetComponent<TransformComponent>().Scale == glm::vec3(2.0f));
+	run("scale self to vector(1, 2, 3) over 1 second\n");
+	test.Run(1.0);
+	CHECK(test.Box.GetComponent<TransformComponent>().Scale == glm::vec3(1.0f, 2.0f, 3.0f));
+
+	// fade keeps the color and changes its alpha: a UIImage first, else a Text.
+	CHECK(run("set f to fade self to 0.25 over 1 second\nsay f.property\n") == "UIImage.color\n");
+	test.Run(1.0);
+	CHECK(test.Box.GetComponent<UIImageComponent>().Color == glm::vec4(0.25f, 0.5f, 0.75f, 0.25f));
+	Entity label = test.Play->CreateEntity("Label");
+	label.AddComponent<TextComponent>().Color = glm::vec4(1.0f, 0.0f, 0.0f, 0.5f);
+	forge.Output.clear();
+	forge.Run("say (fade self to 1 over 1 second).property\n", label);
+	REQUIRE(forge.Errors.empty());
+	CHECK(forge.Output == "Text.color\n");
+	test.Run(1.0);
+	CHECK(label.GetComponent<TextComponent>().Color == glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+	// The same names a script uses for its own things still work.
+	CHECK(run("function move(n)\n\treturn n * 2\nend\nsay move(4)\nset fade to 3\nsay fade\n") == "8\n3\n");
+
+	const auto error = [&](const std::string& line, Entity self)
+	{
+		forge.Errors.clear();
+		forge.Run(line + "\n", self);
+		REQUIRE(forge.Errors.size() == 1);
+		return forge.Errors[0];
+	};
+	CHECK(error("move self to 5 over 1 second", test.Box).find("needs a vector of 3 numbers") != std::string::npos);
+	CHECK(error("move self to vector(1, 2, 3) over -1 seconds", test.Box).find("A tween's length is a number of seconds") != std::string::npos);
+	CHECK(error("move self to vector(1, 2, 3) over 1 second with \"wobbly\"", test.Box).find("'wobbly' isn't an easing style") != std::string::npos);
+	CHECK(error("move 5 to vector(1, 2, 3) over 1 second", test.Box).find("'move' needs an entity, like: move self to vector(0, 1, 0) over 1 second") != std::string::npos);
+	CHECK(error("fade self to 2 over 1 second", test.Box).find("opacity from 0 (clear) to 1 (solid)") != std::string::npos);
+	Entity plain = test.Play->CreateEntity("Plain");
+	CHECK(error("fade self to 0 over 1 second", plain).find("'fade' needs an entity with a UIImage or a Text, and 'Plain' has neither") != std::string::npos);
+	CHECK(error("push self by vector(0, 5, 0)", plain).find("RigidBody") != std::string::npos);
+}
+
 TEST_CASE("Scripts start and steer tweens through the API, and bad arguments say what's wrong")
 {
 	TweenScene test;

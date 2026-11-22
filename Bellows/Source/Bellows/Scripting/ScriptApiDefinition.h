@@ -338,6 +338,16 @@ namespace Bellows::Scripting {
 			return ScriptTween { target.SceneID, id, target, property.Name };
 		}
 
+		// --- Physics -----------------------------------------------------------
+
+		inline void AddImpulse(const RigidBodyRef& body, const glm::vec3& impulse)
+		{
+			Entity entity = body.GetEntity();
+			body.Get();
+			if (PhysicsWorld* physics = GetPhysics(entity))
+				physics->AddImpulse(entity, impulse);
+		}
+
 		inline SceneTweens* FindTweens(const ScriptTween& tween)
 		{
 			Scene* scene = Scene::GetSceneByID(tween.SceneID);
@@ -579,7 +589,7 @@ namespace Bellows::Scripting {
 			[](const RigidBodyRef& r) { Entity e = r.GetEntity(); r.Get(); return GetPhysics(e) ? GetPhysics(e)->GetAngularVelocity(e) : glm::vec3(0.0f); },
 			[](const RigidBodyRef& r, const glm::vec3& v) { Entity e = r.GetEntity(); r.Get(); if (GetPhysics(e)) GetPhysics(e)->SetAngularVelocity(e, v); }, "");
 		rigidBody.Method("add_force", [](const RigidBodyRef& r, const glm::vec3& f) { Entity e = r.GetEntity(); r.Get(); if (GetPhysics(e)) GetPhysics(e)->AddForce(e, f); }, "", Arg("force"));
-		rigidBody.Method("add_impulse", [](const RigidBodyRef& r, const glm::vec3& i) { Entity e = r.GetEntity(); r.Get(); if (GetPhysics(e)) GetPhysics(e)->AddImpulse(e, i); }, "", Arg("impulse"));
+		rigidBody.Method("add_impulse", [](const RigidBodyRef& r, const glm::vec3& i) { Detail::AddImpulse(r, i); }, "", Arg("impulse"));
 		rigidBody.Method("add_torque", [](const RigidBodyRef& r, const glm::vec3& t) { Entity e = r.GetEntity(); r.Get(); if (GetPhysics(e)) GetPhysics(e)->AddTorque(e, t); }, "", Arg("torque"));
 		rigidBody.Method("teleport", [](const RigidBodyRef& r, const glm::vec3& position) { r.Get(); SetWorldPosition(r.Owner, position); }, "", Arg("position"));
 

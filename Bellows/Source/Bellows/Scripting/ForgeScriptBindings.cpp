@@ -755,10 +755,96 @@ namespace Bellows::Scripting {
 			};
 		}
 
+		// What a tween phrase's value means.
+		enum class TweenPhraseValue
+		{
+			AsGiven,		// A vector, as tween() takes it
+			Size,			// A number for all three axes, or a vector
+			Opacity			// 0 to 1: the alpha of the entity's color
+		};
+
+		struct TweenPhrase
+		{
+			const char* Verb;		// "move"
+			const char* Link;		// "to" or "by"
+			const char* Value;		// The value's name in the pattern
+			const char* Property;	// The tween property, or nullptr for fade (its color property)
+			TweenPhraseValue Kind;
+			const char* Doc;		// What it does, before "; same as"
+			const char* Same;		// The tween() call it is
+		};
+
+		const TweenPhrase c_TweenPhrases[] = {
+			{ "move", "to", "position", "position", TweenPhraseValue::AsGiven, "Moves an entity smoothly to a position", "tween(entity, \"position\", position, seconds)" },
+			{ "move", "by", "offset", "position", TweenPhraseValue::AsGiven, "Moves an entity smoothly by an offset", "tween_by(entity, \"position\", offset, seconds)" },
+			{ "turn", "to", "angles", "rotation", TweenPhraseValue::AsGiven, "Turns an entity smoothly to rotation angles in degrees", "tween(entity, \"rotation\", angles, seconds)" },
+			{ "turn", "by", "angles", "rotation", TweenPhraseValue::AsGiven, "Turns an entity smoothly by angles in degrees, more than one turn too", "tween_by(entity, \"rotation\", angles, seconds)" },
+			{ "scale", "to", "size", "scale", TweenPhraseValue::Size, "Scales an entity smoothly to a size: a number for all three axes, or a vector", "tween(entity, \"scale\", size, seconds)" },
+			{ "fade", "to", "opacity", nullptr, TweenPhraseValue::Opacity, "Fades a UI image (or, without one, a text) smoothly to an opacity from 0 to 1, keeping its color", "tween(entity, \"UIImage.color\", color, seconds)" },
+		};
+
+		// The color 'fade' changes: the entity's UIImage, or its Text.
+		const TweenProperty& FadeProperty(const ScriptEntity& target)
+		{
+			Entity entity = target.Resolve();
+			if (entity.HasComponent<UIImageComponent>())
+				return FindTweenProperty("UIImage.color");
+			if (entity.HasComponent<TextComponent>())
+				return FindTweenProperty("Text.color");
+			throw ScriptValueError("'fade' needs an entity with a UIImage or a Text, and '" + entity.GetName() + "' has neither");
+		}
+
+		// move / turn / scale / fade (entity) to|by (value) over (seconds) seconds [with (style)]: starts the
+		// tween its tween() call would, with the same checks and messages, and gives back the Tween.
+		FS::NativeFn TweenPhraseFunction(const TweenPhrase& phrase, bool withStyle)
+		{
+			return [&phrase, withStyle](FS::CallContext& context)
+			{
+				FS::VM& vm = context.GetVM();
+				const std::string example = std::string(phrase.Verb) + " self " + phrase.Link + " " +
+					(phrase.Kind == TweenPhraseValue::Opacity ? "0.5" : phrase.Kind == TweenPhraseValue::Size ? "2" : "vector(0, 1, 0)") + " over 1 second";
+				const ScriptEntity target = PhraseEntity(context, phrase.Verb, "an entity", example);
+				const std::string what = std::string("'") + phrase.Verb + "'";
+				const FS::Value given = context.Arg(1);
+				const double seconds = context.Number(2);
+				const std::string ease = withStyle ? context.Text(3) : std::string("in out");
+				return ReturnValue(vm, Guard([&]
+				{
+					ScriptValue value;
+					std::string property = phrase.Property ? phrase.Property : "";
+					switch (phrase.Kind)
+					{
+						case TweenPhraseValue::AsGiven:
+							value = Convert<ScriptValue>::From(vm, given, what);
+							break;
+						case TweenPhraseValue::Size:
+							if (given.IsNumber())
+								value = glm::vec3(static_cast<float>(given.AsNumber()));
+							else
+								value = Convert<ScriptValue>::From(vm, given, what);
+							break;
+						case TweenPhraseValue::Opacity:
+						{
+							if (!given.IsNumber() || !std::isfinite(given.AsNumber()) || given.AsNumber() < 0.0 || given.AsNumber() > 1.0)
+								throw ScriptValueError("'fade' needs an opacity from 0 (clear) to 1 (solid), like: fade self to 0 over 1 second");
+							const TweenProperty& color = FadeProperty(target);
+							glm::vec4 rgba = color.Get(target.Resolve());
+							rgba.a = static_cast<float>(given.AsNumber());
+							value = ScriptValueList { double(rgba.r), double(rgba.g), double(rgba.b), double(rgba.a) };
+							property = color.Name;
+							break;
+						}
+					}
+					return Detail::StartTween(target, property, value, seconds, ease, 0.0, std::string_view(phrase.Link) == "by");
+				}));
+			};
+		}
+
 		// The phrases are thin wrappers over functions of the shared API, so both spellings behave alike.
 		const std::vector<EnginePhrase>& GetEnginePhrases()
 		{
-			static const std::vector<EnginePhrase> s_Phrases = {
+			static const std::vector<EnginePhrase> s_Phrases = [] {
+			std::vector<EnginePhrase> phrases = {
 				{ { "save screenshot", "Saves what the player sees and gives back the file's full path; same as save_screenshot()", "str" },
 					[](FS::CallContext& context) { return context.GetVM().MakeText(Guard([] { return SaveScreenshot("", 1920); })); } },
 				{ { "save screenshot to (path)", "Saves what the player sees to path (inside the user folder when relative) and gives back the full path; same as save_screenshot(path)", "str" },
@@ -801,7 +887,40 @@ namespace Bellows::Scripting {
 							return entity.GetScene()->SetUIFocus(entity);
 						}));
 					} },
+				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "push", "an entity", "push self by vector(0, 5, 0)");
+						const glm::vec3 impulse = Convert<glm::vec3>::From(context.GetVM(), context.Arg(1), "'push'");
+						Guard([&] { Detail::AddImpulse(RigidBodyRef { entity }, impulse); });
+						return FS::Value();
+					} },
 			};
+			// Each tween phrase in four spellings: "second" and "seconds", each with and without
+			// "with (style)" for the easing (FSC checked that these parse with any expression between).
+			for (const TweenPhrase& phrase : c_TweenPhrases)
+			{
+				for (const char* unit : { "seconds", "second" })
+				{
+					for (const bool withStyle : { false, true })
+					{
+						std::string pattern = std::string(phrase.Verb) + " (entity) " + phrase.Link + " (" + phrase.Value + ") over (seconds) " + unit;
+						std::string same = phrase.Same;
+						std::string easing = "\"in out\"";
+						if (withStyle)
+						{
+							pattern += " with (style)";
+							same.insert(same.size() - 1, ", style");
+							easing = "with an easing style (\"bounce out\"; ease() lists them)";
+						}
+						const std::string doc = std::string(phrase.Doc) + " over a number of seconds, eased " + easing +
+							", and gives back the Tween; same as " + same;
+						phrases.push_back({ { pattern, doc, "Tween", true }, TweenPhraseFunction(phrase, withStyle) });
+					}
+				}
+			}
+			return phrases;
+			}();
 			return s_Phrases;
 		}
 
