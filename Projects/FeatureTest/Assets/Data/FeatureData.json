@@ -1,0 +1,9 @@
+{
+	"name": "FeatureTest data",
+	"levels": [
+		{ "title": "Meadow", "enemies": 3 },
+		{ "title": "Caves", "enemies": 7 }
+	],
+	"hard_mode": false,
+	"secret": null
+}

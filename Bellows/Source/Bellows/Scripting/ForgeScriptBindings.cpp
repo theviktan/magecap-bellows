@@ -924,6 +924,12 @@ namespace Bellows::Scripting {
 						});
 						return ReturnValue(context.GetVM(), entities);
 					} },
+				{ { "the data in (path)", "The contents of a JSON data file in the Assets folder (\"Data/items.json\"), as maps and lists; same as load_json(path)", "Value", true },
+					[](FS::CallContext& context)
+					{
+						const std::string path = context.Text(0);
+						return ReturnValue(context.GetVM(), Guard([&] { return LoadDataJson(path); }));
+					} },
 				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
 					[](FS::CallContext& context)
 					{

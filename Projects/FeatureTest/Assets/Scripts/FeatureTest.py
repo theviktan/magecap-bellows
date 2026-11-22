@@ -659,6 +659,12 @@ class FeatureTest(bellows.Script):
         self.check(raises(lambda: bellows.save_screenshot("shot.gif"), ValueError), "save_screenshot rejects other formats")
 
     def test_saved_data(self):
+        data = bellows.load_json("Data/FeatureData.json")
+        self.check(data["name"] == "FeatureTest data" and data["hard_mode"] is False and data["secret"] is None, "load_json reads a data file")
+        self.check([level["title"] for level in data["levels"]] == ["Meadow", "Caves"] and data["levels"][1]["enemies"] == 7, "load_json's lists and dicts")
+        self.check(bellows.load_text("Data\\FeatureData.json").startswith("{"), "load_text, with either slash")
+        self.check(raises(lambda: bellows.load_json("../FeatureTest.bproject"), ValueError), "data files can't be read from outside Assets")
+        self.check(raises(lambda: bellows.load_json("Data/Missing.json"), ValueError), "a missing data file raises ValueError")
         bellows.delete_data("Feature Test Python")
         self.check(bellows.load_data("Feature Test Python", 7) == 7, "load_data's default")
         progress = {"credits": 12.5, "ships": ["Comet", "Nova"], "spawn": bellows.Vec3(1, 2, 3), "docked": True, "captain": None}
