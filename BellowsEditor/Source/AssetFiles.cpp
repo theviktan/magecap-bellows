@@ -5,6 +5,7 @@
 #include "Bellows/Core/Platform.h"
 
 #include <algorithm>
+#include <cctype>
 #include <system_error>
 
 namespace Bellows::AssetFiles {
@@ -43,7 +44,8 @@ namespace Bellows::AssetFiles {
 				moves.emplace_back(companion, MeshImportSettings::GetFilePath(target));
 			for (const auto& [from, to] : moves)
 			{
-				if (std::filesystem::exists(to, error))
+				// The same file under other capitals (Windows) is a rename, not a clash.
+				if (std::filesystem::exists(to, error) && !std::filesystem::equivalent(from, to, error))
 				{
 					outError = "'" + to.filename().string() + "' already exists";
 					return false;
@@ -100,6 +102,12 @@ namespace Bellows::AssetFiles {
 			return "a name can't have control characters in it";
 		if (name.back() == ' ' || name.back() == '.')
 			return "a name can't end with a space or a dot";
+		// Windows' device names, with any extension ("con.txt"), can't be files there.
+		std::string stem = name.substr(0, name.find('.'));
+		std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+		const bool numberedDevice = stem.size() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && stem[3] >= '1' && stem[3] <= '9';
+		if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" || numberedDevice)
+			return "'" + name.substr(0, name.find('.')) + "' is a device name on Windows, so it can't be a file name";
 		return std::nullopt;
 	}
 

@@ -34,7 +34,8 @@ namespace Bellows {
 		static bool OpenForEditing(const std::filesystem::path& path);
 		// Moves a file or folder to the Recycle Bin (Windows) or the Trash (freedesktop.org, under
 		// $XDG_DATA_HOME or ~/.local/share), where it can be restored. Leaves it in place and sets
-		// 'outError' when it can't, for instance a Linux file on another drive than the Trash.
+		// 'outError' when it can't, for instance a Linux file on another drive than the Trash. When
+		// Windows can't recycle it (a network drive), Windows asks before deleting it for good.
 		static bool MoveToTrash(const std::filesystem::path& path, std::string& outError);
 	};
 
