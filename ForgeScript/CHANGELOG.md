@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **Repeating text has a limit** (audit S-6, older than 1.6.0): `"ab" * 1e9` built 2 GB of text in
+  one step, and `"ab" * infinity` looped until memory ran out, where the instruction limit can't stop
+  it. Both `text * count` and `text.repeat(count)` now refuse to make more than 100 million bytes,
+  and `*` refuses infinity. `color`, `random_chance` and `hsv`'s alpha refuse infinity and
+  not-a-number too, like the other new built-ins (S-7).
 - **`forgescript --benchmark`** (Roadmap 2.0 Tier 4 #5, step 1): runs scripts five times and prints the
   instructions each executed (exact, the same on every machine) and the median time. Seven benchmarks
   in `Benchmarks/` cover calls, methods, closures, lists, text, events and tasks, and the
