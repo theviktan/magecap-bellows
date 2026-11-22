@@ -1,6 +1,7 @@
 #include "bwpch.h"
 #include "Bellows/Scripting/ScriptGlue.h"
 
+#include "Bellows/Scripting/PythonWatchdog.h"
 #include "Bellows/Scripting/ScriptApiDefinition.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
@@ -175,16 +176,36 @@ namespace Bellows::Scripting {
 		template<typename T>
 		py::arg_v ToPython(const ArgWithDefault<T>& argument) { return py::arg(argument.Name) = argument.Default; }
 
+		// Wraps an API callable so every vector and color argument is checked before it runs: Python's
+		// Vec3 can hold NaN or infinity, and pybind11 hands it over as it is. 'what' names the property or
+		// function in the ValueError.
+		template<typename Callable, typename Result, typename Class, typename... Params>
+		auto CheckVectorArgs(std::string what, Callable function, Result (Class::*)(Params...) const)
+		{
+			return [what = std::move(what), function = std::move(function)](Params... params) -> Result
+			{
+				(RequireFiniteNumbers(params, what), ...);
+				return function(std::forward<Params>(params)...);
+			};
+		}
+
+		template<typename Callable>
+		auto CheckVectorArgs(std::string what, Callable&& function)
+		{
+			using Plain = std::decay_t<Callable>;
+			return CheckVectorArgs(std::move(what), Plain(std::forward<Callable>(function)), &Plain::operator());
+		}
+
 		template<typename T>
 		class PythonClass
 		{
 		public:
-			explicit PythonClass(py::class_<T> type) : m_Type(std::move(type)) {}
+			PythonClass(py::class_<T> type, std::string name) : m_Type(std::move(type)), m_Name(std::move(name)) {}
 
 			template<typename Getter, typename Setter>
 			PythonClass& Property(const char* name, Getter&& getter, Setter&& setter, const char* doc)
 			{
-				m_Type.def_property(name, std::forward<Getter>(getter), std::forward<Setter>(setter), doc);
+				m_Type.def_property(name, std::forward<Getter>(getter), CheckVectorArgs(m_Name + "." + name, std::forward<Setter>(setter)), doc);
 				return *this;
 			}
 
@@ -198,26 +219,27 @@ namespace Bellows::Scripting {
 			template<typename Callable, typename... Args>
 			PythonClass& Method(const char* name, Callable&& function, const char* doc, const Args&... args)
 			{
-				m_Type.def(name, std::forward<Callable>(function), doc, ToPython(args)...);
+				m_Type.def(name, CheckVectorArgs(m_Name + "." + name, std::forward<Callable>(function)), doc, ToPython(args)...);
 				return *this;
 			}
 
 			template<typename Callable, typename... Args>
 			PythonClass& Constructor(Callable&& function, const Args&... args)
 			{
-				m_Type.def(py::init(std::forward<Callable>(function)), ToPython(args)...);
+				m_Type.def(py::init(CheckVectorArgs(m_Name, std::forward<Callable>(function))), ToPython(args)...);
 				return *this;
 			}
 
 			template<typename Callable, typename... Args>
 			PythonClass& Static(const char* name, Callable&& function, const char* doc, const Args&... args)
 			{
-				m_Type.def_static(name, std::forward<Callable>(function), doc, ToPython(args)...);
+				m_Type.def_static(name, CheckVectorArgs(m_Name + "." + name, std::forward<Callable>(function)), doc, ToPython(args)...);
 				return *this;
 			}
 
 		private:
 			py::class_<T> m_Type;
+			std::string m_Name;
 		};
 
 		class PythonApi
@@ -228,7 +250,7 @@ namespace Bellows::Scripting {
 			template<typename Callable, typename... Args>
 			void Function(const char* name, Callable&& function, const char* doc, const Args&... args)
 			{
-				m_Module.def(name, std::forward<Callable>(function), doc, ToPython(args)...);
+				m_Module.def(name, CheckVectorArgs(name, std::forward<Callable>(function)), doc, ToPython(args)...);
 			}
 
 			template<typename T>
@@ -236,7 +258,7 @@ namespace Bellows::Scripting {
 			{
 				py::class_<T> type(m_Module, name, doc);
 				m_Classes[std::type_index(typeid(T))] = type;
-				return PythonClass<T>(type);
+				return PythonClass<T>(type, name);
 			}
 
 			// The Python class made for T, so Python-only extras can be added after the shared API.
@@ -474,6 +496,19 @@ namespace Bellows::Scripting {
 			}
 			return text;
 		};
+		// Python only: ForgeScript has its own guard, counted in instructions.
+		m.def("set_python_time_limit", [](std::optional<double> seconds)
+			{
+				const double limit = seconds.value_or(0.0);
+				if (!std::isfinite(limit) || limit < 0.0)
+					throw ScriptValueError("set_python_time_limit needs a number of seconds from 0 up, or None (0 and None turn the limit off)");
+				PythonWatchdog::SetTimeLimit(limit);
+			},
+			"Sets how long Python may run without returning before it is stopped with KeyboardInterrupt, for the rest of this play: "
+			"0 or None turns the limit off. It is 10 seconds in the editor, and off in a shipped game",
+			py::arg("seconds"));
+		m.def("python_time_limit", []() { return PythonWatchdog::GetTimeLimit(); },
+			"How long Python may run without returning before it is stopped, in seconds; 0 when there is no limit");
 		m.def("log", [joinArgs](const py::args& args) { BW_INFO("{}", joinArgs(args)); }, "Writes an info message to the console");
 		m.def("log_warning", [joinArgs](const py::args& args) { BW_WARN("{}", joinArgs(args)); });
 		m.def("log_error", [joinArgs](const py::args& args) { BW_ERROR("{}", joinArgs(args)); });

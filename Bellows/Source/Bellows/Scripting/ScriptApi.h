@@ -19,12 +19,14 @@
 
 #include <glm/glm.hpp>
 
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <typeinfo>
 #include <utility>
 #include <variant>
@@ -306,6 +308,42 @@ namespace Bellows::Scripting {
 	{
 		glm::vec4 Value { 1.0f };
 	};
+
+	// Vectors and colors scripts give the engine must hold ordinary numbers: a NaN or infinite position
+	// spreads through physics and rendering, and saves as null. Both languages check every vector
+	// argument and property value with this (Python's Vec3 can hold NaN; ForgeScript can make infinity
+	// with 1e308 * 10, and 1e39 becomes infinity as a float).
+	template<typename T>
+	bool HasOnlyFiniteNumbers(const T& value)
+	{
+		if constexpr (std::is_same_v<T, glm::vec2> || std::is_same_v<T, glm::vec3> || std::is_same_v<T, glm::vec4>)
+		{
+			for (typename T::length_type i = 0; i < T::length(); i++)
+			{
+				if (!std::isfinite(value[i]))
+					return false;
+			}
+			return true;
+		}
+		else if constexpr (std::is_same_v<T, ColorValue>)
+			return HasOnlyFiniteNumbers(value.Value);
+		else
+			return true;
+	}
+
+	template<typename T>
+	bool HasOnlyFiniteNumbers(const std::optional<T>& value)
+	{
+		return !value || HasOnlyFiniteNumbers(*value);
+	}
+
+	// Throws ScriptValueError (Python's ValueError) naming 'what' when 'value' isn't finite.
+	template<typename T>
+	void RequireFiniteNumbers(const T& value, const std::string& what)
+	{
+		if (!HasOnlyFiniteNumbers(value))
+			throw ScriptValueError(what + " needs ordinary numbers, not NaN or infinity");
+	}
 
 	// A keyboard key, usually given by name ("W", "space", "left_shift").
 	struct KeyArg
