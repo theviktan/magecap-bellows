@@ -512,6 +512,21 @@ namespace ForgeScript {
 		return FindCompileErrors(*this, scratch, source, fileName, options);
 	}
 
+	std::vector<NameUse> VM::FindNameUses(std::string_view source, const std::string& fileName, std::vector<CompileError>* outMistakes)
+	{
+		GCPause pause(*this);
+		Module* scratch = Allocate<Module>(0, fileName);
+		std::vector<NameUse> uses;
+		CompileOptions options;
+		options.ReportMissingScripts = true;
+		options.NameUses = &uses;
+		std::vector<CompileError> mistakes = FindCompileErrors(*this, scratch, source, fileName, options);
+		if (outMistakes)
+			*outMistakes = std::move(mistakes);
+		std::sort(uses.begin(), uses.end(), [](const NameUse& a, const NameUse& b) { return a.Token < b.Token; });
+		return uses;
+	}
+
 	std::vector<CompileError> VM::FindWarnings(std::string_view source, const std::string& fileName,
 		const std::vector<std::string>& moreBuiltinFunctions)
 	{

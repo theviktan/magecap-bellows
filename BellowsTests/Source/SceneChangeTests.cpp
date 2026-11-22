@@ -54,14 +54,20 @@ when scene loaded with name, path
 end
 )FORGE";
 
-	// The next level: a ground, a level entity, and a second copy of the kept player (same ID).
-	Json MakeLevel(UUID playerID)
+	// The next level: a ground, a level entity, and a second copy of the kept player (same ID), at
+	// the top of the level or under a group, as a level made by hand often has it.
+	Json MakeLevel(UUID playerID, bool playerInGroup = false)
 	{
 		Scene level("Level 2");
 		level.GetSettings().Gravity = { 0.0f, -3.0f, 0.0f };
 		level.CreateEntity("Level Thing");
+		Entity group = level.CreateEntity("Level group");
+		level.CreateChildEntity(group, "Before the copy");
 		Entity player = level.CreateEntityWithUUID(playerID, "Player copy in the level");
+		if (playerInGroup)
+			level.SetParent(player, group, false);
 		level.CreateChildEntity(player, "Copy's child");
+		level.CreateChildEntity(group, "After the copy");
 		return SceneSerializer::SerializeToJson(level);
 	}
 
@@ -185,6 +191,29 @@ TEST_CASE("load_scene keeps entities marked Keep Across Scenes, with their scrip
 		scene.OnUpdateRuntime(1.0f / 60.0f);
 		CHECK(scene.GetTime() > timeBefore);
 	}
+}
+
+TEST_CASE("The kept copy wins over the level's copy even when the level has it under a group")
+{
+	SceneChange test;
+	Scene& scene = *test.Play;
+	const UUID player = test.Player.GetUUID();
+
+	REQUIRE(scene.ChangeScene(MakeLevel(player, true), "Scenes/Level2.bscene"));
+	CHECK(scene.TryGetEntityByUUID(player).GetName() == "Player");
+	CHECK_FALSE(scene.FindEntityByName("Player copy in the level"));
+	CHECK_FALSE(scene.FindEntityByName("Copy's child"));
+
+	// The rest of the group loads, in order, without the copy.
+	Entity group = scene.FindEntityByName("Level group");
+	REQUIRE(group);
+	REQUIRE(group.GetChildren().size() == 2);
+	CHECK(group.GetChildren()[0].GetName() == "Before the copy");
+	CHECK(group.GetChildren()[1].GetName() == "After the copy");
+	size_t players = 0;
+	for (auto handle : scene.GetAllEntitiesWith<TagComponent>())
+		players += Entity(handle, &scene).GetName().find("Player") != std::string::npos ? 1 : 0;
+	CHECK(players == 1);
 }
 
 TEST_CASE("ChangeScene refuses what isn't a scene, and a scene that isn't running")

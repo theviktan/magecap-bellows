@@ -83,6 +83,7 @@ namespace ForgeScript {
 		constexpr int c_InvalidRequest = -32600;
 		constexpr int c_MethodNotFound = -32601;
 		constexpr int c_ServerNotInitialized = -32002;
+		constexpr int c_RequestFailed = -32803;
 
 		// LSP enumerations.
 		constexpr int c_SeverityError = 1;
@@ -955,6 +956,14 @@ namespace ForgeScript {
 			replies.push_back(Response(*id, DocumentSymbols(params)));
 		else if (method == "textDocument/signatureHelp")
 			replies.push_back(Response(*id, SignatureHelp(params)));
+		else if (method == "textDocument/references")
+			replies.push_back(Response(*id, References(params)));
+		else if (method == "textDocument/prepareRename" || method == "textDocument/rename")
+		{
+			std::string error;
+			Json result = method == "textDocument/rename" ? Rename(params, error) : PrepareRename(params, error);
+			replies.push_back(error.empty() ? Response(*id, std::move(result)) : ErrorResponse(*id, c_RequestFailed, error));
+		}
 		else
 			replies.push_back(ErrorResponse(*id, c_MethodNotFound, "'" + method + "' is not something this server does."));
 		return replies;
@@ -974,6 +983,10 @@ namespace ForgeScript {
 		capabilities.Set("hoverProvider", true);
 		capabilities.Set("definitionProvider", true);
 		capabilities.Set("documentSymbolProvider", true);
+		capabilities.Set("referencesProvider", true);
+		Json rename;
+		rename.Set("prepareProvider", true);
+		capabilities.Set("renameProvider", std::move(rename));
 		Json signatures;
 		signatures.Set("triggerCharacters", Json(Json::Array { Json("("), Json(",") }));
 		capabilities.Set("signatureHelpProvider", std::move(signatures));
@@ -999,11 +1012,10 @@ namespace ForgeScript {
 		return ReadTextFile(wanted, outSource);
 	}
 
-	std::vector<CompileError> LanguageServer::FindMistakesIn(const std::filesystem::path& path, const std::string& text) const
+	void LanguageServer::SetUpChecker(VM& vm, const std::filesystem::path& path) const
 	{
-		VM vm;
 		// Engine phrases must be known, or every line that uses one would be a mistake. Their code never
-		// runs here: FindMistakes only compiles.
+		// runs here: the checks only compile.
 		for (const ApiPhrase& phrase : m_ApiPhrases)
 			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); },
 				nullptr, phrase.YieldsToCalls);
@@ -1014,22 +1026,19 @@ namespace ForgeScript {
 			outName = PathToUtf8(file.filename());
 			return ReadScriptForUse(file, outSource);
 		});
+	}
+
+	std::vector<CompileError> LanguageServer::FindMistakesIn(const std::filesystem::path& path, const std::string& text) const
+	{
+		VM vm;
+		SetUpChecker(vm, path);
 		return vm.FindMistakes(text, PathToUtf8(path.filename()));
 	}
 
 	std::vector<CompileError> LanguageServer::FindWarningsIn(const std::filesystem::path& path, const std::string& text) const
 	{
 		VM vm;
-		for (const ApiPhrase& phrase : m_ApiPhrases)
-			vm.RegisterPhrase(phrase.Pattern, [](CallContext&) -> Value { throw RuntimeError("Engine phrases only run inside MageCap Bellows."); },
-				nullptr, phrase.YieldsToCalls);
-		const std::filesystem::path useFolder = FindUseFolder(path);
-		vm.SetModuleLoader([this, useFolder](const std::string& name, std::string& outName, std::string& outSource)
-		{
-			const std::filesystem::path file = ResolveUsePath(useFolder, name);
-			outName = PathToUtf8(file.filename());
-			return ReadScriptForUse(file, outSource);
-		});
+		SetUpChecker(vm, path);
 		std::vector<std::string> engineFunctions;
 		for (const ApiFunction& function : m_ApiFunctions)
 			engineFunctions.push_back(function.Name);
@@ -1968,6 +1977,243 @@ namespace ForgeScript {
 			return names;
 		}
 
+	}
+
+	const NameUse* LanguageServer::NameUseAt(const Document& document, const Json& params, std::vector<NameUse>& outUses,
+		std::vector<CompileError>& outMistakes) const
+	{
+		VM vm;
+		SetUpChecker(vm, document.Path);
+		outUses = vm.FindNameUses(document.Text, PathToUtf8(document.Path.filename()), &outMistakes);
+		const std::vector<std::string_view> lines = SplitLines(document.Text);
+		const int lineIndex = static_cast<int>(params.Get("position").Get("line").AsNumber());
+		if (lineIndex < 0 || lineIndex >= static_cast<int>(lines.size()))
+			return nullptr;
+		const size_t offset = FromUtf16(lines[static_cast<size_t>(lineIndex)], static_cast<int>(params.Get("position").Get("character").AsNumber()));
+		// The cursor may be anywhere in the name or just after it, as when it was just typed.
+		for (const NameUse& use : outUses)
+		{
+			const size_t start = static_cast<size_t>(use.Column - 1);
+			if (use.Line == lineIndex + 1 && offset >= start && offset <= start + static_cast<size_t>(use.Length))
+				return &use;
+		}
+		return nullptr;
+	}
+
+	Json LanguageServer::References(const Json& params)
+	{
+		const std::string& uri = params.Get("textDocument").GetString("uri");
+		const Document* document = FindDocument(uri);
+		if (!document)
+			return Json();
+		std::vector<NameUse> uses;
+		std::vector<CompileError> mistakes;
+		const NameUse* at = NameUseAt(*document, params, uses, mistakes);
+		if (!at)
+			return Json();
+		// Without a context, the declaration is included, as most editors ask for it.
+		const Json& context = params.Get("context");
+		const bool withDeclaration = context.Get("includeDeclaration").IsNull() || context.Get("includeDeclaration").AsBool();
+		Json locations = Json(Json::Array());
+		for (const NameUse& use : uses)
+		{
+			if (use.Key != at->Key || (use.Declares && !withDeclaration))
+				continue;
+			Json location;
+			location.Set("uri", uri).Set("range", RangeOf(document->Text, use.Line, use.Column, use.Length));
+			locations.Add(std::move(location));
+		}
+		return locations;
+	}
+
+	std::string LanguageServer::CheckRenamable(const Document& document, const Json& params, std::vector<NameUse>& outUses, NameUse& outUse) const
+	{
+		std::vector<CompileError> mistakes;
+		const NameUse* at = NameUseAt(document, params, outUses, mistakes);
+		if (!mistakes.empty())
+			return "Fix the mistakes in this script first: rename needs a script that works, to be sure what each name means.";
+		if (!at)
+			return "Put the cursor on the name of a variable, parameter, function or kind that this script makes.";
+		outUse = *at;
+		const std::string oldName(SplitLines(document.Text)[static_cast<size_t>(outUse.Line - 1)].substr(static_cast<size_t>(outUse.Column - 1),
+			static_cast<size_t>(outUse.Length)));
+		if (outUse.Key.rfind("F:", 0) == 0)
+			return "'" + oldName + "' is a field or method. Rename doesn't change those yet, because which kind 'my " + oldName +
+				"' or 'thing." + oldName + "' belongs to can't always be told before the script runs.";
+		const bool scriptLevel = outUse.Key.rfind("G:", 0) == 0;
+		if (scriptLevel && std::none_of(outUses.begin(), outUses.end(), [&](const NameUse& use) { return use.Key == outUse.Key && use.Declares; }))
+			return "'" + oldName + "' isn't made in this script (it is built in, or comes from a script this one uses), so it can't be renamed here.";
+
+		// Every word spelled like the name must be one the compiler placed, or renaming could miss one
+		// (a phrase's words, for example). A field after '.', 's or 'my' is a different thing.
+		Lexer lexer(document.Text);
+		const std::vector<Token> tokens = lexer.Tokenize();
+		std::set<size_t> placed;
+		for (const NameUse& use : outUses)
+			placed.insert(use.Token);
+		for (size_t i = 0; i < tokens.size(); i++)
+		{
+			if (tokens[i].Type != TokenType::Identifier || tokens[i].Lexeme != oldName || placed.count(i))
+				continue;
+			if (i > 0 && (tokens[i - 1].Type == TokenType::Dot || tokens[i - 1].Type == TokenType::Possessive || tokens[i - 1].Type == TokenType::My))
+				continue;
+			return "'" + oldName + "' is also written on line " + std::to_string(tokens[i].Line) +
+				" in a way rename can't follow yet (like a word of a phrase), so renaming it could break the script.";
+		}
+
+		// Rename changes only this script, so a script-level name must not be needed by another open one.
+		if (scriptLevel)
+		{
+			for (const auto& [otherUri, other] : m_Documents)
+			{
+				if (other.Path == document.Path)
+					continue;
+				for (const Symbol& symbol : FindScriptSymbols(other.Text))
+				{
+					if (symbol.SymbolKind == Symbol::Kind::Module &&
+						ResolveUsePath(FindUseFolder(other.Path), symbol.File).lexically_normal() == document.Path)
+						return "'" + PathToUtf8(other.Path.filename()) + "' uses this script, and rename only changes this one. Rename '" +
+							oldName + "' in both by hand, or close that script first.";
+				}
+			}
+		}
+		return "";
+	}
+
+	Json LanguageServer::PrepareRename(const Json& params, std::string& outError)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		if (!document)
+		{
+			outError = "This script isn't open.";
+			return Json();
+		}
+		std::vector<NameUse> uses;
+		NameUse use;
+		outError = CheckRenamable(*document, params, uses, use);
+		if (!outError.empty())
+			return Json();
+		Json result;
+		result.Set("range", RangeOf(document->Text, use.Line, use.Column, use.Length))
+			.Set("placeholder", std::string(SplitLines(document->Text)[static_cast<size_t>(use.Line - 1)].substr(static_cast<size_t>(use.Column - 1), static_cast<size_t>(use.Length))));
+		return result;
+	}
+
+	Json LanguageServer::Rename(const Json& params, std::string& outError)
+	{
+		const std::string& uri = params.Get("textDocument").GetString("uri");
+		const Document* document = FindDocument(uri);
+		if (!document)
+		{
+			outError = "This script isn't open.";
+			return Json();
+		}
+		std::vector<NameUse> uses;
+		NameUse target;
+		outError = CheckRenamable(*document, params, uses, target);
+		if (!outError.empty())
+			return Json();
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		const std::string oldName(lines[static_cast<size_t>(target.Line - 1)].substr(static_cast<size_t>(target.Column - 1), static_cast<size_t>(target.Length)));
+		const std::string newName = params.GetString("newName");
+
+		// The new name must be one name of a sensible length, and not a keyword.
+		if (newName.size() > 255)
+		{
+			outError = "A name can be at most 255 characters long.";
+			return Json();
+		}
+		Lexer lexer(newName);
+		const std::vector<Token> newTokens = lexer.Tokenize();
+		if (newTokens.empty() || newTokens[0].Lexeme != newName || (newTokens.size() > 1 && newTokens[1].Type != TokenType::Eof && newTokens[1].Type != TokenType::Newline))
+		{
+			outError = "'" + newName + "' isn't one name. A name is one word of letters, digits and _, starting with a letter or _.";
+			return Json();
+		}
+		if (newTokens[0].Type != TokenType::Identifier && newTokens[0].IsWord())
+		{
+			outError = "'" + newName + "' is a ForgeScript keyword, so it can't be a name.";
+			return Json();
+		}
+		if (newTokens[0].Type != TokenType::Identifier)
+		{
+			outError = "'" + newName + "' isn't a name. A name is one word of letters, digits and _, starting with a letter or _.";
+			return Json();
+		}
+
+		VM vm;
+		SetUpChecker(vm, document->Path);
+		const bool engineFunction = std::any_of(m_ApiFunctions.begin(), m_ApiFunctions.end(), [&newName](const ApiFunction& function) { return function.Name == newName; });
+		if (newName != oldName && (vm.HasSharedGlobal(newName) || engineFunction))
+		{
+			outError = "'" + newName + "' is a built-in function, so the script couldn't call it any more under that name. Pick another name.";
+			return Json();
+		}
+
+		// The renamed script, checked: it must compile, warn no more, and every name in it must mean
+		// what it meant before (so the new name doesn't take over, or hide, another one).
+		std::vector<const NameUse*> renamed;
+		for (const NameUse& use : uses)
+		{
+			if (use.Key == target.Key)
+				renamed.push_back(&use);
+		}
+		std::string text;
+		size_t copied = 0;
+		for (const NameUse* use : renamed)
+		{
+			// The lines are views into the document's text, so a line starts where its view does.
+			const size_t lineStart = static_cast<size_t>(lines[static_cast<size_t>(use->Line - 1)].data() - document->Text.data());
+			const size_t start = lineStart + static_cast<size_t>(use->Column - 1);
+			text.append(document->Text, copied, start - copied);
+			text += newName;
+			copied = start + static_cast<size_t>(use->Length);
+		}
+		text.append(document->Text, copied, std::string::npos);
+
+		std::vector<CompileError> mistakes;
+		const std::string fileName = PathToUtf8(document->Path.filename());
+		const std::vector<NameUse> after = vm.FindNameUses(text, fileName, &mistakes);
+		if (!mistakes.empty())
+		{
+			outError = "Renaming '" + oldName + "' to '" + newName + "' would make this script stop working: " + mistakes.front().Message;
+			return Json();
+		}
+		bool same = after.size() == uses.size();
+		std::map<std::string, std::string> keys;
+		std::set<std::string> taken;
+		for (size_t i = 0; same && i < uses.size(); i++)
+		{
+			same = uses[i].Token == after[i].Token;
+			auto [it, added] = keys.emplace(uses[i].Key, after[i].Key);
+			if (added)
+				same = same && taken.insert(after[i].Key).second;
+			else
+				same = same && it->second == after[i].Key;
+		}
+		if (!same)
+		{
+			outError = "'" + newName + "' already means something else where '" + oldName + "' is used, so renaming would change what the script does. Pick another name.";
+			return Json();
+		}
+		if (FindWarningsIn(document->Path, text).size() > FindWarningsIn(document->Path, document->Text).size())
+		{
+			outError = "Renaming '" + oldName + "' to '" + newName + "' would give this script a new warning. Pick another name.";
+			return Json();
+		}
+
+		Json edits = Json(Json::Array());
+		for (const NameUse* use : renamed)
+		{
+			Json edit;
+			edit.Set("range", RangeOf(document->Text, use->Line, use->Column, use->Length)).Set("newText", newName);
+			edits.Add(std::move(edit));
+		}
+		Json changes;
+		changes.Set(uri, std::move(edits));
+		Json result;
+		result.Set("changes", std::move(changes));
+		return result;
 	}
 
 	Json LanguageServer::SignatureHelp(const Json& params)

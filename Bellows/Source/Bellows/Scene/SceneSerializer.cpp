@@ -821,21 +821,34 @@ namespace Bellows {
 		if (!entities.is_array())
 			return false;
 
+		// Entities the scene already has (kept across a scene change) win over the file's copies, at
+		// any depth: a kept player is left out of the file wherever it is there, under "Level" or at
+		// the top, with the copy's children. Parents come before their children in the file.
+		std::unordered_set<uint64_t> existing, skipped;
+		if (skipExistingTrees)
+		{
+			for (const auto& [id, handle] : scene.m_EntityMap)
+				existing.insert(static_cast<uint64_t>(id));
+		}
+
 		// Entities are stored as consecutive depth-first trees; split them at every root.
 		Json tree = Json::array();
 		auto flush = [&]()
 		{
-			uint64_t rootID = 0;
 			if (!tree.empty())
-				JsonRead(tree.front(), "ID", rootID);
-			if (!tree.empty() && !(skipExistingTrees && rootID != 0 && scene.TryGetEntityByUUID(UUID(rootID))))
 				DeserializeEntityTree(scene, tree, false);
 			tree = Json::array();
 		};
 		for (const Json& entity : entities)
 		{
-			uint64_t parentID = 0;
+			uint64_t id = 0, parentID = 0;
+			JsonRead(entity, "ID", id);
 			JsonRead(entity, "Parent", parentID);
+			if (skipExistingTrees && ((id != 0 && existing.contains(id)) || (parentID != 0 && skipped.contains(parentID))))
+			{
+				skipped.insert(id);
+				continue;
+			}
 			if (parentID == 0)
 				flush();
 			tree.push_back(entity);

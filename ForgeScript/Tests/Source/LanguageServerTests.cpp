@@ -655,6 +655,170 @@ TEST_CASE("LanguageServerGoesToDefinitions")
 	CHECK(session.At("textDocument/definition", uri, 0, 8).IsNull());
 }
 
+namespace {
+
+	// textDocument/rename or prepareRename at a position; an error reply's message in outError.
+	Json RenameAt(Session& session, const std::string& method, const std::string& uri, int line, int character,
+		const std::string& newName, std::string& outError)
+	{
+		Json document;
+		document.Set("uri", uri);
+		Json position;
+		position.Set("line", line).Set("character", character);
+		Json params;
+		params.Set("textDocument", document).Set("position", position).Set("newName", newName);
+		const Json reply = session.Request(method, params);
+		outError = reply.Find("error") ? reply.Get("error").GetString("message") : "";
+		return reply.Find("error") ? Json() : reply;
+	}
+
+	// Where the edits of a rename go, as "line:character-character" for each, in order.
+	std::vector<std::string> EditSpans(const Json& edit, const std::string& uri)
+	{
+		std::vector<std::string> spans;
+		for (const Json& change : edit.Get("changes").Get(uri).AsArray())
+		{
+			const Json& range = change.Get("range");
+			spans.push_back(std::to_string(static_cast<int>(range.Get("start").Get("line").AsNumber())) + ":" +
+				std::to_string(static_cast<int>(range.Get("start").Get("character").AsNumber())) + "-" +
+				std::to_string(static_cast<int>(range.Get("end").Get("character").AsNumber())));
+		}
+		return spans;
+	}
+
+}
+
+TEST_CASE("LanguageServerFindsEveryUseOfAName")
+{
+	Session session;
+	const std::string uri = "file:///tmp/references.forge";
+	session.Open(uri,
+		"set score to 0\n"                    // 0
+		"function grow(amount)\n"             // 1
+		"\tset score to score + amount\n"     // 2
+		"\treturn amount\n"                   // 3
+		"end\n"
+		"function shrink(amount)\n"           // 5
+		"\treturn amount - 1\n"               // 6
+		"end\n"
+		"grow(2)\n");                         // 8
+
+	// Each 'amount' is its own: the one of grow is not the one of shrink.
+	Json locations = session.At("textDocument/references", uri, 3, 9);
+	REQUIRE_EQ(locations.AsArray().size(), static_cast<size_t>(3));
+	CHECK_EQ(locations.AsArray()[0].Get("range").Get("start").Get("line").AsNumber(), 1.0);
+	CHECK_EQ(locations.AsArray()[0].Get("range").Get("start").Get("character").AsNumber(), 14.0);
+	CHECK_EQ(locations.AsArray()[2].Get("range").Get("start").Get("line").AsNumber(), 3.0);
+	CHECK_EQ(session.At("textDocument/references", uri, 6, 8).AsArray().size(), static_cast<size_t>(2));
+
+	// A script-level name, from where it is made and where it is used.
+	CHECK_EQ(session.At("textDocument/references", uri, 0, 4).AsArray().size(), static_cast<size_t>(3));
+	CHECK_EQ(session.At("textDocument/references", uri, 8, 2).AsArray().size(), static_cast<size_t>(2));
+
+	// Without the declaration, when the editor asks so.
+	Json document;
+	document.Set("uri", uri);
+	Json position;
+	position.Set("line", 3).Set("character", 9);
+	Json context;
+	context.Set("includeDeclaration", false);
+	Json params;
+	params.Set("textDocument", document).Set("position", position).Set("context", context);
+	CHECK_EQ(session.Request("textDocument/references", params).AsArray().size(), static_cast<size_t>(2));
+
+	// Not on a name: nothing.
+	CHECK(session.At("textDocument/references", uri, 4, 1).IsNull());
+}
+
+TEST_CASE("LanguageServerRenamesWhatTheCompilerSees")
+{
+	Session session;
+	const std::string uri = "file:///tmp/rename.forge";
+	const std::string source =
+		"set lives to 3\n"                         // 0
+		"function heal(amount)\n"                  // 1
+		"\tset total to lives + amount\n"          // 2
+		"\tset helper to function(x) return x + amount end\n" // 3
+		"\treturn helper(total)\n"                 // 4
+		"end\n"
+		"function hurt(amount)\n"                  // 6
+		"\treturn amount\n"                        // 7
+		"end\n"
+		"kind Hero\n"                              // 9
+		"\tset health to 10\n"                     // 10
+		"end\n"
+		"say heal(lives)\n";                       // 12
+	CHECK(session.Open(uri, source).AsArray().empty());
+
+	// prepareRename names what will change.
+	std::string error;
+	const Json prepared = RenameAt(session, "textDocument/prepareRename", uri, 2, 23, "", error);
+	CHECK_EQ(error, std::string());
+	CHECK_EQ(prepared.GetString("placeholder"), std::string("amount"));
+	CHECK_EQ(prepared.Get("range").Get("start").Get("character").AsNumber(), 22.0);
+
+	// Only heal's 'amount', including where a function inside it uses it; hurt's stays.
+	Json edit = RenameAt(session, "textDocument/rename", uri, 1, 15, "gain", error);
+	CHECK_EQ(error, std::string());
+	REQUIRE_EQ(EditSpans(edit, uri), (std::vector<std::string> { "1:14-20", "2:22-28", "3:38-44" }));
+	CHECK_EQ(edit.Get("changes").Get(uri).AsArray()[0].GetString("newText"), std::string("gain"));
+
+	// A script-level variable and a kind.
+	edit = RenameAt(session, "textDocument/rename", uri, 12, 11, "hearts", error);
+	CHECK_EQ(error, std::string());
+	CHECK_EQ(EditSpans(edit, uri), (std::vector<std::string> { "0:4-9", "2:14-19", "12:9-14" }));
+	edit = RenameAt(session, "textDocument/rename", uri, 9, 6, "Champion", error);
+	CHECK_EQ(error, std::string());
+	CHECK_EQ(EditSpans(edit, uri).size(), static_cast<size_t>(1));
+
+	// Refused, with a reason, instead of a rename that could break the script.
+	auto refused = [&](int line, int character, const std::string& newName, const std::string& reason)
+	{
+		std::string message;
+		CHECK(RenameAt(session, "textDocument/rename", uri, line, character, newName, message).IsNull());
+		INFO(message);
+		CHECK_NE(message.find(reason), std::string::npos);
+	};
+	refused(10, 6, "hp", "is a field or method");
+	refused(12, 1, "speak", "Put the cursor on the name");
+	refused(2, 14, "amount", "already means something else");
+	refused(2, 6, "lives", "already means something else");
+	refused(1, 15, "end", "is a ForgeScript keyword");
+	refused(1, 15, "two words", "isn't one name");
+	refused(1, 15, "9lives", "isn't");
+	refused(1, 15, std::string(256, 'a'), "at most 255 characters");
+	CHECK(RenameAt(session, "textDocument/rename", uri, 1, 15, std::string(255, 'a'), error).Get("changes").AsObject().size() == 1);
+	refused(1, 15, "print", "is a built-in function");
+	refused(1, 15, "find_entity", "is a built-in function");
+
+	// A script with mistakes is not renamed.
+	session.Change(uri, source + "set = 4\n", 2);
+	refused(1, 15, "gain", "Fix the mistakes");
+}
+
+TEST_CASE("LanguageServerLeavesNamesOfOtherScriptsAlone")
+{
+	TempFolder project("rename");
+	project.Write("Game.bproject", "{ \"Name\": \"Game\" }");
+	project.Write("Assets/Scripts/Helpers.forge", "function double(n)\n\treturn n * 2\nend\n");
+	Session session;
+	const std::string helpersUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Helpers.forge");
+	const std::string mainUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Main.forge");
+	session.Open(helpersUri, "function double(n)\n\treturn n * 2\nend\n");
+	session.Open(mainUri, "use \"Scripts/Helpers\"\nsay double(4)\n");
+
+	std::string error;
+	// A name from a used script isn't this script's to rename.
+	CHECK(RenameAt(session, "textDocument/rename", mainUri, 1, 5, "twice", error).IsNull());
+	CHECK_NE(error.find("isn't made in this script"), std::string::npos);
+	// And the script that makes it is used by an open script, which rename wouldn't change.
+	CHECK(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
+	CHECK_NE(error.find("Main.forge' uses this script"), std::string::npos);
+	// Its parameter is its own, so that is fine.
+	CHECK_EQ(EditSpans(RenameAt(session, "textDocument/rename", helpersUri, 0, 16, "amount", error), helpersUri),
+		(std::vector<std::string> { "0:16-17", "1:8-9" }));
+}
+
 TEST_CASE("FindScriptSymbolsSeesPastElseIf")
 {
 	const std::vector<LanguageServer::Symbol> symbols = FindScriptSymbols(

@@ -2,7 +2,7 @@
 
 ForgeScript is a scripting language for games. It reads like plain English, it is short to type, and it was built to drive a game engine: moving entities, reacting to events, waiting for time to pass, and organizing game objects.
 
-This guide teaches the whole language step by step. Every example is real ForgeScript code you can run.
+This guide teaches the whole language step by step. Every example is real ForgeScript code you can run. When you know the basics, the [Cookbook](Cookbook.md) has thirty ready-made recipes for common game tasks.
 
 **How to try the examples:** open a terminal in the folder that holds `forgescript.exe` (Windows) or `forgescript` (Linux) and either:
 

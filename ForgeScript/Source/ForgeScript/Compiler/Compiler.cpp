@@ -53,12 +53,14 @@ namespace ForgeScript {
 			int Depth = 0;
 			bool IsCaptured = false;
 			size_t NameIndex = static_cast<size_t>(-1); // Its entry in Function::LocalNames, if named.
+			int Id = -1; // Tells variables apart for CompileOptions::NameUses, even with the same name.
 		};
 
 		struct UpvalueInfo
 		{
 			uint8_t Index = 0;
 			bool IsLocal = false;
+			int LocalId = -1; // The Local::Id of the variable it reaches.
 		};
 
 		struct LoopInfo
@@ -356,6 +358,8 @@ namespace ForgeScript {
 				ErrorAtCurrent(message);
 			}
 			std::string name(Current().Lexeme);
+			if (m_Options.NameUses)
+				m_ConsumedNames.push_back(m_Pos);
 			Advance();
 			return name;
 		}
@@ -366,6 +370,9 @@ namespace ForgeScript {
 			if (!Current().IsWord())
 				ErrorAtCurrent("Expected a property name after '.'.");
 			std::string name(Current().Lexeme);
+			// A field or method: which kind's can't be told here, so every one of that name shares a key.
+			if (m_Options.NameUses)
+				NoteName(m_Pos, name, "F:" + name, false);
 			Advance();
 			return name;
 		}
@@ -942,14 +949,58 @@ namespace ForgeScript {
 			}
 		}
 
-		// Declares a local variable for the value that is currently on top of the stack.
-		int AddLocal(const std::string& name)
+		static constexpr size_t c_NoToken = static_cast<size_t>(-1);
+		static constexpr size_t c_LastConsumed = static_cast<size_t>(-2);
+
+		// Declares a local variable for the value that is currently on top of the stack. 'at' is the token
+		// that names it, for CompileOptions::NameUses: by default the last name read with ConsumeName
+		// that is spelled the same and not yet noted; c_NoToken when no token names it here.
+		int AddLocal(const std::string& name, size_t at = c_LastConsumed)
 		{
 			if (m_State->Locals.size() >= 256)
 				Error("Too many variables in one function (the limit is 255). Split it into smaller functions.");
 			m_State->Locals.push_back({ name, m_State->ScopeDepth, false });
+			m_State->Locals.back().Id = m_NextLocalId++;
 			NameLocal(m_State->Locals.size() - 1);
+			if (!name.empty())
+				NoteLocal(at == c_LastConsumed ? LastConsumed(name) : at, name, m_State->Locals.back().Id, true);
 			return static_cast<int>(m_State->Locals.size()) - 1;
+		}
+
+		// The last token of the statement being compiled that ConsumeName read, is spelled 'name' and is
+		// not yet noted, or c_NoToken.
+		size_t LastConsumed(const std::string& name) const
+		{
+			for (auto it = m_ConsumedNames.rbegin(); it != m_ConsumedNames.rend() && *it >= m_StatementStart; ++it)
+			{
+				if (m_Tokens[*it].Lexeme == name && !m_NotedTokens.count(*it))
+					return *it;
+			}
+			return c_NoToken;
+		}
+
+		// Records that the token at 'at' names the variable 'key' (see CompileOptions::NameUses). Only a
+		// token spelled 'name' counts, so a wrong guess of where a name is notes nothing.
+		void NoteName(size_t at, const std::string& name, const std::string& key, bool declares)
+		{
+			if (!m_Options.NameUses || at >= m_Tokens.size() || m_Tokens[at].Type != TokenType::Identifier ||
+				m_Tokens[at].Lexeme != name || !m_NotedTokens.insert(at).second)
+				return;
+			const Token& token = m_Tokens[at];
+			m_Options.NameUses->push_back({ token.Line, token.Column, static_cast<int>(token.Lexeme.size()), at, key, declares });
+		}
+
+		// The key is made only when someone listens, since this runs for every name a script uses.
+		void NoteLocal(size_t at, const std::string& name, int id, bool declares)
+		{
+			if (m_Options.NameUses)
+				NoteName(at, name, "L" + std::to_string(id), declares);
+		}
+
+		void NoteScriptName(size_t at, const std::string& name, bool declares)
+		{
+			if (m_Options.NameUses)
+				NoteName(at, name, "G:" + name, declares);
 		}
 
 		// Records where a named local lives, for the debugger. It is visible from here on.
@@ -972,7 +1023,7 @@ namespace ForgeScript {
 			return -1;
 		}
 
-		int AddUpvalue(FunctionState* state, uint8_t index, bool isLocal, const std::string& name)
+		int AddUpvalue(FunctionState* state, uint8_t index, bool isLocal, const std::string& name, int localId)
 		{
 			for (size_t i = 0; i < state->Upvalues.size(); i++)
 			{
@@ -981,7 +1032,7 @@ namespace ForgeScript {
 			}
 			if (state->Upvalues.size() >= 256)
 				Error("Too many outside variables used by one function (the limit is 255).");
-			state->Upvalues.push_back({ index, isLocal });
+			state->Upvalues.push_back({ index, isLocal, localId });
 			state->Fn->UpvalueNames.push_back(name);
 			state->Fn->UpvalueCount = static_cast<int>(state->Upvalues.size());
 			return static_cast<int>(state->Upvalues.size()) - 1;
@@ -996,12 +1047,13 @@ namespace ForgeScript {
 			if (local != -1)
 			{
 				state->Enclosing->Locals[static_cast<size_t>(local)].IsCaptured = true;
-				return AddUpvalue(state, static_cast<uint8_t>(local), true, name);
+				return AddUpvalue(state, static_cast<uint8_t>(local), true, name, state->Enclosing->Locals[static_cast<size_t>(local)].Id);
 			}
 
 			int upvalue = ResolveUpvalue(state->Enclosing, name);
 			if (upvalue != -1)
-				return AddUpvalue(state, static_cast<uint8_t>(upvalue), false, name);
+				return AddUpvalue(state, static_cast<uint8_t>(upvalue), false, name,
+					state->Enclosing->Upvalues[static_cast<size_t>(upvalue)].LocalId);
 			return -1;
 		}
 
@@ -1018,7 +1070,8 @@ namespace ForgeScript {
 			return false;
 		}
 
-		Target ResolveName(const std::string& name)
+		// 'at' is the token of the name, for CompileOptions::NameUses (c_NoToken when there is none).
+		Target ResolveName(const std::string& name, size_t at = c_NoToken)
 		{
 			Target target;
 			int local = ResolveLocal(m_State, name);
@@ -1026,6 +1079,7 @@ namespace ForgeScript {
 			{
 				target.Type = TargetType::Local;
 				target.Slot = local;
+				NoteLocal(at, name, m_State->Locals[static_cast<size_t>(local)].Id, false);
 				return target;
 			}
 			int upvalue = ResolveUpvalue(m_State, name);
@@ -1033,10 +1087,12 @@ namespace ForgeScript {
 			{
 				target.Type = TargetType::Upvalue;
 				target.Slot = upvalue;
+				NoteLocal(at, name, m_State->Upvalues[static_cast<size_t>(upvalue)].LocalId, false);
 				return target;
 			}
 			target.Type = TargetType::Global;
 			target.Name = NameConstant(name);
+			NoteScriptName(at, name, false);
 			return target;
 		}
 
@@ -1079,8 +1135,9 @@ namespace ForgeScript {
 			Target& target = chain.Final;
 			if (Check(TokenType::Identifier))
 			{
+				const size_t at = m_Pos;
 				std::string name = ConsumeName("Expected a variable name.");
-				target = ResolveName(name);
+				target = ResolveName(name, at);
 			}
 			else if (Match(TokenType::My))
 			{
@@ -1350,6 +1407,7 @@ namespace ForgeScript {
 		// out first, so "set a, b to [b, a]" swaps them. Before, a comma after the name was always a mistake.
 		void UnpackStatement(const std::vector<std::string>& names)
 		{
+			const size_t firstName = m_Pos;
 			for (size_t i = 0; i < names.size(); i++)
 			{
 				for (size_t j = 0; j < i; j++)
@@ -1371,16 +1429,18 @@ namespace ForgeScript {
 			for (size_t i = names.size(); i > 0; i--)
 			{
 				const std::string& name = names[i - 1];
+				const size_t at = firstName + 2 * (i - 1);
 				const bool scriptVariable = m_State->Kind == ScopeKind::Script && ResolveLocal(m_State, name) == -1;
 				Target target;
 				if (scriptVariable)
 				{
 					target.Type = TargetType::Global;
 					target.Name = NameConstant(name);
+					NoteScriptName(at, name, true);
 				}
 				else
 				{
-					target = ResolveName(name);
+					target = ResolveName(name, at);
 				}
 				EmitSet(target);
 				EmitOp(OpCode::Pop);
@@ -1402,6 +1462,7 @@ namespace ForgeScript {
 				{
 					// A script level variable: "set score to 0".
 					WarnIfHidesBuiltin(name);
+					NoteScriptName(m_Pos, name, true);
 					Advance();
 					Advance();
 					Expression();
@@ -2363,7 +2424,7 @@ namespace ForgeScript {
 				if (ResolveLocal(m_State, local) != -1 || IsModuleName(local) || IsVisibleInEnclosing(local))
 					continue;
 				EmitOp(OpCode::Nothing);
-				AddLocal(local);
+				AddLocal(local, c_NoToken);
 			}
 
 			fn->BodyIp = CurrentChunk().Size();
@@ -2550,6 +2611,7 @@ namespace ForgeScript {
 			if (m_State->Kind == ScopeKind::Script && m_State->ScopeDepth == 0)
 			{
 				WarnIfHidesBuiltin(name);
+				NoteScriptName(LastConsumed(name), name, true);
 				EmitWithName(OpCode::SetGlobal, name);
 				EmitOp(OpCode::Pop);
 			}
@@ -2558,12 +2620,14 @@ namespace ForgeScript {
 				int existing = ResolveLocal(m_State, name);
 				if (existing != -1 && m_State->Locals[static_cast<size_t>(existing)].Depth == m_State->ScopeDepth)
 				{
+					NoteLocal(LastConsumed(name), name, m_State->Locals[static_cast<size_t>(existing)].Id, true);
 					EmitOp(OpCode::SetLocal);
 					EmitByte(static_cast<uint8_t>(existing));
 					EmitOp(OpCode::Pop);
 				}
 				else if (m_State->Kind == ScopeKind::Script && ResolveLocal(m_State, name) == -1)
 				{
+					NoteScriptName(LastConsumed(name), name, true);
 					EmitWithName(OpCode::SetGlobal, name);
 					EmitOp(OpCode::Pop);
 				}
@@ -2578,15 +2642,18 @@ namespace ForgeScript {
 		{
 			Token opener = Current();
 			Advance();
+			const size_t nameAt = m_Pos;
 			std::string name = ConsumeName("Expected a function name.");
 
 			bool isLocal = !(m_State->Kind == ScopeKind::Script);
+			if (!isLocal)
+				NoteScriptName(nameAt, name, true);
 			int slot = -1;
 			if (isLocal)
 			{
 				// Declare first so the function can call itself.
 				EmitOp(OpCode::Nothing);
-				slot = AddLocal(name);
+				slot = AddLocal(name, nameAt);
 			}
 
 			std::vector<DefaultValue> defaults;
@@ -2668,17 +2735,19 @@ namespace ForgeScript {
 		{
 			Token opener = Current();
 			Advance();
+			const size_t nameAt = m_Pos;
 			std::string name = ConsumeName("Expected a name for the kind, like: kind Enemy");
 
 			EmitWithName(OpCode::Kind, name);
 			bool isGlobal = m_State->Kind == ScopeKind::Script;
 			if (isGlobal)
 			{
+				NoteScriptName(nameAt, name, true);
 				EmitWithName(OpCode::SetGlobal, name);
 			}
 			else
 			{
-				int slot = AddLocal(name);
+				int slot = AddLocal(name, nameAt);
 				EmitOp(OpCode::GetLocal);
 				EmitByte(static_cast<uint8_t>(slot));
 			}
@@ -3188,10 +3257,12 @@ namespace ForgeScript {
 			}
 			std::string event = EventName(source.empty() ? "wait for door opened" : "wait for \"Start\" is clicked");
 			std::vector<std::string> names;
+			std::vector<size_t> nameTokens;
 			if (Match(TokenType::With) || Match(TokenType::By))
 			{
 				do
 				{
+					nameTokens.push_back(m_Pos);
 					names.push_back(ConsumeName("Expected a name for the event value, like: wait for hit with damage"));
 				} while (Match(TokenType::Comma) || Match(TokenType::And));
 			}
@@ -3209,10 +3280,11 @@ namespace ForgeScript {
 				{
 					target.Type = TargetType::Global;
 					target.Name = NameConstant(name);
+					NoteScriptName(nameTokens[i - 1], name, true);
 				}
 				else
 				{
-					target = ResolveName(name);
+					target = ResolveName(name, nameTokens[i - 1]);
 				}
 				EmitSet(target);
 				EmitOp(OpCode::Pop);
@@ -4187,8 +4259,9 @@ namespace ForgeScript {
 		{
 			if (!Check(TokenType::Identifier))
 				ErrorAtCurrent("Expected the name of a kind after 'new', like: new Enemy()");
+			const size_t at = m_Pos;
 			std::string name = ConsumeName("Expected the name of a kind.");
-			EmitGet(ResolveName(name));
+			EmitGet(ResolveName(name, at));
 			while (Match(TokenType::Dot))
 				EmitWithName(OpCode::GetProperty, ConsumeMemberName());
 
@@ -4274,6 +4347,7 @@ namespace ForgeScript {
 				return false;
 			Nested nested(*this);
 			const std::string name(Peek(1).Lexeme);
+			const size_t nameAt = m_Pos + 1;
 			Advance();
 			Advance();
 			Advance();
@@ -4291,7 +4365,7 @@ namespace ForgeScript {
 			BeginScope();
 			state.Locals.push_back({ "", state.ScopeDepth, false });
 			NameLocal(0);
-			AddLocal(name);
+			AddLocal(name, nameAt);
 			fn->ParamNames = { name };
 			DefaultValues(fn, fn->ParamNames, {});
 			fn->BodyIp = CurrentChunk().Size();
@@ -4413,7 +4487,7 @@ namespace ForgeScript {
 					std::string name(token.Lexeme);
 					const size_t nameIndex = m_Pos;
 					Advance();
-					const Target target = ResolveName(name);
+					const Target target = ResolveName(name, nameIndex);
 					WarnIfCallFindsOwnValue(name, target, nameIndex);
 					if (target.Type == TargetType::Global)
 					{
@@ -4498,6 +4572,11 @@ namespace ForgeScript {
 		Module* m_Module;
 		std::vector<Token> m_Tokens;
 		size_t m_Pos = 0;
+		// For CompileOptions::NameUses: the tokens ConsumeName read, the tokens already noted, and the
+		// next Local::Id.
+		std::vector<size_t> m_ConsumedNames;
+		std::unordered_set<size_t> m_NotedTokens;
+		int m_NextLocalId = 0;
 		std::string m_FileName;
 		CompileOptions m_Options;
 		PhraseTable m_Phrases;
