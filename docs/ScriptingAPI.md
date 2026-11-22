@@ -198,6 +198,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `create_entity(name="Entity", parent=None)` | Creates an entity (with a Transform) and returns it. |
 | `destroy(entity)` / `entity.destroy()` | Destroys the entity and its children (at the end of the frame during play). |
 | `find_entity(name)` | First entity with that name, or `None`. |
+| `find_tagged(tag)` | Every entity with the tag, parents before their children; an empty list when there are none. |
 | `get_entity(id)` | Entity by its persistent ID (`entity.id`), or `None`. |
 | `get_entities(component=None)` | All entities, optionally only those with a component (`get_entities(bellows.RigidBody)` or `get_entities("RigidBody")`). |
 | `instantiate(prefab, position=None, parent=None)` | Spawns a `.bprefab` and returns its root entity. |
@@ -219,6 +220,8 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `valid` / `bool(entity)` | `False` once destroyed. |
 | `name` | Read/write. |
 | `keep_across_scenes` | Read/write. When true, the entity and its children stay when `load_scene` changes the scene (the Inspector's **Keep Across Scenes**, saved in the scene). A kept child of an entity that goes moves to the top level and stays where it is in the world. |
+| `tags` | The groups the entity belongs to (`["enemy", "boss"]`), in the order they were added; the Inspector's **Tags**, saved in the scene. Read-only: change it with the methods below. |
+| `add_tag(tag)`, `remove_tag(tag)`, `has_tag(tag)` | `add_tag` returns `False` when the entity has the tag already, and `remove_tag` when it didn't. A tag is trimmed, 1 to 64 characters on one line, and matches exactly (letter case counts); an entity has at most 32. A tag that breaks these rules raises `ValueError`. |
 | `position` | **World** position (read/write). |
 | `local_position` | Position relative to the parent. |
 | `rotation` | Local rotation as Euler angles in **degrees**. |
@@ -666,6 +669,9 @@ engine sends these events, which the script handles with `when`:
   | `scale (entity) to (size) over (seconds) seconds` | `tween(entity, "scale", size, seconds)`; a number scales all three axes |
   | `fade (entity) to (opacity) over (seconds) seconds` | `tween` of `"UIImage.color"` (or `"Text.color"`) to the same color with that alpha, 0 to 1 |
   | `push (entity) by (impulse)` | `entity.rigid_body.add_impulse(impulse)` |
+  | `tag (entity) as (tag)` | `entity.add_tag(tag)` |
+  | `untag (entity) as (tag)` | `entity.remove_tag(tag)` |
+  | `everything tagged (tag)` | `find_tagged(tag)`, so `for each enemy in everything tagged "enemy"` works |
 
   Every tween phrase also takes `second` (`over 1 second`) and ends with an optional
   `with (style)` for the easing, which is `"in out"` otherwise: `move door to p over 2 seconds with

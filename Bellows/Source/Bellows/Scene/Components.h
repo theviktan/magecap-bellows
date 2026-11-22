@@ -32,8 +32,9 @@ namespace Bellows {
 
 	struct TagComponent
 	{
-		std::string Tag;
+		std::string Tag;				// The entity's name
 		bool KeepAcrossScenes = false;	// The entity and its children stay when load_scene changes the scene
+		std::vector<std::string> Tags;	// Groups it belongs to ("enemy"); see Scene/EntityTags.h for the rules
 	};
 
 	// Local transform relative to the parent entity (or the world for root entities).

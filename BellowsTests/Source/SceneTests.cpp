@@ -5,6 +5,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/SceneSerializer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -409,6 +410,86 @@ TEST_CASE("Values that can't be read keep their defaults and are named in a warn
 	REQUIRE(warnings.size() == 2);
 	CHECK(warnings[0].find("Scene settings: Gravity could not be read") != std::string::npos);
 	CHECK(warnings[1].find("Entity 'Cube': Transform.Scale, PointLight.Intensity, PointLight.Range could not be read") != std::string::npos);
+}
+
+TEST_CASE("Tags follow one set of rules, and find_tagged lists entities in hierarchy order")
+{
+	TagComponent tag;
+	CHECK(EntityTags::AddTag(tag, "  enemy "));
+	CHECK_FALSE(EntityTags::AddTag(tag, "enemy"));
+	CHECK(EntityTags::AddTag(tag, "Enemy"));
+	CHECK(tag.Tags == std::vector<std::string>{ "enemy", "Enemy" });
+	CHECK(EntityTags::HasTag(tag, " enemy"));
+	CHECK_FALSE(EntityTags::HasTag(tag, "ENEMY"));
+	CHECK_THROWS_WITH(EntityTags::AddTag(tag, "   "), "A tag can't be empty");
+	CHECK_THROWS_WITH(EntityTags::AddTag(tag, std::string(65, 'x')), doctest::Contains("at most 64 characters"));
+	CHECK(EntityTags::AddTag(tag, std::string(64, 'x')));
+	// 64 accented letters are 128 bytes, and still 64 characters.
+	std::string accented;
+	for (int i = 0; i < 64; i++)
+		accented += "\xC3\xA9";
+	CHECK(EntityTags::AddTag(tag, accented));
+	CHECK_THROWS_WITH(EntityTags::AddTag(tag, accented + "e"), "A tag can be at most 64 characters long, and this one has 65");
+	CHECK_THROWS_WITH(EntityTags::AddTag(tag, "two\nlines"), doctest::Contains("one line"));
+	CHECK(EntityTags::RemoveTag(tag, "Enemy "));
+	CHECK_FALSE(EntityTags::RemoveTag(tag, "Enemy"));
+	TagComponent full;
+	for (size_t i = 0; i < EntityTags::MaxTagsPerEntity; i++)
+		EntityTags::AddTag(full, "t" + std::to_string(i));
+	CHECK_THROWS_WITH(EntityTags::AddTag(full, "one more"), "An entity can have at most 32 tags");
+	CHECK_FALSE(EntityTags::AddTag(full, "t0"));
+
+	Scene scene("Tags");
+	Entity a = scene.CreateEntity("A");
+	Entity b = scene.CreateEntity("B");
+	Entity child = scene.CreateEntity("A's child");
+	scene.SetParent(child, a);
+	Entity plain = scene.CreateEntity("Plain");
+	for (Entity entity : { b, child, a })
+		EntityTags::AddTag(entity.GetComponent<TagComponent>(), "enemy");
+	const std::vector<Entity> found = EntityTags::FindTagged(scene, " enemy ");
+	REQUIRE(found.size() == 3);
+	CHECK(found[0] == a);
+	CHECK(found[1] == child);
+	CHECK(found[2] == b);
+	CHECK(EntityTags::FindTagged(scene, "pickup").empty());
+	CHECK(EntityTags::FindTagged(scene, "").empty());
+	(void)plain;
+}
+
+TEST_CASE("Tags are saved with the entity, and a damaged list loads cleaned with a warning")
+{
+	Scene scene("Saved Tags");
+	Entity door = scene.CreateEntity("Door");
+	EntityTags::AddTag(door.GetComponent<TagComponent>(), "door");
+	EntityTags::AddTag(door.GetComponent<TagComponent>(), "locked");
+	scene.CreateEntity("Untagged");
+	const Json json = SceneSerializer::SerializeToJson(scene);
+	CHECK(json.dump().find("\"Tags\":[\"door\",\"locked\"]") != std::string::npos);
+	CHECK(json.dump().find("\"Tags\":[]") == std::string::npos);
+
+	Scene loaded("Loaded");
+	REQUIRE(SceneSerializer::DeserializeFromJson(loaded, json));
+	CHECK(loaded.FindEntityByName("Door").GetComponent<TagComponent>().Tags == std::vector<std::string>{ "door", "locked" });
+	CHECK(loaded.FindEntityByName("Untagged").GetComponent<TagComponent>().Tags.empty());
+
+	const Json damaged = Json::parse(R"({ "Version": 1, "Entities": [
+		{ "ID": 21, "Name": "Crate", "Tags": [" pickup ", "pickup", "", "heavy"] },
+		{ "ID": 22, "Name": "Odd", "Tags": "pickup" } ] })");
+	const uint64_t before = Log::GetLatestSequence();
+	Scene cleaned("Cleaned");
+	REQUIRE(SceneSerializer::DeserializeFromJson(cleaned, damaged));
+	CHECK(cleaned.FindEntityByName("Crate").GetComponent<TagComponent>().Tags == std::vector<std::string>{ "pickup", "heavy" });
+	CHECK(cleaned.FindEntityByName("Odd").GetComponent<TagComponent>().Tags.empty());
+	std::string warnings;
+	for (const LogMessage& message : Log::GetMessagesSince(before))
+	{
+		if (message.Level == LogLevel::Warn)
+			warnings += message.Text + "\n";
+	}
+	CHECK(warnings.find("Entity 'Crate': the tag 'pickup' was left out") != std::string::npos);
+	CHECK(warnings.find("Entity 'Crate': the tag '' was left out") != std::string::npos);
+	CHECK(warnings.find("Entity 'Odd': Tags could not be read") != std::string::npos);
 }
 
 TEST_CASE("Prefabs instantiate with fresh IDs and keep their hierarchy")

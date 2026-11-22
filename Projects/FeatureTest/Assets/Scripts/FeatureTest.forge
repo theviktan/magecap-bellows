@@ -213,6 +213,26 @@ function test_keep_across_scenes()
 	kept.destroy()
 end
 
+function test_tags()
+	set guard to create_entity("Forge Guard")
+	set scout to create_entity("Forge Scout")
+	tag guard as "forge enemy"
+	tag scout as "forge enemy"
+	tag guard as "forge enemy"
+	check(guard.tags is ["forge enemy"] and scout.has_tag("forge enemy"), "tag (entity) as (tag), each tag once")
+	set found to []
+	for each enemy in everything tagged "forge enemy"
+		add enemy.name to found
+	end
+	check(found is ["Forge Guard", "Forge Scout"], "everything tagged (tag), in hierarchy order ({found})")
+	check(length(find_tagged("forge enemy")) is 2, "find_tagged")
+	untag scout as "forge enemy"
+	check(not scout.has_tag("forge enemy") and length(everything tagged "forge enemy") is 1, "untag (entity) as (tag)")
+	check(fails(function() tag guard as "" end), "an empty tag is refused")
+	guard.destroy()
+	scout.destroy()
+end
+
 function test_saved_data()
 	delete_data("Feature Test")
 	check(load_data("Feature Test", 7) is 7, "load_data gives the default when nothing is saved")
@@ -324,6 +344,7 @@ function run_tests()
 		test_screenshots()
 		test_pause()
 		test_keep_across_scenes()
+		test_tags()
 		test_saved_data()
 		test_destruction()
 		test_physics()

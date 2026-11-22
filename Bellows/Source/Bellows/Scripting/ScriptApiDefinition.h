@@ -22,6 +22,7 @@
 #include "Bellows/Core/InputNames.h"
 #include "Bellows/Math/Easing.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
@@ -336,6 +337,20 @@ namespace Bellows::Scripting {
 				throw ScriptValueError(error.what());
 			}
 			return ScriptTween { target.SceneID, id, target, property.Name };
+		}
+
+		// --- Tags --------------------------------------------------------------
+
+		inline bool AddTag(const ScriptEntity& entity, const std::string& tag)
+		{
+			try
+			{
+				return EntityTags::AddTag(entity.Resolve().GetComponent<TagComponent>(), tag);
+			}
+			catch (const std::invalid_argument& error)
+			{
+				throw ScriptValueError(error.what());
+			}
 		}
 
 		// --- Physics -----------------------------------------------------------
@@ -874,6 +889,15 @@ namespace Bellows::Scripting {
 		entity.Property("keep_across_scenes", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TagComponent>().KeepAcrossScenes; },
 			[](const ScriptEntity& e, bool v) { e.Resolve().GetComponent<TagComponent>().KeepAcrossScenes = v; },
 			"The entity and its children stay when load_scene changes the scene, keeping their scripts, physics and sounds");
+		entity.ReadOnly("tags", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TagComponent>().Tags; },
+			"The groups the entity belongs to (\"enemy\"), in the order they were added; find them with find_tagged");
+		entity.Method("add_tag", [](const ScriptEntity& e, const std::string& tag) { return Detail::AddTag(e, tag); },
+			"Adds a tag, and returns false when the entity already had it. A tag is trimmed, 1 to 64 characters, and an entity has at most 32",
+			Arg("tag"));
+		entity.Method("remove_tag", [](const ScriptEntity& e, const std::string& tag) { return EntityTags::RemoveTag(e.Resolve().GetComponent<TagComponent>(), tag); },
+			"Removes a tag, and returns false when the entity didn't have it", Arg("tag"));
+		entity.Method("has_tag", [](const ScriptEntity& e, const std::string& tag) { return EntityTags::HasTag(e.Resolve().GetComponent<TagComponent>(), tag); },
+			"True when the entity has the tag (letter case counts)", Arg("tag"));
 		entity.ReadOnly("transform", [](const ScriptEntity& e) { e.Resolve(); return TransformRef { e }; }, "");
 		entity.Property("position", [](const ScriptEntity& e) { return GetWorldPosition(e); }, [](const ScriptEntity& e, const glm::vec3& v) { SetWorldPosition(e, v); }, "World-space position");
 		entity.Property("local_position", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TransformComponent>().Translation; },
@@ -1075,6 +1099,13 @@ namespace Bellows::Scripting {
 		api.Function("ui_hovered", []() { return EntityOrNone(RequireContextScene().GetUIHovered()); },
 			"The UI entity under the pointer that the pointer can use, or None");
 		api.Function("find_entity", [](const std::string& name) { return EntityOrNone(RequireContextScene().FindEntityByName(name)); }, "", Arg("name"));
+		api.Function("find_tagged", [](const std::string& tag)
+			{
+				std::vector<ScriptEntity> result;
+				for (Entity entity : EntityTags::FindTagged(RequireContextScene(), tag))
+					result.emplace_back(entity);
+				return result;
+			}, "Every entity of the scene with the tag, parents before their children; an empty list when there are none", Arg("tag"));
 		api.Function("get_entity", [](uint64_t id) { return EntityOrNone(RequireContextScene().TryGetEntityByUUID(UUID(id))); }, "", Arg("id"));
 		api.Function("get_entities", [](const std::optional<ComponentName>& component)
 			{
