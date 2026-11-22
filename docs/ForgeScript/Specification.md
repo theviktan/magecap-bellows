@@ -504,7 +504,7 @@ A phrase is a function called by its words: `phrase heal (target) by (amount)` i
 - Each slot holds any expression; the value becomes the parameter of that name.
 - Phrases can return values, so they work inside expressions: `say average of 4 and 8`.
 - A phrase can be used anywhere in the script, even above its definition, and in scripts that `use` it.
-- A local variable of the same name as a phrase's first word wins over the phrase.
+- A local variable of the same name as a phrase's first word wins over the phrase, except at the start of a statement when the next word can't go on from a value: with a local `move`, `move box to p` is the phrase, while `move(1)`, `move.x`, `say move` and `repeat move times` use the variable.
 - The host can register its own phrases. A host phrase may be marked to **give way to calls**: its first word followed by `(`, `[`, `.`, `'s`, an operator, `of`, `is`, `contains`, `and` or `or` keeps the meaning it had without the phrase. A space doesn't change that: `show (x)` is still a call, and the checker warns about it ([13](#13-mistakes-and-warnings)).
 
 The built-in phrases are `say (value)`, `random number from (a) to (b)`, `random item from (list)` and `distance from (a) to (b)`.
