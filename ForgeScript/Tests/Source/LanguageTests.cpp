@@ -375,6 +375,46 @@ TEST_CASE("ListVerbsKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(Output("try\n\tset n to 5\n\tsort n\ncatch problem\n\tsay problem\nend\n"), "sort");
 }
 
+TEST_CASE("ChangeHandlersRunAfterChanges")
+{
+	// A handler that waits lets the writer go on; its values were taken when the change happened.
+	VM vm;
+	std::vector<std::string> printed;
+	vm.SetPrintHandler([&printed](const std::string& text) { printed.push_back(text); });
+	LoadResult loaded = vm.Load(
+		"kind W\n\tset hp to 3\n\twhen my hp changes with now\n\t\twait 1 second\n\t\tsay \"was {now}, is {my hp}\"\n\tend\nend\n"
+		"set w to new W()\nset w.hp to 2\nset w.hp to 1\nsay \"writer goes on\"\n", "w.forge");
+	REQUIRE(loaded.Success);
+	CHECK(printed == std::vector<std::string>{ "writer goes on" });
+	vm.Update(1.5);
+	CHECK(printed == std::vector<std::string>{ "writer goes on", "was 2, is 1", "was 1, is 1" });
+
+	// Handlers that change each other's fields stop with an error, and the writer goes on.
+	std::vector<std::string> errors;
+	VM loops;
+	loops.SetPrintHandler([&printed](const std::string& text) { printed.push_back(text); });
+	loops.SetErrorHandler([&errors](const ScriptError& error) { errors.push_back(error.Message); });
+	printed.clear();
+	REQUIRE(loops.Load("kind P\n\tset a to 0\n\tset b to 0\n\twhen my a changes with now\n\t\tset my b to now + 1\n\tend\n"
+		"\twhen my b changes with now\n\t\tset my a to now + 1\n\tend\nend\nset p to new P()\nset p.a to 1\nsay \"still here\"\n", "p.forge").Success);
+	REQUIRE_FALSE(errors.empty());
+	CHECK_CONTAINS(errors[0], "was changed from inside 64 other changes and events");
+	CHECK(printed == std::vector<std::string>{ "still here" });
+
+	// Each object has its own changes: one object's handler sees only its own.
+	CHECK_EQ(Output("kind K\n\tset x to 0\n\twhen my x changes with now\n\t\tsay \"{my name}: {now}\"\n\tend\n\tfunction setup(n)\n\t\tset my name to n\n\tend\nend\n"
+		"set a to new K(\"a\")\nset b to new K(\"b\")\nset b.x to 2\nset a.x to 1\n"), std::string("b: 2\na: 1\n"));
+}
+
+TEST_CASE("ChangeHandlersKeepOldMeaningsAndExplainMistakes")
+{
+	// At the top level it is still an event, also with values.
+	CHECK_EQ(Output("when my health changes with by_how_much\n\tsay by_how_much\nend\ntrigger my health changes with 5\n"), std::string("5\n"));
+	CHECK_CONTAINS(CompileFails("kind P\n\twhen my hp changes with a, b, c\n\tend\nend\n").Message,
+		"'when my hp changes' gives two values: the new one and the old one, like: with now, before");
+	CHECK_CONTAINS(CompileFails("kind P\n\twhen hp changes\n\tend\nend\n").Message, "or 'when my name changes' to react to a field.");
+}
+
 TEST_CASE("BigChoiceSetsStayQuick")
 {
 	// Audit S-5: 20,000 choices, each used once and all but one in a match, check and run without

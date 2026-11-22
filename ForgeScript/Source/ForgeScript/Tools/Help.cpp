@@ -92,7 +92,7 @@ namespace ForgeScript {
 				Keyword("until", "until done ... end, wait until ready", "Repeats until the condition is true, or waits until it is."),
 				Keyword("use", "use \"helpers\", use \"helpers\" as h", "Brings in another script's functions, phrases and kinds."),
 				Keyword("wait", "wait 2 seconds, wait 3 frames, wait until ready, wait for hit with damage", "Pauses only this task while the game keeps running. 'wait for' pauses it until this script gets the event, with its values in the names."),
-				Keyword("when", "when event with values ... end", "Runs every time the event happens."),
+				Keyword("when", "when event with values ... end", "Runs every time the event happens. Inside a kind, when my health changes with now, before ... end runs right after an object's field changes."),
 				Keyword("while", "while condition ... end", "Repeats a block while the condition is true."),
 				Keyword("with", "trigger hit with 25, when hit with damage", "Introduces the values that go with an event."),
 				Keyword("yes", "yes", "The same as true."),

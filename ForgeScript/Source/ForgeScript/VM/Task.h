@@ -75,6 +75,10 @@ namespace ForgeScript {
 		// How many 'trigger's this handler runs inside (0 for a task not started by an event, or after a
 		// 'wait', when the trigger has returned). Kept by a debugger stop, which leaves the task inside.
 		size_t EventDepth = 0;
+		// For a task running a 'when my field changes' handler: the object and field it handles, so a write
+		// to that field inside it doesn't run it again.
+		Instance* ChangeInstance = nullptr;
+		String* ChangeField = nullptr;
 		StepMode Step = StepMode::None;
 		size_t StepDepth = 0;     // How many frames the task had when the step began.
 		std::string FailureMessage;

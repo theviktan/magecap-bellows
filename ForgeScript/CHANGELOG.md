@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
   as `.sort()`, `.sort_by(...)`, `.shuffle()` and `.reverse()`. On text, `reverse name` changes the
   variable. The words aren't reserved: names, calls like `sort(x)` and a script's own phrases keep
   their meaning.
+- **Reacting to a change** (Tier 2 #9): `when my health changes with now, before ... end` inside a
+  kind runs right after a write that changes the field (by `is`), as a task like `trigger`'s, so it
+  may `wait`. A field's first value isn't a change, a write inside the field's own handler doesn't
+  run it again, and a parent kind's handlers run first. Kinds without handlers, and fields without
+  them, write as fast as before. At the top level, `when my health changes` is still the event of
+  that name; inside a kind the line was an error before.
 - **Fixed before release (Audit 4):** the list words (`the`, `first of`, `item 2 of`) and
   `every`/`any` count toward the 256-level nesting limit, so a very long chain is a mistake
   instead of a crash (S-4). A function with many different values, like a long `choices` list, no

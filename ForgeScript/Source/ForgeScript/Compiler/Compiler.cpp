@@ -2722,6 +2722,31 @@ namespace ForgeScript {
 					Expression();
 					EmitWithName(OpCode::SharedValue, sharedName);
 				}
+				else if (Check(TokenType::When) && Peek(1).Type == TokenType::My && Peek(2).Type == TokenType::Identifier &&
+					Peek(3).Type == TokenType::Identifier && Peek(3).Lexeme == "changes")
+				{
+					// 'when my health changes [with now, before]': a method run right after a write that
+					// changes the field (see VM::RunChangeHandlers).
+					const Token handlerOpener = Current();
+					Advance(); // when
+					Advance(); // my
+					const std::string field(Current().Lexeme);
+					Advance();
+					Advance(); // changes
+					std::vector<std::string> params;
+					if (Match(TokenType::With) || Match(TokenType::By))
+					{
+						do
+						{
+							params.push_back(ConsumeName("Expected a name for the new value (and then the old one)."));
+						} while (Match(TokenType::Comma) || Match(TokenType::And));
+						if (params.size() > 2)
+							ErrorAt(handlerOpener, "'when my " + field + " changes' gives two values: the new one and the old one, like: with now, before");
+					}
+					Match(TokenType::Do);
+					FunctionBody("when my " + field + " changes", ScopeKind::Method, params, handlerOpener, "'when'");
+					EmitWithName(OpCode::ChangeHandler, field);
+				}
 				else if (Check(TokenType::Function))
 				{
 					Token methodOpener = Current();
@@ -2734,7 +2759,7 @@ namespace ForgeScript {
 				}
 				else
 				{
-					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods, or 'shared name is value' for one value all its objects share.");
+					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods, 'shared name is value' for one value all its objects share, or 'when my name changes' to react to a field.");
 				}
 				EndOfStatement();
 				SkipNewlines();
@@ -2746,6 +2771,7 @@ namespace ForgeScript {
 			fields->Name = m_VM.Intern(name + " fields");
 			fields->Owner = m_Module;
 			fields->IsMethod = true;
+			fields->IsFieldInit = true;
 
 			FunctionState state;
 			state.Enclosing = m_State;

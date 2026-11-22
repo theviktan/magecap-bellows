@@ -1,0 +1,56 @@
+# 'when my field changes' inside a kind runs right after the field changes.
+kind Player
+	set health to 100
+	set mana to 5
+	when my health changes with now, before
+		say "health {before} -> {now}"
+	end
+	function setup(first_health)
+		set my health to first_health
+	end
+end
+set hero to new Player(80)                              # expect: health 100 -> 80
+take 30 from hero.health                                # expect: health 80 -> 50
+set hero.health to 50
+set hero.mana to 9
+say "no change, no handler"                             # expect: no change, no handler
+
+# A kind that extends it: the first values run nothing; the parent's handler runs first.
+kind Boss extends Player
+	set health to 500
+	when my health changes
+		say "boss handler"
+	end
+end
+set boss to new Boss(400)                               # expect: health 500 -> 400
+                                                        # expect: boss handler
+
+# A write inside its own handler doesn't run it again.
+kind Clamp
+	set value to 0
+	when my value changes with now
+		if now is above 10 then
+			set my value to 10
+		end
+	end
+end
+set c to new Clamp()
+set c.value to 99
+say c.value                                             # expect: 10
+
+# Changing a list inside a field isn't a change of the field.
+kind Bag
+	set items to []
+	when my items changes
+		say "items changed"
+	end
+end
+set bag to new Bag()
+add "rope" to bag.items
+set bag.items to ["lamp"]                               # expect: items changed
+
+# At the top level, 'when my x changes' is still an event.
+when my score changes
+	say "the event ran"
+end
+trigger my score changes                                # expect: the event ran

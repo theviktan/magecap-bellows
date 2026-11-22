@@ -1882,9 +1882,74 @@ namespace ForgeScript {
 		return Fail("A " + TypeOf(object) + " has no property called '" + key + "'.");
 	}
 
+	bool VM::SetWatchedField(Task* task, Instance* instance, String* name, const Value& value)
+	{
+		if (!instance->Class->WatchedFields.count(name))
+		{
+			instance->SetField(name, value);
+			return true;
+		}
+		auto old = instance->Fields.find(name);
+		const bool had = old != instance->Fields.end();
+		const Value before = had ? old->second : Value();
+		instance->SetField(name, value);
+
+		// A first value (the field is new, or the kind's 'set' lines are giving it) or an equal one
+		// isn't a change; nor is a write inside this field's own handler.
+		if (!had || ValuesEqual(before, value))
+			return true;
+		if (task && !task->Frames.empty() && task->Frames.back().Function->Fn->IsFieldInit)
+			return true;
+		if (task && task->ChangeInstance == instance && task->ChangeField == name)
+			return true;
+
+		// The handlers for this field, a kind it extends first.
+		std::vector<Kind*> kinds;
+		for (Kind* kind = instance->Class; kind; kind = kind->Parent)
+			kinds.push_back(kind);
+		std::vector<Closure*> handlers;
+		for (auto kind = kinds.rbegin(); kind != kinds.rend(); ++kind)
+		{
+			auto found = (*kind)->ChangeHandlers.find(name);
+			if (found != (*kind)->ChangeHandlers.end())
+				handlers.insert(handlers.end(), found->second.begin(), found->second.end());
+		}
+		if (handlers.empty())
+			return true;
+
+		const size_t depth = task ? task->EventDepth + 1 : 0;
+		if (m_RunningTasks.size() >= m_Config.MaxNestedCalls || depth >= m_Config.MaxNestedCalls)
+		{
+			return Fail("'" + name->Text + "' was changed from inside " + std::to_string(m_Config.MaxNestedCalls) +
+				" other changes and events; 'when ... changes' handlers that change each other's fields need a way to stop.");
+		}
+
+		// Like 'trigger': every task is made before any runs, each one a method call on the object.
+		std::vector<Task*> tasks;
+		for (Closure* handler : handlers)
+		{
+			Task* handlerTask = NewTask(handler->Fn->Owner);
+			handlerTask->EventDepth = depth;
+			handlerTask->ChangeInstance = instance;
+			handlerTask->ChangeField = name;
+			m_PendingTasks.push_back(handlerTask);
+			// The pending task keeps itself, and the kind its handler, while the call is made.
+			handlerTask->Stack.push_back(Value::FromObject(Allocate<BoundMethod>(0, Value::FromObject(instance), handler)));
+			const Value values[2] = { value, before };
+			for (int i = 0; i < handler->Fn->Arity && i < 2; i++)
+				handlerTask->Stack.push_back(values[i]);
+			tasks.push_back(handlerTask);
+		}
+		for (Task* handlerTask : tasks)
+		{
+			StartCall(handlerTask, handlerTask->Stack.size() - 1);
+			RemovePending(handlerTask);
+		}
+		return true;
+	}
+
 	bool VM::SetProperty(Task* task, const Value& object, String* name, const Value& value)
 	{
-		(void)task;
 		const std::string& key = name->Text;
 		if (!object.IsObject())
 		{
@@ -1896,8 +1961,13 @@ namespace ForgeScript {
 		switch (object.AsObject()->GetType())
 		{
 			case ObjectType::Instance:
-				As<Instance>(object)->SetField(name, value);
+			{
+				Instance* instance = As<Instance>(object);
+				if (instance->Class && instance->Class->WatchesFields)
+					return SetWatchedField(task, instance, name, value);
+				instance->SetField(name, value);
 				return true;
+			}
 			case ObjectType::Map:
 				As<Map>(object)->Set(Value::FromObject(name), value);
 				return true;
@@ -3115,6 +3185,19 @@ namespace ForgeScript {
 					if (As<Kind>(parent) == kind)
 						FORGESCRIPT_FAIL("A kind cannot extend itself.");
 					kind->Parent = As<Kind>(parent);
+					kind->WatchesFields = kind->WatchesFields || kind->Parent->WatchesFields;
+					kind->WatchedFields.insert(kind->Parent->WatchedFields.begin(), kind->Parent->WatchedFields.end());
+					break;
+				}
+				case OpCode::ChangeHandler:
+				{
+					String* field = FORGESCRIPT_READ_STRING();
+					Closure* handler = As<Closure>(stack.back());
+					stack.pop_back();
+					Kind* kind = As<Kind>(stack.back());
+					kind->ChangeHandlers[field].push_back(handler);
+					kind->WatchesFields = true;
+					kind->WatchedFields.insert(field);
 					break;
 				}
 				case OpCode::AddTest:
@@ -3533,6 +3616,12 @@ namespace ForgeScript {
 					MarkObject(name);
 					MarkValue(value);
 				}
+				for (auto& [name, handlers] : kind->ChangeHandlers)
+				{
+					MarkObject(name);
+					for (Closure* handler : handlers)
+						MarkObject(handler);
+				}
 				break;
 			}
 			case ObjectType::Instance:
@@ -3587,6 +3676,10 @@ namespace ForgeScript {
 				MarkObject(task->Owner);
 				if (task->WaitEvent)
 					MarkObject(task->WaitEvent);
+				if (task->ChangeInstance)
+					MarkObject(task->ChangeInstance);
+				if (task->ChangeField)
+					MarkObject(task->ChangeField);
 				break;
 			}
 		}
