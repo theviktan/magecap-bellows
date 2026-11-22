@@ -20,6 +20,11 @@ with new language or tool features, the patch number with fixes.
   `repeat while` to `while`, a misspelled type or choice to the suggested one, and a missing `end`
   after the block's last indented line. `forgescript --check --json` gives the same change as a
   `"fix"` field, for editors that read the JSON. Messages and what scripts do are unchanged.
+- **Hover explains the phrase the line uses** (for Bellows 0.6.0's tween phrases). Hover on a word
+  of an engine phrase used to list every phrase with that word, so `move door to p over 2 seconds`
+  showed every `move` phrase, and `set move to 4` showed them too. It now matches the phrase's
+  words in order, with a value between them, and shows only the phrases that use the most of the
+  line's words. On such a line, a variable that shares the phrase's first word no longer hides it.
 - **Fixed: `format_date` could make more text than the 100 MB limit** (audit S-10). A long pattern of
   `Month` or `Weekday` grows into longer names (up to 171 MB in the audit). It now stops with
   "format_date would make more than 100000000 bytes of text from this pattern", which `try` can
