@@ -588,6 +588,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 
 - A value named like a built-in function that the script also calls: `set max to 10` in a script that calls `max(a, b)`.
 - `show (menu)`, with a space before the bracket, for a host phrase that gives way to calls ([8](#8-phrases)): it is a call, not the phrase.
+- In 1.6.0: a timer whose time is written as a negative number (`every -1 seconds`), which works like 0.
 - In 1.6.0: a call to one of the script's functions with a plain value of another type than its parameter's `as` type: "'heal' takes a number for 'amount' (amount as number), but this is text."
 - In 1.6.0: a `match` with no `otherwise` whose cases are all choices of one set ([5.1](#51-variables-and-constants)) and leave one out: "This match has no case for State.jumping, and no otherwise."
 

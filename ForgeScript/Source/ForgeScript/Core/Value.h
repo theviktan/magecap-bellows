@@ -77,6 +77,9 @@ namespace ForgeScript {
 	// the same order, and maps when they have the same keys with equal values (in any order). Nested
 	// lists and maps are compared the same way; lists that contain themselves are handled safely.
 	bool ContentsEqual(const Value& a, const Value& b);
+	// Whether Value's == compares this object by its contents (vectors, engine objects) rather than by
+	// being the same object.
+	bool ComparedByContents(const Object* object);
 
 	// Formats a number the way ForgeScript prints it: whole numbers have no ".0".
 	std::string FormatNumber(double number);
