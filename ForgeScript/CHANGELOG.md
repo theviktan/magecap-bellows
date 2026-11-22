@@ -7,6 +7,17 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **Find all uses, and rename** in the language server (Roadmap 2.0, Tier 4 #1):
+  `textDocument/references` and `textDocument/rename` (with `prepareRename`). They work from what
+  the compiler resolved, not from spelling, so two parameters both named `amount` are two different
+  names, and a function inside a function changes with the outer variable it uses. Rename covers a
+  script's variables, parameters, loop and `catch` names, functions and kinds, in that script. It
+  refuses, saying why, instead of guessing: fields and methods (`my health`, `goblin.health`; the
+  kind isn't known), names a script doesn't make, a script with mistakes, a keyword or built-in
+  function as the new name, a new name that already means something where the old one is used, a
+  name also written in a phrase's words, and a script-level name of a script another open script
+  `use`s. Each rename is checked by compiling the renamed script: every name must mean what it
+  meant, with no new mistake or warning. Hosts get the compiler's answer from `VM::FindNameUses`.
 - **Waiting for an event** (Roadmap 2.0, Tier 1 #2). `wait for door opened` pauses the task until its
   script gets the event; `wait for hit with damage, source` puts the event's values in the names, and
   `wait for "Start" is clicked` waits for that entity's event. The script's `when` blocks run first,

@@ -1,5 +1,6 @@
 #include "TestFramework.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -207,4 +208,68 @@ TEST_CASE("CheckReportsScriptsThatCannotBeFound")
 	vm.SetErrorHandler([&reported](const ScriptError& e) { reported = e.Message; });
 	CHECK_FALSE(vm.Load("use \"Scripts/Missing\"\n", "run.forge").Success);
 	CHECK_EQ(reported, std::string("Could not find the script \"Scripts/Missing\" to use."));
+}
+
+TEST_CASE("FindNameUsesTellsVariablesApart")
+{
+	VM vm;
+	const std::string source =
+		"set score to 0\n"                                   // 1
+		"function grow(amount)\n"                            // 2
+		"\tset total to score + amount\n"                    // 3
+		"\tfor each item in [1, 2]\n"                        // 4
+		"\t\tset total to total + item\n"                    // 5
+		"\tend\n"
+		"\treturn total\n"                                   // 7
+		"end\n"
+		"function other(amount)\n"                           // 9
+		"\tset helper to function(x) return x + amount end\n" // 10
+		"\treturn helper(amount)\n"                          // 11
+		"end\n"
+		"kind Enemy\n"                                       // 13
+		"\tset health to 10\n"                               // 14
+		"\tfunction hit(amount)\n"                           // 15
+		"\t\tset my health to my health - amount\n"           // 16
+		"\tend\n"
+		"end\n"
+		"set e to new Enemy()\n"                             // 19
+		"grow(5)\n";                                         // 20
+	std::vector<CompileError> mistakes;
+	const std::vector<NameUse> uses = vm.FindNameUses(source, "uses.forge", &mistakes);
+	CHECK(mistakes.empty());
+	auto keyAt = [&uses](int line, int column) -> std::string
+	{
+		for (const NameUse& use : uses)
+		{
+			if (use.Line == line && use.Column == column)
+				return use.Key + (use.Declares ? " made" : "");
+		}
+		return "";
+	};
+	// A script-level variable, made on line 1 and read in a function.
+	CHECK_EQ(keyAt(1, 5), std::string("G:score made"));
+	CHECK_EQ(keyAt(3, 15), std::string("G:score"));
+	// Three parameters named 'amount' are three variables.
+	const std::string growAmount = keyAt(2, 15);
+	CHECK_EQ(growAmount.substr(0, 1), std::string("L"));
+	CHECK_EQ(keyAt(3, 23) + " made", growAmount);
+	CHECK_NE(keyAt(9, 16), growAmount);
+	CHECK_NE(keyAt(15, 15), growAmount);
+	// A function inside a function reaches the outer 'amount'.
+	CHECK_EQ(keyAt(10, 39) + " made", keyAt(9, 16));
+	CHECK_EQ(keyAt(11, 16) + " made", keyAt(9, 16));
+	// A variable a function makes by setting it: the same one on every line.
+	CHECK_EQ(keyAt(3, 6), keyAt(5, 7));
+	CHECK_EQ(keyAt(5, 16), keyAt(7, 9));
+	CHECK_EQ(keyAt(4, 11), keyAt(5, 24) + " made");
+	// Fields share a key by name, since which kind's can't be told.
+	CHECK_EQ(keyAt(14, 6), std::string("F:health"));
+	CHECK_EQ(keyAt(16, 10), std::string("F:health"));
+	// Functions and kinds of the script.
+	CHECK_EQ(keyAt(2, 10), std::string("G:grow made"));
+	CHECK_EQ(keyAt(20, 1), std::string("G:grow"));
+	CHECK_EQ(keyAt(13, 6), std::string("G:Enemy made"));
+	CHECK_EQ(keyAt(19, 14), std::string("G:Enemy"));
+	// Listed in the order they are written.
+	CHECK(std::is_sorted(uses.begin(), uses.end(), [](const NameUse& a, const NameUse& b) { return a.Token < b.Token; }));
 }

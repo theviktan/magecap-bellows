@@ -122,7 +122,23 @@ namespace ForgeScript {
 		Json Definition(const Json& params);
 		Json DocumentSymbols(const Json& params);
 		Json SignatureHelp(const Json& params);
+		Json References(const Json& params);
+		// Rename and its check: a reason in outError when the name can't be renamed (then the reply is
+		// an error the editor shows).
+		Json PrepareRename(const Json& params, std::string& outError);
+		Json Rename(const Json& params, std::string& outError);
 		Json PublishDiagnostics(const std::string& uri);
+
+		// A VM that checks 'path' as the engine would: the engine's phrases known, 'use' reading open
+		// documents first.
+		void SetUpChecker(VM& vm, const std::filesystem::path& path) const;
+		// Which variable each name in a document means (VM::FindNameUses), and the use under a position
+		// ("textDocument" and "position" of a request), or nullptr.
+		const NameUse* NameUseAt(const Document& document, const Json& params, std::vector<NameUse>& outUses,
+			std::vector<CompileError>& outMistakes) const;
+		// Why the name under the request's position can't be renamed, or "" (then outUses and outUse are
+		// that document's uses and the one under the cursor).
+		std::string CheckRenamable(const Document& document, const Json& params, std::vector<NameUse>& outUses, NameUse& outUse) const;
 
 		void LoadApi(const std::filesystem::path& file);
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
