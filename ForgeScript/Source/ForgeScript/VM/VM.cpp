@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <new>
 #include <cstdio>
 #include <iostream>
 #include <utility>
@@ -2223,7 +2224,20 @@ namespace ForgeScript {
 				default: break;
 			}
 		}
+		// Joining text or lists can ask for more memory than there is (audit S-8): that is a script
+		// error the script can catch, not a crash of the game.
+		try
+		{
+			return ArithmeticOnObjects(op, a, b, outValue);
+		}
+		catch (const std::bad_alloc&)
+		{
+			return Fail("There isn't enough memory for this. Is a loop making text or a list bigger and bigger?");
+		}
+	}
 
+	bool VM::ArithmeticOnObjects(OpCode op, const Value& a, const Value& b, Value& outValue)
+	{
 		if (op == OpCode::Add)
 		{
 			if (IsObjectType(a, ObjectType::String) || IsObjectType(b, ObjectType::String))
@@ -2232,6 +2246,9 @@ namespace ForgeScript {
 				std::string right;
 				if (!SafeToText(a, left) || !SafeToText(b, right))
 					return false;
+				if (left.size() + right.size() > c_MaxTextBytes)
+					return Fail("Joining this text would make more than " + FormatNumber(static_cast<double>(c_MaxTextBytes)) +
+						" bytes of text. Is a loop making it bigger and bigger?");
 				outValue = MakeText(left + right);
 				return true;
 			}
@@ -3420,7 +3437,11 @@ namespace ForgeScript {
 					{
 						std::string part;
 						ok = SafeToText(stack[i], part);
-						text += part;
+						if (ok && text.size() + part.size() > c_MaxTextBytes)
+							ok = Fail("Filling in this text would make more than " + FormatNumber(static_cast<double>(c_MaxTextBytes)) +
+								" bytes of text. Is a loop making it bigger and bigger?");
+						if (ok)
+							text += part;
 					}
 					FORGESCRIPT_CHECK(ok);
 					stack.resize(first);
