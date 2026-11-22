@@ -21,7 +21,7 @@ fully scriptable so agents can build games through it.
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -57,7 +57,7 @@ The tests:
 | `ForgeScriptCheckCommand` | `forgescript --check` text, `--json`, `--stdin`/`--name` output and exit codes, which editors and MageCap Forge depend on (`ForgeScript/Tests/CLI`). |
 | `ForgeScriptLspCommand` | `forgescript --lsp`, the language server, over standard input and output with a recorded session (`ForgeScript/Tests/LSP`). |
 | `ForgeScriptDocExamples` | Every ```` ```forge ```` example in `docs/ForgeScript`, `docs/ScriptingAPI.md` and `ForgeScript/README.md` passes `forgescript --check` with the engine API (`ForgeScript/Tests/Docs`). Examples with a `use` line are left out. |
-| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings, the agent server over loopback (no GPU). |
+| `BellowsUnitTests` | Core, math, meshes, scene, serialization, physics, audio, scripting, projects, export, Script Editor and Project Manager logic, editor settings, the agent server over loopback, and fuzz tests of every file loader (no GPU). |
 | `BellowsGpuTests` | `[gpu]` test cases: renderer output, picking, shadows, validation-clean frames. |
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
@@ -67,6 +67,26 @@ The tests:
 Without a GPU, run on the Mesa software rasterizer:
 `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json ctest --test-dir build/linux-debug`.
 Run a single doctest case with `build/linux-debug/bin/BellowsTests -tc="*name*"`.
+
+`BellowsTests/Source/FuzzTests.cpp` fuzzes every loader that reads a file a user or a download can
+hand the engine (images, glTF, fonts, audio, scenes, prefabs, materials, themes, `.bimport`,
+`.bproject`). It mutates valid files from a fixed seed, so a run is the same everywhere, and writes
+each input to `TestOutput/Fuzz/<target>/` before loading it, so a crash leaves its file there. A
+loader that reads a new kind of file gets a fuzz test there too. CI runs a few hundred inputs per
+loader; before a release, or after changing a loader, run longer and under AddressSanitizer, which
+catches reads past the end of a buffer that don't crash:
+
+```bash
+cmake -S . -B build/asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBELLOWS_BUILD_EDITOR=OFF \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build/asan -j3 --target BellowsTests   # More jobs can run out of memory
+cd build/asan/bin && ASAN_OPTIONS=detect_leaks=0 BELLOWS_FUZZ_ITERATIONS=20000 ./BellowsTests -tc="Fuzz:*"
+```
+
+`BELLOWS_FUZZ_SEED=<number>` tries different mutations. `BellowsTests/Data/CFFTest.otf`, the CFF font
+the font tests read, is written by `Tools/GenerateTestFonts.py` (needs `pip install fonttools`).
 GPU tests run with Vulkan validation enabled and fail on any validation message.
 
 ## Versions and releases

@@ -12,6 +12,8 @@ namespace Bellows {
 	namespace {
 
 		constexpr size_t c_MaxImageFileSize = size_t(512) * 1024 * 1024;
+		// The same limit as STBI_MAX_DIMENSIONS (VendorImplementations.cpp), for OpenEXR too.
+		constexpr int c_MaxImageDimension = 16384;
 
 		// Exact sRGB <-> linear conversion tables for 8-bit values.
 		struct SRGBTables
@@ -137,8 +139,7 @@ namespace Bellows {
 		return LoadFromMemory(data.Data(), data.Size(), colorSpace, path.filename().string(), keepHighDynamicRange);
 	}
 
-	Ref<Texture2D> Texture2D::LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName,
-		bool keepHighDynamicRange)
+	std::optional<DecodedImage> Texture2D::Decode(const void* data, size_t size, const std::string& debugName)
 	{
 		const auto* bytes = static_cast<const stbi_uc*>(data);
 		int width = 0, height = 0, channels = 0;
@@ -146,9 +147,10 @@ namespace Bellows {
 		if (!data || size == 0 || size > c_MaxImageFileSize)
 		{
 			BW_CORE_ERROR("Image '{}' is {} bytes; images can be up to {} MB", debugName, size, c_MaxImageFileSize / (1024 * 1024));
-			return nullptr;
+			return std::nullopt;
 		}
 
+		DecodedImage image;
 		if (IsOpenEXR(data, size))
 		{
 			float* pixels = nullptr;
@@ -158,37 +160,59 @@ namespace Bellows {
 				BW_CORE_ERROR("Failed to decode EXR image '{}': {}", debugName, error ? error : "unknown error");
 				if (error)
 					FreeEXRErrorMessage(error);
-				return nullptr;
+				return std::nullopt;
 			}
-			Ref<Texture2D> texture = CreateFromFloatPixels(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, colorSpace,
-				debugName, keepHighDynamicRange);
-			std::free(pixels);
-			return texture;
+			image.Pixels.reset(pixels);
+			image.HighDynamicRange = true;
+			if (width > 0 && height > 0 && width <= c_MaxImageDimension && height <= c_MaxImageDimension)
+			{
+				image.Width = static_cast<uint32_t>(width);
+				image.Height = static_cast<uint32_t>(height);
+			}
 		}
-
-		if (stbi_is_hdr_from_memory(bytes, static_cast<int>(size)))
+		else if (stbi_is_hdr_from_memory(bytes, static_cast<int>(size)))
 		{
 			float* pixels = stbi_loadf_from_memory(bytes, static_cast<int>(size), &width, &height, &channels, 4);
 			if (!pixels)
 			{
 				BW_CORE_ERROR("Failed to decode HDR image '{}': {}", debugName, stbi_failure_reason());
-				return nullptr;
+				return std::nullopt;
 			}
-			Ref<Texture2D> texture = CreateFromFloatPixels(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, colorSpace,
-				debugName, keepHighDynamicRange);
-			stbi_image_free(pixels);
-			return texture;
+			image.Pixels.reset(pixels);
+			image.HighDynamicRange = true;
+			image.Width = static_cast<uint32_t>(width);
+			image.Height = static_cast<uint32_t>(height);
+		}
+		else
+		{
+			stbi_uc* pixels = stbi_load_from_memory(bytes, static_cast<int>(size), &width, &height, &channels, 4);
+			if (!pixels)
+			{
+				BW_CORE_ERROR("Failed to decode image '{}': {}", debugName, stbi_failure_reason());
+				return std::nullopt;
+			}
+			image.Pixels.reset(pixels);
+			image.Width = static_cast<uint32_t>(width);
+			image.Height = static_cast<uint32_t>(height);
 		}
 
-		stbi_uc* pixels = stbi_load_from_memory(bytes, static_cast<int>(size), &width, &height, &channels, 4);
-		if (!pixels)
+		if (image.Width == 0 || image.Height == 0)
 		{
-			BW_CORE_ERROR("Failed to decode image '{}': {}", debugName, stbi_failure_reason());
-			return nullptr;
+			BW_CORE_ERROR("Image '{}' has no pixels, or is over {} pixels on a side", debugName, c_MaxImageDimension);
+			return std::nullopt;
 		}
-		Ref<Texture2D> texture = CreateFromRGBA8(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixels, colorSpace, debugName);
-		stbi_image_free(pixels);
-		return texture;
+		return image;
+	}
+
+	Ref<Texture2D> Texture2D::LoadFromMemory(const void* data, size_t size, TextureColorSpace colorSpace, const std::string& debugName,
+		bool keepHighDynamicRange)
+	{
+		const std::optional<DecodedImage> image = Decode(data, size, debugName);
+		if (!image)
+			return nullptr;
+		if (image->HighDynamicRange)
+			return CreateFromFloatPixels(image->Width, image->Height, image->GetPixelsFloat(), colorSpace, debugName, keepHighDynamicRange);
+		return CreateFromRGBA8(image->Width, image->Height, image->GetPixels8(), colorSpace, debugName);
 	}
 
 	Ref<Texture2D> Texture2D::CreateFromRGBA8(uint32_t width, uint32_t height, const void* pixels, TextureColorSpace colorSpace,

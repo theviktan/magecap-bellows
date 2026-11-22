@@ -35,10 +35,15 @@
 #undef STB_VORBIS_HEADER_ONLY
 #include <stb_vorbis.c>
 
-// Glyph outlines, kerning and atlas packing for game text (Text/Font.cpp); Dear ImGui keeps its own
+// Atlas packing and CFF glyph outlines for game text (Text/Font.cpp, Text/FontFile.cpp); Dear ImGui keeps its own
 // private copies. The packer comes first, or stb_truetype declares a stand-in for it.
 #define STB_RECT_PACK_IMPLEMENTATION
 #include <stb_rect_pack.h>
 
+// Bellows reads font files itself (Text/FontFile.cpp) and uses stb_truetype only to run CFF
+// charstrings, through buffers of each table's real size. Damaged charstrings reach stb_truetype's
+// asserts, whose reads already fall back safely (to 0, or an empty buffer); as asserts they would
+// stop a debug build over a bad file instead.
+#define STBTT_assert(x) ((void)0)
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
