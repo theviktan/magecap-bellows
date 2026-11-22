@@ -5,6 +5,14 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.7.0 (not released yet)
+
+- **Callbacks are about ten times faster** (Tier 4 #5, step 2). `map`, `filter`, `sort_by`, `any`,
+  `all`, `max_by` and every other built-in that calls a script function used to make a new task, with
+  its own stack, for every item, which also kept the garbage collector busy. A task that finished
+  cleanly is now used again for the next call. `Benchmarks/closures.forge` went from 147 ms to 15 ms
+  (release build); nothing a script sees changes.
+
 ## 1.6.0 (2026-11-22)
 
 - **Repeating text has a limit** (audit S-6, older than 1.6.0): `"ab" * 1e9` built 2 GB of text in

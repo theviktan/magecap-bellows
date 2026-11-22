@@ -771,7 +771,18 @@ namespace ForgeScript {
 		if (IsObjectType(callee, ObjectType::Closure))
 			owner = As<Closure>(callee)->Fn->Owner;
 
-		Task* task = NewTask(owner);
+		// A task that finished one of these calls is used again for the next, so map, filter, sort_by
+		// and the like don't make a new task (and its stack) for every item, which also kept the garbage
+		// collector running.
+		Task* task = nullptr;
+		if (!m_SpareTasks.empty())
+		{
+			task = m_SpareTasks.back();
+			m_SpareTasks.pop_back();
+			task->Owner = owner;
+		}
+		else
+			task = NewTask(owner);
 		task->CanYield = false;
 		task->IsNested = true;
 		task->Stack.push_back(callee);
@@ -783,7 +794,25 @@ namespace ForgeScript {
 
 		if (task->State == TaskState::Failed)
 			throw RuntimeError(task->FailureMessage);
-		return task->Result;
+		const Value result = task->Result;
+		// Only a task that ended cleanly, holding nothing, is kept: one that failed or stopped in the
+		// debugger may still be looked at.
+		if (task->State == TaskState::Done && !task->OpenUpvalues && task->Frames.empty() && m_SpareTasks.size() < c_MaxSpareTasks)
+		{
+			task->Stack.clear();
+			task->Handlers.clear();
+			task->PendingNames = nullptr;
+			task->State = TaskState::Ready;
+			task->EventDepth = 0;
+			task->ChangeInstance = nullptr;
+			task->ChangeField = nullptr;
+			task->Step = StepMode::None;
+			task->StepDepth = 0;
+			task->Result = Value();
+			task->Owner = nullptr;
+			m_SpareTasks.push_back(task);
+		}
+		return result;
 	}
 
 	void VM::Update(double deltaSeconds)
@@ -3579,6 +3608,8 @@ namespace ForgeScript {
 		for (Task* task : m_Tasks)
 			MarkObject(task);
 		for (Task* task : m_RunningTasks)
+			MarkObject(task);
+		for (Task* task : m_SpareTasks)
 			MarkObject(task);
 		for (Task* task : m_PendingTasks)
 			MarkObject(task);
