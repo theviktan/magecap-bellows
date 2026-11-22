@@ -1197,7 +1197,7 @@ say "This prints immediately, while blinking continues."
 
 Every `when` block also runs as its own task, which is why handlers can `wait`.
 
-**Important:** a loop that never waits freezes the game, because nothing else gets a turn. Always put a `wait` inside `repeat forever` and other long-running loops. The engine can stop runaway scripts with an error, and the editor (and `forgescript --check`) warns about a `repeat forever` that has no `wait`, `stop` or `return` inside and calls nothing that might wait.
+**Important:** a loop that never waits freezes the game, because nothing else gets a turn. Always put a `wait` inside `repeat forever` and other long-running loops. The engine can stop runaway scripts with an error, and the editor (and `forgescript --check`) warns about a `repeat forever` (or `while true`, or `until false`) that has no `wait`, `stop` or `return` inside and calls nothing that might wait.
 
 Code the engine calls directly and needs an answer from right away (for example, a sorting function you pass to `sort_by`) cannot `wait`. ForgeScript tells you clearly if this happens; use `start` for code that needs to wait.
 

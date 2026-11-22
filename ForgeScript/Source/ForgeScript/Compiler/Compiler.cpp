@@ -2388,16 +2388,24 @@ namespace ForgeScript {
 			Token opener = Current();
 			Advance();
 			size_t loopStart = CurrentChunk().Size();
+			// 'while true' and 'until false' never stop by themselves, like 'repeat forever'.
+			const std::string condition(Current().Lexeme);
+			const bool forever = (isUntil ? Check(TokenType::False) || Check(TokenType::No) : Check(TokenType::True) || Check(TokenType::Yes)) &&
+				(Peek(1).Type == TokenType::Do || Peek(1).Type == TokenType::Newline);
 			Expression();
 			Match(TokenType::Do);
 			size_t exit = EmitJump(isUntil ? OpCode::JumpIfTrue : OpCode::JumpIfFalse);
 			EmitOp(OpCode::Pop);
 			PushLoop(loopStart, true);
+			size_t bodyStart = m_Pos;
 			ScopedBlock();
 			EmitLoop(loopStart);
 			PatchJump(exit);
 			EmitOp(OpCode::Pop);
 			PopLoop();
+			if (forever && m_Options.Warnings && !MayPauseOrLeave(bodyStart, m_Pos))
+				Warn(opener, "This '" + std::string(opener.Lexeme) + " " + condition + "' loop never waits, so nothing else in the "
+					"game can run while it does. Add a 'wait' inside it, like: wait 1 frame");
 			ConsumeEnd(opener, isUntil ? "'until' loop" : "'while' loop");
 		}
 
