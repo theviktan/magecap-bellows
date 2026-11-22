@@ -26,8 +26,9 @@ namespace Bellows {
 		static std::optional<Json> ReadSceneFile(const std::filesystem::path& path);
 
 		static Json SerializeToJson(Scene& scene);
-		// With skipExistingTrees, a tree whose root's ID is already in the scene is left out: the scene's
-		// own entity wins (Scene::ChangeScene's kept entities).
+		// With skipExistingTrees, an entity whose ID is already in the scene is left out with its children
+		// in the file, wherever it is there (at the top or under another entity): the scene's own entity
+		// wins (Scene::ChangeScene's kept entities).
 		static bool DeserializeFromJson(Scene& scene, const Json& json, bool skipExistingTrees = false);
 
 		// One entity's components (without children).
