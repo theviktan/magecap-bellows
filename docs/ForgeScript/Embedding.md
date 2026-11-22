@@ -53,6 +53,7 @@ private:
 - `SetPrintHandler` receives everything scripts `say` or `print`. Send it to your console panel.
 - `SetErrorHandler` receives every uncaught error with the message, file, line and a call trace. `Trace` is readable text; `Frames` holds the same steps as data, innermost first: each `StackFrame` has `File`, `Line`, `Function` (empty for code at the top of a script) and `Repeats` (a function calling itself shows once, with the count). Use `Frames` to send errors to other tools instead of reading the text.
 - The VM is **not** thread safe. Use it from the main (game) thread only.
+- `StartProfile()` and `TakeProfile()` tell where scripts spend their instructions: each `ProfileEntry` has the `Function` (empty for a script's top level), its `File` and `Line`, the `Instructions` executed in its own code and its `Calls`, most instructions first. Show them in a debug overlay to find what to optimize; it costs a little time per instruction while on.
 - `config.CountInstructions = true` makes the VM count every instruction it executes; `GetInstructionsRun()` gives the total. The count is the same on every machine, so it suits a performance test of your own scripts, as `forgescript --benchmark` uses it. It's off by default because counting costs a little time on every instruction (a set `InstructionLimit` counts too).
 
 ---

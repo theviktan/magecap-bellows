@@ -114,9 +114,11 @@ namespace {
 			"  forgescript --realtime <script>     run using real time for 'wait'\n"
 			"  forgescript --test <script.forge>   run the script, then its tests ('test \"name\" ... end')\n"
 			"  forgescript --format <script.forge> lay the script out the standard way (rewrites the file)\n"
-			"  forgescript --benchmark <scripts>   run each script 5 times: its instructions and median time\n"
 			"      --check                         change nothing; exit with 1 when it needs formatting\n"
 			"      --stdin                         read the script from standard input, print the result\n"
+			"  forgescript --benchmark <scripts>   run each script 5 times: its instructions and median time\n"
+			"  forgescript --profile <script>      run the script, then list where its instructions went\n"
+			"      --output <file>                 write the profile to a file instead of the screen\n"
 			"  forgescript --version               show the version\n";
 	}
 
@@ -196,7 +198,35 @@ namespace {
 		return 0;
 	}
 
-	int RunFile(const std::string& fileName, bool realtime)
+	// The profile's table: the functions that ran the most instructions, at most 30, with their share,
+	// their calls and where they are.
+	std::string ProfileReport(const std::string& scriptName, const std::vector<ForgeScript::ProfileEntry>& entries)
+	{
+		uint64_t total = 0;
+		for (const ForgeScript::ProfileEntry& entry : entries)
+			total += entry.Instructions;
+		std::ostringstream out;
+		out << "Profile of " << scriptName << ": " << total << " instructions in script code\n";
+		out << "  instructions       %      calls  function\n";
+		const size_t shown = std::min<size_t>(entries.size(), 30);
+		for (size_t i = 0; i < shown; i++)
+		{
+			const ForgeScript::ProfileEntry& entry = entries[i];
+			char line[96];
+			std::snprintf(line, sizeof(line), "  %12llu  %5.1f%%  %9llu  ", static_cast<unsigned long long>(entry.Instructions),
+				total ? 100.0 * static_cast<double>(entry.Instructions) / static_cast<double>(total) : 0.0,
+				static_cast<unsigned long long>(entry.Calls));
+			out << line << (entry.Function.empty() ? std::string("(top of the script)") : entry.Function) << " (" << entry.File;
+			if (entry.Line > 0)
+				out << " line " << entry.Line;
+			out << ")\n";
+		}
+		if (entries.size() > shown)
+			out << "  ... and " << entries.size() - shown << " more functions\n";
+		return out.str();
+	}
+
+	int RunFile(const std::string& fileName, bool realtime, bool profile = false, const std::string& profileOutput = std::string())
 	{
 		std::string source;
 		if (!ReadFile(fileName, source))
@@ -216,6 +246,8 @@ namespace {
 			std::cerr << error.ToString() << std::endl;
 		});
 
+		if (profile)
+			vm.StartProfile();
 		ForgeScript::LoadResult result = vm.Load(source, path.filename().string());
 		if (!result.Success)
 			return 70;
@@ -237,6 +269,23 @@ namespace {
 			else
 			{
 				vm.Update(step);
+			}
+		}
+		if (profile)
+		{
+			const std::string report = ProfileReport(ForgeScript::PathToUtf8(path.filename()), vm.TakeProfile());
+			if (profileOutput.empty())
+				std::cout << report << std::flush;
+			else
+			{
+				std::ofstream out(ForgeScript::PathFromUtf8(profileOutput), std::ios::binary | std::ios::trunc);
+				out << report;
+				if (!out.flush())
+				{
+					std::cerr << "Could not write '" << profileOutput << "'." << std::endl;
+					return 66;
+				}
+				std::cout << "Profile written to " << profileOutput << std::endl;
 			}
 		}
 		return hadError ? 70 : 0;
@@ -542,6 +591,8 @@ int main(int argc, char** argv)
 	bool test = false;
 	bool format = false;
 	bool benchmark = false;
+	bool profile = false;
+	std::string profileOutput;
 	std::vector<std::string> files;
 	bool lsp = false;
 	std::filesystem::path apiFile;
@@ -570,6 +621,17 @@ int main(int argc, char** argv)
 			format = true;
 		else if (std::strcmp(argv[i], "--benchmark") == 0)
 			benchmark = true;
+		else if (std::strcmp(argv[i], "--profile") == 0)
+			profile = true;
+		else if (std::strcmp(argv[i], "--output") == 0)
+		{
+			if (i + 1 >= argc)
+			{
+				std::cerr << "--output needs a file name after it, like: --output profile.txt" << std::endl;
+				return 64;
+			}
+			profileOutput = argv[++i];
+		}
 		else if (std::strcmp(argv[i], "--lsp") == 0)
 			lsp = true;
 		else if (std::strcmp(argv[i], "--api") == 0)
@@ -608,6 +670,15 @@ int main(int argc, char** argv)
 		}
 	}
 
+	if (profile || !profileOutput.empty())
+	{
+		if (!profile || check || test || format || benchmark || lsp || apiGiven || checkOptions.Json || checkOptions.FromStdin || files.size() != 1)
+		{
+			std::cerr << "--profile takes one script, and --output only goes with --profile, like: forgescript --profile game.forge --output profile.txt" << std::endl;
+			return 64;
+		}
+		return RunFile(file, realtime, true, profileOutput);
+	}
 	if (benchmark)
 	{
 		if (check || test || format || lsp || realtime || apiGiven || checkOptions.Json || checkOptions.FromStdin || files.empty())

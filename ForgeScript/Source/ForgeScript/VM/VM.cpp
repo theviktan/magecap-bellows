@@ -815,6 +815,51 @@ namespace ForgeScript {
 		return result;
 	}
 
+	void VM::StartProfile()
+	{
+		m_Profile.clear();
+		m_ProfiledFunction = nullptr;
+		m_ProfiledEntry = nullptr;
+		m_Profiling = true;
+	}
+
+	std::vector<ProfileEntry> VM::TakeProfile()
+	{
+		m_Profiling = false;
+		std::vector<ProfileEntry> entries;
+		for (auto& [fn, entry] : m_Profile)
+			entries.push_back(std::move(entry));
+		m_Profile.clear();
+		m_ProfiledFunction = nullptr;
+		m_ProfiledEntry = nullptr;
+		std::stable_sort(entries.begin(), entries.end(), [](const ProfileEntry& a, const ProfileEntry& b)
+		{
+			if (a.Instructions != b.Instructions)
+				return a.Instructions > b.Instructions;
+			return a.File != b.File ? a.File < b.File : a.Line < b.Line;
+		});
+		return entries;
+	}
+
+	ProfileEntry& VM::ProfileOf(const Function* fn)
+	{
+		auto [it, added] = m_Profile.try_emplace(fn);
+		if (added)
+		{
+			// Named now: a function can be freed during the run, and its address used for another.
+			ProfileEntry& entry = it->second;
+			entry.File = fn->Owner ? fn->Owner->Name : std::string();
+			entry.Function = fn->Name ? fn->Name->Text : std::string();
+			// The script's own top-level code is named after its file; a function value is "function".
+			if (entry.Function == entry.File)
+				entry.Function.clear();
+			else if (entry.Function == "function")
+				entry.Function = "(a function value)";
+			entry.Line = fn->Chunk.GetLine(fn->BodyIp);
+		}
+		return it->second;
+	}
+
 	void VM::Update(double deltaSeconds)
 	{
 		// The debugger holds a task: everything waits with it, and time stands still.
@@ -1355,6 +1400,8 @@ namespace ForgeScript {
 		frame.Base = task->Stack.size() - static_cast<size_t>(fn->Arity) - 1;
 		frame.Flags = flags;
 		task->Frames.push_back(frame);
+		if (m_Profiling)
+			ProfileOf(fn).Calls++;
 		return true;
 	}
 
@@ -1431,6 +1478,8 @@ namespace ForgeScript {
 		frame.Base = task->Stack.size() - arity - 1;
 		frame.Flags = flags;
 		task->Frames.push_back(frame);
+		if (m_Profiling)
+			ProfileOf(frame.Function->Fn).Calls++;
 		return true;
 	}
 
@@ -2655,9 +2704,19 @@ namespace ForgeScript {
 			if (m_BytesAllocated > m_NextGC && m_GCPaused == 0)
 				CollectGarbage();
 			// One test for both, and none of their work in the usual run, which keeps the loop fast.
-			if (m_Config.InstructionLimit || m_Config.CountInstructions)
+			if (m_Config.InstructionLimit || m_Config.CountInstructions || m_Profiling)
 			{
 				executed.Executed++;
+				if (m_Profiling)
+				{
+					const Function* fn = frame->Function->Fn;
+					if (fn != m_ProfiledFunction)
+					{
+						m_ProfiledEntry = &ProfileOf(fn);
+						m_ProfiledFunction = fn;
+					}
+					m_ProfiledEntry->Instructions++;
+				}
 				if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
 				{
 					instructions = 0;

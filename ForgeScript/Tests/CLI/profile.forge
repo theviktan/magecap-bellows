@@ -1,0 +1,8 @@
+function square(n)
+	return n * n
+end
+set total to 0
+for i from 1 to 3 do
+	set total to total + square(i)
+end
+say total

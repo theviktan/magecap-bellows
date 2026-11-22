@@ -122,6 +122,17 @@ namespace ForgeScript {
 	// The most bytes 'text * count' and text.repeat(count) may make in one step (100 MB).
 	constexpr size_t c_MaxRepeatedTextBytes = 100'000'000;
 
+	// One function's part of a profile (VM::StartProfile): the instructions executed in its own code
+	// (not in the functions it calls, nor inside built-in functions) and how often it was called.
+	struct ProfileEntry
+	{
+		std::string Function; // "" for the code at the top of a script, "(a function value)" for function(x) ... end
+		std::string File;
+		int Line = 0;
+		uint64_t Instructions = 0;
+		uint64_t Calls = 0;
+	};
+
 	struct VMConfig
 	{
 		// Stop runaway recursion with a clear error instead of a crash.
@@ -264,6 +275,13 @@ namespace ForgeScript {
 		// VMConfig::CountInstructions is on (or an InstructionLimit is set). The same script does the same
 		// count on every machine, which is what 'forgescript --benchmark' compares.
 		uint64_t GetInstructionsRun() const { return m_InstructionsRun; }
+		// Profiling ('forgescript --profile'): between StartProfile and TakeProfile, every instruction is
+		// counted against the function it runs in. The counts are exact and the same on every machine;
+		// work inside built-in functions (sort, map's own loop) isn't counted, only script code. Costs a
+		// little time per instruction while on. TakeProfile gives the entries, most instructions first,
+		// and stops.
+		void StartProfile();
+		std::vector<ProfileEntry> TakeProfile();
 		void CancelTasks(Module* module);
 
 		// ---------------------------------------------------------- Debugger
@@ -456,6 +474,11 @@ namespace ForgeScript {
 		std::unordered_map<std::string, std::vector<int>> m_Breakpoints; // Sorted lines per script.
 		bool m_DebugActive = false;
 		uint64_t m_InstructionsRun = 0;
+		bool m_Profiling = false;
+		std::unordered_map<const Function*, ProfileEntry> m_Profile;
+		const Function* m_ProfiledFunction = nullptr; // the last function counted, and its entry
+		ProfileEntry* m_ProfiledEntry = nullptr;
+		ProfileEntry& ProfileOf(const Function* fn);
 		bool m_PauseRequested = false;
 		size_t m_SteppingTasks = 0;
 		Task* m_StoppedTask = nullptr;
