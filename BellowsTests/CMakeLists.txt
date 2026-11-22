@@ -2,10 +2,12 @@
 
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
 
-# Editor logic without UI (the agent server, UI templates, settings, the project list, script languages, checks, ForgeScript help, the game window session) is compiled in and tested directly.
+# Editor logic without UI (the agent server, asset file operations, UI templates, settings, the project list, script languages, checks, ForgeScript help, the game window session) is compiled in and tested directly.
 set(EDITOR_LOGIC_SOURCES
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AgentServer.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AgentServer.h"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AssetFiles.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AssetFiles.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/EditorSettings.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/EditorSettings.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ForgeScriptAssist.cpp"

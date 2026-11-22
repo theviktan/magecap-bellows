@@ -1,5 +1,6 @@
 #include "ContentBrowserPanel.h"
 
+#include "AssetFiles.h"
 #include "EditorLayer.h"
 #include "EditorTheme.h"
 #include "EditorUI.h"
@@ -23,6 +24,11 @@ namespace Bellows {
 	namespace {
 
 		constexpr double c_RefreshInterval = 1.0;	// Seconds between folder rescans
+#if defined(BW_PLATFORM_WINDOWS)
+		constexpr const char* c_TrashName = "Recycle Bin";
+#else
+		constexpr const char* c_TrashName = "Trash";
+#endif
 
 	}
 
@@ -49,7 +55,7 @@ namespace Bellows {
 			item.Path = entry.path();
 			item.Name = entry.path().filename().string();
 			item.IsDirectory = entry.is_directory(error);
-			if (item.Name.empty() || item.Name.front() == '.' || item.Path.extension() == ".tmp")
+			if (item.Name.empty() || item.Name.front() == '.' || item.Path.extension() == ".tmp" || AssetFiles::IsCompanionFile(item.Path))
 				continue;
 			item.AssetPath = AssetManager::GetAssetPath(item.Path);
 			if (!item.IsDirectory && AssetManager::GetAssetType(item.AssetPath) == AssetType::None)
@@ -324,10 +330,9 @@ namespace Bellows {
 		const std::filesystem::path source = AssetManager::GetAbsolutePath(assetPath);
 		if (source.parent_path() == folder || source == folder)
 			return;
-		std::error_code error;
-		std::filesystem::rename(source, folder / source.filename(), error);
-		if (error)
-			BW_ERROR("Could not move '{}': {}", source.filename().string(), error.message());
+		std::string error;
+		if (!AssetFiles::Move(source, folder, error))
+			BW_ERROR("Could not move '{}': {}", source.filename().string(), error);
 		AssetManager::Invalidate(assetPath);
 		m_LastRefreshTime = -1.0;
 	}
@@ -477,7 +482,7 @@ namespace Bellows {
 				ImGui::EndMenu();
 			}
 			if (type == AssetType::Script && ImGui::MenuItem(ICON_EXTERNAL_LINK "  Open in External Editor"))
-				Platform::OpenWithDefaultApplication(item.Path);
+				Platform::OpenForEditing(item.Path);
 			if (type == AssetType::Script && m_Editor.GetPrimarySelection() && ImGui::MenuItem(ICON_PAPERCLIP "  Attach to Selected Entity"))
 				m_Editor.AttachScript(m_Editor.GetPrimarySelection(), item.AssetPath);
 			if (ImGui::MenuItem(ICON_PENCIL "  Rename"))
@@ -593,19 +598,12 @@ namespace Bellows {
 			ImGui::Spacing();
 			if (ImGui::Button("Rename", ImVec2(110.0f * scale, 0.0f)) || enter)
 			{
-				const std::filesystem::path target = m_RenamePath.parent_path() / m_RenameBuffer;
-				if (!m_RenameBuffer.empty() && target != m_RenamePath)
+				if (m_RenameBuffer != m_RenamePath.filename().string())
 				{
-					std::error_code error;
-					if (FileSystem::Exists(target))
-						BW_ERROR("'{}' already exists", m_RenameBuffer);
-					else
-					{
-						AssetManager::Invalidate(AssetManager::GetAssetPath(m_RenamePath));
-						std::filesystem::rename(m_RenamePath, target, error);
-						if (error)
-							BW_ERROR("Could not rename: {}", error.message());
-					}
+					AssetManager::Invalidate(AssetManager::GetAssetPath(m_RenamePath));
+					std::string error;
+					if (!AssetFiles::Rename(m_RenamePath, m_RenameBuffer, error))
+						BW_ERROR("Could not rename '{}': {}", m_RenamePath.filename().string(), error);
 				}
 				m_LastRefreshTime = -1.0;
 				ImGui::CloseCurrentPopup();
@@ -624,16 +622,17 @@ namespace Bellows {
 		ImGui::SetNextWindowSize(ImVec2(420.0f * scale, 0.0f));
 		if (ImGui::BeginPopupModal("Delete Asset", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize))
 		{
-			ImGui::TextWrapped("Delete '%s'? This cannot be undone.", m_DeletePath.filename().string().c_str());
+			ImGui::TextWrapped("Move '%s' to the %s? You can restore it from there.", m_DeletePath.filename().string().c_str(), c_TrashName);
 			ImGui::Spacing();
 			ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Error));
 			if (ImGui::Button(ICON_TRASH_2 "  Delete", ImVec2(110.0f * scale, 0.0f)))
 			{
-				std::error_code error;
 				AssetManager::Invalidate(AssetManager::GetAssetPath(m_DeletePath));
-				std::filesystem::remove_all(m_DeletePath, error);
-				if (error)
-					BW_ERROR("Could not delete: {}", error.message());
+				std::string error;
+				if (!AssetFiles::Delete(m_DeletePath, error))
+					BW_ERROR("Could not move '{}' to the {}: {}. Nothing was deleted.", m_DeletePath.filename().string(), c_TrashName, error);
+				else if (!error.empty())
+					BW_WARN("Moved '{}' to the {}, but {}", m_DeletePath.filename().string(), c_TrashName, error);
 				if (m_SelectedAsset == AssetManager::GetAssetPath(m_DeletePath))
 					m_SelectedAsset.clear();
 				m_LastRefreshTime = -1.0;
