@@ -7,6 +7,12 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **Fixed: `is a function` inside a function hid the rest of the script.** The compiler's look-ahead
+  read the `function` of the type test `x is a function` as the start of a function block, so the
+  `end` that closed the real function was taken as that block's, and every line after the function
+  silently never ran (with no mistake reported). `is a function` and `is an function` now open
+  nothing, as `is a kind` already didn't, in the compiler, the lexer and the editor tools. Scripts
+  that never wrote `is a function` inside a function or kind are unchanged.
 - **New built-ins** (Roadmap 2.0 Tier 4 #3): `ease(t, style)` with eleven easing curves; `noise(x [, y
   [, z]])`, smooth Perlin noise from -1 to 1 that is the same every run; `color(r, g, b [, a])`,
   `color("#ff8800")` and `hsv(h, s, v [, a])`, each the `[r, g, b, a]` list engine colors take;
