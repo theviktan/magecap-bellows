@@ -61,6 +61,8 @@ namespace Bellows {
 
 		std::filesystem::path m_RenamePath;
 		std::string m_RenameBuffer;
+		std::string m_RenameError;		// Why renaming to m_RenameFailedName failed, shown while that name is typed
+		std::string m_RenameFailedName;
 		bool m_OpenRename = false;
 		std::filesystem::path m_DeletePath;
 		bool m_OpenDelete = false;

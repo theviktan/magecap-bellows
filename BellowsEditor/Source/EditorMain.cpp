@@ -48,6 +48,7 @@ namespace {
 			"  --no-agent-server      Disable the automation server\n"
 			"  --agent-port <n>       Automation server port (default 7420)\n"
 			"  --validation           Enable Vulkan validation layers\n"
+			"  --console              Windows: show the log in a console window\n"
 			"  --check-script <file>  Check a .forge or .py script for mistakes and exit\n"
 			"                         (--json for JSON output, --stdin to read the text from stdin)\n"
 			"  --write-forgescript-api <file>\n"
@@ -75,6 +76,7 @@ namespace {
 int main(int argc, char** argv)
 {
 	const ApplicationCommandLineArgs args = ApplicationCommandLineArgs::FromArgv(argc, argv);
+	Platform::ConnectConsole(args.Has("--console"));
 	if (args.Has("--help") || args.Has("-h"))
 	{
 		PrintUsage();

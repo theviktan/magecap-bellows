@@ -40,6 +40,45 @@ namespace Bellows {
 			return true;
 		}
 
+		// Finds the dotted path of keys from 'root' down to 'target', an object or array inside it.
+		bool FindJsonPath(const Json& root, const Json* target, std::string& path, int depth = 0)
+		{
+			if (&root == target)
+				return true;
+			if (depth >= 16 || !root.is_structured())
+				return false;
+			for (auto it = root.begin(); it != root.end(); ++it)
+			{
+				std::string step = root.is_object() ? it.key() : "[" + std::to_string(std::distance(root.begin(), it)) + "]";
+				std::string inner;
+				if (FindJsonPath(*it, target, inner, depth + 1))
+				{
+					path = inner.empty() ? step : (inner.front() == '[' ? step + inner : step + "." + inner);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// Names every value JsonRead could not use under 'root' in one Console warning, so a NaN saved
+		// as null (or a hand-edited typo) is never dropped without a word.
+		void WarnUnreadValues(const JsonReadIssues& issues, const Json& root, const std::string& owner)
+		{
+			if (issues.IsEmpty())
+				return;
+			std::string fields;
+			for (const JsonReadIssues::Issue& issue : issues.GetIssues())
+			{
+				std::string path;
+				FindJsonPath(root, issue.Object, path);
+				if (!fields.empty())
+					fields += ", ";
+				fields += path.empty() ? issue.Key : path + "." + issue.Key;
+			}
+			BW_CORE_WARN("{}: {} could not be read (empty, the wrong kind of value, or not a finite number), so the default was kept",
+				owner, fields);
+		}
+
 		void DeserializeComponents(Entity entity, const Json& json)
 		{
 			JsonRead(json, "KeepAcrossScenes", entity.GetComponent<TagComponent>().KeepAcrossScenes);
@@ -677,6 +716,7 @@ namespace Bellows {
 
 		for (const Json& entityJson : entities)
 		{
+			JsonReadIssues issues;
 			uint64_t id = 0;
 			std::string name = "Entity";
 			JsonRead(entityJson, "ID", id);
@@ -696,6 +736,7 @@ namespace Bellows {
 			uint64_t parentID = 0;
 			JsonRead(entityJson, "Parent", parentID);
 			created.emplace_back(entity, parentID);
+			WarnUnreadValues(issues, entityJson, "Entity '" + name + "'");
 		}
 
 		// Rebuild the hierarchy in file order (keeps sibling order). The first entity is the tree root.
@@ -815,7 +856,11 @@ namespace Bellows {
 		JsonRead(json, "Scene", name);
 		scene.SetName(name);
 		if (auto it = json.find("Settings"); it != json.end())
+		{
+			JsonReadIssues issues;
 			DeserializeSettings(*it, scene.GetSettings());
+			WarnUnreadValues(issues, *it, "Scene settings");
+		}
 
 		const Json& entities = json["Entities"];
 		if (!entities.is_array())

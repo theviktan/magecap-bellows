@@ -134,6 +134,11 @@ namespace Bellows {
 			check.Message = "Give the project a name.";
 			return check;
 		}
+		if (FileSystem::IsWindowsDeviceName(trimmed))
+		{
+			check.Message = "'" + trimmed.substr(0, trimmed.find('.')) + "' is a device name on Windows, so it can't be a project name.";
+			return check;
+		}
 		if (location.empty())
 		{
 			check.Message = "Choose where to put the project.";

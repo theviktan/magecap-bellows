@@ -2,6 +2,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Asset/MeshImporter.h"
+#include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Platform.h"
 
 #include <algorithm>
@@ -102,12 +103,22 @@ namespace Bellows::AssetFiles {
 			return "a name can't have control characters in it";
 		if (name.back() == ' ' || name.back() == '.')
 			return "a name can't end with a space or a dot";
-		// Windows' device names, with any extension ("con.txt"), can't be files there.
-		std::string stem = name.substr(0, name.find('.'));
-		std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-		const bool numberedDevice = stem.size() == 4 && (stem.starts_with("COM") || stem.starts_with("LPT")) && stem[3] >= '1' && stem[3] <= '9';
-		if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" || numberedDevice)
+		if (FileSystem::IsWindowsDeviceName(name))
 			return "'" + name.substr(0, name.find('.')) + "' is a device name on Windows, so it can't be a file name";
+		return std::nullopt;
+	}
+
+	std::optional<std::string> CheckNewPath(std::string_view relativePath)
+	{
+		size_t start = 0;
+		while (start <= relativePath.size())
+		{
+			const size_t end = std::min(relativePath.find_first_of("/\\", start), relativePath.size());
+			const std::string part(relativePath.substr(start, end - start));
+			if (const std::optional<std::string> problem = CheckNewName(part))
+				return part.empty() ? *problem : "'" + part + "': " + *problem;
+			start = end + 1;
+		}
 		return std::nullopt;
 	}
 

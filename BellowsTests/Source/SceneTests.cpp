@@ -373,6 +373,44 @@ TEST_CASE("Deserializing rejects malformed scene files")
 	CHECK(scene->GetEntityCount() == 0);
 }
 
+TEST_CASE("Values that can't be read keep their defaults and are named in a warning")
+{
+	// NaN is saved as null, and 1e39 is too big for a float, so it reads as infinity: neither may reach the scene.
+	const Json json = Json::parse(R"({
+		"Version": 1,
+		"Settings": { "Gravity": [0.0, null, 0.0], "FixedTimestep": 0.02 },
+		"Entities": [
+			{ "ID": 11, "Name": "Cube", "Transform": { "Translation": [1.0, 2.0, 3.0], "Scale": [1.0, 1.0, null] },
+			  "PointLight": { "Intensity": 1e39, "Range": "far" } },
+			{ "ID": 12, "Name": "Fine", "Transform": { "Translation": [4.0, 5.0, 6.0] } }
+		]
+	})");
+	const uint64_t before = Log::GetLatestSequence();
+	Scene scene("Unreadable");
+	REQUIRE(SceneSerializer::DeserializeFromJson(scene, json));
+
+	Entity cube = scene.FindEntityByName("Cube");
+	REQUIRE(cube);
+	const TransformComponent& transform = cube.GetComponent<TransformComponent>();
+	CHECK(transform.Translation == glm::vec3(1.0f, 2.0f, 3.0f));
+	CHECK(transform.Scale == glm::vec3(1.0f));
+	const PointLightComponent defaults;
+	CHECK(cube.GetComponent<PointLightComponent>().Intensity == defaults.Intensity);
+	CHECK(cube.GetComponent<PointLightComponent>().Range == defaults.Range);
+	CHECK(scene.GetSettings().Gravity == SceneSettings().Gravity);
+	CHECK(scene.GetSettings().FixedTimestep == doctest::Approx(0.02f));
+
+	std::vector<std::string> warnings;
+	for (const LogMessage& message : Log::GetMessagesSince(before))
+	{
+		if (message.Level == LogLevel::Warn)
+			warnings.push_back(message.Text);
+	}
+	REQUIRE(warnings.size() == 2);
+	CHECK(warnings[0].find("Scene settings: Gravity could not be read") != std::string::npos);
+	CHECK(warnings[1].find("Entity 'Cube': Transform.Scale, PointLight.Intensity, PointLight.Range could not be read") != std::string::npos);
+}
+
 TEST_CASE("Prefabs instantiate with fresh IDs and keep their hierarchy")
 {
 	const std::filesystem::path projectAssets = BellowsTests::GetTestOutputDirectory() / "PrefabProject";

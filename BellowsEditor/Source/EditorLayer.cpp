@@ -25,6 +25,7 @@
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/PythonWatchdog.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 
@@ -1264,7 +1265,11 @@ namespace Bellows {
 		try
 		{
 			for (uint32_t i = 0; i < frames && application.IsRunning(); i++)
+			{
+				// Python that runs frames is letting time pass, not stuck: each frame restarts its clock.
+				Scripting::PythonWatchdog::Restart();
 				application.RunFrame();
+			}
 		}
 		catch (...)
 		{
@@ -1750,7 +1755,7 @@ namespace Bellows {
 				StopGameWindow();
 			}
 			ImGui::Separator();
-			if (ImGui::MenuItem("Play Opens a Game Window", nullptr, m_Settings.PlayInGameWindow))
+			if (ImGui::MenuItem("Use a Game Window for Play", nullptr, m_Settings.PlayInGameWindow))
 			{
 				m_Settings.PlayInGameWindow = !m_Settings.PlayInGameWindow;
 				m_Settings.Save();
@@ -2423,7 +2428,9 @@ namespace Bellows {
 			pathField("output", m_DialogPath, true, {});
 			ImGui::Spacing();
 			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-			ImGui::TextDisabled("Builds a standalone game for this platform: the runtime, your assets and a bundled Python runtime.");
+			ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+			ImGui::TextWrapped("Builds a standalone game for this platform: the runtime, your assets and a bundled Python runtime.");
+			ImGui::PopStyleColor();
 			ImGui::PopFont();
 			if (!m_LastExport.Messages.empty())
 			{

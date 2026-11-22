@@ -139,6 +139,15 @@ TEST_CASE("Export sanitizes names and refuses unsafe output folders")
 	CHECK(ProjectExporter::SanitizeName("My Game!") == "My Game");
 	CHECK(ProjectExporter::SanitizeName("../../evil") == "evil");
 	CHECK(ProjectExporter::SanitizeName("???") == "Game");
+	// Accented letters become plain ones instead of disappearing, and other characters still go.
+	CHECK(ProjectExporter::SanitizeName("T\xC3\xABst") == "Test");
+	CHECK(ProjectExporter::SanitizeName("Stra\xC3\x9F" "e \xC5\x81\xC3\xB3" "d\xC5\xBA") == "Strasse Lodz");
+	CHECK(ProjectExporter::SanitizeName("\xF0\x9F\x8E\xAE Arcade") == "Arcade");
+	CHECK(ProjectExporter::SanitizeName("Bad\xFF\xC3") == "Bad");
+	// Windows' device names can't be folders or programs there.
+	CHECK(ProjectExporter::SanitizeName("CON") == "CON Game");
+	CHECK(ProjectExporter::SanitizeName("lpt1") == "lpt1 Game");
+	CHECK(ProjectExporter::SanitizeName("Console") == "Console");
 
 	const std::filesystem::path directory = BellowsTests::GetTestOutputDirectory() / "Projects" / "Unsafe";
 	Ref<Project> project = Project::Create(directory, "Unsafe");
@@ -148,6 +157,26 @@ TEST_CASE("Export sanitizes names and refuses unsafe output folders")
 	CHECK_FALSE(ProjectExporter::Export(*project, options).Success);
 	options.OutputDirectory = directory;
 	CHECK_FALSE(ProjectExporter::Export(*project, options).Success);
+	Project::SetActive(nullptr);
+}
+
+TEST_CASE("A new project's file is named after its cleaned name and stays in its folder")
+{
+	const std::filesystem::path root = BellowsTests::GetTestOutputDirectory() / "Projects" / "FileNames";
+	std::error_code error;
+	std::filesystem::remove_all(root, error);
+	const std::filesystem::path directory = root / "A" / "B";
+
+	Ref<Project> project = Project::Create(directory, "../../Escape");
+	REQUIRE(project);
+	CHECK(project->GetConfig().Name == "../../Escape");
+	CHECK(project->GetProjectFilePath() == std::filesystem::absolute(directory) / "Escape.bproject");
+	CHECK(std::filesystem::is_regular_file(directory / "Escape.bproject"));
+	CHECK_FALSE(std::filesystem::exists(root / "Escape.bproject"));
+
+	project = Project::Create(root / "Accents", "T\xC3\xABst: Part 2?");
+	REQUIRE(project);
+	CHECK(project->GetProjectFilePath().filename() == "Test Part 2.bproject");
 	Project::SetActive(nullptr);
 }
 

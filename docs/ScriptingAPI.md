@@ -92,6 +92,15 @@ assigned to the instance before `on_create`.
 
 `Script` also offers the shortcuts `self.transform` and `self.get_component(component)`.
 
+**Time limit.** A callback, a script's top-level code, or code typed in the editor's Console that runs
+for more than 10 seconds without returning is stopped with `KeyboardInterrupt` (which `except Exception`
+doesn't catch), and the Console says why. This keeps a loop with no end from freezing the editor or the
+game, like ForgeScript's "ran too long" guard. A script whose callback was stopped still gets its next
+callbacks (a script whose top-level code was stopped doesn't start). A
+single long call into C, such as `sum(range(10**10))`, is only stopped once it returns. Spread long work
+over frames. Automation that lets time pass with `bellows.editor.run_frames` is never stopped, and
+scripts run with `--run-script` have no limit.
+
 **Hot reload.** Saving a `.py` or `.forge` script while the editor is playing swaps in its new code
 within half a second, and the Console shows `Reloaded <file>`. A Python script's module runs again and
 each running object switches to the new class: its attribute values (including Inspector fields) stay,

@@ -2,7 +2,10 @@
 
 #include "Bellows/Scene/Entity.h"
 
+#include <imgui.h>
+
 #include <string>
+#include <vector>
 
 namespace Bellows {
 
@@ -22,10 +25,22 @@ namespace Bellows {
 		// The "create entity" menu, shared with the main menu bar. New entities become children of 'parent'.
 		void DrawCreateMenu(Entity parent);
 	private:
-		void DrawEntityNode(Entity entity);
-		bool MatchesFilter(Entity entity) const;
+		// One line of the tree as it shows now.
+		struct Row
+		{
+			Entity Target;
+			int Depth = 0;
+			bool HasChildren = false;
+		};
+
+		// The ID ImGui keeps an entity's tree node (and whether it is open) under, in this window.
+		static ImGuiID GetNodeID(UUID uuid);
+		void CollectRows(Entity entity, int depth);
+		bool CollectMatchingRows(Entity entity, int depth, const std::string& filter);
+		void DrawEntityRow(const Row& row);
 	private:
 		EditorLayer& m_Editor;
+		std::vector<Row> m_Rows;
 		std::string m_Filter;
 		UUID m_RenamingEntity = 0;
 		std::string m_RenameBuffer;

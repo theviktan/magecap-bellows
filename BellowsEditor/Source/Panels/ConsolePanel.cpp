@@ -43,10 +43,15 @@ namespace Bellows {
 			std::string output;
 			const bool success = m_Editor.ExecutePython(source, output);
 			PullMessages();	// Messages logged by the code come before its result
+			// A traceback is one error however many lines it has: only its first line is counted.
 			std::istringstream stream(output);
 			std::string line;
+			bool first = true;
 			while (std::getline(stream, line))
-				m_Entries.push_back({ success ? LogLevel::Info : LogLevel::Error, LogSource::Client, line, false });
+			{
+				m_Entries.push_back({ success ? LogLevel::Info : LogLevel::Error, LogSource::Client, line, false, !first });
+				first = false;
+			}
 			m_ScrollToBottom = true;
 		});
 	}
@@ -86,7 +91,7 @@ namespace Bellows {
 		for (const Entry& entry : m_Entries)
 		{
 			warnings += entry.Level == LogLevel::Warn;
-			errors += entry.Level >= LogLevel::Error;
+			errors += entry.Level >= LogLevel::Error && !entry.Continues;
 		}
 
 		// Toolbar

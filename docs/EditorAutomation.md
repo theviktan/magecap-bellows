@@ -14,6 +14,13 @@ There are three ways in:
 All three run the code on the editor's main thread between frames, with `bellows` (the game
 API, see [ScriptingAPI.md](ScriptingAPI.md)) and `bellows.editor` available. In the Console and
 through the agent server, a trailing expression prints its value, like the Python prompt.
+Console and agent-server code that runs 10 seconds without returning is stopped with
+`KeyboardInterrupt` (see "Time limit" in [ScriptingAPI.md](ScriptingAPI.md)); each `run_frames` frame
+restarts that clock, and `--run-script` has no limit.
+
+On Windows the editor (like a game) is a GUI program, so it never opens a console window of its own.
+Its output still goes where it's sent: a pipe or a file (`> log.txt`), or the command prompt it was
+started from. `--console` opens a console window for the log when there is nowhere else to show it.
 
 ## For other tools: checking scripts and finding the editor
 

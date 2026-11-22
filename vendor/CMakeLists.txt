@@ -99,7 +99,9 @@ target_include_directories(BellowsImGui SYSTEM PUBLIC
 	"${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends"
 	"${CMAKE_CURRENT_SOURCE_DIR}/imgui/misc/cpp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/ImGuizmo/src")
-target_compile_definitions(BellowsImGui PUBLIC IMGUI_DEFINE_MATH_OPERATORS IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+# IMGUI_USE_WCHAR32: characters past U+FFFF (emoji) typed into text fields are kept as they are,
+# instead of being replaced with U+FFFD before the editor sees them.
+target_compile_definitions(BellowsImGui PUBLIC IMGUI_DEFINE_MATH_OPERATORS IMGUI_DISABLE_OBSOLETE_FUNCTIONS IMGUI_USE_WCHAR32)
 target_link_libraries(BellowsImGui PUBLIC glfw)
 target_compile_definitions(BellowsImGui PRIVATE GLFW_INCLUDE_NONE)
 

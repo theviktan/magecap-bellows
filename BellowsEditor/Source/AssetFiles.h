@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Bellows {
@@ -20,6 +21,9 @@ namespace Bellows {
 		// Why a new name for an asset can't be used, or nothing when it can. A name has no folder in it:
 		// renaming never moves an asset to another folder (or out of the project).
 		std::optional<std::string> CheckNewName(const std::string& name);
+		// The same for each folder and file name of a new file's path inside the assets
+		// ("Scripts/Enemies/Bat.forge"), with either slash between them.
+		std::optional<std::string> CheckNewPath(std::string_view relativePath);
 
 		// Each returns false and sets 'outError' to why when it changes nothing.
 		bool Rename(const std::filesystem::path& asset, const std::string& newName, std::string& outError);

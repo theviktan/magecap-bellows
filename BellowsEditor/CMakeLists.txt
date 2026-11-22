@@ -11,6 +11,12 @@ bellows_set_compile_options(BellowsEditor)
 bellows_copy_python_runtime(BellowsEditor)
 add_dependencies(BellowsEditor BellowsRuntime)
 
-if(NOT WIN32)
+if(WIN32)
+	# A GUI program, so starting the editor never opens a console window; the log is in the Console
+	# panel and Editor.log. Platform::ConnectConsole reconnects output when it's started from a command
+	# prompt, and --console opens a console for debugging.
+	set_target_properties(BellowsEditor PROPERTIES WIN32_EXECUTABLE ON)
+	target_link_options(BellowsEditor PRIVATE /ENTRY:mainCRTStartup)
+else()
 	set_target_properties(BellowsEditor PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN")
 endif()
