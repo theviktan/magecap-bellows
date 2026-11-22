@@ -355,6 +355,7 @@ namespace ForgeScript {
 
 		void RegisterLibrary();
 		std::string Describe(const Value& value, bool quoteText);
+		bool DescribeInto(const Value& value, bool quoteText, std::string& out);
 		// ToText for use inside the interpreter loop: a failing "to_text" becomes a script error.
 		bool SafeToText(const Value& value, std::string& outText);
 		void RegisterMethod(std::unordered_map<String*, NativeFunction*>& table, const std::string& name, int arity, NativeFn fn);
@@ -499,6 +500,8 @@ namespace ForgeScript {
 		uint64_t m_Frame = 0;
 		std::mt19937_64 m_Random{ 0x5eed };
 		int m_TextDepth = 0;
+		std::vector<Object*> m_TextOpen;        // Lists, maps and objects Describe is inside of right now.
+		size_t m_TextLimit = c_MaxTextBytes;    // Describe stops once its text is longer than this.
 
 		String* m_SetupName = nullptr;
 		String* m_SelfName = nullptr;

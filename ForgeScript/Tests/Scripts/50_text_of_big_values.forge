@@ -1,0 +1,52 @@
+# A list, map or object that holds itself shows [...] where it comes back, instead of freezing.
+set l to [1]
+l.add(l)
+l.add(l)
+l.add(l)
+l.add(l)
+say l                                                          # expect: [1, [...], [...], [...], [...]]
+say "{l}"                                                      # expect: [1, [...], [...], [...], [...]]
+say l.length                                                   # expect: 5
+
+set m to {"a": 1}
+set m["self"] to m
+say m                                                          # expect: {"a": 1, "self": {...}}
+
+kind Node
+	set next to nothing
+end
+set node to new Node
+set node.next to node
+say node                                                       # expect: Node {next: Node {...}}
+
+# The same list twice, side by side, is not holding itself: both are shown in full.
+set pair to [1, 2]
+say [pair, pair]                                               # expect: [[1, 2], [1, 2]]
+
+# A value that would make a huge text gives a clear mistake, quickly.
+function too_big()
+	set a to ["xxxxxxxxxx"]
+	repeat 9 times
+		set a to [a, a, a, a, a, a, a, a]
+	end
+	try
+		set text to "{a}"
+		return "no mistake"
+	catch problem
+		return problem
+	end
+end
+say too_big().starts_with("Turning this into text would make more than 100000000 bytes")   # expect: true
+
+# An object with its own to_text decides its own text, even inside a list that holds itself.
+kind Tag
+	set items to []
+	function to_text()
+		return "tag of {my items.length}"
+	end
+end
+set tag to new Tag
+tag.items.add(tag)
+set bag to [tag]
+bag.add(bag)
+say bag                                                        # expect: [tag of 1, [...]]

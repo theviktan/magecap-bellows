@@ -1190,6 +1190,15 @@ namespace ForgeScript {
 			explicit PlainText(bool& flag) : Flag(flag) { Flag = true; }
 			~PlainText() { Flag = false; }
 		} plain(m_PlainText);
+		constexpr size_t c_MaxText = 500;
+		// Describe stops a little past what the pane shows, so a huge value costs nothing extra.
+		struct TextLimit
+		{
+			size_t& Limit;
+			size_t Old;
+			TextLimit(size_t& limit, size_t value) : Limit(limit), Old(limit) { Limit = value; }
+			~TextLimit() { Limit = Old; }
+		} limit(m_TextLimit, c_MaxText + 100);
 		try
 		{
 			variable.Text = Describe(value, true);
@@ -1199,7 +1208,6 @@ namespace ForgeScript {
 			// A host type's text function failed; the debugger still shows the rest.
 			variable.Text = "<" + variable.Type + ">";
 		}
-		constexpr size_t c_MaxText = 500;
 		if (variable.Text.size() > c_MaxText)
 		{
 			size_t cut = c_MaxText;
@@ -2554,6 +2562,10 @@ namespace ForgeScript {
 		catch (const RuntimeError& error)
 		{
 			return Fail(error.what());
+		}
+		catch (const std::bad_alloc&)
+		{
+			return Fail("There isn't enough memory to turn this into text.");
 		}
 	}
 
