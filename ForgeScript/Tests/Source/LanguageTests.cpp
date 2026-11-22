@@ -413,6 +413,8 @@ TEST_CASE("ChangeHandlersKeepOldMeaningsAndExplainMistakes")
 	CHECK_CONTAINS(CompileFails("kind P\n\twhen my hp changes with a, b, c\n\tend\nend\n").Message,
 		"'when my hp changes' gives two values: the new one and the old one, like: with now, before");
 	CHECK_CONTAINS(CompileFails("kind P\n\twhen hp changes\n\tend\nend\n").Message, "or 'when my name changes' to react to a field.");
+}
+
 TEST_CASE("BigChoiceSetsStayQuick")
 {
 	// Audit S-5: 20,000 choices, each used once and all but one in a match, check and run without
