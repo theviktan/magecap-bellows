@@ -1528,8 +1528,14 @@ def lerp(a: float, b: float, t: float) -> float: ...
 def load_data(name: str, default: typing.Any = None) -> typing.Any:
     """The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)"""
 
+def load_json(path: str) -> typing.Any:
+    """Reads a JSON data file from the Assets folder ("Data/items.json"): objects become dicts (ForgeScript maps), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"""
+
 def load_scene(path: str) -> bool:
     """Switches to another scene at the end of the frame"""
+
+def load_text(path: str) -> str:
+    """Reads a text file from the Assets folder ("Data/intro.txt"), read again only when it changes"""
 
 def log(*args: typing.Any) -> None:
     """Writes an info message to the console"""

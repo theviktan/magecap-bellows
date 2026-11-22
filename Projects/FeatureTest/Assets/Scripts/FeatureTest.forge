@@ -233,6 +233,15 @@ function test_tags()
 	scout.destroy()
 end
 
+function test_data_files()
+	set data to the data in "Data/FeatureData.json"
+	check(data["name"] is "FeatureTest data" and data["levels"][2]["title"] is "Caves", "the data in (path) reads a JSON data file")
+	check(data["secret"] is nothing and data["hard_mode"] is false, "JSON null and false")
+	check(load_json("Data/FeatureData.json")["levels"][1]["enemies"] is 3, "load_json")
+	check(load_text("Data/FeatureData.json").starts_with("\{"), "load_text")
+	check(fails(function() load_text("../FeatureTest.bproject") end), "data files can't be read from outside Assets")
+end
+
 function test_saved_data()
 	delete_data("Feature Test")
 	check(load_data("Feature Test", 7) is 7, "load_data gives the default when nothing is saved")
@@ -345,6 +354,7 @@ function run_tests()
 		test_pause()
 		test_keep_across_scenes()
 		test_tags()
+		test_data_files()
 		test_saved_data()
 		test_destruction()
 		test_physics()

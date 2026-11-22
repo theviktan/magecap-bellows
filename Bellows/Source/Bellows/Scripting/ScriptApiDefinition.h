@@ -26,6 +26,7 @@
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
+#include "Bellows/Scripting/DataFiles.h"
 #include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Scripting/TweenProperties.h"
 #include "Bellows/Text/TextLayout.h"
@@ -1173,6 +1174,12 @@ namespace Bellows::Scripting {
 		api.Function("load_data", [](const std::string& name, const ScriptValue& fallback) { return LoadData(name, fallback); },
 			"The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)",
 			Arg("name"), Arg("default", ScriptValue()));
+		api.Function("load_json", [](const std::string& path) { return LoadDataJson(path); },
+			"Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become dicts (ForgeScript maps), arrays lists. "
+			"Read-only game data that ships with the game, unlike save_data; read again only when the file changes",
+			Arg("path"));
+		api.Function("load_text", [](const std::string& path) { return LoadDataText(path); },
+			"Reads a text file from the Assets folder (\"Data/intro.txt\"), read again only when it changes", Arg("path"));
 		api.Function("has_data", [](const std::string& name) { return HasData(name); }, "True when a value is saved under the name", Arg("name"));
 		api.Function("delete_data", [](const std::string& name) { return DeleteData(name); },
 			"Deletes the value saved under the name; false when there was none", Arg("name"));

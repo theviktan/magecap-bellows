@@ -545,6 +545,28 @@
 			"doc": "The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)"
 		},
 		{
+			"name": "load_json",
+			"params": [
+				{
+					"name": "path",
+					"type": "str"
+				}
+			],
+			"returns": "Value",
+			"doc": "Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become dicts (ForgeScript maps), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"
+		},
+		{
+			"name": "load_text",
+			"params": [
+				{
+					"name": "path",
+					"type": "str"
+				}
+			],
+			"returns": "str",
+			"doc": "Reads a text file from the Assets folder (\"Data/intro.txt\"), read again only when it changes"
+		},
+		{
 			"name": "has_data",
 			"params": [
 				{
@@ -2531,6 +2553,12 @@
 			"pattern": "everything tagged (tag)",
 			"doc": "A list of every entity with the tag, parents before their children; same as find_tagged(tag)",
 			"returns": "list[Entity]",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "the data in (path)",
+			"doc": "The contents of a JSON data file in the Assets folder (\"Data/items.json\"), as maps and lists; same as load_json(path)",
+			"returns": "Value",
 			"yields_to_calls": true
 		},
 		{
