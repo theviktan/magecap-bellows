@@ -273,9 +273,21 @@ namespace ForgeScript {
 
 		// True when 'word' is one of a phrase's own words and the line also has the phrase's first word, so
 		// hovering "screenshot" in "save screenshot to x" explains the phrase.
-		bool LineUsesPhrase(const std::string& pattern, const std::string& word, std::string_view line)
+		std::string_view Trim(std::string_view text);
+
+		// How many of a phrase's own words the line uses, in the pattern's order, with something written
+		// for each value between them, when the word at 'wordStart' is one of them; 0 when it doesn't.
+		// "move door to p over 2 seconds" uses all four words of "move (entity) to (position) over
+		// (seconds) seconds" but not "... second", and "set move to 5" uses none of them.
+		size_t PhraseWordsUsed(const std::string& pattern, std::string_view line, size_t wordStart)
 		{
-			std::vector<std::string> words;
+			struct Part
+			{
+				std::string Word;
+				bool ValueBefore = false;
+			};
+			std::vector<Part> parts;
+			bool value = false;
 			size_t start = 0;
 			while (start < pattern.size())
 			{
@@ -283,19 +295,48 @@ namespace ForgeScript {
 				if (end == std::string::npos)
 					end = pattern.size();
 				const std::string part = pattern.substr(start, end - start);
-				if (!part.empty() && part.front() != '(')
-					words.push_back(part);
+				if (!part.empty() && part.front() == '(')
+					value = true;
+				else if (!part.empty())
+				{
+					parts.push_back({ part, value });
+					value = false;
+				}
 				start = end + 1;
 			}
-			if (words.empty() || std::find(words.begin(), words.end(), word) == words.end())
-				return false;
-			for (size_t at = line.find(words.front()); at != std::string_view::npos; at = line.find(words.front(), at + 1))
+			if (parts.empty())
+				return 0;
+			auto wholeWordAt = [&line](size_t at, size_t length)
 			{
-				const size_t after = at + words.front().size();
-				if ((at == 0 || !IsWordChar(line[at - 1])) && (after >= line.size() || !IsWordChar(line[after])))
-					return true;
+				const size_t after = at + length;
+				return (at == 0 || !IsWordChar(line[at - 1])) && (after >= line.size() || !IsWordChar(line[after]));
+			};
+			// Try each place the first word appears; the rest follow it in order, each as early as it can.
+			for (size_t first = line.find(parts.front().Word); first != std::string_view::npos; first = line.find(parts.front().Word, first + 1))
+			{
+				if (!wholeWordAt(first, parts.front().Word.size()))
+					continue;
+				bool coversWord = first == wordStart;
+				size_t at = first + parts.front().Word.size();
+				size_t matched = 1;
+				for (; matched < parts.size(); matched++)
+				{
+					size_t next = line.find(parts[matched].Word, at);
+					while (next != std::string_view::npos && !wholeWordAt(next, parts[matched].Word.size()))
+						next = line.find(parts[matched].Word, next + 1);
+					if (next == std::string_view::npos)
+						break;
+					// A value goes between the words: "move to" with nothing between isn't the phrase.
+					if (parts[matched].ValueBefore && Trim(line.substr(at, next - at)).empty())
+						break;
+					coversWord = coversWord || next == wordStart;
+					at = next + parts[matched].Word.size();
+				}
+				// A trailing value needs something after the last word.
+				if (matched == parts.size() && coversWord && (!value || !Trim(line.substr(at)).empty()))
+					return matched;
 			}
-			return false;
+			return 0;
 		}
 
 		// What to type for a phrase: its words up to the first value, "random item from ".
@@ -1516,10 +1557,27 @@ namespace ForgeScript {
 		}
 		else
 		{
+			// Of the engine's and the language's phrases the line could be, only the ones using the most of
+			// its words: on "move door to p over 2 seconds with \"out\"", the pattern ending in "with (style)",
+			// not every "move".
+			size_t mostWords = 0;
+			for (const ApiPhrase& phrase : m_ApiPhrases)
+				mostWords = std::max(mostWords, PhraseWordsUsed(phrase.Pattern, line, wordStart));
+			for (const HelpEntry& help : GetLanguageHelp())
+			{
+				if (help.EntryKind == HelpEntry::Kind::Phrase)
+					mostWords = std::max(mostWords, PhraseWordsUsed(help.Name, line, wordStart));
+			}
+			// A variable with a phrase word's name ('set move to 4') isn't what "move door to ..." means:
+			// a phrase that yields to calls is still the phrase there, so the phrase is explained.
+			auto shadowedByPhrase = [mostWords](const Symbol& symbol) { return mostWords > 0 && symbol.SymbolKind != Symbol::Kind::Phrase; };
+
 			bool found = false;
 			for (const Symbol& symbol : symbols)
 			{
-				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && LineUsesPhrase(symbol.Name, word, line);
+				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && PhraseWordsUsed(symbol.Name, line, wordStart) > 0;
+				if (!phraseWord && shadowedByPhrase(symbol))
+					continue;
 				if ((symbol.Name == word || phraseWord) && symbol.Owner.empty() && symbol.SymbolKind != Symbol::Kind::Module)
 				{
 					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
@@ -1529,7 +1587,9 @@ namespace ForgeScript {
 			}
 			for (const Symbol& symbol : used)
 			{
-				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && LineUsesPhrase(symbol.Name, word, line);
+				const bool phraseWord = symbol.SymbolKind == Symbol::Kind::Phrase && PhraseWordsUsed(symbol.Name, line, wordStart) > 0;
+				if (!phraseWord && shadowedByPhrase(symbol))
+					continue;
 				if (!found && (symbol.Name == word || phraseWord) && symbol.Owner.empty())
 				{
 					parts.push_back(HelpMarkdown(symbol.Signature, symbol.Doc));
@@ -1552,12 +1612,12 @@ namespace ForgeScript {
 				}
 				for (const ApiPhrase& phrase : m_ApiPhrases)
 				{
-					if (LineUsesPhrase(phrase.Pattern, word, line))
+					if (mostWords > 0 && PhraseWordsUsed(phrase.Pattern, line, wordStart) == mostWords)
 						parts.push_back(HelpMarkdown(phrase.Pattern + (phrase.Returns.empty() ? "" : " -> " + ForgeTypeName(phrase.Returns)), phrase.Doc));
 				}
 				for (const HelpEntry& help : GetLanguageHelp())
 				{
-					const bool phraseWord = help.EntryKind == HelpEntry::Kind::Phrase && LineUsesPhrase(help.Name, word, line);
+					const bool phraseWord = help.EntryKind == HelpEntry::Kind::Phrase && mostWords > 0 && PhraseWordsUsed(help.Name, line, wordStart) == mostWords;
 					if ((help.EntryKind == HelpEntry::Kind::Function && help.Name == word) || phraseWord)
 						parts.push_back(HelpMarkdown(help.Signature, help.Doc));
 				}

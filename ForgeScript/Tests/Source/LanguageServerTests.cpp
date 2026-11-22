@@ -49,8 +49,10 @@ namespace {
 		LanguageServer Server;
 		int NextID = 1;
 
-		explicit Session(bool withApi = true)
-			: Server(LanguageServer::Options { withApi ? c_TestApi : std::filesystem::path() })
+		explicit Session(bool withApi = true) : Session(withApi ? c_TestApi : std::filesystem::path()) {}
+
+		explicit Session(const std::filesystem::path& api)
+			: Server(LanguageServer::Options { api })
 		{
 			Json init;
 			init.Set("rootUri", "file:///tmp");
@@ -654,6 +656,43 @@ TEST_CASE("LanguageServerShowsHoverHelp")
 	CHECK_EQ(hover.Get("range").Get("end").Get("character").AsNumber(), 4.0);
 	CHECK(session.At("textDocument/hover", uri, 5, 4).IsNull() == false);
 	CHECK(session.At("textDocument/hover", uri, 99, 0).IsNull());
+}
+
+TEST_CASE("LanguageServerExplainsTheEnginePhraseOnTheLine")
+{
+	// Engine phrases that share their first word, like Bellows 0.6.0's tween phrases.
+	TempFolder folder("phrase-hover");
+	folder.Write("api.json", "{ \"functions\": [], \"types\": [], \"phrases\": ["
+		"{ \"pattern\": \"move (entity) to (position) over (seconds) seconds\", \"doc\": \"Moves it.\", \"returns\": \"Tween\", \"yields_to_calls\": true },"
+		"{ \"pattern\": \"move (entity) to (position) over (seconds) second\", \"doc\": \"Moves it.\", \"returns\": \"Tween\", \"yields_to_calls\": true },"
+		"{ \"pattern\": \"move (entity) to (position) over (seconds) seconds with (style)\", \"doc\": \"Moves it, eased.\", \"returns\": \"Tween\", \"yields_to_calls\": true },"
+		"{ \"pattern\": \"move (entity) by (offset) over (seconds) seconds\", \"doc\": \"Moves it by.\", \"returns\": \"Tween\", \"yields_to_calls\": true } ] }");
+	Session session(folder.Path / "api.json");
+	const std::string uri = "file:///tmp/phrases.forge";
+	session.Open(uri,
+		"set door to 1\n"
+		"move door to 5 over 2 seconds\n"              // 1
+		"move door to 5 over 1 second\n"               // 2
+		"move door to 5 over 2 seconds with \"out\"\n" // 3
+		"set t to move door by 3 over 2 seconds\n"     // 4
+		"set move to 4\n");                            // 5
+	auto hover = [&session, &uri](int line, int character) { return HoverText(session.At("textDocument/hover", uri, line, character)); };
+
+	// Only the pattern the line is: "seconds", not "second"; the plain one, not "with".
+	std::string text = hover(1, 1);
+	CHECK_NE(text.find("move (entity) to (position) over (seconds) seconds -> Tween"), std::string::npos);
+	CHECK_EQ(text.find("second\n"), std::string::npos);
+	CHECK_EQ(text.find("with (style)"), std::string::npos);
+	CHECK_EQ(text.find("by (offset)"), std::string::npos);
+	CHECK_NE(hover(2, 23).find("over (seconds) second -> Tween"), std::string::npos);
+	// With 'with', the pattern that uses all the words.
+	text = hover(3, 1);
+	CHECK_NE(text.find("seconds with (style) -> Tween"), std::string::npos);
+	CHECK_EQ(text.find("Moves it.\n"), std::string::npos);
+	// Any of its words explains it, also when the phrase is a value.
+	CHECK_NE(hover(4, 19).find("move (entity) by (offset)"), std::string::npos);
+	// A variable that happens to be called 'move' isn't the phrase.
+	CHECK_EQ(hover(5, 5).find("move (entity)"), std::string::npos);
 }
 
 TEST_CASE("LanguageServerGoesToDefinitions")
