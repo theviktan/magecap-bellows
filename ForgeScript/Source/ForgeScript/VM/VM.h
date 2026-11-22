@@ -119,8 +119,10 @@ namespace ForgeScript {
 		Value m_Value;
 	};
 
-	// The most bytes 'text * count' and text.repeat(count) may make in one step (100 MB).
-	constexpr size_t c_MaxRepeatedTextBytes = 100'000'000;
+	// The most bytes one step may make of text: 'text * count', text.repeat(count), 'a + b' and
+	// "{a}{b}" (100 MB), so a runaway loop gets a script error instead of using all the memory.
+	constexpr size_t c_MaxTextBytes = 100'000'000;
+	constexpr size_t c_MaxRepeatedTextBytes = c_MaxTextBytes;
 
 	// One function's part of a profile (VM::StartProfile): the instructions executed in its own code
 	// (not in the functions it calls, nor inside built-in functions) and how often it was called.
@@ -395,6 +397,8 @@ namespace ForgeScript {
 		std::vector<std::string_view> GlobalNameCandidates(const Function* fn) const;
 
 		bool Arithmetic(Task* task, OpCode op, const Value& a, const Value& b, Value& outValue);
+		// Arithmetic's text, list and vector cases, which may run out of memory.
+		bool ArithmeticOnObjects(OpCode op, const Value& a, const Value& b, Value& outValue);
 		bool Compare(Task* task, OpCode op, const Value& a, const Value& b, bool& outResult);
 		bool ContainsValue(Task* task, const Value& container, const Value& item, bool& outResult);
 		Module* UseModule(Task* task, const std::string& path);

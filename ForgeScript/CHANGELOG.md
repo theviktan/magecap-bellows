@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Text and lists that outgrow memory are a script error, not a crash** (audit S-8, older than 1.6.0).
+  A loop doing `set s to s + s` or `set s to "{s}{s}"` now stops at 100 million bytes with "Joining
+  this text would make more than 100000000 bytes of text", the same limit as repeating text. A
+  list (or anything else `+` builds) that can't get the memory it needs fails with "There isn't
+  enough memory for this", which `try` can catch, instead of closing the game or the editor.
 - **`forgescript --profile`** (Roadmap 2.0 Tier 4 #5, step 3): runs a script, then lists the functions
   that executed the most instructions, with each one's share, its calls and where it is; `--output`
   writes the table to a file. Hosts use `VM::StartProfile` and `VM::TakeProfile`. Counts are exact

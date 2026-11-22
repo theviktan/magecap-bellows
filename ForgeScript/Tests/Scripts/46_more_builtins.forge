@@ -140,6 +140,12 @@ say problem_of(function() "ab" * infinity end)              # expect: Text can o
 say problem_of(function() "ab" * 1e9 end)                   # expect: Repeating this text 1000000000 times would make more than 100000000 bytes of text.
 say problem_of(function() "ab".repeat(1e9) end)             # expect: Repeating this text 1000000000 times would make more than 100000000 bytes of text.
 say ("" * 1e15).length                                      # expect: 0
+# Joining text can't make more than 100 MB in one step either (audit S-8).
+set half to "x" * 50000001
+say problem_of(function() half + half end)                  # expect: Joining this text would make more than 100000000 bytes of text. Is a loop making it bigger and bigger?
+say problem_of(function() "{half}{half}" end)               # expect: Filling in this text would make more than 100000000 bytes of text. Is a loop making it bigger and bigger?
+say (half + "y").length                                     # expect: 50000002
+set half to nothing
 say ("ab" * 3)                                              # expect: ababab
 say "émile".capitalize()                                    # expect: émile
 say "été à paris".title()                                   # expect: été à Paris
