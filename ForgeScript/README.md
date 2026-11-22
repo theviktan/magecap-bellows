@@ -40,6 +40,7 @@ forgescript game.forge               run a script
 forgescript --check game.forge       check a script for mistakes without running it
 forgescript --realtime game.forge    run with real time, so "wait 2 seconds" really waits
 forgescript --test game.forge        run the script, then its 'test "..." ... end' blocks
+forgescript --format game.forge      lay the script out the standard way
 forgescript --version                show the version (see CHANGELOG.md)
 ```
 
@@ -86,6 +87,22 @@ FAIL a hit always does at least 1
 
 Each test runs as a task, with game time stepping by 1/60 second (a test that still waits after 600 seconds of game time fails). Exit codes: `0` every test passed (or there were none), `1` a test failed, `70` the script itself failed before its tests, `66` and `64` as above. `--test` can't be combined with `--check` or `--realtime`.
 
+### Laying scripts out
+
+`--format` lays a script out the standard way and saves it (it writes only when something changes, and never leaves half a file):
+
+- A tab for each open block, and for each open bracket. `else`, `otherwise`, a `match`'s `is` lines, `catch` and `finally` sit one level out, with their block's first line. A line carried on from the one before (after an operator or a `\`) goes one further. Comment lines move with the code under them.
+- No spaces at the ends of lines, at most two blank lines in a row, and one line break at the end. Windows line breaks stay Windows line breaks.
+- Nothing else changes: not text in quotes, long text, `#[ ]#` comments or the spacing inside a line. The result must read as exactly the same tokens as before, or the file is left alone.
+
+```text
+forgescript --format game.forge             rewrite the file: "game.forge: formatted." or "already formatted."
+forgescript --format --check game.forge     change nothing; exit 1 when it isn't laid out (for CI)
+forgescript --format --stdin < game.forge   print the laid-out script (--name gives its name for messages)
+```
+
+Exit codes: `0` laid out (or already was), `1` with `--check` when it isn't, `65` when it can't be laid out (a block missing its `end`, an extra `end` or bracket, or text the lexer can't read; the message gives the line), `66` when the file can't be read or written, `64` for options that don't go together. It doesn't need the engine API: a script with mistakes that still adds up is laid out too. Every example in the docs is kept laid out this way by the `ForgeScriptDocExamples` test.
+
 ### Language server for editors
 
 `forgescript --lsp` is a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) 3.17 server over standard input and output. An editor starts it and gets, for `.forge` files:
@@ -95,6 +112,7 @@ Each test runs as a task, with game time stepping by 1/60 second (a test that st
 - **Hover**: the signature and help of whatever is under the cursor. A script's own functions show the `#` comment lines written right above them. Engine types are shown with ForgeScript's names (`text`, `number`, `yes/no`, `vector`, `nothing`, `list of Entity`), although `forgescript-api.json` uses Python's.
 - **Go to definition**: functions, phrases, kinds, variables and parameters, in the file and in scripts it uses; on the path of a `use` line, the script it names.
 - **Find all uses** (`textDocument/references`) of the name under the cursor in the script: the uses of that very variable, as the compiler sees it, so another function's parameter with the same name isn't one of them. Fields and methods list every use of a field or method by that name, of any kind.
+- **Formatting** (`textDocument/formatting`): the document laid out as `--format` would, as one edit, or the reason it can't be.
 - **Rename** (`textDocument/rename`, with `prepareRename`): a variable, parameter, loop or `catch` name, function or kind of the script, in every place it is used there. When renaming could change what the script does it refuses and says why: a field or method (which kind's can't always be told), a name the script doesn't make, a script with mistakes, a keyword, a built-in function or more than 255 characters as the new name, a new name that already means something where the old one is used, a name also written in a phrase's words, or a script-level name of a script another open script `use`s (rename changes one script only). Every rename is checked by compiling the renamed script first.
 - **Signature help** after `(` and `,`: the function being called, with the parameter you are typing marked, for the script's own functions, the engine's functions and methods, and the built-in ones.
 - **Outline** (document symbols): the script's functions, phrases, kinds with their fields, functions and handlers, `when` handlers, script variables and constants.

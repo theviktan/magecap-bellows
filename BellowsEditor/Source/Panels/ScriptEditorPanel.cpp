@@ -1024,7 +1024,7 @@ namespace Bellows {
 			if (ImGui::MenuItem(ICON_COPY "  Copy Script Path", nullptr, false, document != nullptr))
 				ImGui::SetClipboardText(document->AssetPath.empty() ? document->Path.string().c_str() : document->AssetPath.c_str());
 			if (ImGui::MenuItem(ICON_EXTERNAL_LINK "  Open in External Editor", nullptr, false, document != nullptr))
-				Platform::OpenWithDefaultApplication(document->Path);
+				Platform::OpenForEditing(document->Path);
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_X "  Close", "Ctrl+W", false, document != nullptr))
 				RequestClose(m_ActiveDocument);
@@ -1135,7 +1135,7 @@ namespace Bellows {
 				if (ImGui::MenuItem(ICON_COPY "  Copy Script Path"))
 					ImGui::SetClipboardText(document.AssetPath.empty() ? document.Path.string().c_str() : document.AssetPath.c_str());
 				if (ImGui::MenuItem(ICON_EXTERNAL_LINK "  Open in External Editor"))
-					Platform::OpenWithDefaultApplication(document.Path);
+					Platform::OpenForEditing(document.Path);
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_X "  Close"))
 					closeIndex = i;

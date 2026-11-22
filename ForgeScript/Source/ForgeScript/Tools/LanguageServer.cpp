@@ -3,6 +3,7 @@
 #include "ForgeScript/Compiler/Lexer.h"
 #include "ForgeScript/Compiler/ScriptVariables.h"
 #include "ForgeScript/ForgeScript.h"
+#include "ForgeScript/Tools/Formatter.h"
 #include "ForgeScript/Tools/Help.h"
 #include "ForgeScript/Tools/ProjectPaths.h"
 
@@ -958,6 +959,12 @@ namespace ForgeScript {
 			replies.push_back(Response(*id, SignatureHelp(params)));
 		else if (method == "textDocument/references")
 			replies.push_back(Response(*id, References(params)));
+		else if (method == "textDocument/formatting")
+		{
+			std::string error;
+			Json result = Format(params, error);
+			replies.push_back(error.empty() ? Response(*id, std::move(result)) : ErrorResponse(*id, c_RequestFailed, error));
+		}
 		else if (method == "textDocument/prepareRename" || method == "textDocument/rename")
 		{
 			std::string error;
@@ -984,6 +991,7 @@ namespace ForgeScript {
 		capabilities.Set("definitionProvider", true);
 		capabilities.Set("documentSymbolProvider", true);
 		capabilities.Set("referencesProvider", true);
+		capabilities.Set("documentFormattingProvider", true);
 		Json rename;
 		rename.Set("prepareProvider", true);
 		capabilities.Set("renameProvider", std::move(rename));
@@ -2214,6 +2222,33 @@ namespace ForgeScript {
 		Json result;
 		result.Set("changes", std::move(changes));
 		return result;
+	}
+
+	Json LanguageServer::Format(const Json& params, std::string& outError)
+	{
+		const Document* document = FindDocument(params.Get("textDocument").GetString("uri"));
+		if (!document)
+		{
+			outError = "This script isn't open.";
+			return Json();
+		}
+		const FormatResult formatted = FormatScript(document->Text);
+		if (!formatted.Error.empty())
+		{
+			outError = formatted.ErrorLine > 0 ? "Line " + std::to_string(formatted.ErrorLine) + ": " + formatted.Error : formatted.Error;
+			return Json();
+		}
+		Json edits = Json(Json::Array());
+		if (!formatted.Changed)
+			return edits;
+		// One edit for the whole text: simple for every editor, and the server syncs whole documents anyway.
+		const std::vector<std::string_view> lines = SplitLines(document->Text);
+		Json range;
+		range.Set("start", Position(0, 0)).Set("end", Position(static_cast<int>(lines.size()) - 1, ToUtf16(lines.back(), lines.back().size())));
+		Json edit;
+		edit.Set("range", std::move(range)).Set("newText", formatted.Text);
+		edits.Add(std::move(edit));
+		return edits;
 	}
 
 	Json LanguageServer::SignatureHelp(const Json& params)

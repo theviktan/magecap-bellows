@@ -6,7 +6,8 @@
 # An example is a block that starts with a ```forge line and ends with a ``` line. Examples with a
 # 'use' line are left out: the scripts they use exist only in the reader's project. An example with
 # its own tests (a 'test "..."' line, as in the Cookbook) is also run with 'forgescript --test', so
-# what it teaches is what it does.
+# what it teaches is what it does, and every example must already be laid out as 'forgescript
+# --format' lays it out.
 
 cmake_minimum_required(VERSION 3.24)
 
@@ -61,7 +62,16 @@ foreach(doc IN LISTS DOCS)
 		if(NOT exitCode EQUAL 0)
 			string(STRIP "${out}${err}" said)
 			list(APPEND failures "${docName}:${line}: ${said}")
-		elseif(code MATCHES "(^|\n)test \"")
+			continue()
+		endif()
+		# Each example is laid out the way 'forgescript --format' lays it out, so the docs teach one style.
+		execute_process(COMMAND "${FORGESCRIPT}" --format --check "${file}"
+			RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
+		if(NOT exitCode EQUAL 0)
+			list(APPEND failures "${docName}:${line}: not laid out the way forgescript --format lays it out")
+			continue()
+		endif()
+		if(code MATCHES "(^|\n)test \"")
 			execute_process(COMMAND "${FORGESCRIPT}" --test "${file}"
 				RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
 			math(EXPR tested "${tested} + 1")
