@@ -168,9 +168,17 @@ namespace Bellows {
 		SHFILEOPSTRUCTW operation{};
 		operation.wFunc = FO_DELETE;
 		operation.pFrom = from.c_str();
-		operation.fFlags = static_cast<FILEOP_FLAGS>(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT);
+		// FOF_ALLOWUNDO recycles, but deletes for good what the Recycle Bin can't take (a network or
+		// removable drive, a file bigger than the bin) without a word under FOF_NOCONFIRMATION.
+		// FOF_WANTNUKEWARNING brings back Windows' own question for exactly that case.
+		operation.fFlags = static_cast<FILEOP_FLAGS>(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING | FOF_NOERRORUI | FOF_SILENT);
 		const int result = ::SHFileOperationW(&operation);
-		if (result != 0 || operation.fAnyOperationsAborted)
+		if (operation.fAnyOperationsAborted)
+		{
+			outError = "it can't go in the Recycle Bin, and you chose to keep it";
+			return false;
+		}
+		if (result != 0)
 		{
 			outError = "the Recycle Bin refused it (error " + std::to_string(result) + ")";
 			return false;

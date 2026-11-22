@@ -88,17 +88,37 @@ TEST_CASE("Renaming and moving a model takes its import settings with it")
 	CHECK(error.find("inside itself") != std::string::npos);
 }
 
+TEST_CASE("Changing only an asset's capitals renames it, with its import settings")
+{
+	TestAssets assets("AssetFilesCapitals");
+	std::string error;
+	REQUIRE(AssetFiles::Rename(assets.Model, "crate.glb", error));
+	// On a case-insensitive drive (Windows) the name changes in place; elsewhere it is a new name.
+	bool found = false, settingsFound = false;
+	for (const auto& entry : std::filesystem::directory_iterator(assets.Root / "Models"))
+	{
+		found = found || entry.path().filename() == "crate.glb";
+		settingsFound = settingsFound || entry.path().filename() == "crate.glb.bimport";
+	}
+	CHECK(found);
+	CHECK(settingsFound);
+}
+
 TEST_CASE("Renames stay in their folder, and nothing moves out of the assets or over another file")
 {
 	TestAssets assets("AssetFilesRefused");
 	std::string error;
-	for (const char* name : { "", ".", "..", "../Crate.glb", "Models/Crate2.glb", "..\\Crate.glb", "C:\\Crate.glb", "/tmp/Crate.glb", "Crate?.glb", "Crate.glb." })
+	for (const char* name : { "", ".", "..", "../Crate.glb", "Models/Crate2.glb", "..\\Crate.glb", "C:\\Crate.glb", "/tmp/Crate.glb", "Crate?.glb", "Crate.glb.",
+		"CON", "nul.glb", "Com1.glb", "LPT9", "aux.tar.gz" })
 	{
 		CAPTURE(name);
 		CHECK(AssetFiles::CheckNewName(name));
 		CHECK_FALSE(AssetFiles::Rename(assets.Model, name, error));
 	}
 	CHECK_FALSE(AssetFiles::CheckNewName("Crate (old).glb"));
+	CHECK_FALSE(AssetFiles::CheckNewName("Console.glb"));
+	CHECK_FALSE(AssetFiles::CheckNewName("COM10.glb"));
+	CHECK_FALSE(AssetFiles::CheckNewName("COM0"));
 	CHECK(FileSystem::Exists(assets.Model));
 	CHECK(FileSystem::Exists(assets.Settings));
 
