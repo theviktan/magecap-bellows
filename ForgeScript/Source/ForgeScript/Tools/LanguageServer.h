@@ -128,6 +128,7 @@ namespace ForgeScript {
 		// textDocument/codeAction: the quick fixes of this script's mistakes on the asked lines.
 		Json CodeActions(const Json& params);
 		static Json MistakeRange(const std::string& text, const CompileError& mistake);
+		static Json WarningRange(const std::string& text, const CompileError& warning);
 		// Rename and its check: a reason in outError when the name can't be renamed (then the reply is
 		// an error the editor shows).
 		Json PrepareRename(const Json& params, std::string& outError);

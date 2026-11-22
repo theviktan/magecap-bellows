@@ -284,6 +284,7 @@ namespace ForgeScript {
 				}
 
 				WarnTypesOfCalls();
+				WarnNamesNeverSet();
 				if (m_AllErrors && !m_AllErrors->empty())
 					throw CompileAbort();
 				EmitOp(OpCode::Nothing);
@@ -1050,6 +1051,22 @@ namespace ForgeScript {
 		{
 			EmitOp(op);
 			EmitU16(NameConstant(name));
+			if (op == OpCode::SetGlobal && m_Options.Warnings)
+				m_GlobalsSet.insert(name);
+		}
+
+		// For WarnNamesNeverSet: a script variable set through a Target (its name is a constant of the
+		// function being compiled). A function or handler can set one too: 'set _target to ...'.
+		void NoteGlobalSet(uint16_t nameConstant)
+		{
+			if (!m_Options.Warnings)
+				return;
+			const std::vector<Value>& constants = CurrentChunk().GetConstants();
+			if (nameConstant >= constants.size())
+				return;
+			const Value& name = constants[nameConstant];
+			if (name.GetType() == ValueType::Object && name.AsObject()->GetType() == ObjectType::String)
+				m_GlobalsSet.insert(static_cast<String*>(name.AsObject())->Text);
 		}
 
 		size_t EmitJump(OpCode op)
@@ -1262,7 +1279,7 @@ namespace ForgeScript {
 			{
 				case TargetType::Local:     EmitOp(OpCode::SetLocal); EmitByte(static_cast<uint8_t>(target.Slot)); break;
 				case TargetType::Upvalue:   EmitOp(OpCode::SetUpvalue); EmitByte(static_cast<uint8_t>(target.Slot)); break;
-				case TargetType::Global:    EmitOp(OpCode::SetGlobal); EmitU16(target.Name); break;
+				case TargetType::Global:    EmitOp(OpCode::SetGlobal); EmitU16(target.Name); NoteGlobalSet(target.Name); break;
 				case TargetType::Property:  EmitOp(OpCode::SetProperty); EmitU16(target.Name); break;
 				case TargetType::Index:     EmitOp(OpCode::SetIndex); break;
 				case TargetType::Temporary: Error("This cannot be changed. You can only change variables, properties and list items."); break;
@@ -2109,7 +2126,130 @@ namespace ForgeScript {
 			warning.File = m_FileName;
 			warning.Line = at.Line;
 			warning.Column = at.Column;
+			if (m_Fix.HasFix())
+			{
+				warning.FixTitle = std::move(m_Fix.FixTitle);
+				warning.FixLine = m_Fix.FixLine;
+				warning.FixColumn = m_Fix.FixColumn;
+				warning.FixEndLine = m_Fix.FixEndLine;
+				warning.FixEndColumn = m_Fix.FixEndColumn;
+				warning.FixText = std::move(m_Fix.FixText);
+			}
+			m_Fix = CompileError();
 			m_Options.Warnings->push_back(std::move(warning));
+		}
+
+		// Every name the scripts this one uses could set (and the scripts they use), for the warning below.
+		// It counts every word in them, so a name set there in any way is known; a script that can't be
+		// found makes the warning stay quiet, since its own mistake already says so.
+		const std::set<std::string>* UsedScriptWords()
+		{
+			if (m_UsedWordsReady)
+				return m_UsedWordsComplete ? &m_UsedWords : nullptr;
+			m_UsedWordsReady = true;
+			m_UsedWordsComplete = true;
+			std::set<std::string> visited;
+			std::vector<std::string> waiting;
+			auto queueUses = [&waiting](const std::vector<Token>& tokens)
+			{
+				for (size_t i = 0; i + 1 < tokens.size(); i++)
+				{
+					if (tokens[i].Type == TokenType::Use && tokens[i + 1].Type == TokenType::String)
+						waiting.push_back(tokens[i + 1].Text);
+				}
+			};
+			queueUses(m_Tokens);
+			constexpr size_t c_MaxScripts = 256;
+			while (!waiting.empty())
+			{
+				const std::string path = waiting.back();
+				waiting.pop_back();
+				std::string resolvedName;
+				std::string source;
+				if (!CheckUsePath(path).empty() || !m_VM.ResolveModuleSource(path, resolvedName, source) || visited.size() >= c_MaxScripts)
+				{
+					m_UsedWordsComplete = false;
+					return nullptr;
+				}
+				if (!visited.insert(resolvedName).second)
+					continue;
+				Lexer lexer(source);
+				const std::vector<Token> tokens = lexer.Tokenize();
+				for (const Token& token : tokens)
+				{
+					if (token.Type == TokenType::Identifier)
+						m_UsedWords.emplace(token.Lexeme);
+				}
+				queueUses(tokens);
+			}
+			return &m_UsedWords;
+		}
+
+		// "'helth' isn't set anywhere": a plain read of a name nothing could have set. Not this script (in
+		// any place, before or after), not a script it uses, not the language or the engine. Calls are
+		// left out, since an engine's functions are only known when the checker is told about them.
+		void WarnIfNeverSet(const std::string& name, size_t at)
+		{
+			if (!m_Options.Warnings || at >= m_Tokens.size() || IsModuleName(name) || IsBuiltinFunction(name))
+				return;
+			// Decided once the whole script is compiled: a function or handler further down may set it.
+			PendingRead read;
+			read.Name = name;
+			read.At = at;
+			for (FunctionState* state = m_State; state; state = state->Enclosing)
+			{
+				for (const auto& local : state->Locals)
+				{
+					if (!local.Name.empty())
+						read.Visible.push_back(local.Name);
+				}
+			}
+			m_PendingReads.push_back(std::move(read));
+		}
+
+		void WarnNamesNeverSet()
+		{
+			if (!m_Options.Warnings || m_PendingReads.empty())
+				return;
+			const std::set<std::string>* used = UsedScriptWords();
+			if (!used)
+				return;
+			for (const PendingRead& read : m_PendingReads)
+			{
+				if (m_GlobalsSet.count(read.Name) > 0 || used->count(read.Name) > 0)
+					continue;
+
+				// Every name the script could have meant, for "Did you mean ...?".
+				std::vector<std::string> names(m_ModuleNames.begin(), m_ModuleNames.end());
+				names.insert(names.end(), m_GlobalsSet.begin(), m_GlobalsSet.end());
+				names.insert(names.end(), read.Visible.begin(), read.Visible.end());
+				for (const std::string& shared : m_VM.GetSharedGlobalNames())
+					names.push_back(shared);
+				if (m_Options.BuiltinFunctions)
+					names.insert(names.end(), m_Options.BuiltinFunctions->begin(), m_Options.BuiltinFunctions->end());
+				names.insert(names.end(), used->begin(), used->end());
+				std::vector<std::string_view> candidates(names.begin(), names.end());
+
+				// Suggest a name only when it is the one close name; two close ones would be a guess.
+				std::string message = "'" + read.Name + "' isn't set anywhere, so this line will stop with a mistake when it runs.";
+				const std::string closest = ClosestName(read.Name, candidates);
+				if (!closest.empty())
+				{
+					std::vector<std::string_view> others;
+					for (std::string_view candidate : candidates)
+					{
+						if (candidate != closest)
+							others.push_back(candidate);
+					}
+					if (ClosestName(read.Name, others).empty())
+					{
+						message += " Did you mean '" + closest + "'?";
+						FixTokens(m_Tokens[read.At], m_Tokens[read.At], "Change to '" + closest + "'", closest);
+					}
+				}
+				message += OtherLanguageNameHint(read.Name);
+				Warn(m_Tokens[read.At], message);
+			}
 		}
 
 		// The type of a value that is written out plainly from tokens[first] to tokens[last] (a number,
@@ -4501,7 +4641,10 @@ namespace ForgeScript {
 				ErrorAtCurrent("Expected the name of a kind after 'new', like: new Enemy()");
 			const size_t at = m_Pos;
 			std::string name = ConsumeName("Expected the name of a kind.");
-			EmitGet(ResolveName(name, at));
+			const Target kind = ResolveName(name, at);
+			if (kind.Type == TargetType::Global)
+				WarnIfNeverSet(name, at);
+			EmitGet(kind);
 			while (Match(TokenType::Dot))
 				EmitWithName(OpCode::GetProperty, ConsumeMemberName());
 
@@ -4729,6 +4872,8 @@ namespace ForgeScript {
 					Advance();
 					const Target target = ResolveName(name, nameIndex);
 					WarnIfCallFindsOwnValue(name, target, nameIndex);
+					if (target.Type == TargetType::Global && !Check(TokenType::LeftParen))
+						WarnIfNeverSet(name, nameIndex);
 					if (target.Type == TargetType::Global)
 					{
 						CheckChoiceName(name);
@@ -4922,7 +5067,18 @@ namespace ForgeScript {
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
 		CompileError m_Error;
 		CompileError m_Fix;   // only its Fix fields: the change the next ErrorAt offers (see FixTokens)
-		Token m_MisplacedEndOpener;   // the last block that took an 'end' indented less than itself (see FixMissingEnd)
+		Token m_MisplacedEndOpener;
+		std::set<std::string> m_UsedWords;   // see UsedScriptWords
+		struct PendingRead
+		{
+			std::string Name;
+			size_t At = 0;
+			std::vector<std::string> Visible;   // the variables visible where it is read, for the suggestion
+		};
+		std::vector<PendingRead> m_PendingReads;   // see WarnIfNeverSet
+		std::set<std::string> m_GlobalsSet;        // every script variable set anywhere, when warning
+		bool m_UsedWordsReady = false;
+		bool m_UsedWordsComplete = false;   // the last block that took an 'end' indented less than itself (see FixMissingEnd)
 		std::vector<CompileError>* m_AllErrors = nullptr;
 		// A file with this many mistakes is probably not ForgeScript at all; stop there.
 		static constexpr size_t c_MaxCollectedErrors = 100;

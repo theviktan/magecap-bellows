@@ -14,6 +14,20 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **A warning for names that are never set** (asked for by MFC and MCBellows). `say helth`, in a
+  script that sets `health`, passed `--check` and failed only when the line ran. It now warns:
+  "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean
+  'health'?", with a quick fix. It warns only when nothing sets the name: not this script (anywhere
+  in it, even later or only inside an `if`), not a script it uses (directly or not), not the language,
+  and not the engine (its functions and types, when the checker knows them, as Bellows' does and
+  `--api` does). A name is suggested only when it is the one close name, calls are left alone, and a
+  `use`d script that can't be found keeps it quiet. No script in the repository gets it, except
+  `12_errors.forge`, which reads an unset name on purpose.
+- **Fixed in the docs, found by that warning:** Cookbook recipes 3, 5, 8, 17 and 26 and the
+  Language Guide's "Saving progress" example set a value only inside `when created` and read it in
+  another `when` block or function, where it was never set ("'_target' has not been given a value
+  yet"). Each now sets it at the top of the script (`set _target to nothing`), so the blocks share
+  it, and recipe 3 explains why.
 - **A phrase works as a statement beside a variable with its first word** (reported by MCBellows).
   In a function with `set move to tween(...)`, the statement `move box to p over 2 seconds` failed
   with "Expected the end of the line, but found 'box'", because a local hid the phrase everywhere.

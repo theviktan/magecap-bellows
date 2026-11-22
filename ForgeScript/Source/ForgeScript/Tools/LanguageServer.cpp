@@ -1093,10 +1093,13 @@ namespace ForgeScript {
 	{
 		VM vm;
 		SetUpChecker(vm, path);
-		std::vector<std::string> engineFunctions;
+		// The engine's functions, and its types (which scripts also use as values, like Material.load).
+		std::vector<std::string> engineNames;
 		for (const ApiFunction& function : m_ApiFunctions)
-			engineFunctions.push_back(function.Name);
-		return vm.FindWarnings(text, PathToUtf8(path.filename()), engineFunctions);
+			engineNames.push_back(function.Name);
+		for (const ApiType& type : m_ApiTypes)
+			engineNames.push_back(type.Name);
+		return vm.FindWarnings(text, PathToUtf8(path.filename()), engineNames);
 	}
 
 	Json LanguageServer::PublishDiagnostics(const std::string& uri)
@@ -1118,14 +1121,7 @@ namespace ForgeScript {
 		if (diagnostics.AsArray().empty())
 		{
 			for (const CompileError& warning : FindWarningsIn(document.Path, document.Text))
-			{
-				const size_t index = static_cast<size_t>(std::clamp(warning.Line - 1, 0, static_cast<int>(lines.size()) - 1));
-				const size_t at = std::min(lines[index].size(), static_cast<size_t>(std::max(warning.Column - 1, 0)));
-				size_t length = 0;
-				while (at + length < lines[index].size() && (std::isalnum(static_cast<unsigned char>(lines[index][at + length])) || lines[index][at + length] == '_'))
-					length++;
-				add(RangeOf(document.Text, warning.Line, warning.Column, static_cast<int>(std::max<size_t>(length, 1))), warning.Message, c_SeverityWarning);
-			}
+				add(WarningRange(document.Text, warning), warning.Message, c_SeverityWarning);
 		}
 
 		// A script this one uses that has mistakes of its own: shown on the 'use' line, because the script
@@ -2390,6 +2386,18 @@ namespace ForgeScript {
 		return range;
 	}
 
+	Json LanguageServer::WarningRange(const std::string& text, const CompileError& warning)
+	{
+		// A warning marks the word it is about.
+		const std::vector<std::string_view> lines = SplitLines(text);
+		const size_t index = static_cast<size_t>(std::clamp(warning.Line - 1, 0, static_cast<int>(lines.size()) - 1));
+		const size_t at = std::min(lines[index].size(), static_cast<size_t>(std::max(warning.Column - 1, 0)));
+		size_t length = 0;
+		while (at + length < lines[index].size() && (std::isalnum(static_cast<unsigned char>(lines[index][at + length])) || lines[index][at + length] == '_'))
+			length++;
+		return RangeOf(text, warning.Line, warning.Column, static_cast<int>(std::max<size_t>(length, 1)));
+	}
+
 	Json LanguageServer::CodeActions(const Json& params)
 	{
 		Json actions = Json(Json::Array());
@@ -2407,14 +2415,24 @@ namespace ForgeScript {
 		};
 
 		const std::string fileName = PathToUtf8(document->Path.filename());
-		for (const CompileError& mistake : FindMistakesIn(document->Path, document->Text))
+		// Mistakes and warnings (like "'helth' isn't set anywhere. Did you mean 'health'?") both carry fixes.
+		// As in the published diagnostics, warnings come only once a script has no mistakes.
+		std::vector<std::pair<CompileError, int>> diagnostics;
+		for (CompileError& mistake : FindMistakesIn(document->Path, document->Text))
+			diagnostics.emplace_back(std::move(mistake), c_SeverityError);
+		if (diagnostics.empty())
+		{
+			for (CompileError& warning : FindWarningsIn(document->Path, document->Text))
+				diagnostics.emplace_back(std::move(warning), c_SeverityWarning);
+		}
+		for (const auto& [mistake, severity] : diagnostics)
 		{
 			// A fix belongs to this script's own mistakes, offered on the line the mistake is shown on.
 			if (!mistake.HasFix() || mistake.File != fileName || mistake.Line - 1 < fromLine || mistake.Line - 1 > toLine)
 				continue;
 			Json diagnostic;
-			diagnostic.Set("range", MistakeRange(document->Text, mistake)).Set("severity", c_SeverityError).Set("source", "forgescript")
-				.Set("message", mistake.Message);
+			diagnostic.Set("range", severity == c_SeverityError ? MistakeRange(document->Text, mistake) : WarningRange(document->Text, mistake))
+				.Set("severity", severity).Set("source", "forgescript").Set("message", mistake.Message);
 			Json range;
 			range.Set("start", position(mistake.FixLine, mistake.FixColumn)).Set("end", position(mistake.FixEndLine, mistake.FixEndColumn));
 			Json edit;

@@ -125,6 +125,7 @@ Attach to the camera. Name the player entity "Player" in the scene.
 ```forge
 set offset to vector(0, 4, 8)
 set smoothing to 5.0
+set _target to nothing
 
 when created
 	set _target to find_entity("Player")
@@ -140,7 +141,9 @@ end
 
 **How it works.** Each frame the camera moves part of the way toward where it wants to be, so it
 eases in instead of snapping. A bigger `smoothing` follows more tightly. `min(1, ...)` keeps a very
-long frame from overshooting. Names starting with `_` stay out of the Inspector.
+long frame from overshooting. `_target` is set at the top of the script so both `when` blocks share
+it: a `set` only inside `when created` would make a variable that `when update` can't see. Names
+starting with `_` stay out of the Inspector.
 
 **Going further.** `lerp` with `smoothing * delta` slows slightly on low frame rates. For a result
 that's exactly the same at any frame rate, use `1 - exp(-smoothing * delta)` as the blend amount.
@@ -189,6 +192,7 @@ Attach to a turret. It turns toward the player when the player comes close.
 
 ```forge
 set sight to 12.0
+set _player to nothing
 
 when created
 	set _player to find_entity("Player")
@@ -353,6 +357,7 @@ In a game, pass `time()`:
 
 ```forge
 set dash_cooldown to 3.0
+set _dash to nothing
 
 when created
 	set _dash to new Cooldown(dash_cooldown)
@@ -708,6 +713,7 @@ Attach to a game manager.
 
 ```forge
 set save_name to "slot1"
+set _save to nothing
 
 when created
 	set _save to load_data(save_name, { level: 1, coins: 0, items: [] })
@@ -1026,6 +1032,8 @@ the panel. Tick **Run While Paused** on the HUD's Script component: a paused gam
 `when update` in every other script, and this one has to keep hearing Esc.
 
 ```forge
+set _menu to nothing
+
 when created
 	set _menu to find_entity("Pause Menu")
 	hide _menu
