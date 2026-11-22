@@ -42,6 +42,7 @@ forgescript --realtime game.forge    run with real time, so "wait 2 seconds" rea
 forgescript --test game.forge        run the script, then its 'test "..." ... end' blocks
 forgescript --format game.forge      lay the script out the standard way
 forgescript --benchmark a.forge ...  measure scripts: instructions executed and median time
+forgescript --profile game.forge     run the script, then list where its instructions went
 forgescript --version                show the version (see CHANGELOG.md)
 ```
 
@@ -115,6 +116,19 @@ calls.forge instructions 1800594 median 10.9 ms
 The instruction count is exact and the same on every computer; the time is the median of the five runs. What the scripts print is left out. Exit codes: `0`, `70` when a script fails or executes a different number of instructions on another run (a benchmark must use `random_seed`), `66` when one can't be read.
 
 The scripts in [`Benchmarks`](Benchmarks) measure calls, methods, closures, lists, text, events and tasks. The `ForgeScriptBenchmarks` test compares their instruction counts with `Benchmarks/instructions.txt` and fails when one grows by more than 5%, which catches changes that make the compiler emit more work. It can't catch a slower VM doing the same instructions, so the times are printed for people to compare, not tested. When a change lowers a count, lower its line in `instructions.txt` in the same pull request.
+
+### Finding what's slow
+
+`--profile` runs a script as usual (with game time stepping by 1/60 second), then prints which functions executed the most instructions:
+
+```text
+Profile of methods.forge: 1800029 instructions in script code
+  instructions       %      calls  function
+       1200000   66.7%     100000  bump (methods.forge line 5)
+        600023   33.3%          1  (top of the script) (methods.forge line 2)
+```
+
+Each function counts the instructions of its own code, not of the functions it calls; `(a function value)` is a `function(x) ... end`. Work done inside built-in functions (the loop of `sort` or `map`, for example) isn't counted, so a line that calls `sort` on a big list costs more time than its count shows. The counts are exact and the same on every computer, so a profile from a player's machine matches yours. `--output profile.txt` writes the table to that file instead of the screen (it never writes next to the script on its own). Hosts get the same from `VM::StartProfile` and `VM::TakeProfile`.
 
 ### Language server for editors
 

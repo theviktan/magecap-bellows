@@ -727,3 +727,23 @@ TEST_CASE("VMCountsInstructionsWhenAsked")
 	failing.Load("set x to 1\nfail \"stop\"\n", "fail.forge");
 	CHECK(failing.GetInstructionsRun() > 0);
 }
+
+TEST_CASE("VMProfilesWhereInstructionsGo")
+{
+	VM vm;
+	vm.SetPrintHandler([](const std::string&) {});
+	vm.StartProfile();
+	REQUIRE(vm.Load("function fib(n)\n\tif n < 2 then return n end\n\treturn fib(n - 1) + fib(n - 2)\nend\nsay fib(10)\n", "fib.forge").Success);
+	const std::vector<ProfileEntry> profile = vm.TakeProfile();
+	REQUIRE_EQ(profile.size(), static_cast<size_t>(2));
+	// Most instructions first: fib, called 177 times for fib(10), then the top of the script.
+	CHECK_EQ(profile[0].Function, std::string("fib"));
+	CHECK_EQ(profile[0].File, std::string("fib.forge"));
+	CHECK_EQ(profile[0].Line, 2);
+	CHECK_EQ(profile[0].Calls, static_cast<uint64_t>(177));
+	CHECK(profile[0].Instructions > profile[1].Instructions);
+	CHECK_EQ(profile[1].Function, std::string());
+	// TakeProfile stops profiling: what runs afterwards isn't counted.
+	REQUIRE(vm.Load("set x to 1 + 2\n", "after.forge").Success);
+	CHECK(vm.TakeProfile().empty());
+}

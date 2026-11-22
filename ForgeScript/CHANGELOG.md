@@ -7,6 +7,13 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **`forgescript --profile`** (Roadmap 2.0 Tier 4 #5, step 3): runs a script, then lists the functions
+  that executed the most instructions, with each one's share, its calls and where it is; `--output`
+  writes the table to a file. Hosts use `VM::StartProfile` and `VM::TakeProfile`. Counts are exact
+  and machine-independent; work inside built-in functions isn't counted. Profiling costs nothing
+  while it's off.
+- **Fixed: `forgescript --help`** listed `--benchmark` between `--format` and `--format`'s own
+  `--check` and `--stdin`.
 - **Callbacks are about ten times faster** (Tier 4 #5, step 2). `map`, `filter`, `sort_by`, `any`,
   `all`, `max_by` and every other built-in that calls a script function used to make a new task, with
   its own stack, for every item, which also kept the garbage collector busy. A task that finished

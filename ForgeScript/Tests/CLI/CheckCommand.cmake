@@ -122,3 +122,18 @@ expect_run("format unbalanced" 65 "${FOLDER}/unbalanced.forge:1: A block is miss
 	ARGS --format "${FOLDER}/unbalanced.forge")
 expect_run("format missing file" 66 "Could not open '${FOLDER}/missing.forge'." ARGS --format "${FOLDER}/missing.forge")
 expect_run("format with json" 64 "--format works on its own, with --check or --stdin (and --name)." ARGS --format --json "${messy}")
+
+# --profile: the script runs (its output first), then the table of where its instructions went.
+set(profiled "${FOLDER}/profile.forge")
+set(profileTable "Profile of profile.forge: 68 instructions in script code\n  instructions       %      calls  function\n            56   82.4%          1  (top of the script) (profile.forge line 1)\n            12   17.6%          3  square (profile.forge line 2)")
+expect_run("profile" 0 "14\n${profileTable}" ARGS --profile "${profiled}")
+set(profileFile "${CMAKE_CURRENT_BINARY_DIR}/profile-output.txt")
+expect_run("profile to a file" 0 "14\nProfile written to ${profileFile}" ARGS --profile "${profiled}" --output "${profileFile}")
+file(READ "${profileFile}" written)
+string(STRIP "${written}" written)
+if(NOT written STREQUAL profileTable)
+	message(FATAL_ERROR "profile to a file: the file holds\n${written}")
+endif()
+file(REMOVE "${profileFile}")
+expect_run("output without profile" 64 "--profile takes one script, and --output only goes with --profile, like: forgescript --profile game.forge --output profile.txt"
+	ARGS --output "${profileFile}" "${profiled}")
