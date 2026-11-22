@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **Repeating text has a limit** (audit S-6, older than 1.6.0): `"ab" * 1e9` built 2 GB of text in
+  one step, and `"ab" * infinity` looped until memory ran out, where the instruction limit can't stop
+  it. Both `text * count` and `text.repeat(count)` now refuse to make more than 100 million bytes,
+  and `*` refuses infinity. `color`, `random_chance` and `hsv`'s alpha refuse infinity and
+  not-a-number too, like the other new built-ins (S-7).
 - **Fixed: `is a function` inside a function hid the rest of the script.** The compiler's look-ahead
   read the `function` of the type test `x is a function` as the start of a function block, so the
   `end` that closed the real function was taken as that block's, and every line after the function

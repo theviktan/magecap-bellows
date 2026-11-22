@@ -119,6 +119,9 @@ namespace ForgeScript {
 		Value m_Value;
 	};
 
+	// The most bytes 'text * count' and text.repeat(count) may make in one step (100 MB).
+	constexpr size_t c_MaxRepeatedTextBytes = 100'000'000;
+
 	struct VMConfig
 	{
 		// Stop runaway recursion with a clear error instead of a crash.
