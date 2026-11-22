@@ -896,6 +896,34 @@ namespace Bellows::Scripting {
 							return entity.GetScene()->SetUIFocus(entity);
 						}));
 					} },
+				{ { "tag (entity) as (tag)", "Adds a tag to an entity (nothing happens when it has it already); same as entity.add_tag(tag)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "tag", "an entity", "tag self as \"enemy\"");
+						const std::string tag = context.Text(1);
+						Guard([&] { Detail::AddTag(entity, tag); });
+						return FS::Value();
+					} },
+				{ { "untag (entity) as (tag)", "Takes a tag off an entity (nothing happens when it doesn't have it); same as entity.remove_tag(tag)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "untag", "an entity", "untag self as \"enemy\"");
+						const std::string tag = context.Text(1);
+						Guard([&] { EntityTags::RemoveTag(entity.Resolve().GetComponent<TagComponent>(), tag); });
+						return FS::Value();
+					} },
+				{ { "everything tagged (tag)", "A list of every entity with the tag, parents before their children; same as find_tagged(tag)", "list[Entity]", true },
+					[](FS::CallContext& context)
+					{
+						const std::string tag = context.Text(0);
+						std::vector<ScriptEntity> entities;
+						Guard([&]
+						{
+							for (Entity entity : EntityTags::FindTagged(RequireContextScene(), tag))
+								entities.emplace_back(entity);
+						});
+						return ReturnValue(context.GetVM(), entities);
+					} },
 				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
 					[](FS::CallContext& context)
 					{

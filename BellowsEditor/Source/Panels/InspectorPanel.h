@@ -25,6 +25,7 @@ namespace Bellows {
 		void FlushMaterialSave();
 		void DrawEntity(Entity entity);
 		void DrawAddComponentMenu(Entity entity);
+		void DrawTags(Entity entity);
 		void DrawScriptComponent(Entity entity, ScriptComponent& component);
 		void DrawMeshRenderer(Entity entity, MeshRendererComponent& component);
 		bool DrawMaterialEditor(const Ref<Material>& material, const std::string& assetPath);
@@ -41,6 +42,9 @@ namespace Bellows {
 		EditorLayer& m_Editor;
 		std::unordered_map<std::string, CachedScriptInfo> m_ScriptInfoCache;
 		std::string m_ComponentFilter;
+		std::string m_NewTag;		// The tag being typed into the Tags field
+		std::string m_TagProblem;	// Why the last tag typed there can't be used
+		UUID m_TagEntity = 0;		// The entity they belong to
 
 		// Material edits are written to disk once the edit is finished, not every frame of a drag.
 		Ref<Material> m_PendingMaterialSave;

@@ -3,6 +3,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/EntityTags.h"
 
 namespace Bellows {
 
@@ -81,7 +82,14 @@ namespace Bellows {
 
 		void DeserializeComponents(Entity entity, const Json& json)
 		{
-			JsonRead(json, "KeepAcrossScenes", entity.GetComponent<TagComponent>().KeepAcrossScenes);
+			TagComponent& tag = entity.GetComponent<TagComponent>();
+			JsonRead(json, "KeepAcrossScenes", tag.KeepAcrossScenes);
+			std::vector<std::string> tags;
+			JsonRead(json, "Tags", tags);
+			std::vector<std::string> dropped;
+			tag.Tags = EntityTags::Clean(tags, dropped);
+			for (const std::string& unused : dropped)
+				BW_CORE_WARN("Entity '{}': the tag '{}' was left out (empty, too long, a repeat, or past {} tags)", tag.Tag, unused, EntityTags::MaxTagsPerEntity);
 			if (auto it = json.find("Transform"); it != json.end())
 			{
 				TransformComponent& transform = entity.GetComponent<TransformComponent>();
@@ -416,6 +424,8 @@ namespace Bellows {
 		json["Parent"] = static_cast<uint64_t>(entity.GetComponent<RelationshipComponent>().Parent);
 		if (entity.GetComponent<TagComponent>().KeepAcrossScenes)
 			json["KeepAcrossScenes"] = true;
+		if (const std::vector<std::string>& tags = entity.GetComponent<TagComponent>().Tags; !tags.empty())
+			json["Tags"] = tags;
 
 		{
 			const TransformComponent& transform = entity.GetComponent<TransformComponent>();

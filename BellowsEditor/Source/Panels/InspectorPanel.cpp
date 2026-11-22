@@ -12,6 +12,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIWidgets.h"
@@ -190,6 +191,7 @@ namespace Bellows {
 		ImGui::Checkbox("Keep Across Scenes", &entity.GetComponent<TagComponent>().KeepAcrossScenes);
 		ImGui::SetItemTooltip("This entity and its children stay when the game changes scene (load_scene), keeping their "
 			"scripts, physics and sounds. A scene that has it too doesn't add a second copy.");
+		DrawTags(entity);
 		ImGui::PopFont();
 		ImGui::Spacing();
 
@@ -653,6 +655,77 @@ namespace Bellows {
 
 		ImGui::Spacing();
 		ImGui::EndChild();
+	}
+
+	void InspectorPanel::DrawTags(Entity entity)
+	{
+		TagComponent& component = entity.GetComponent<TagComponent>();
+		if (entity.GetUUID() != m_TagEntity)
+		{
+			m_TagEntity = entity.GetUUID();
+			m_NewTag.clear();
+			m_TagProblem.clear();
+		}
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("Tags");
+		ImGui::SetItemTooltip("Groups this entity belongs to, such as \"enemy\" or \"pickup\". Scripts find them all with "
+			"find_tagged(\"enemy\") (ForgeScript: everything tagged \"enemy\"). Click a tag to remove it.");
+
+		// The tags flow along the line like words, then the field to add one. The cursor is at the start
+		// of a line here, so the room it has is the line's whole width.
+		const float lineEnd = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const auto sameLineIfItFits = [&](float width)
+		{
+			if (ImGui::GetItemRectMax().x + style.ItemSpacing.x + width <= lineEnd)
+				ImGui::SameLine();
+		};
+		std::string removed;
+		for (const std::string& tag : component.Tags)
+		{
+			const std::string label = tag + "  " ICON_X;
+			sameLineIfItFits(ImGui::CalcTextSize(label.c_str()).x + style.FramePadding.x * 2.0f);
+			ImGui::PushID(tag.c_str());
+			if (ImGui::SmallButton(label.c_str()))
+				removed = tag;
+			ImGui::SetItemTooltip("Remove the tag \"%s\"", tag.c_str());
+			ImGui::PopID();
+		}
+		if (!removed.empty())
+		{
+			EntityTags::RemoveTag(component, removed);
+			m_Editor.CommitChange("Remove tag");
+		}
+
+		if (component.Tags.size() < EntityTags::MaxTagsPerEntity)
+		{
+			const float fieldWidth = 140.0f * Theme::GetScale();
+			sameLineIfItFits(fieldWidth);
+			ImGui::SetNextItemWidth(std::min(fieldWidth, ImGui::GetContentRegionAvail().x));
+			if (ImGui::InputTextWithHint("##NewTag", "Add a tag", &m_NewTag, ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				const std::string tag = EntityTags::Trim(m_NewTag);
+				m_TagProblem = EntityTags::CheckTag(tag).value_or("");
+				if (m_TagProblem.empty())
+				{
+					if (EntityTags::AddTag(component, tag))
+						m_Editor.CommitChange("Add tag");
+					m_NewTag.clear();
+				}
+				// Enter adds the tag and keeps typing in the field, for the next one.
+				ImGui::SetKeyboardFocusHere(-1);
+			}
+			else if (ImGui::IsItemEdited())
+			{
+				m_TagProblem.clear();
+			}
+		}
+		if (!m_TagProblem.empty())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+			ImGui::TextWrapped("%s.", m_TagProblem.c_str());
+			ImGui::PopStyleColor();
+		}
 	}
 
 	void InspectorPanel::DrawMeshRenderer(Entity entity, MeshRendererComponent& c)

@@ -249,6 +249,17 @@ class FeatureTest(bellows.Script):
         self.check(parent.keep_across_scenes, "keep_across_scenes")
         parent.keep_across_scenes = False
 
+        self.check(parent.tags == [] and not parent.has_tag("enemy"), "entities start with no tags")
+        self.check(parent.add_tag(" enemy ") and not parent.add_tag("enemy") and child.add_tag("enemy"), "add_tag trims and adds each tag once")
+        self.check(parent.add_tag("boss") and parent.tags == ["enemy", "boss"] and parent.has_tag("boss"), "tags keep their order")
+        tagged = bellows.find_tagged("enemy")
+        self.check([e.name for e in tagged] == ["Renamed Parent", parent.children[0].name], f"find_tagged in hierarchy order ({[e.name for e in tagged]})")
+        self.check(parent.remove_tag("boss") and not parent.remove_tag("boss") and parent.tags == ["enemy"], "remove_tag")
+        self.check(raises(lambda: parent.add_tag("  "), ValueError) and raises(lambda: parent.add_tag("x" * 65), ValueError), "bad tags are refused")
+        self.check(bellows.find_tagged("nobody") == [], "find_tagged with no matches")
+        parent.remove_tag("enemy")
+        child.remove_tag("enemy")
+
         parent.position = Vec3(1.0, 2.0, 3.0)
         child.local_position = Vec3(0.0, 1.0, 0.0)
         self.check(close(child.position, (1.0, 3.0, 3.0)), "child world position follows the parent")

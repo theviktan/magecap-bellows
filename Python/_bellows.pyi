@@ -260,6 +260,15 @@ class Entity:
     @keep_across_scenes.setter
     def keep_across_scenes(self, value: bool) -> None: ...
     @property
+    def tags(self) -> list[str]:
+        """The groups the entity belongs to ("enemy"), in the order they were added; find them with find_tagged"""
+    def add_tag(self, tag: str) -> bool:
+        """Adds a tag, and returns false when the entity already had it. A tag is trimmed, 1 to 64 characters, and an entity has at most 32"""
+    def remove_tag(self, tag: str) -> bool:
+        """Removes a tag, and returns false when the entity didn't have it"""
+    def has_tag(self, tag: str) -> bool:
+        """True when the entity has the tag (letter case counts)"""
+    @property
     def transform(self) -> Transform: ...
     @property
     def position(self) -> Vec3:
@@ -1447,6 +1456,9 @@ def emit(name: str, *args: typing.Any) -> None:
     """Sends an event to every script: Python's on_event(self, name, *values) and ForgeScript's 'when <name>' handlers"""
 
 def find_entity(name: str) -> Entity | None: ...
+
+def find_tagged(tag: str) -> list[Entity]:
+    """Every entity of the scene with the tag, parents before their children; an empty list when there are none"""
 
 def frame() -> int:
     """Frames since play started"""
