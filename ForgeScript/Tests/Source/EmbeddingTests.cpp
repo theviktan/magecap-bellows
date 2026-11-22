@@ -681,6 +681,43 @@ TEST_CASE("PhrasesThatYieldToCalls")
 	CHECK_EQ(plain.Output, std::string("hi Ron\n"));
 }
 
+TEST_CASE("APhraseIsUsableBesideALocalWithItsFirstWord")
+{
+	// Bellows 0.6.0's FeatureTest had 'set move to tween(...)' and then 'move box to ...' in the same
+	// function, which failed with "Expected the end of the line, but found 'box'." At the start of a
+	// statement, 'move box' can't mean the variable, so it is the phrase; everywhere else the local wins.
+	Harness h;
+	std::string moved;
+	CHECK(h.Machine.RegisterPhrase("move (thing) to (place)", [&moved](CallContext& c)
+	{
+		moved += c.GetVM().ToText(c.Arg(0)) + " to " + c.GetVM().ToText(c.Arg(1)) + ";";
+		return Value();
+	}, nullptr, true));
+	h.Machine.Load(
+		"function run()\n"
+		"\tset move to 3\n"
+		"\tmove \"box\" to 5\n"       // the statement this test is about: the phrase
+		"\tsay move\n"               // the local
+		"\tsay move + 1\n"           // the local
+		"\trepeat move times\n"      // the local
+		"\t\tsay \"r\"\n"
+		"\tend\n"
+		"\tset move to [7]\n"
+		"\tsay move[1]\n"            // the local
+		"end\n"
+		"run()\n", "t.forge");
+	for (const std::string& error : h.Errors)
+		MESSAGE(error);
+	CHECK(h.Errors.empty());
+	CHECK_EQ(moved, std::string("box to 5;"));
+	CHECK_EQ(h.Output, std::string("3\n4\nr\nr\nr\n7\n"));
+
+	// In a value the local still wins, as before: 'set t to move "box" to 5' is a mistake.
+	VM vm;
+	vm.RegisterPhrase("move (thing) to (place)", [](CallContext&) { return Value(); }, nullptr, true);
+	CHECK_FALSE(vm.FindMistakes("function run()\n\tset move to 3\n\tset t to move \"box\" to 5\nend\n", "t.forge").empty());
+}
+
 TEST_CASE("WarningsForBracketsThatHideAPhrase")
 {
 	auto warnings = [](const std::string& source)

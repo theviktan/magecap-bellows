@@ -3783,9 +3783,18 @@ namespace ForgeScript {
 			if (it == root->Words.end())
 				return false;
 
-			// A local variable with the same name wins over a phrase.
+			// A local variable with the same name wins over a phrase, except at the start of a statement
+			// when the next word can't go on from a value: with a local 'move', "move box to p over 2
+			// seconds" can only be the phrase ("move box" means nothing for the variable), while "move(1)",
+			// "move.x" and a 'move' alone on its line stay the variable's.
 			if (ResolveLocal(m_State, word) != -1 || IsVisibleInEnclosing(word))
-				return false;
+			{
+				const Token& after = Peek(1);
+				const bool onlyThePhrase = isStatement && !ContinuesValue(after) && after.Type != TokenType::Newline &&
+					after.Type != TokenType::Eof && !IsBlockKeyword(after.Type);
+				if (!onlyThePhrase)
+					return false;
+			}
 			// Some phrases start with a word that may be a name too, like 'show': there the word followed by
 			// a call or an operator keeps its old meaning, and only "show menu" is the phrase.
 			if (m_VM.PhraseYieldsToCalls(word) && ContinuesValue(Peek(1)))

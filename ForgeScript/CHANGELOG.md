@@ -14,6 +14,12 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **A phrase works as a statement beside a variable with its first word** (reported by MCBellows).
+  In a function with `set move to tween(...)`, the statement `move box to p over 2 seconds` failed
+  with "Expected the end of the line, but found 'box'", because a local hid the phrase everywhere.
+  At the start of a statement, when the next word can't go on from a value, it is now the phrase.
+  Every other use of the local (`move(1)`, `move.x`, `say move`, `repeat move times`) is unchanged,
+  and the line it fixes was always a mistake before.
 - **Quick fixes in the editor** (`textDocument/codeAction`). A mistake whose message says exactly
   what to write instead comes with a one-click fix: `=` to `to` in `set`, `=` to `is` in a comparison
   or a parameter's default, `x += 5` / `x++` / `x--` to `add 5 to x` / `add 1 to x` / `take 1 from x`,
