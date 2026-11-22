@@ -1600,6 +1600,9 @@ def set_paused(paused: bool = True) -> None:
 def set_python_time_limit(seconds: float | None) -> None:
     """Sets how long Python may run without returning before it is stopped with KeyboardInterrupt, for the rest of this play: 0 or None turns the limit off. It is 10 seconds in the editor, and off in a shipped game"""
 
+def shake_camera(strength: float = 0.3, seconds: float = 0.4) -> None:
+    """Shakes the game camera's view, fading out over 'seconds' (at most 10): strength 1 moves it up to 0.15 m and turns it up to 1.5 degrees (at most 10). Only the picture moves, not the camera's Transform; a stronger shake replaces a weaker one, and a paused game holds it"""
+
 def started_from_editor() -> bool:
     """True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"""
 

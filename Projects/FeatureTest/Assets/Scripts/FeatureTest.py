@@ -189,6 +189,11 @@ class FeatureTest(bellows.Script):
         bellows.set_python_time_limit(limit)
         self.check(raised == 30.0 and bellows.python_time_limit() == limit, "set_python_time_limit")
         self.check(raises(lambda: bellows.set_python_time_limit(-1), ValueError), "a negative time limit is refused")
+        camera = bellows.primary_camera()
+        before = camera.position if camera else None
+        bellows.shake_camera(0.5, 0.2)
+        self.check(camera is None or camera.position == before, "shake_camera moves the picture, not the camera's Transform")
+        self.check(raises(lambda: bellows.shake_camera(11), ValueError) and raises(lambda: bellows.shake_camera(1, -1), ValueError), "camera shake limits")
         # No device input is delivered in automated runs, but every query must work.
         self.check(not bellows.is_key_down(Key.Space) and not bellows.is_key_pressed(Key.W) and not bellows.is_key_released(Key.Escape), "keyboard queries")
         self.check(not bellows.is_key_down("A"), "keys by name")

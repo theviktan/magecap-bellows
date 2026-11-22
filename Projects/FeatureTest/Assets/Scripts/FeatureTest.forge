@@ -213,6 +213,14 @@ function test_keep_across_scenes()
 	kept.destroy()
 end
 
+function test_camera_shake()
+	shake the camera by 0.5 over 0.2 seconds
+	shake the camera by 0.2 over 1 second
+	shake_camera(0.3, 0.1)
+	check(fails(function() shake the camera by 20 over 1 second end), "'shake the camera' refuses a strength over 10")
+	check(fails(function() shake_camera(1, 11) end), "shake_camera refuses more than 10 seconds")
+end
+
 function test_tags()
 	set guard to create_entity("Forge Guard")
 	set scout to create_entity("Forge Scout")
@@ -354,6 +362,7 @@ function run_tests()
 		test_pause()
 		test_keep_across_scenes()
 		test_tags()
+		test_camera_shake()
 		test_data_files()
 		test_saved_data()
 		test_destruction()

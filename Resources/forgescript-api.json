@@ -379,6 +379,23 @@
 			"doc": ""
 		},
 		{
+			"name": "shake_camera",
+			"params": [
+				{
+					"name": "strength",
+					"type": "float",
+					"default": 0.3
+				},
+				{
+					"name": "seconds",
+					"type": "float",
+					"default": 0.4
+				}
+			],
+			"returns": "None",
+			"doc": "Shakes the game camera's view, fading out over 'seconds' (at most 10): strength 1 moves it up to 0.15 m and turns it up to 1.5 degrees (at most 10). Only the picture moves, not the camera's Transform; a stronger shake replaces a weaker one, and a paused game holds it"
+		},
+		{
 			"name": "find_tagged",
 			"params": [
 				{
@@ -2559,6 +2576,18 @@
 			"pattern": "the data in (path)",
 			"doc": "The contents of a JSON data file in the Assets folder (\"Data/items.json\"), as maps and lists; same as load_json(path)",
 			"returns": "Value",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "shake the camera by (strength) over (seconds) seconds",
+			"doc": "Shakes the game camera's view, fading out over the seconds; same as shake_camera(strength, seconds)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "shake the camera by (strength) over (seconds) second",
+			"doc": "Shakes the game camera's view, fading out over the second; same as shake_camera(strength, seconds)",
+			"returns": "None",
 			"yields_to_calls": true
 		},
 		{
