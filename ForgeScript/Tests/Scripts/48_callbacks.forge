@@ -1,0 +1,45 @@
+# Built-in functions calling back into the script (map, filter, sort_by ...) reuse their tasks.
+# Whatever a callback does, the next one starts clean.
+set numbers to range(1, 5)
+say numbers.map(function(x) return x * 2 end)                 # expect: [2, 4, 6, 8, 10]
+
+# A callback inside a callback.
+say numbers.map(function(x) return numbers.filter(function(y) return y < x end).length end)   # expect: [0, 1, 2, 3, 4]
+
+# A callback that keeps one of its own variables in a function it gives back.
+set makers to numbers.map(function(x)
+	set doubled to x * 2
+	return function() return doubled end
+end)
+say makers.map(function(f) return f() end)                     # expect: [2, 4, 6, 8, 10]
+
+# A callback that fails, caught by the script; the calls after it work.
+function first_problem()
+	try
+		numbers.map(function(x)
+			if x is 3 then fail "three" end
+			return x
+		end)
+	catch problem
+		return problem
+	end
+end
+say first_problem().starts_with("three")                       # expect: true
+say numbers.filter(function(x) return x is odd end)            # expect: [1, 3, 5]
+
+# A callback that runs a 'try' of its own.
+say numbers.map(function(x)
+	try
+		if x is even then fail "even" end
+		return "odd"
+	catch problem
+		return problem
+	end
+end)                                                           # expect: ["odd", "even", "odd", "even", "odd"]
+
+# Many calls in a row, with the garbage collector running in between.
+set total to 0
+repeat 200 times
+	add range(1, 50).map(function(x) return [x] end).length to total
+end
+say total                                                      # expect: 10000

@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.6.0 (not released yet)
 
+- **Callbacks are about ten times faster** (Tier 4 #5, step 2). `map`, `filter`, `sort_by`, `any`,
+  `all`, `max_by` and every other built-in that calls a script function used to make a new task, with
+  its own stack, for every item, which also kept the garbage collector busy. A task that finished
+  cleanly is now used again for the next call. `Benchmarks/closures.forge` went from 147 ms to 15 ms
+  (release build); nothing a script sees changes.
 - **`forgescript --benchmark`** (Roadmap 2.0 Tier 4 #5, step 1): runs scripts five times and prints the
   instructions each executed (exact, the same on every machine) and the median time. Seven benchmarks
   in `Benchmarks/` cover calls, methods, closures, lists, text, events and tasks, and the

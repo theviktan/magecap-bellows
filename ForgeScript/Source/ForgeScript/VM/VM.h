@@ -432,6 +432,9 @@ namespace ForgeScript {
 		std::vector<Task*> m_Tasks;          // Tasks that are waiting to resume.
 		std::vector<Task*> m_RunningTasks;   // Tasks currently executing (can be nested).
 		std::vector<Task*> m_PendingTasks;   // Tasks created but not started yet.
+		// Finished, emptied tasks of CallFromNative, used again for its next calls.
+		std::vector<Task*> m_SpareTasks;
+		static constexpr size_t c_MaxSpareTasks = 8;
 		std::unordered_map<Object*, int> m_Pinned;
 		std::unordered_map<const NativeType::MethodInfo*, NativeFunction*> m_NativeMethodCache;
 		std::string m_ErrorMessage;
