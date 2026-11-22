@@ -747,3 +747,46 @@ TEST_CASE("VMProfilesWhereInstructionsGo")
 	REQUIRE(vm.Load("set x to 1 + 2\n", "after.forge").Success);
 	CHECK(vm.TakeProfile().empty());
 }
+
+TEST_CASE("TryEaseMatchesTheScriptsEase")
+{
+	// Hosts (Bellows' tweens) share ease()'s curves through Core/Easing.h; both must agree exactly.
+	const std::vector<std::string_view>& names = EaseStyleNames();
+	REQUIRE_EQ(names.size(), size_t(11));
+	CHECK_EQ(std::string(names.front()), std::string("linear"));
+	CHECK_EQ(std::string(names.back()), std::string("elastic out"));
+
+	Harness h;
+	LoadResult result = h.Machine.Load("function eased(t, style)\n\treturn ease(t, style)\nend\n", "t.forge");
+	REQUIRE(result.Success);
+	Value fn = h.Machine.GetGlobal(result.LoadedModule, "eased");
+	for (std::string_view name : names)
+	{
+		for (double t : { 0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0 })
+		{
+			double hosted = -1;
+			REQUIRE(TryEase(name, t, hosted));
+			Value out;
+			REQUIRE(h.Machine.Call(fn, { Value::FromNumber(t), h.Machine.MakeText(std::string(name)) }, &out));
+			CHECK_EQ(out.AsNumber(), hosted);
+		}
+		double atStart = -1, atEnd = -1;
+		REQUIRE(TryEase(name, 0, atStart));
+		REQUIRE(TryEase(name, 1, atEnd));
+		CHECK(std::abs(atStart) < 1e-12);
+		CHECK(std::abs(atEnd - 1) < 1e-12);
+	}
+
+	double value = -1;
+	CHECK(TryEase("  In Out ", 0.5, value));
+	CHECK_EQ(value, 0.5);
+	CHECK(TryEase("out", 7, value));
+	CHECK_EQ(value, 1.0);
+	CHECK(TryEase("out", -3, value));
+	CHECK_EQ(value, 0.0);
+	CHECK(TryEase("linear", std::nan(""), value));
+	CHECK_EQ(value, 0.0);
+	value = 42;
+	CHECK_FALSE(TryEase("wobble", 0.5, value));
+	CHECK_EQ(value, 42.0);
+}

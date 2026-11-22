@@ -4,6 +4,7 @@
 
 #include "ForgeScript/API/Native.h"
 #include "ForgeScript/Compiler/Compiler.h"
+#include "ForgeScript/Core/Easing.h"
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/Core/Value.h"
 #include "ForgeScript/VM/VM.h"
