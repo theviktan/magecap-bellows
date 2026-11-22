@@ -354,6 +354,20 @@ namespace Bellows::Scripting {
 			}
 		}
 
+		// --- Camera shake ------------------------------------------------------
+
+		inline void ShakeCamera(double strength, double seconds)
+		{
+			if (!std::isfinite(strength) || strength < 0.0 || strength > CameraShake::MaxStrength)
+				throw ScriptValueError("A camera shake's strength is a number from 0 to 10");
+			if (!std::isfinite(seconds) || seconds < 0.0 || seconds > CameraShake::MaxSeconds)
+				throw ScriptValueError("A camera shake lasts from 0 to 10 seconds");
+			Scene& scene = RequireContextScene();
+			if (!scene.IsRunning())
+				throw ScriptValueError("The camera shakes while the game is playing");
+			scene.GetCameraShake().Start(static_cast<float>(strength), static_cast<float>(seconds));
+		}
+
 		// --- Physics -----------------------------------------------------------
 
 		inline void AddImpulse(const RigidBodyRef& body, const glm::vec3& impulse)
@@ -1100,6 +1114,10 @@ namespace Bellows::Scripting {
 		api.Function("ui_hovered", []() { return EntityOrNone(RequireContextScene().GetUIHovered()); },
 			"The UI entity under the pointer that the pointer can use, or None");
 		api.Function("find_entity", [](const std::string& name) { return EntityOrNone(RequireContextScene().FindEntityByName(name)); }, "", Arg("name"));
+		api.Function("shake_camera", [](double strength, double seconds) { Detail::ShakeCamera(strength, seconds); },
+			"Shakes the game camera's view, fading out over 'seconds' (at most 10): strength 1 moves it up to 0.15 m and turns it up to 1.5 degrees "
+			"(at most 10). Only the picture moves, not the camera's Transform; a stronger shake replaces a weaker one, and a paused game holds it",
+			Arg("strength", 0.3), Arg("seconds", 0.4));
 		api.Function("find_tagged", [](const std::string& tag)
 			{
 				std::vector<ScriptEntity> result;

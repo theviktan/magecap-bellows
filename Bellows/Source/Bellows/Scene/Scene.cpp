@@ -413,6 +413,7 @@ namespace Bellows {
 		m_PhysicsWorld = CreateScope<PhysicsWorld>(*this);
 		m_PhysicsWorld->SyncBodies();
 		m_Tweens = CreateScope<SceneTweens>();
+		m_CameraShake.Clear();
 
 		if (AudioEngine::IsInitialized())
 			m_Audio = CreateScope<SceneAudio>(*this);
@@ -435,6 +436,7 @@ namespace Bellows {
 		m_PendingDestroy.clear();
 		// After the scripts stopped, so a tween started in on_destroy goes too.
 		m_Tweens.reset();
+		m_CameraShake.Clear();
 		m_Audio.reset();
 		m_PhysicsWorld.reset();
 		m_IsRunning = false;
@@ -545,6 +547,10 @@ namespace Bellows {
 
 		// The UI goes first, so scripts see this frame's UI events and only the input it left the game.
 		UpdateUIInput();
+
+		// A camera shake runs in game time, so a paused game holds it.
+		if (!m_GamePaused)
+			m_CameraShake.Update(deltaTime);
 
 		// Tweens next, so scripts see this frame's values; while the game is paused only those marked
 		// to run while paused move.
@@ -738,7 +744,7 @@ namespace Bellows {
 		return fallback;
 	}
 
-	bool Scene::GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera)
+	bool Scene::GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera, bool withShake)
 	{
 		Entity cameraEntity = GetPrimaryCameraEntity();
 		if (!cameraEntity)
@@ -751,10 +757,14 @@ namespace Bellows {
 		Math::DecomposeTransform(world, translation, rotation, scale);
 
 		// The view ignores scale so scaled camera parents do not distort the image.
-		const glm::mat4 cameraTransform = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation);
+		glm::mat4 cameraTransform = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation);
+		// A shake doesn't show while the game is paused (a pause menu over a tilted view would look broken);
+		// it goes on when the game does.
+		if (withShake && m_IsRunning && !m_GamePaused && m_CameraShake.IsShaking())
+			cameraTransform *= m_CameraShake.GetOffset();
 		outCamera.View = glm::inverse(cameraTransform);
 		outCamera.Projection = camera.GetProjection(aspectRatio);
-		outCamera.Position = translation;
+		outCamera.Position = glm::vec3(cameraTransform[3]);
 		outCamera.NearClip = camera.NearClip;
 		outCamera.FarClip = camera.FarClip;
 		return true;

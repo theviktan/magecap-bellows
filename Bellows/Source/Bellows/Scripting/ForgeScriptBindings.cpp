@@ -849,6 +849,17 @@ namespace Bellows::Scripting {
 			};
 		}
 
+		FS::NativeFn ShakeCameraPhrase()
+		{
+			return [](FS::CallContext& context)
+			{
+				const double strength = context.Number(0);
+				const double seconds = context.Number(1);
+				Guard([&] { Detail::ShakeCamera(strength, seconds); });
+				return FS::Value();
+			};
+		}
+
 		// The phrases are thin wrappers over functions of the shared API, so both spellings behave alike.
 		const std::vector<EnginePhrase>& GetEnginePhrases()
 		{
@@ -930,6 +941,10 @@ namespace Bellows::Scripting {
 						const std::string path = context.Text(0);
 						return ReturnValue(context.GetVM(), Guard([&] { return LoadDataJson(path); }));
 					} },
+				{ { "shake the camera by (strength) over (seconds) seconds", "Shakes the game camera's view, fading out over the seconds; same as shake_camera(strength, seconds)", "None", true },
+					ShakeCameraPhrase() },
+				{ { "shake the camera by (strength) over (seconds) second", "Shakes the game camera's view, fading out over the second; same as shake_camera(strength, seconds)", "None", true },
+					ShakeCameraPhrase() },
 				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
 					[](FS::CallContext& context)
 					{

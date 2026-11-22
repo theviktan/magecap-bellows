@@ -5,6 +5,7 @@
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Renderer/SceneRenderer.h"
+#include "Bellows/Scene/CameraShake.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UITheme.h"
 
@@ -156,7 +157,9 @@ namespace Bellows {
 		bool UIWantsPointer() const { return m_UICapture.Pointer; }
 		bool UIWantsKeyboard() const { return m_UICapture.Keyboard; }
 		// Finds the primary camera entity and builds a RenderCamera for the given aspect ratio.
-		bool GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera);
+		// The primary camera's view. 'withShake' adds a running camera shake: for the rendered game view
+		// only, so scripts' screen_to_world_ray and world_to_screen stay steady.
+		bool GetPrimaryCamera(float aspectRatio, RenderCamera& outCamera, bool withShake = false);
 		Entity GetPrimaryCameraEntity();
 
 		void OnViewportResize(uint32_t width, uint32_t height);
@@ -172,6 +175,9 @@ namespace Bellows {
 		SceneAudio* GetAudio() const { return m_Audio.get(); }
 		// The running tweens; null when the scene isn't playing.
 		SceneTweens* GetTweens() const { return m_Tweens.get(); }
+		// The game camera's shake (shake_camera); cleared when play starts and stops.
+		CameraShake& GetCameraShake() { return m_CameraShake; }
+		const CameraShake& GetCameraShake() const { return m_CameraShake; }
 		float GetTime() const { return m_Time; }
 		uint64_t GetFrameCount() const { return m_FrameCount; }
 
@@ -281,6 +287,7 @@ namespace Bellows {
 		Scope<PhysicsWorld> m_PhysicsWorld;
 		Scope<SceneAudio> m_Audio;
 		Scope<SceneTweens> m_Tweens;
+		CameraShake m_CameraShake;
 
 		static Scene* s_ActiveScene;
 

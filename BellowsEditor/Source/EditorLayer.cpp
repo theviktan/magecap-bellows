@@ -1026,7 +1026,7 @@ namespace Bellows {
 
 		RenderCamera camera = m_Camera.GetRenderCamera();
 		if (IsUsingGameCamera() || uiView)
-			scene->GetPrimaryCamera(aspect, camera);	// The UI view keeps the editor camera when there is no game camera
+			scene->GetPrimaryCamera(aspect, camera, true);	// The UI view keeps the editor camera when there is no game camera
 
 		// Through the game camera the viewport shows exactly what the player sees.
 		m_ViewportShowsGameView = IsUsingGameCamera();
@@ -1183,7 +1183,7 @@ namespace Bellows {
 		const uint32_t width = std::max(m_ViewportRenderer->GetViewportWidth(), 1u);
 		const uint32_t height = std::max(m_ViewportRenderer->GetViewportHeight(), 1u);
 		RenderCamera camera;
-		if (!scene->GetPrimaryCamera(static_cast<float>(width) / static_cast<float>(height), camera))
+		if (!scene->GetPrimaryCamera(static_cast<float>(width) / static_cast<float>(height), camera, true))
 			return std::nullopt;
 		if (!m_ScreenshotRenderer)
 			m_ScreenshotRenderer = CreateScope<SceneRenderer>();

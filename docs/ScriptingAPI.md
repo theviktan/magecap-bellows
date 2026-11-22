@@ -205,6 +205,7 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `get_entities(component=None)` | All entities, optionally only those with a component (`get_entities(bellows.RigidBody)` or `get_entities("RigidBody")`). |
 | `instantiate(prefab, position=None, parent=None)` | Spawns a `.bprefab` and returns its root entity. |
 | `primary_camera()` | The entity whose Camera is primary, or `None`. |
+| `shake_camera(strength=0.3, seconds=0.4)` | Shakes the game camera's view, fading out over `seconds` (at most 10). Strength 1 moves it up to 0.15 m and turns it up to 1.5 degrees (at most 10). Only the picture moves: the camera's Transform, physics, `screen_to_world_ray` and saved scenes don't see it. A stronger shake replaces a weaker one (or what's left of it); a paused game holds it, and it ends with play. Out-of-range values raise `ValueError`; play mode only. |
 | `screen_to_world_ray(screen_position)` | `(origin, direction)` through a viewport pixel, or `None` without a camera. |
 | `world_to_screen(world_position)` | `Vec2` pixel position, or `None` if behind the camera. |
 | `scene_name()`, `is_playing()` | Current scene name; whether the game is running. |
@@ -675,12 +676,14 @@ engine sends these events, which the script handles with `when`:
   | `untag (entity) as (tag)` | `entity.remove_tag(tag)` |
   | `everything tagged (tag)` | `find_tagged(tag)`, so `for each enemy in everything tagged "enemy"` works |
   | `the data in (path)` | `load_json(path)`, so `set items to the data in "Data/items.json"` works |
+  | `shake the camera by (strength) over (seconds) seconds` | `shake_camera(strength, seconds)`; `second` works too |
 
   Every tween phrase also takes `second` (`over 1 second`) and ends with an optional
   `with (style)` for the easing, which is `"in out"` otherwise: `move door to p over 2 seconds with
   "bounce out"`. They give back the `Tween`, so a script can wait for it (example below). A
-  script's own `move` function or `fade` variable still works, but where it is visible, it hides the
-  phrase that starts with the same word.
+  script's own `move` function or `fade` variable still works beside them: with a local `move`, `move box
+  to p over 1 second` at the start of a line is still the phrase, while `move(1)` and `say move` use the
+  variable.
 
   Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works. The widget
   phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still

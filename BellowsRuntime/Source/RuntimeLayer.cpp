@@ -124,7 +124,7 @@ namespace Bellows {
 		m_Scene->OnUpdateRuntime(timestep);
 
 		RenderCamera camera;
-		if (!m_Scene->GetPrimaryCamera(static_cast<float>(width) / static_cast<float>(std::max(height, 1u)), camera))
+		if (!m_Scene->GetPrimaryCamera(static_cast<float>(width) / static_cast<float>(std::max(height, 1u)), camera, true))
 		{
 			// No camera in the scene: look at the origin from a sensible default.
 			camera.Position = glm::vec3(0.0f, 2.0f, 8.0f);
