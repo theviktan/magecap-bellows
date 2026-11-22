@@ -116,6 +116,7 @@ class FeatureTest(bellows.Script):
         yield from self.test_collisions_and_triggers()
         yield from self.test_raycasts()
         yield from self.test_gameplay_scripts()
+        yield from self.test_tweens()
 
     def test_forgescript(self):
         """FeatureTest.forge tests the API from ForgeScript first; it reports by renaming its entity."""
@@ -658,6 +659,9 @@ class FeatureTest(bellows.Script):
         self.check(self.events and self.events[-1] == ("feature test", (1.0, "two", [3.0], {"four": 4.0}, self.entity)),
                    "emit reaches on_event, the sender's own included")
         self.check(raises(lambda: bellows.emit("bad", object()), ValueError), "emit rejects values other scripts can't read")
+        bellows.emit("feature test vectors", Vec2(1, 2), Vec4(0.5, 0.25, 0, 1))
+        self.check(self.events[-1] == ("feature test vectors", ([1.0, 2.0], [0.5, 0.25, 0.0, 1.0])),
+                   "emit sends Vec2 and Vec4 as lists of numbers")
 
     def test_ui_focus(self):
         # A small menu under this test's own entity: UI events climb through non-UI parents to its script.
@@ -834,3 +838,36 @@ class FeatureTest(bellows.Script):
         rotation = bottle.rotation
         yield from self.wait_frames(3)
         self.check(not close(rotation, bottle.rotation, 1e-4), "the spinner rotates the bottle")
+
+    def test_tweens(self):
+        box = bellows.create_entity("Tween Box")
+        box.position = Vec3(0, 0, 0)
+        move = bellows.tween(box, "position", Vec3(0, 3, 0), 0.5, "linear")
+        self.check(isinstance(move, bellows.Tween) and move.property == "position" and move.entity == box, "tween returns a Tween handle")
+        self.check(move.running and not move.finished, "a new tween is running")
+        yield from self.wait_until(lambda: move.finished, 2.0)
+        self.check(move.finished and not move.running and move.progress == 1.0, "a tween finishes")
+        self.check(box.position.y == 3.0, "a tween lands exactly on its target")
+        self.check(any(name == "tween finished" and values == (box, "position", float(move.id))
+                       for name, values in self.events), "'tween finished' reaches on_event with the entity, property and id")
+
+        spin = bellows.tween_by(box, "rotation", Vec3(0, 90, 0), 10.0, "out", 0.25)
+        spin.repeat = 2
+        spin.yoyo = True
+        spin.while_paused = True
+        self.check(spin.repeat == 2 and spin.yoyo and spin.while_paused, "a tween's repeat, yoyo and while_paused can be set")
+        self.check(spin.pause() and spin.running and spin.resume(), "a tween pauses and resumes")
+        self.check(spin.complete() and spin.finished and abs(box.rotation.y - 90.0) < 1e-3, "complete jumps to the end")
+
+        image = bellows.create_entity("Tween Image")
+        image.add_component("UIRect")
+        image.add_component("UIImage")
+        fade = bellows.tween(image, "UIImage.color", Vec4(1, 1, 1, 0), 5.0)
+        self.check(fade.running, "colors tween from a Vec4")
+        self.check(bellows.stop_tweens(image) == 1 and not fade.running and not fade.finished, "stop_tweens stops an entity's tweens")
+        self.check(raises(lambda: bellows.tween(box, "name", 1, 1), ValueError), "only number and vector properties tween")
+        self.check(raises(lambda: bellows.tween(box, "scale", Vec3(2), 1, "wobbly"), ValueError), "unknown easing styles are refused")
+        self.check(raises(lambda: bellows.tween(box, "scale", Vec3(2), float("inf")), ValueError), "a tween's length must be finite")
+        bellows.destroy(image)
+        bellows.destroy(box)
+        yield

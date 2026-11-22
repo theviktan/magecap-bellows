@@ -320,6 +320,17 @@ namespace Bellows::Scripting {
 			return value.cast<std::string>();
 		if (py::isinstance<glm::vec3>(value))
 			return value.cast<glm::vec3>();
+		// Vec2 and Vec4 (colors) go as lists of numbers, the way ForgeScript writes them.
+		if (py::isinstance<glm::vec2>(value))
+		{
+			const glm::vec2 v = value.cast<glm::vec2>();
+			return ScriptValueList { double(v.x), double(v.y) };
+		}
+		if (py::isinstance<glm::vec4>(value))
+		{
+			const glm::vec4 v = value.cast<glm::vec4>();
+			return ScriptValueList { double(v.x), double(v.y), double(v.z), double(v.w) };
+		}
 		if (py::isinstance<ScriptEntity>(value))
 			return value.cast<ScriptEntity>();
 		if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value))
@@ -340,7 +351,7 @@ namespace Bellows::Scripting {
 			}
 			return map;
 		}
-		throw ScriptValueError("Values sent to the engine can be None, bool, numbers, str, Vec3, Entity, lists and dicts, not " + PythonTypeName(value));
+		throw ScriptValueError("Values sent to the engine can be None, bool, numbers, str, Vec2, Vec3, Vec4, Entity, lists and dicts, not " + PythonTypeName(value));
 	}
 
 	// -------------------------------------------------------------------------

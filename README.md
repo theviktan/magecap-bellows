@@ -29,7 +29,8 @@ can drive end to end.
   **Create → UI** also makes whole screens to start from: a Main Menu and a HUD.
 * **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
-  prefabs, input, physics and audio. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
+  prefabs, input, physics, audio, and tweens that move any number or vector property smoothly over
+  time. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
 * **ForgeScript**: Bellows' own natural-language scripting language and its flagship way to write
   game logic (`set speed to 5`, `when collided with other`, `wait 2 seconds`). The language, its
   `forgescript` tool and its tests are in `ForgeScript/` (guide:

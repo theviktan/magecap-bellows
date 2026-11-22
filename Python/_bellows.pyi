@@ -916,6 +916,47 @@ class Transform:
     def up(self) -> Vec3: ...
 
 
+class Tween:
+    """A property moving smoothly over time (what tween and tween_by return); 'tween finished' is sent when it reaches its end"""
+    @property
+    def id(self) -> int:
+        """The ID sent with 'tween finished'"""
+    @property
+    def entity(self) -> Entity: ...
+    @property
+    def property(self) -> str: ...
+    @property
+    def running(self) -> bool:
+        """True until it ends (paused or waiting for its delay counts as running)"""
+    @property
+    def finished(self) -> bool:
+        """True once it reached its end; false when it was stopped or replaced"""
+    @property
+    def progress(self) -> float:
+        """From 0 to 1 over every repeat (the current one when repeating forever)"""
+    @property
+    def repeat(self) -> int:
+        """How many more times it runs after the first: 0, a count, or -1 for forever"""
+    @repeat.setter
+    def repeat(self, value: int) -> None: ...
+    @property
+    def yoyo(self) -> bool:
+        """Every other run goes back the way it came (needs repeat)"""
+    @yoyo.setter
+    def yoyo(self, value: bool) -> None: ...
+    @property
+    def while_paused(self) -> bool:
+        """Keeps moving while the game is paused (set_paused), for pause menus"""
+    @while_paused.setter
+    def while_paused(self, value: bool) -> None: ...
+    def stop(self) -> bool:
+        """Stops it where it is, sending no 'tween finished'; false when it had already ended"""
+    def pause(self) -> bool: ...
+    def resume(self) -> bool: ...
+    def complete(self) -> bool:
+        """Jumps to the end, repeats included (the current run when repeating forever); 'tween finished' follows next frame"""
+
+
 class UIButton:
     """Clickable: colors its UIImage by state, from its canvas's theme unless it sets its own; a click (or ui_accept while focused) raises 'clicked'"""
     @property
@@ -1538,8 +1579,17 @@ def set_paused(paused: bool = True) -> None:
 def started_from_editor() -> bool:
     """True while the game plays in the editor (its viewport, or a game window it started); false in an exported game"""
 
+def stop_tweens(entity: Entity, property: str = '') -> int:
+    """Stops an entity's tweens, or only those of one property, sending no 'tween finished'; returns how many it stopped"""
+
 def time() -> float:
     """Seconds since play started"""
+
+def tween(entity: Entity, property: str, to: typing.Any, seconds: float, ease: str = 'in out', delay: float = 0.0) -> Tween:
+    """Moves a property smoothly from where it is to 'to' over 'seconds': an entity's position, local_position, rotation or scale, or a component's number or vector property as "Component.property" ("UIImage.color", "AudioSource.volume"). A new tween of the same property replaces the running one"""
+
+def tween_by(entity: Entity, property: str, amount: typing.Any, seconds: float, ease: str = 'in out', delay: float = 0.0) -> Tween:
+    """Like tween, but adds 'amount' to the property; a rotation turns by the full amount, more than one turn too"""
 
 def ui_clear_focus() -> None:
     """Takes focus away from the UI"""
