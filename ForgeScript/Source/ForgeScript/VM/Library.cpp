@@ -8,6 +8,11 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <random>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <vector>
 
 // The ForgeScript standard library: functions every script can use, plus the functions
 // that belong to lists, text, maps and vectors.
@@ -214,6 +219,133 @@ namespace ForgeScript {
 			if (IsObjectType(a, ObjectType::String) && IsObjectType(b, ObjectType::String))
 				return As<String>(a)->Text < As<String>(b)->Text;
 			context.Error("sort can only order numbers with numbers or text with text. Use sort_by with a function for anything else.");
+		}
+
+		// A number argument that must be finite: infinity, or a not-a-number made from it, would turn into
+		// an int with undefined behavior inside noise and hsv, and means nothing for a point or a curve.
+		double FiniteNumber(CallContext& c, size_t index, const char* name)
+		{
+			const double number = c.Number(index);
+			if (!std::isfinite(number))
+				c.Error(std::string(name) + " needs ordinary numbers, but value " + std::to_string(index + 1) + " is " +
+					(std::isnan(number) ? "not a number." : "infinity."));
+			return number;
+		}
+
+		// Ken Perlin's improved noise (2002), from his reference permutation, so the same position gives
+		// the same value on every machine and every run.
+		double PerlinNoise(double x, double y, double z)
+		{
+			static const uint8_t c_Permutation[256] = {
+				151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10,
+				23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87,
+				174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211,
+				133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208,
+				89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5,
+				202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119,
+				248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232,
+				178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249,
+				14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205,
+				93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180 };
+			auto at = [](int i) { return static_cast<int>(c_Permutation[i & 255]); };
+			auto fade = [](double t) { return t * t * t * (t * (t * 6 - 15) + 10); };
+			auto mix = [](double t, double a, double b) { return a + t * (b - a); };
+			auto gradient = [](int hash, double gx, double gy, double gz)
+			{
+				const int h = hash & 15;
+				const double u = h < 8 ? gx : gy;
+				const double v = h < 4 ? gy : (h == 12 || h == 14 ? gx : gz);
+				return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+			};
+			const double fx = std::floor(x), fy = std::floor(y), fz = std::floor(z);
+			// Wrapping to 0..255 first keeps huge coordinates from overflowing an int.
+			const int X = static_cast<int>(std::fmod(fx, 256.0) + 256.0) & 255;
+			const int Y = static_cast<int>(std::fmod(fy, 256.0) + 256.0) & 255;
+			const int Z = static_cast<int>(std::fmod(fz, 256.0) + 256.0) & 255;
+			x -= fx;
+			y -= fy;
+			z -= fz;
+			const double u = fade(x), v = fade(y), w = fade(z);
+			const int A = at(X) + Y, AA = at(A) + Z, AB = at(A + 1) + Z;
+			const int B = at(X + 1) + Y, BA = at(B) + Z, BB = at(B + 1) + Z;
+			const double result = mix(w,
+				mix(v, mix(u, gradient(at(AA), x, y, z), gradient(at(BA), x - 1, y, z)),
+					mix(u, gradient(at(AB), x, y - 1, z), gradient(at(BB), x - 1, y - 1, z))),
+				mix(v, mix(u, gradient(at(AA + 1), x, y, z - 1), gradient(at(BA + 1), x - 1, y, z - 1)),
+					mix(u, gradient(at(AB + 1), x, y - 1, z - 1), gradient(at(BB + 1), x - 1, y - 1, z - 1))));
+			return std::clamp(result, -1.0, 1.0);
+		}
+
+		// The easing curves of ease(t, style), each from 0 at t = 0 to 1 at t = 1.
+		struct EaseStyle
+		{
+			std::string_view Name;
+			double (*Curve)(double t);
+		};
+
+		double EaseBounceOut(double t)
+		{
+			if (t < 1 / 2.75)
+				return 7.5625 * t * t;
+			if (t < 2 / 2.75)
+			{
+				t -= 1.5 / 2.75;
+				return 7.5625 * t * t + 0.75;
+			}
+			if (t < 2.5 / 2.75)
+			{
+				t -= 2.25 / 2.75;
+				return 7.5625 * t * t + 0.9375;
+			}
+			t -= 2.625 / 2.75;
+			return 7.5625 * t * t + 0.984375;
+		}
+
+		const std::vector<EaseStyle>& EaseStyles()
+		{
+			constexpr double c_Pi = 3.14159265358979323846;
+			constexpr double c_Back = 1.70158;
+			static const std::vector<EaseStyle> c_Styles = {
+				{ "linear", [](double t) { return t; } },
+				{ "in", [](double t) { return t * t * t; } },
+				{ "out", [](double t) { return 1 - std::pow(1 - t, 3); } },
+				{ "in out", [](double t) { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; } },
+				{ "sine in", [](double t) { return 1 - std::cos(t * c_Pi / 2); } },
+				{ "sine out", [](double t) { return std::sin(t * c_Pi / 2); } },
+				{ "sine in out", [](double t) { return -(std::cos(c_Pi * t) - 1) / 2; } },
+				{ "back in", [](double t) { return (c_Back + 1) * t * t * t - c_Back * t * t; } },
+				{ "back out", [](double t) { return 1 + (c_Back + 1) * std::pow(t - 1, 3) + c_Back * std::pow(t - 1, 2); } },
+				{ "bounce out", EaseBounceOut },
+				{ "elastic out", [](double t)
+					{
+						if (t <= 0 || t >= 1)
+							return t <= 0 ? 0.0 : 1.0;
+						return std::pow(2, -10 * t) * std::sin((t * 10 - 0.75) * (2 * c_Pi / 3)) + 1;
+					} },
+			};
+			return c_Styles;
+		}
+
+		// "#ff8800", "ff8800", "#f80" and the same with alpha ("#ff880080", "#f808"), as 0 to 1 values.
+		bool ParseHexColor(std::string_view text, double outRgba[4])
+		{
+			if (!text.empty() && text.front() == '#')
+				text.remove_prefix(1);
+			if (text.size() != 3 && text.size() != 4 && text.size() != 6 && text.size() != 8)
+				return false;
+			const bool shortForm = text.size() <= 4;
+			const size_t channels = shortForm ? text.size() : text.size() / 2;
+			outRgba[3] = 1.0;
+			for (size_t i = 0; i < channels; i++)
+			{
+				const std::string_view digits = shortForm ? text.substr(i, 1) : text.substr(i * 2, 2);
+				unsigned value = 0;
+				const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), value, 16);
+				if (error != std::errc() || end != digits.data() + digits.size())
+					return false;
+				outRgba[i] = shortForm ? value * 17 / 255.0 : value / 255.0;
+			}
+			return true;
 		}
 
 	}
@@ -594,6 +726,112 @@ namespace ForgeScript {
 				return Value();
 			std::uniform_int_distribution<size_t> pick(0, list->Items.size() - 1);
 			return list->Items[pick(c.GetVM().GetRandom())];
+		});
+
+		// true with chance p (0 never, 1 always): if random_chance(0.25) then drop a coin.
+		RegisterFunction("random_chance", 1, [](CallContext& c)
+		{
+			const double chance = c.Number(0);
+			return Value::FromBool(std::uniform_real_distribution<double>(0.0, 1.0)(c.GetVM().GetRandom()) < chance);
+		});
+		// A direction of length 1, any way round with the same chance.
+		RegisterFunction("random_direction", 0, [](CallContext& c)
+		{
+			std::mt19937_64& random = c.GetVM().GetRandom();
+			const double z = std::uniform_real_distribution<double>(-1.0, 1.0)(random);
+			const double angle = std::uniform_real_distribution<double>(0.0, 2 * 3.14159265358979323846)(random);
+			const double ring = std::sqrt(std::max(0.0, 1 - z * z));
+			return c.GetVM().MakeVector(ring * std::cos(angle), ring * std::sin(angle), z);
+		});
+		// A point on the ground (y is 0) inside a circle around (0, 0, 0), every spot with the same
+		// chance: add it to a position to spawn around it.
+		RegisterFunction("random_point_in_circle", 1, [](CallContext& c)
+		{
+			const double radius = FiniteNumber(c, 0, "random_point_in_circle");
+			if (radius < 0)
+				c.Error("random_point_in_circle needs a radius of 0 or more.");
+			std::mt19937_64& random = c.GetVM().GetRandom();
+			const double distance = radius * std::sqrt(std::uniform_real_distribution<double>(0.0, 1.0)(random));
+			const double angle = std::uniform_real_distribution<double>(0.0, 2 * 3.14159265358979323846)(random);
+			return c.GetVM().MakeVector(distance * std::cos(angle), 0, distance * std::sin(angle));
+		});
+
+		// ------------------------------------------------------------------ Noise, easing and colors
+
+		// Smooth noise from -1 to 1 that changes gently as the position moves: noise(x), noise(x, y) or
+		// noise(x, y, z). The same position always gives the same value (random_seed doesn't change it);
+		// add an offset for a different pattern.
+		RegisterFunction("noise", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() < 1 || c.Count() > 3)
+				c.Error("noise needs 1, 2 or 3 numbers, like: noise(x) or noise(x, y)");
+			if (c.Count() == 1 && c.Arg(0).IsObject() && IsObjectType(c.Arg(0), ObjectType::Vector))
+			{
+				const Vector* at = c.VectorArg(0);
+				if (!std::isfinite(at->X) || !std::isfinite(at->Y) || !std::isfinite(at->Z))
+					c.Error("noise needs ordinary numbers, but the position has infinity or not a number in it.");
+				return Value::FromNumber(PerlinNoise(at->X, at->Y, at->Z));
+			}
+			// A left-out coordinate is a fixed fraction, not 0: noise is 0 on whole-number grid lines, so
+			// noise(x) along y = 0 would hardly move.
+			const double x = FiniteNumber(c, 0, "noise");
+			const double y = c.Count() > 1 ? FiniteNumber(c, 1, "noise") : 0.318;
+			const double z = c.Count() > 2 ? FiniteNumber(c, 2, "noise") : 0.627;
+			return Value::FromNumber(PerlinNoise(x, y, z));
+		});
+		// ease(t, "out"): t from 0 to 1 bent into a curve, for smooth movement and animation. t is
+		// clamped to 0 to 1.
+		RegisterFunction("ease", 2, [](CallContext& c)
+		{
+			const double t = std::clamp(FiniteNumber(c, 0, "ease"), 0.0, 1.0);
+			const std::string style = Lower(Trim(c.Text(1)));
+			for (const EaseStyle& candidate : EaseStyles())
+			{
+				if (candidate.Name == style)
+					return Value::FromNumber(candidate.Curve(t));
+			}
+			std::string names;
+			for (const EaseStyle& candidate : EaseStyles())
+				names += std::string(names.empty() ? "" : ", ") + "\"" + std::string(candidate.Name) + "\"";
+			c.Error("'" + c.Text(1) + "' isn't an easing style. The styles are " + names + ".");
+		});
+		// color(r, g, b [, a]) with 0 to 1 values, or color("#ff8800"): the [r, g, b, a] list engine
+		// colors take.
+		RegisterFunction("color", AnyArity, [](CallContext& c)
+		{
+			VM& vm = c.GetVM();
+			if (c.Count() == 1 && c.Arg(0).IsObject() && IsObjectType(c.Arg(0), ObjectType::String))
+			{
+				double rgba[4] = { 0, 0, 0, 1 };
+				if (!ParseHexColor(c.Text(0), rgba))
+					c.Error("'" + c.Text(0) + "' isn't a color. Write it like \"#ff8800\" (red, green, blue) or \"#ff880080\" (with alpha).");
+				return vm.MakeList({ Value::FromNumber(rgba[0]), Value::FromNumber(rgba[1]), Value::FromNumber(rgba[2]), Value::FromNumber(rgba[3]) });
+			}
+			if (c.Count() < 3 || c.Count() > 4)
+				c.Error("color needs red, green and blue (and alpha) from 0 to 1, like: color(1, 0.5, 0), or a text like color(\"#ff8800\").");
+			return vm.MakeList({ Value::FromNumber(c.Number(0)), Value::FromNumber(c.Number(1)), Value::FromNumber(c.Number(2)),
+				Value::FromNumber(c.Count() > 3 ? c.Number(3) : 1.0) });
+		});
+		// hsv(hue, saturation, value [, alpha]), each from 0 to 1, as an [r, g, b, a] color. The hue goes
+		// round the color wheel: 0 red, 1/3 green, 2/3 blue, and 1 red again.
+		RegisterFunction("hsv", AnyArity, [](CallContext& c)
+		{
+			if (c.Count() < 3 || c.Count() > 4)
+				c.Error("hsv needs hue, saturation and value (and alpha) from 0 to 1, like: hsv(0.6, 1, 1)");
+			double hue = std::fmod(FiniteNumber(c, 0, "hsv"), 1.0);
+			if (hue < 0)
+				hue += 1.0;
+			const double saturation = std::clamp(FiniteNumber(c, 1, "hsv"), 0.0, 1.0);
+			const double value = std::clamp(FiniteNumber(c, 2, "hsv"), 0.0, 1.0);
+			const double sector = hue * 6;
+			const int index = static_cast<int>(sector) % 6;
+			const double part = sector - std::floor(sector);
+			const double p = value * (1 - saturation);
+			const double q = value * (1 - saturation * part);
+			const double t = value * (1 - saturation * (1 - part));
+			const double table[6][3] = { { value, t, p }, { q, value, p }, { p, value, t }, { p, q, value }, { t, p, value }, { value, p, q } };
+			return c.GetVM().MakeList({ Value::FromNumber(table[index][0]), Value::FromNumber(table[index][1]),
+				Value::FromNumber(table[index][2]), Value::FromNumber(c.Count() > 3 ? c.Number(3) : 1.0) });
 		});
 
 		// ------------------------------------------------------------------ Time
@@ -1086,6 +1324,94 @@ namespace ForgeScript {
 			return Value::FromNumber(total / static_cast<double>(numbers.size()));
 		});
 
+		// Each item once, the first time it comes, in order: [3, 1, 3, 2].unique() is [3, 1, 2].
+		// Lists and maps count as the same when their items are.
+		RegisterMethod(ListMethods, "unique", 0, [selfList](CallContext& c)
+		{
+			VM& vm = c.GetVM();
+			const std::vector<Value>& items = selfList(c)->Items;
+			std::vector<Value> kept;
+			// Numbers and text are looked up quickly; other values are compared with the ones kept.
+			std::unordered_set<double> numbers;
+			std::unordered_set<std::string_view> texts;
+			for (const Value& item : items)
+			{
+				bool seen = false;
+				if (item.IsNumber())
+					seen = !numbers.insert(item.AsNumber() == 0 ? 0.0 : item.AsNumber()).second;
+				else if (IsObjectType(item, ObjectType::String))
+					seen = !texts.insert(As<String>(item)->Text).second;
+				else
+					seen = std::any_of(kept.begin(), kept.end(), [&item](const Value& other) { return ContentsEqual(item, other); });
+				if (!seen)
+					kept.push_back(item);
+			}
+			return vm.MakeList(std::move(kept));
+		});
+		// The items of the lists inside, one level deep: [[1, 2], [3], 4].flatten() is [1, 2, 3, 4].
+		RegisterMethod(ListMethods, "flatten", 0, [selfList](CallContext& c)
+		{
+			std::vector<Value> flat;
+			for (const Value& item : selfList(c)->Items)
+			{
+				if (IsObjectType(item, ObjectType::List))
+				{
+					const std::vector<Value>& inner = As<List>(item)->Items;
+					flat.insert(flat.end(), inner.begin(), inner.end());
+				}
+				else
+					flat.push_back(item);
+			}
+			return c.GetVM().MakeList(std::move(flat));
+		});
+		// The list cut into lists of 'size' items (the last may be shorter): rows of a grid, pages of a
+		// menu.
+		RegisterMethod(ListMethods, "chunk", 1, [selfList](CallContext& c)
+		{
+			VM& vm = c.GetVM();
+			const int64_t size = c.Integer(0);
+			if (size < 1)
+				c.Error("chunk needs a size of 1 or more, like: items.chunk(3)");
+			const std::vector<Value> items = selfList(c)->Items;
+			Value result = vm.MakeList();
+			Handle keep(vm, result);
+			for (size_t start = 0; start < items.size(); start += static_cast<size_t>(size))
+			{
+				const size_t end = std::min(items.size(), start + static_cast<size_t>(size));
+				As<List>(result)->Items.push_back(vm.MakeList(std::vector<Value>(items.begin() + static_cast<std::ptrdiff_t>(start),
+					items.begin() + static_cast<std::ptrdiff_t>(end))));
+			}
+			return result;
+		});
+		// The item for which 'fn' gives the biggest (or smallest) number, the first one on a tie, or
+		// nothing for an empty list: enemies.min_by(function(e) return e.distance_to(me) end).
+		auto bestBy = [selfList](CallContext& c, const char* name, bool biggest) -> Value
+		{
+			VM& vm = c.GetVM();
+			if (!c.IsCallable(0))
+				c.Error(std::string(name) + " needs a function that gives a number for each item, like: enemies." + name +
+					"(function(enemy) return enemy.health end)");
+			const std::vector<Value> snapshot = selfList(c)->Items;
+			Value held = vm.MakeList(snapshot);
+			Handle keep(vm, held);
+			Value best;
+			double bestScore = 0;
+			for (size_t i = 0; i < snapshot.size(); i++)
+			{
+				const Value score = vm.CallFromNative(c.Arg(0), { snapshot[i] });
+				if (!score.IsNumber())
+					c.Error(std::string(name) + "'s function must give a number for each item, but gave " + vm.TypeOf(score) + ".");
+				if (i == 0 || (biggest ? score.AsNumber() > bestScore : score.AsNumber() < bestScore))
+				{
+					best = snapshot[i];
+					bestScore = score.AsNumber();
+				}
+			}
+			return best;
+		};
+		RegisterMethod(ListMethods, "max_by", 1, [bestBy](CallContext& c) { return bestBy(c, "max_by", true); });
+		RegisterMethod(ListMethods, "min_by", 1, [bestBy](CallContext& c) { return bestBy(c, "min_by", false); });
+
 		// ------------------------------------------------------------------ Text
 
 		auto selfText = [](CallContext& c) -> const std::string& { return As<String>(c.Self())->Text; };
@@ -1242,6 +1568,46 @@ namespace ForgeScript {
 			return Value::FromBool(ok);
 		});
 		RegisterMethod(TextMethods, "is_empty", 0, [selfText](CallContext& c) { return Value::FromBool(selfText(c).empty()); });
+
+		// "sword of fire".capitalize() is "Sword of fire": the first letter in capitals, the rest as it is.
+		RegisterMethod(TextMethods, "capitalize", 0, [selfText](CallContext& c)
+		{
+			std::string text = selfText(c);
+			if (!text.empty())
+				text[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(text[0])));
+			return c.GetVM().MakeText(text);
+		});
+		// "sword of fire".title() is "Sword Of Fire": the first letter of each word in capitals.
+		RegisterMethod(TextMethods, "title", 0, [selfText](CallContext& c)
+		{
+			std::string text = selfText(c);
+			bool wordStart = true;
+			for (char& ch : text)
+			{
+				const unsigned char byte = static_cast<unsigned char>(ch);
+				if (std::isspace(byte))
+					wordStart = true;
+				else
+				{
+					if (wordStart)
+						ch = static_cast<char>(std::toupper(byte));
+					wordStart = false;
+				}
+			}
+			return c.GetVM().MakeText(text);
+		});
+		// How many times 'part' is in the text, without overlapping: "banana".count("an") is 2.
+		RegisterMethod(TextMethods, "count", 1, [selfText](CallContext& c)
+		{
+			const std::string& text = selfText(c);
+			const std::string part = c.Text(0);
+			if (part.empty())
+				c.Error("count needs some text to look for, like: line.count(\"a\")");
+			double count = 0;
+			for (size_t at = text.find(part); at != std::string::npos; at = text.find(part, at + part.size()))
+				count++;
+			return Value::FromNumber(count);
+		});
 
 		// ------------------------------------------------------------------ Maps
 

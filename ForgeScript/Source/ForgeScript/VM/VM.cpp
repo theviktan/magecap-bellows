@@ -194,6 +194,11 @@ namespace ForgeScript {
 		double number = Number(index);
 		if (number != std::floor(number))
 			throw RuntimeError(m_Name + " needs a whole number for value " + std::to_string(index + 1) + ", but got " + FormatNumber(number) + ".");
+		// Past about 9.2 quintillion (and at infinity) the number has no int64_t, and converting it
+		// anyway is undefined behavior in C++.
+		if (std::fabs(number) >= 9.2e18)
+			throw RuntimeError(m_Name + " needs a whole number between -9.2e18 and 9.2e18 for value " + std::to_string(index + 1) +
+				", but got " + FormatNumber(number) + ".");
 		return static_cast<int64_t>(number);
 	}
 

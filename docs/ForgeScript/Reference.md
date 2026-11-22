@@ -90,15 +90,17 @@ Long text: `"""` ... `"""`, over any number of lines. `"` needs no escape; `{ }`
 | Game math | `move_toward(from, to, step)` (numbers or vectors), `inverse_lerp(a, b, value)`, `remap(value, from_low, from_high, to_low, to_high)`, `smoothstep(a, b, x)`, `wrap(value, low, high)`, `snapped(value, step)` |
 | Lists of numbers | `range(from, to [, step])` (both ends included, counts down when `to` is smaller), `zip(first, second)` |
 | JSON | `to_json(value)`, `from_json(text)` |
-| Random | `random_seed(n)`, `random()` (0 to 1), `random(n)` (1 to n), `random(a, b)`, `random number from (a) to (b)`, `random item from (list)` |
+| Random | `random_seed(n)`, `random()` (0 to 1), `random(n)` (1 to n), `random(a, b)`, `random number from (a) to (b)`, `random item from (list)`, `random_chance(p)` (true with chance p), `random_direction()` (length 1), `random_point_in_circle(radius)` (on the ground, y is 0) |
+| Easing and noise | `ease(t, style)` with style `"linear"`, `"in"`, `"out"`, `"in out"`, `"sine in"`, `"sine out"`, `"sine in out"`, `"back in"`, `"back out"`, `"bounce out"`, `"elastic out"` (t from 0 to 1); `noise(x [, y [, z]])` or `noise(position)`: smooth, -1 to 1, the same every run |
+| Colors | `color(r, g, b [, a])`, `color("#ff8800")` (also `"#f80"`, and with alpha), `hsv(hue, saturation, value [, alpha])`: each an `[r, g, b, a]` list from 0 to 1 |
 | Time | `time()` (seconds since start), `frame()` |
 | Vectors | `vector(x, y [, z])`, `distance(a, b)`, `distance from (a) to (b)` |
 
 ## Methods
 
-**Text:** `length` · `upper()` · `lower()` · `trim()` · `split([separator])` · `contains(x)` · `starts_with(x)` · `ends_with(x)` · `find(x)` · `replace(a, b)` · `slice(start [, end])` · `repeat(n)` · `reverse()` · `pad_start(width [, fill])` · `pad_end(width [, fill])` · `characters()` · `is_number()` · `is_empty()`
+**Text:** `length` · `upper()` · `lower()` · `trim()` · `split([separator])` · `contains(x)` · `starts_with(x)` · `ends_with(x)` · `find(x)` · `replace(a, b)` · `slice(start [, end])` · `repeat(n)` · `reverse()` · `pad_start(width [, fill])` · `pad_end(width [, fill])` · `characters()` · `is_number()` · `is_empty()` · `capitalize()` · `title()` · `count(part)`
 
-**Lists:** `length` · `first` · `last` · `add(x)` · `insert(position, x)` · `remove(x)` · `remove_at(position)` · `pop()` · `clear()` · `contains(x)` · `index_of(x)` · `is_empty()` · `copy()` · `reverse()` · `shuffle()` · `pick()` · `sort()` · `sort_by(f)` · `join([separator])` · `slice(start [, end])` · `sum()` · `average()` · `min()` · `max()` · `count(f or value)` · `remove_where(f)` · `any(f)` · `all(f)` · `map(f)` · `filter(f)` · `find(f)` · `each(f)`
+**Lists:** `length` · `first` · `last` · `add(x)` · `insert(position, x)` · `remove(x)` · `remove_at(position)` · `pop()` · `clear()` · `contains(x)` · `index_of(x)` · `is_empty()` · `copy()` · `reverse()` · `shuffle()` · `pick()` · `sort()` · `sort_by(f)` · `join([separator])` · `slice(start [, end])` · `sum()` · `average()` · `min()` · `max()` · `count(f or value)` · `remove_where(f)` · `any(f)` · `all(f)` · `map(f)` · `filter(f)` · `find(f)` · `each(f)` · `unique()` · `flatten()` · `chunk(size)` · `max_by(f)` · `min_by(f)`
 
 **Maps:** `length` · `keys()` · `values()` · `has(key)` · `get(key [, default])` · `merge(other)` · `remove(key)` · `clear()` · `copy()` · `is_empty()`
 

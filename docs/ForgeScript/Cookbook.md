@@ -497,8 +497,9 @@ With entities, compare their positions: `get_entities("Enemy")` lists the entiti
 **How it works.** The loop keeps the best one seen so far. `filter` keeps the items for which the
 function gives back true.
 
-**Going further.** Compare squared distances (`(a - b).dot(a - b)`) to skip a square root when
-there are hundreds of enemies, or sort a copy: `sort targets by function(p) return p.distance_to(origin) end`.
+**Going further.** `positions.min_by(function(p) return p.distance_to(origin) end)` does the same in
+one line. Compare squared distances (`(a - b).dot(a - b)`) to skip a square root when there are
+hundreds of enemies.
 
 ---
 
@@ -1166,8 +1167,9 @@ end
 **How it works.** An easing function turns a straight 0-to-1 into a curve: slow at the ends, or
 overshooting. `tween` takes the easing as a value, so any function can be passed in.
 
-**Going further.** Most easing curves on easings.net are a line or two of math like
-`ease_out_back`.
+**Going further.** ForgeScript has the common curves built in: `ease(t, "back out")` is the same as
+`ease_out_back(t)`, and `"in"`, `"out"`, `"in out"`, `"bounce out"` and `"elastic out"` are there
+too. Write your own, as here, when you want a curve of your own.
 
 ### 30. Money, time and plurals
 
