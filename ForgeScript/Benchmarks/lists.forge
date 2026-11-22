@@ -1,0 +1,13 @@
+# Lists: building, indexing, sorting and going through them.
+random_seed(7)
+set items to []
+for i from 1 to 30000 do
+	add random(1000) to items
+end
+sort items
+set total to 0
+for each item, position in items do
+	if position % 3 is 0 then add item to total end
+end
+say total
+say items[1] <= items[-1]

@@ -1,0 +1,13 @@
+# Calls on objects made from a kind, with fields read and changed.
+kind Counter
+	set count to 0
+	function bump(step)
+		add step to my count
+		return my count
+	end
+end
+set counter to new Counter()
+repeat 100000 times
+	counter.bump(2)
+end
+say counter.count

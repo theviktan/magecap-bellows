@@ -1,0 +1,13 @@
+# Tasks: many at once, each waiting frame by frame.
+set finished to 0
+function worker(frames)
+	repeat frames times
+		wait 1 frame
+	end
+	add 1 to finished
+end
+for i from 1 to 500 do
+	start worker(20 + i % 10)
+end
+wait until finished is 500
+say finished

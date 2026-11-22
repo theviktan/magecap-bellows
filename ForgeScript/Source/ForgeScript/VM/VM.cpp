@@ -2581,6 +2581,14 @@ namespace ForgeScript {
 		const uint8_t* code = frame->Function->Fn->Chunk.GetCode().data();
 		const Value* constants = frame->Function->Fn->Chunk.GetConstants().data();
 		uint64_t instructions = 0;
+		// Every instruction this run executes when VMConfig::CountInstructions (or a limit) is on, added
+		// to the VM's total however the run ends.
+		struct CountOnExit
+		{
+			uint64_t& Total;
+			uint64_t Executed = 0;
+			~CountOnExit() { Total += Executed; }
+		} executed { m_InstructionsRun };
 		task->State = TaskState::Running;
 
 #define FORGESCRIPT_REFRESH()                                                         \
@@ -2610,10 +2618,15 @@ namespace ForgeScript {
 		dispatch:
 			if (m_BytesAllocated > m_NextGC && m_GCPaused == 0)
 				CollectGarbage();
-			if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
+			// One test for both, and none of their work in the usual run, which keeps the loop fast.
+			if (m_Config.InstructionLimit || m_Config.CountInstructions)
 			{
-				instructions = 0;
-				FORGESCRIPT_FAIL("This script ran too long without waiting. Add a 'wait' inside long loops.");
+				executed.Executed++;
+				if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
+				{
+					instructions = 0;
+					FORGESCRIPT_FAIL("This script ran too long without waiting. Add a 'wait' inside long loops.");
+				}
 			}
 			if (m_DebugActive && DebugLineReached(task, frame))
 			{
