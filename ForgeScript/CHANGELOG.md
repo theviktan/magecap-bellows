@@ -14,6 +14,9 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **Hosts share `ease()`'s curves** (for Bellows' tweens): `ForgeScript/Core/Easing.h` has
+  `TryEase(style, t, outValue)` and `EaseStyleNames()`, and `ease()` now uses them, so an engine's
+  tweens and a script's `ease()` give exactly the same numbers. Nothing a script sees changes.
 - **A list that holds itself no longer freezes or crashes** (audit S-9, older than 1.6.0). A list,
   map or object that holds itself is now shown as `[...]`, `{...}` or `Name {...}` where it comes
   back: `[1, [...], [...]]`. Before, a list added to itself four times took 27 seconds to `say`, and

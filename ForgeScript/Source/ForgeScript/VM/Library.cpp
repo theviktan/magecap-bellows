@@ -1,5 +1,6 @@
 #include "ForgeScript/VM/VM.h"
 
+#include "ForgeScript/Core/Easing.h"
 #include "ForgeScript/Core/Utf8.h"
 #include "ForgeScript/Tools/Json.h"
 
@@ -492,56 +493,6 @@ namespace ForgeScript {
 			return std::clamp(result, -1.0, 1.0);
 		}
 
-		// The easing curves of ease(t, style), each from 0 at t = 0 to 1 at t = 1.
-		struct EaseStyle
-		{
-			std::string_view Name;
-			double (*Curve)(double t);
-		};
-
-		double EaseBounceOut(double t)
-		{
-			if (t < 1 / 2.75)
-				return 7.5625 * t * t;
-			if (t < 2 / 2.75)
-			{
-				t -= 1.5 / 2.75;
-				return 7.5625 * t * t + 0.75;
-			}
-			if (t < 2.5 / 2.75)
-			{
-				t -= 2.25 / 2.75;
-				return 7.5625 * t * t + 0.9375;
-			}
-			t -= 2.625 / 2.75;
-			return 7.5625 * t * t + 0.984375;
-		}
-
-		const std::vector<EaseStyle>& EaseStyles()
-		{
-			constexpr double c_Pi = 3.14159265358979323846;
-			constexpr double c_Back = 1.70158;
-			static const std::vector<EaseStyle> c_Styles = {
-				{ "linear", [](double t) { return t; } },
-				{ "in", [](double t) { return t * t * t; } },
-				{ "out", [](double t) { return 1 - std::pow(1 - t, 3); } },
-				{ "in out", [](double t) { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; } },
-				{ "sine in", [](double t) { return 1 - std::cos(t * c_Pi / 2); } },
-				{ "sine out", [](double t) { return std::sin(t * c_Pi / 2); } },
-				{ "sine in out", [](double t) { return -(std::cos(c_Pi * t) - 1) / 2; } },
-				{ "back in", [](double t) { return (c_Back + 1) * t * t * t - c_Back * t * t; } },
-				{ "back out", [](double t) { return 1 + (c_Back + 1) * std::pow(t - 1, 3) + c_Back * std::pow(t - 1, 2); } },
-				{ "bounce out", EaseBounceOut },
-				{ "elastic out", [](double t)
-					{
-						if (t <= 0 || t >= 1)
-							return t <= 0 ? 0.0 : 1.0;
-						return std::pow(2, -10 * t) * std::sin((t * 10 - 0.75) * (2 * c_Pi / 3)) + 1;
-					} },
-			};
-			return c_Styles;
-		}
-
 		// "#ff8800", "ff8800", "#f80" and the same with alpha ("#ff880080", "#f808"), as 0 to 1 values.
 		bool ParseHexColor(std::string_view text, double outRgba[4])
 		{
@@ -999,16 +950,13 @@ namespace ForgeScript {
 		// clamped to 0 to 1.
 		RegisterFunction("ease", 2, [](CallContext& c)
 		{
-			const double t = std::clamp(FiniteNumber(c, 0, "ease"), 0.0, 1.0);
-			const std::string style = Lower(Trim(c.Text(1)));
-			for (const EaseStyle& candidate : EaseStyles())
-			{
-				if (candidate.Name == style)
-					return Value::FromNumber(candidate.Curve(t));
-			}
+			const double t = FiniteNumber(c, 0, "ease");
+			double result = 0.0;
+			if (TryEase(c.Text(1), t, result))
+				return Value::FromNumber(result);
 			std::string names;
-			for (const EaseStyle& candidate : EaseStyles())
-				names += std::string(names.empty() ? "" : ", ") + "\"" + std::string(candidate.Name) + "\"";
+			for (std::string_view name : EaseStyleNames())
+				names += std::string(names.empty() ? "" : ", ") + "\"" + std::string(name) + "\"";
 			c.Error("'" + c.Text(1) + "' isn't an easing style. The styles are " + names + ".");
 		});
 		// color(r, g, b [, a]) with 0 to 1 values, or color("#ff8800"): the [r, g, b, a] list engine

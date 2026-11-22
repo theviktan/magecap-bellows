@@ -343,6 +343,14 @@ m_Paused = m_VM.IsStopped();
   A step that reaches a `wait` or the end of its handler returns with nothing stopped; the task stops on its next line when it runs again. Only code that may wait can stop: functions that built-in functions call back (`sort_by`, `map`, `filter`, a kind's `to_text`) and `VM::Call` pass over their breakpoints. Event handlers run as their own tasks, so step into one with a breakpoint in it. A task that reaches a breakpoint while another is stopped waits its turn; the handler is called for it when the first goes on. `UnloadModule` and `CancelTasks` end the stops of the tasks they cancel. `StopDebugging()` turns the debugger off before a game shuts down: it removes every breakpoint, pause and step and cancels the held tasks without calling the handler. Variables are shown without running script code (a kind's `to_text` is not called), and long values are shortened. Lines are checked only while there are breakpoints, a pause request or a step, so a game without them runs at full speed. In Bellows, `ForgeScriptRuntime::SetBreakpoints` and `SetDebugHandler` keep both across play sessions, and `GetMachine()` gives the session's VM for the buttons above. Its `Stop()` turns the debugger off before sending `destroyed`, and `Reload` refuses (returning false with a message) while a script is stopped.
 - **Interactive console:** run typed lines in one module with `CompileOptions::Repl = true`, which prints the value of a line that is only an expression (see `ForgeScript/CLI/Source/Main.cpp`).
 - **Repeatable random numbers** for replays and tests: `m_VM.SetRandomSeed(1234);`
+- **The same easing curves as `ease()`** for engine tweens and animation (`ForgeScript/Core/Easing.h`, included by `ForgeScript.h`). `TryEase` matches a style name the way `ease()` does (spaces around it and letter case don't matter) and clamps `t` to 0 to 1; `EaseStyleNames()` lists the 11 names for your own error message:
+
+```cpp
+double eased = 0.0;
+if (!ForgeScript::TryEase(style, elapsed / duration, eased))
+	return Error("'" + style + "' isn't an easing style.");
+position = start + (target - start) * eased;
+```
 
 ---
 
