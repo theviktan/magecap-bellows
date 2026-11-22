@@ -1003,8 +1003,19 @@ TEST_CASE("LanguageServerOffersQuickFixes")
 	REQUIRE_EQ(actions.AsArray().size(), static_cast<size_t>(1));
 	CHECK_EQ(onlyEdit(actions.AsArray()[0]).GetString("newText"), std::string("add 1 to x"));
 
+	// A warning's fix too: a name that's never set, close to one that is.
+	session.Change(uri, "set health to 1\nsay helth\n", 5);
+	actions = actionsOn(1);
+	REQUIRE_EQ(actions.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(actions.AsArray()[0].GetString("title"), std::string("Change to 'health'"));
+	CHECK_EQ(actions.AsArray()[0].Get("diagnostics").AsArray()[0].Get("severity").AsNumber(), 2.0);
+	edit = onlyEdit(actions.AsArray()[0]);
+	CHECK_EQ(edit.GetString("newText"), std::string("health"));
+	CHECK_EQ(edit.Get("range").Get("start").Get("character").AsNumber(), 4.0);
+	CHECK_EQ(edit.Get("range").Get("end").Get("character").AsNumber(), 9.0);
+
 	// No mistake, no fixes.
-	session.Change(uri, "set x to 1\n", 5);
+	session.Change(uri, "set x to 1\n", 6);
 	CHECK(actionsOn(0).AsArray().empty());
 }
 

@@ -1449,6 +1449,9 @@ The script's top level runs again in the new version, so a line there that creat
 `save_data(name, value)` keeps a value after the game closes, and `load_data(name, default)` gets it back the next time. The value can be a number, text, true/false, a vector, `nothing`, or a list or map of these, so one map usually holds a whole save:
 
 ```forge
+set rent_per_second to 0.5
+set save to nothing     # set at the top, so `when created` and `save_progress` share it
+
 when created
 	set save to load_data("starfall", { credits: 100, ships: [], saved_at: real_time() })
 	# real_time() counts while the game is closed, so the station earns rent while you're away.

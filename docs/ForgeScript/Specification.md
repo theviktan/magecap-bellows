@@ -597,6 +597,10 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 - In 1.6.0: a timer whose time is written as a negative number (`every -1 seconds`), which works like 0.
 - In 1.6.0: a call to one of the script's functions with a plain value of another type than its parameter's `as` type: "'heal' takes a number for 'amount' (amount as number), but this is text."
 - In 1.6.0: a `match` with no `otherwise` whose cases are all choices of one set ([5.1](#51-variables-and-constants)) and leave one out: "This match has no case for State.jumping, and no otherwise."
+- In 1.7.0: a `repeat forever`, `while true` or `until false` loop that has no `wait`, `stop`, `return` or `fail` inside and calls nothing that might wait: "This 'repeat forever' loop never waits, so nothing else in the game can run while it does."
+- In 1.7.0: a name read as a value that nothing sets: not this script (anywhere in it), not a script it uses, not the language and not the engine. "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean 'health'?" A name is suggested only when it is the one close name. Calls (`helth()`) are left alone.
+
+A mistake or warning whose message says exactly what to write instead also carries that change, so an editor can offer it as a one-click fix (1.7.0; see the language server's quick fixes).
 
 ---
 

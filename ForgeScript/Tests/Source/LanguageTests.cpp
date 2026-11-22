@@ -497,6 +497,105 @@ TEST_CASE("MistakesThatNameTheirFixCarryIt")
 	CHECK_FALSE(vm.FindMistakes("set x to 1\nsay x += 5\n", "t.forge")[0].HasFix());
 }
 
+TEST_CASE("ANameThatIsNeverSetWarns")
+{
+	VM vm;
+	auto warnings = [&vm](const std::string& source, std::vector<std::string> engine = {})
+	{
+		std::vector<CompileError> all = vm.FindWarnings(source, "t.forge", engine);
+		std::vector<CompileError> found;
+		for (CompileError& warning : all)
+		{
+			if (warning.Message.find("isn't set anywhere") != std::string::npos)
+				found.push_back(std::move(warning));
+		}
+		return found;
+	};
+
+	// The misspelling, with the one close name and its fix; inside text and inside a function too.
+	std::vector<CompileError> found = warnings("set health to 10\nsay helth\nsay \"{helth} left\"\nfunction f()\n\tsay helth\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(3));
+	CHECK_EQ(found[0].Message, std::string("'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean 'health'?"));
+	CHECK_EQ(found[0].Line, 2);
+	CHECK_EQ(found[0].Column, 5);
+	CHECK_EQ(found[0].FixTitle, std::string("Change to 'health'"));
+	CHECK_EQ(found[0].FixText, std::string("health"));
+	CHECK_EQ(found[0].FixColumn, 5);
+	CHECK_EQ(found[0].FixEndColumn, 10);
+	CHECK_EQ(found[1].Line, 3);
+	CHECK_EQ(found[2].Line, 5);
+
+	// No close name, or two of them: no guess.
+	found = warnings("say totally_unknown\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("'totally_unknown' isn't set anywhere, so this line will stop with a mistake when it runs."));
+	CHECK_FALSE(found[0].HasFix());
+	found = warnings("set cart to 1\nset card to 2\nsay carx\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message.find("Did you mean"), std::string::npos);
+	// A name from another language gets its hint.
+	CHECK_NE(warnings("say True\n")[0].Message.find("In ForgeScript, write: true"), std::string::npos);
+	// A misspelled kind after 'new'.
+	CHECK_NE(warnings("kind Enemy\nend\nset e to new Enmy()\n")[0].Message.find("Did you mean 'Enemy'?"), std::string::npos);
+
+	// Set anywhere counts: later in the script, only inside an 'if', as a function, kind or choices,
+	// built in, or the engine's (named by the checker).
+	CHECK(warnings("function show_it()\n\tsay later\nend\nset later to 1\n").empty());
+	CHECK(warnings("if random(1, 2) is 1 then\n\tset bonus to 2\nend\nsay bonus\n").empty());
+	CHECK(warnings("function hit()\n\treturn 1\nend\nkind Box\nend\nchoices Color are red, green\nsay hit\nsay Box\nsay Color.red\n").empty());
+	CHECK(warnings("say pi\nsay length\n").empty());
+	CHECK(warnings("say Material\n", { "Material" }).empty());
+	CHECK(warnings("say Material\n").size() == 1);
+	// Calls are left alone: an engine's functions are only known when the checker is told about them.
+	CHECK(warnings("find_entity(\"Hero\")\nsay find_entity(\"Hero\")\n").empty());
+	// Set only inside one 'when' block, a name is that block's own: another block can't read it.
+	// Set at the top too, both share it (the Cookbook's recipes do this).
+	found = warnings("when ping\n\tset _target to 1\nend\nwhen pong\n\tsay _target\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Line, 5);
+	CHECK(warnings("set _target to nothing\nwhen ping\n\tset _target to 1\nend\nwhen pong\n\tsay _target\nend\n").empty());
+	// A function further down that sets a script variable counts (it sets the script's one).
+	CHECK(warnings("set count to 0\nfunction show_count()\n\tsay count\nend\nfunction bump()\n\tset count to count + 1\nend\n").empty());
+
+	// Locals and parameters are never warned about.
+	CHECK(warnings("function f(a)\n\tset b to a\n\tsay b\nend\nfor each x in [1]\n\tsay x\nend\n").empty());
+}
+
+TEST_CASE("ANameFromAUsedScriptIsSet")
+{
+	VM vm;
+	vm.SetModuleLoader([](const std::string& path, std::string& outName, std::string& outSource)
+	{
+		outName = path + ".forge";
+		if (path == "helpers")
+		{
+			outSource = "use \"deeper\"\nset shared_score to 3\n";
+			return true;
+		}
+		if (path == "deeper")
+		{
+			outSource = "set deep_value to 1\n";
+			return true;
+		}
+		return false;
+	});
+	auto neverSet = [&vm](const std::string& source)
+	{
+		size_t count = 0;
+		for (const CompileError& warning : vm.FindWarnings(source, "t.forge", {}))
+			count += warning.Message.find("isn't set anywhere") != std::string::npos ? 1 : 0;
+		return count;
+	};
+	// Set in a used script, or in one that script uses.
+	CHECK_EQ(neverSet("use \"helpers\"\nsay shared_score\nsay deep_value\n"), static_cast<size_t>(0));
+	// A misspelling of it still warns, with the used script's name as the suggestion.
+	const std::vector<CompileError> found = vm.FindWarnings("use \"helpers\"\nsay shared_scor\n", "t.forge", {});
+	REQUIRE_FALSE(found.empty());
+	CHECK_NE(found[0].Message.find("Did you mean 'shared_score'?"), std::string::npos);
+	// A used script that can't be found keeps the warning quiet: its own mistake says so.
+	CHECK_EQ(neverSet("use \"missing\"\nsay anything\n"), static_cast<size_t>(0));
+}
+
 TEST_CASE("RepeatForeverWithoutAWaitWarns")
 {
 	VM vm;
