@@ -2075,20 +2075,83 @@ namespace ForgeScript {
 				" in a way rename can't follow yet (like a word of a phrase), so renaming it could break the script.";
 		}
 
-		// Rename changes only this script, so a script-level name must not be needed by another open one.
+		// Rename changes only this script, so a script-level name must not be needed by another script:
+		// any script in the game that uses this one, directly or through others, open or not.
 		if (scriptLevel)
+			return CheckNoOtherScriptNeeds(document, oldName);
+		return "";
+	}
+
+	std::string LanguageServer::CheckNoOtherScriptNeeds(const Document& document, const std::string& oldName) const
+	{
+		// Every script of the game: the editor's text for open ones, the file for the rest. A script that
+		// isn't a file yet (an unsaved editor tab) has no folder, so only the open scripts are looked at.
+		std::map<std::filesystem::path, std::string> scripts;
+		for (const auto& [otherUri, other] : m_Documents)
+			scripts[other.Path.lexically_normal()] = other.Text;
+		const std::filesystem::path useFolder = document.Path.is_absolute() ? FindUseFolder(document.Path) : std::filesystem::path();
+		constexpr size_t c_MaxEntries = 200'000;
+		constexpr uintmax_t c_MaxScriptBytes = 4'000'000;
+		size_t entries = 0;
+		std::error_code error;
+		if (!useFolder.empty())
 		{
-			for (const auto& [otherUri, other] : m_Documents)
+			for (std::filesystem::recursive_directory_iterator it(useFolder, std::filesystem::directory_options::skip_permission_denied, error), end;
+				!error && it != end; it.increment(error))
 			{
-				if (other.Path == document.Path)
+				if (++entries > c_MaxEntries)
+					return "There are too many files in '" + PathToUtf8(useFolder) + "' to find every script that uses this one, so rename "
+						"can't be sure it changes them all. Rename '" + oldName + "' by hand.";
+				std::error_code fileError;
+				if (it->path().extension() != ".forge" || !it->is_regular_file(fileError) || it->file_size(fileError) > c_MaxScriptBytes)
 					continue;
-				for (const Symbol& symbol : FindScriptSymbols(other.Text))
-				{
-					if (symbol.SymbolKind == Symbol::Kind::Module &&
-						ResolveUsePath(FindUseFolder(other.Path), symbol.File).lexically_normal() == document.Path)
-						return "'" + PathToUtf8(other.Path.filename()) + "' uses this script, and rename only changes this one. Rename '" +
-							oldName + "' in both by hand, or close that script first.";
-				}
+				const std::filesystem::path path = it->path().lexically_normal();
+				std::string text;
+				if (scripts.count(path) == 0 && ReadTextFile(path, text))
+					scripts[path] = std::move(text);
+			}
+		}
+
+		// Which scripts each one uses, then every script that reaches this one, and through which.
+		std::map<std::filesystem::path, std::vector<std::filesystem::path>> uses;
+		for (const auto& [path, text] : scripts)
+		{
+			for (const Symbol& symbol : FindScriptSymbols(text))
+			{
+				if (symbol.SymbolKind == Symbol::Kind::Module)
+					uses[path].push_back(ResolveUsePath(FindUseFolder(path), symbol.File).lexically_normal());
+			}
+		}
+		const std::filesystem::path self = document.Path.lexically_normal();
+		std::map<std::filesystem::path, std::filesystem::path> reachedThrough; // user -> the script it uses on the way
+		std::vector<std::filesystem::path> waiting{ self };
+		while (!waiting.empty())
+		{
+			const std::filesystem::path used = waiting.back();
+			waiting.pop_back();
+			for (const auto& [user, list] : uses)
+			{
+				if (user == self || reachedThrough.count(user) || std::find(list.begin(), list.end(), used) == list.end())
+					continue;
+				reachedThrough[user] = used;
+				waiting.push_back(user);
+			}
+		}
+
+		// Only a script that mentions the name can be broken by renaming it.
+		for (const auto& [user, through] : reachedThrough)
+		{
+			Lexer lexer(scripts[user]);
+			const std::vector<Token> tokens = lexer.Tokenize();
+			for (size_t i = 0; i < tokens.size(); i++)
+			{
+				if (tokens[i].Type != TokenType::Identifier || tokens[i].Lexeme != oldName)
+					continue;
+				if (i > 0 && (tokens[i - 1].Type == TokenType::Dot || tokens[i - 1].Type == TokenType::Possessive || tokens[i - 1].Type == TokenType::My))
+					continue;
+				const std::string how = through == self ? "uses this script" : "uses this script through '" + PathToUtf8(through.filename()) + "'";
+				return "'" + PathToUtf8(user.filename()) + "' " + how + " and says '" + oldName + "' on line " + std::to_string(tokens[i].Line) +
+					", and rename only changes this script. Rename '" + oldName + "' in both by hand.";
 			}
 		}
 		return "";

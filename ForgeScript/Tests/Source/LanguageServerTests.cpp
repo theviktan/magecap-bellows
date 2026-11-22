@@ -862,6 +862,39 @@ TEST_CASE("LanguageServerLeavesNamesOfOtherScriptsAlone")
 		(std::vector<std::string> { "0:16-17", "1:8-9" }));
 }
 
+TEST_CASE("LanguageServerRenameFindsScriptsThatArentOpen")
+{
+	TempFolder project("rename-closed");
+	project.Write("Game.bproject", "{ \"Name\": \"Game\" }");
+	const std::string helpers = "function double(n)\n\treturn n * 2\nend\nfunction half(n)\n\treturn n / 2\nend\n";
+	project.Write("Assets/Scripts/Helpers.forge", helpers);
+	project.Write("Assets/Scripts/Main.forge", "use \"Scripts/Helpers\"\nsay double(4)\n");
+	Session session;
+	const std::string helpersUri = LanguageServer::PathToUri(project.Path / "Assets/Scripts/Helpers.forge");
+	session.Open(helpersUri, helpers);
+
+	std::string error;
+	// Main.forge isn't open, but it uses Helpers and says 'double', so renaming it would break Main.
+	CHECK(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
+	CHECK_EQ(error, std::string("'Main.forge' uses this script and says 'double' on line 2, and rename only changes this script. "
+		"Rename 'double' in both by hand."));
+	// Main never says 'half', so 'half' can be renamed.
+	CHECK_EQ(EditSpans(RenameAt(session, "textDocument/rename", helpersUri, 3, 10, "halve", error), helpersUri),
+		(std::vector<std::string> { "3:9-13" }));
+
+	// A script that reaches Helpers through another one counts too ('use' brings in what the used script uses).
+	project.Write("Assets/Scripts/Main.forge", "say 1\n");
+	project.Write("Assets/Scripts/Tools.forge", "use \"Scripts/Helpers\"\n");
+	project.Write("Assets/Scripts/Level.forge", "use \"Scripts/Tools\"\nsay double(2)\n");
+	CHECK(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
+	CHECK_EQ(error, std::string("'Level.forge' uses this script through 'Tools.forge' and says 'double' on line 2, and rename only "
+		"changes this script. Rename 'double' in both by hand."));
+
+	// A field of the same name in another script isn't this name.
+	project.Write("Assets/Scripts/Level.forge", "use \"Scripts/Tools\"\nset box to {}\nsay box.double\n");
+	CHECK_FALSE(RenameAt(session, "textDocument/rename", helpersUri, 0, 10, "twice", error).IsNull());
+}
+
 TEST_CASE("LanguageServerFormatsADocument")
 {
 	Session session;

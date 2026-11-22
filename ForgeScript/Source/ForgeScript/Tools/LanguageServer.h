@@ -141,6 +141,8 @@ namespace ForgeScript {
 		// Why the name under the request's position can't be renamed, or "" (then outUses and outUse are
 		// that document's uses and the one under the cursor).
 		std::string CheckRenamable(const Document& document, const Json& params, std::vector<NameUse>& outUses, NameUse& outUse) const;
+		// Why renaming a script-level name could break another script of the game, or "".
+		std::string CheckNoOtherScriptNeeds(const Document& document, const std::string& oldName) const;
 
 		void LoadApi(const std::filesystem::path& file);
 		bool ReadScriptForUse(const std::filesystem::path& path, std::string& outSource) const;
