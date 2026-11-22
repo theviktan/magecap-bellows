@@ -443,6 +443,35 @@ TEST_CASE("NegativeTimerTimesWarn")
 	CHECK_CONTAINS(found[1].Message, "runs as soon as it can. Use a time above 0, like: after 1 second");
 }
 
+TEST_CASE("RepeatForeverWithoutAWaitWarns")
+{
+	VM vm;
+	auto warnings = [&vm](const std::string& source) { return vm.FindWarnings(source, "t.forge", {}); };
+
+	// Nothing in it waits or leaves: the game can't run while it does.
+	std::vector<CompileError> found = warnings("set n to 0\nrepeat forever\n\tadd 1 to n\n\tsay n\n\tset x to random(1, 6)\nend\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 2);
+	CHECK_EQ(found[0].Message, std::string("This 'repeat forever' loop never waits, so nothing else in the game can run while it does. "
+		"Add a 'wait' inside it, like: wait 1 frame"));
+
+	// An inner loop that never waits warns even when the outer one does.
+	found = warnings("repeat forever\n\twait 1 frame\n\trepeat forever\n\t\tsay 1\n\tend\nend\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 3);
+
+	// A wait, a way out, or a call that might wait: no warning.
+	CHECK(warnings("repeat forever\n\twait 1 frame\nend\n").empty());
+	CHECK(warnings("set n to 0\nrepeat forever\n\tadd 1 to n\n\tif n > 3 then stop end\nend\n").empty());
+	CHECK(warnings("function run()\n\trepeat forever\n\t\treturn 1\n\tend\nend\n").empty());
+	CHECK(warnings("repeat forever\n\tfail \"no\"\nend\n").empty());
+	CHECK(warnings("function step()\n\twait 1 frame\nend\nrepeat forever\n\tstep()\nend\n").empty());
+	CHECK(warnings("phrase rest a bit\n\twait 1 frame\nend\nrepeat forever\n\trest a bit\nend\n").empty());
+	CHECK(warnings("set things to []\nrepeat forever\n\tthings.first()\nend\n").empty());
+	// Other loops are left alone.
+	CHECK(warnings("repeat 3 times\n\tsay 1\nend\n").empty());
+}
+
 TEST_CASE("OptionalTypesWarnOnPlainValuesOnly")
 {
 	VM vm;
