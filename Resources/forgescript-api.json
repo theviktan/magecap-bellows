@@ -2460,6 +2460,156 @@
 			"doc": "Gives a UI entity keyboard and gamepad focus, and gives back whether it could take it; same as widget.focus()",
 			"returns": "bool",
 			"yields_to_calls": true
+		},
+		{
+			"pattern": "push (entity) by (impulse)",
+			"doc": "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) to (position) over (seconds) seconds",
+			"doc": "Moves an entity smoothly to a position over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"position\", position, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) to (position) over (seconds) seconds with (style)",
+			"doc": "Moves an entity smoothly to a position over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"position\", position, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) to (position) over (seconds) second",
+			"doc": "Moves an entity smoothly to a position over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"position\", position, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) to (position) over (seconds) second with (style)",
+			"doc": "Moves an entity smoothly to a position over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"position\", position, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) by (offset) over (seconds) seconds",
+			"doc": "Moves an entity smoothly by an offset over a number of seconds, eased \"in out\", and gives back the Tween; same as tween_by(entity, \"position\", offset, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) by (offset) over (seconds) seconds with (style)",
+			"doc": "Moves an entity smoothly by an offset over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween_by(entity, \"position\", offset, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) by (offset) over (seconds) second",
+			"doc": "Moves an entity smoothly by an offset over a number of seconds, eased \"in out\", and gives back the Tween; same as tween_by(entity, \"position\", offset, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "move (entity) by (offset) over (seconds) second with (style)",
+			"doc": "Moves an entity smoothly by an offset over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween_by(entity, \"position\", offset, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) to (angles) over (seconds) seconds",
+			"doc": "Turns an entity smoothly to rotation angles in degrees over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"rotation\", angles, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) to (angles) over (seconds) seconds with (style)",
+			"doc": "Turns an entity smoothly to rotation angles in degrees over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"rotation\", angles, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) to (angles) over (seconds) second",
+			"doc": "Turns an entity smoothly to rotation angles in degrees over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"rotation\", angles, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) to (angles) over (seconds) second with (style)",
+			"doc": "Turns an entity smoothly to rotation angles in degrees over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"rotation\", angles, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) by (angles) over (seconds) seconds",
+			"doc": "Turns an entity smoothly by angles in degrees, more than one turn too over a number of seconds, eased \"in out\", and gives back the Tween; same as tween_by(entity, \"rotation\", angles, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) by (angles) over (seconds) seconds with (style)",
+			"doc": "Turns an entity smoothly by angles in degrees, more than one turn too over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween_by(entity, \"rotation\", angles, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) by (angles) over (seconds) second",
+			"doc": "Turns an entity smoothly by angles in degrees, more than one turn too over a number of seconds, eased \"in out\", and gives back the Tween; same as tween_by(entity, \"rotation\", angles, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "turn (entity) by (angles) over (seconds) second with (style)",
+			"doc": "Turns an entity smoothly by angles in degrees, more than one turn too over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween_by(entity, \"rotation\", angles, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "scale (entity) to (size) over (seconds) seconds",
+			"doc": "Scales an entity smoothly to a size: a number for all three axes, or a vector over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"scale\", size, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "scale (entity) to (size) over (seconds) seconds with (style)",
+			"doc": "Scales an entity smoothly to a size: a number for all three axes, or a vector over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"scale\", size, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "scale (entity) to (size) over (seconds) second",
+			"doc": "Scales an entity smoothly to a size: a number for all three axes, or a vector over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"scale\", size, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "scale (entity) to (size) over (seconds) second with (style)",
+			"doc": "Scales an entity smoothly to a size: a number for all three axes, or a vector over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"scale\", size, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "fade (entity) to (opacity) over (seconds) seconds",
+			"doc": "Fades a UI image (or, without one, a text) smoothly to an opacity from 0 to 1, keeping its color over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"UIImage.color\", color, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "fade (entity) to (opacity) over (seconds) seconds with (style)",
+			"doc": "Fades a UI image (or, without one, a text) smoothly to an opacity from 0 to 1, keeping its color over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"UIImage.color\", color, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "fade (entity) to (opacity) over (seconds) second",
+			"doc": "Fades a UI image (or, without one, a text) smoothly to an opacity from 0 to 1, keeping its color over a number of seconds, eased \"in out\", and gives back the Tween; same as tween(entity, \"UIImage.color\", color, seconds)",
+			"returns": "Tween",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "fade (entity) to (opacity) over (seconds) second with (style)",
+			"doc": "Fades a UI image (or, without one, a text) smoothly to an opacity from 0 to 1, keeping its color over a number of seconds, eased with an easing style (\"bounce out\"; ease() lists them), and gives back the Tween; same as tween(entity, \"UIImage.color\", color, seconds, style)",
+			"returns": "Tween",
+			"yields_to_calls": true
 		}
 	]
 }

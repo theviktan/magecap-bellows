@@ -282,6 +282,29 @@ TEST_CASE("Engine phrases are listed for tools")
 		CHECK_FALSE(phrase.Doc.empty());
 		CHECK_FALSE(phrase.Returns.empty());
 	}
-	CHECK_EQ(patterns, std::vector<std::string>{ "save screenshot", "save screenshot to (path)", "user folder",
-		"pause the game", "resume the game", "the game is paused", "keep (entity) across scenes", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)" });
+	std::vector<std::string> expected = { "save screenshot", "save screenshot to (path)", "user folder",
+		"pause the game", "resume the game", "the game is paused", "keep (entity) across scenes", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)",
+		"push (entity) by (impulse)" };
+	// Each tween phrase comes with "seconds" and "second", each with and without "with (style)".
+	for (const char* start : { "move (entity) to (position)", "move (entity) by (offset)", "turn (entity) to (angles)", "turn (entity) by (angles)",
+		"scale (entity) to (size)", "fade (entity) to (opacity)" })
+	{
+		for (const char* unit : { "seconds", "second" })
+		{
+			expected.push_back(std::string(start) + " over (seconds) " + unit);
+			expected.push_back(std::string(start) + " over (seconds) " + unit + " with (style)");
+		}
+	}
+	CHECK_EQ(patterns, expected);
+	for (const Scripting::ForgeScriptPhraseInfo& phrase : phrases)
+	{
+		if (phrase.Pattern.find(" over (seconds) ") != std::string::npos)
+		{
+			CAPTURE(phrase.Pattern);
+			CHECK(phrase.Returns == "Tween");
+			CHECK(phrase.YieldsToCalls);
+			CHECK(phrase.Doc.find("same as tween") != std::string::npos);
+			CHECK((phrase.Doc.find(", style)") != std::string::npos) == (phrase.Pattern.find("with (style)") != std::string::npos));
+		}
+	}
 }
