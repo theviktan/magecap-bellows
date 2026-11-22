@@ -468,8 +468,23 @@ TEST_CASE("RepeatForeverWithoutAWaitWarns")
 	CHECK(warnings("function step()\n\twait 1 frame\nend\nrepeat forever\n\tstep()\nend\n").empty());
 	CHECK(warnings("phrase rest a bit\n\twait 1 frame\nend\nrepeat forever\n\trest a bit\nend\n").empty());
 	CHECK(warnings("set things to []\nrepeat forever\n\tthings.first()\nend\n").empty());
-	// Other loops are left alone.
+	// 'while true' and 'until false' never stop by themselves either.
+	found = warnings("while true do\n\tsay 1\nend\n");
+	REQUIRE(found.size() == 1);
+	CHECK_EQ(found[0].Message, std::string("This 'while true' loop never waits, so nothing else in the game can run while it does. "
+		"Add a 'wait' inside it, like: wait 1 frame"));
+	found = warnings("until false\n\tsay 1\nend\n");
+	REQUIRE(found.size() == 1);
+	CHECK_NE(found[0].Message.find("This 'until false' loop"), std::string::npos);
+	CHECK_NE(warnings("while yes do\n\tsay 1\nend\n")[0].Message.find("This 'while yes' loop"), std::string::npos);
+	CHECK(warnings("while true do\n\twait 1 frame\nend\n").empty());
+	CHECK(warnings("set n to 0\nwhile true do\n\tadd 1 to n\n\tif n > 3 then stop end\nend\n").empty());
+
+	// Other loops are left alone: their condition can change.
 	CHECK(warnings("repeat 3 times\n\tsay 1\nend\n").empty());
+	CHECK(warnings("set n to 0\nwhile n < 3 do\n\tadd 1 to n\nend\n").empty());
+	CHECK(warnings("set going to true\nwhile going do\n\tset going to false\nend\n").empty());
+	CHECK(warnings("while true and false do\n\tsay 1\nend\n").empty());
 }
 
 TEST_CASE("OptionalTypesWarnOnPlainValuesOnly")

@@ -34,7 +34,8 @@ with new language or tool features, the patch number with fixes.
   and `forgescript --check` now warn "This 'repeat forever' loop never waits, so nothing else in
   the game can run while it does" when the loop has no `wait`, `stop`, `return` or `fail` and calls
   nothing that might wait (the script's own functions, phrases and methods might; built-in and
-  engine functions never do). A warning never stops a script.
+  engine functions never do). `while true` and `until false` loops (or `while yes`, `until no`)
+  get the same warning. A warning never stops a script.
 - **Hosts share `ease()`'s curves** (for Bellows' tweens): `ForgeScript/Core/Easing.h` has
   `TryEase(style, t, outValue)` and `EaseStyleNames()`, and `ease()` now uses them, so an engine's
   tweens and a script's `ease()` give exactly the same numbers. Nothing a script sees changes.
