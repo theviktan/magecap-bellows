@@ -14,6 +14,14 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **A list that holds itself no longer freezes or crashes** (audit S-9, older than 1.6.0). A list,
+  map or object that holds itself is now shown as `[...]`, `{...}` or `Name {...}` where it comes
+  back: `[1, [...], [...]]`. Before, a list added to itself four times took 27 seconds to `say`, and
+  `"{l}"` closed the game. A value that would make more than 100 million bytes of text, such as a
+  list holding the same big list many times, now stops with "Turning this into text would make more
+  than 100000000 bytes of text", which `try` can catch. Running out of memory while filling in
+  `"{...}"` is a script error too. The editor's Variables pane writes out only what it shows, so a
+  huge value no longer hangs the debugger.
 - **Text and lists that outgrow memory are a script error, not a crash** (audit S-8, older than 1.6.0).
   A loop doing `set s to s + s` or `set s to "{s}{s}"` now stops at 100 million bytes with "Joining
   this text would make more than 100000000 bytes of text", the same limit as repeating text. A

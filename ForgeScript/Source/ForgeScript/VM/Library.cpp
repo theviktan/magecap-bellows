@@ -30,17 +30,31 @@ namespace ForgeScript {
 
 	std::string VM::Describe(const Value& value, bool quoteText)
 	{
+		std::string text;
+		if (!DescribeInto(value, quoteText, text) && m_TextLimit >= c_MaxTextBytes)
+			throw RuntimeError("Turning this into text would make more than " + FormatNumber(static_cast<double>(c_MaxTextBytes)) +
+				" bytes of text. Does a list or map hold the same big part many times?");
+		return text;
+	}
+
+	// Appends the text of a value to "out". Returns false once "out" is longer than m_TextLimit: the
+	// caller stops there, so a value that would make gigabytes of text costs no more than the limit.
+	bool VM::DescribeInto(const Value& value, bool quoteText, std::string& out)
+	{
 		switch (value.GetType())
 		{
-			case ValueType::Nothing: return "nothing";
-			case ValueType::Boolean: return value.AsBool() ? "true" : "false";
-			case ValueType::Number:  return FormatNumber(value.AsNumber());
+			case ValueType::Nothing: out += "nothing"; return out.size() <= m_TextLimit;
+			case ValueType::Boolean: out += value.AsBool() ? "true" : "false"; return out.size() <= m_TextLimit;
+			case ValueType::Number:  out += FormatNumber(value.AsNumber()); return out.size() <= m_TextLimit;
 			case ValueType::Object:  break;
 		}
 
-		// Guard against lists that contain themselves.
+		// A very deep value is shortened.
 		if (m_TextDepth > 16)
-			return "...";
+		{
+			out += "...";
+			return out.size() <= m_TextLimit;
+		}
 		struct DepthGuard
 		{
 			int& Depth;
@@ -49,99 +63,158 @@ namespace ForgeScript {
 		} guard(m_TextDepth);
 
 		Object* object = value.AsObject();
-		switch (object->GetType())
+		ObjectType type = object->GetType();
+
+		// A list, map or object that holds itself shows "[...]" where it appears again inside itself.
+		// An object with its own "to_text" is left out: a "to_text" that uses itself forever stays a
+		// mistake, as it always was.
+		Closure* customText = nullptr;
+		if (type == ObjectType::Instance && !m_PlainText)
+		{
+			customText = static_cast<Instance*>(object)->Class->FindMethod(Intern("to_text"));
+			if (customText && customText->Fn->Arity != 0)
+				customText = nullptr;
+		}
+		bool container = type == ObjectType::List || type == ObjectType::Map || (type == ObjectType::Instance && !customText);
+		if (container && std::find(m_TextOpen.begin(), m_TextOpen.end(), object) != m_TextOpen.end())
+		{
+			if (type == ObjectType::List)
+				out += "[...]";
+			else if (type == ObjectType::Map)
+				out += "{...}";
+			else
+				out += static_cast<Instance*>(object)->Class->Name->Text + " {...}";
+			return out.size() <= m_TextLimit;
+		}
+		struct OpenGuard
+		{
+			std::vector<Object*>& Open;
+			bool Pushed;
+			OpenGuard(std::vector<Object*>& open, Object* object, bool push) : Open(open), Pushed(push) { if (Pushed) Open.push_back(object); }
+			~OpenGuard() { if (Pushed) Open.pop_back(); }
+		} open(m_TextOpen, object, container);
+
+		switch (type)
 		{
 			case ObjectType::String:
 			{
 				const std::string& text = static_cast<String*>(object)->Text;
-				return quoteText ? "\"" + text + "\"" : text;
+				if (quoteText)
+					out += '"';
+				// Copy no more than the limit allows, so a huge text costs no more than the limit.
+				size_t room = m_TextLimit >= out.size() ? m_TextLimit - out.size() + 1 : 0;
+				out.append(text, 0, std::min(text.size(), room));
+				if (quoteText && text.size() < room)
+					out += '"';
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::List:
 			{
-				std::string text = "[";
+				out += '[';
 				const std::vector<Value>& items = static_cast<List*>(object)->Items;
 				for (size_t i = 0; i < items.size(); i++)
 				{
 					if (i > 0)
-						text += ", ";
-					text += Describe(items[i], true);
+						out += ", ";
+					if (!DescribeInto(items[i], true, out))
+						return false;
 				}
-				return text + "]";
+				out += ']';
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::Map:
 			{
-				std::string text = "{";
+				out += '{';
 				const std::vector<Map::Entry>& entries = static_cast<Map*>(object)->Entries;
 				for (size_t i = 0; i < entries.size(); i++)
 				{
 					if (i > 0)
-						text += ", ";
-					text += Describe(entries[i].Key, true) + ": " + Describe(entries[i].Item, true);
+						out += ", ";
+					if (!DescribeInto(entries[i].Key, true, out))
+						return false;
+					out += ": ";
+					if (!DescribeInto(entries[i].Item, true, out))
+						return false;
 				}
-				return text + "}";
+				out += '}';
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::Vector:
 			{
 				Vector* v = static_cast<Vector*>(object);
-				return "(" + FormatNumber(v->X) + ", " + FormatNumber(v->Y) + ", " + FormatNumber(v->Z) + ")";
+				out += "(" + FormatNumber(v->X) + ", " + FormatNumber(v->Y) + ", " + FormatNumber(v->Z) + ")";
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::Function:
-				return "<function " + (static_cast<Function*>(object)->Name ? static_cast<Function*>(object)->Name->Text : std::string("?")) + ">";
+				out += "<function " + (static_cast<Function*>(object)->Name ? static_cast<Function*>(object)->Name->Text : std::string("?")) + ">";
+				return out.size() <= m_TextLimit;
 			case ObjectType::Closure:
 			{
 				Function* fn = static_cast<Closure*>(object)->Fn;
-				return "<function " + (fn->Name ? fn->Name->Text : std::string("?")) + ">";
+				out += "<function " + (fn->Name ? fn->Name->Text : std::string("?")) + ">";
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::NativeFunction:
-				return "<function " + static_cast<NativeFunction*>(object)->Name + ">";
+				out += "<function " + static_cast<NativeFunction*>(object)->Name + ">";
+				return out.size() <= m_TextLimit;
 			case ObjectType::BoundMethod:
 			{
 				Object* method = static_cast<BoundMethod*>(object)->Method;
 				if (method->GetType() == ObjectType::Closure)
-					return Describe(Value::FromObject(method), false);
-				return "<function " + static_cast<NativeFunction*>(method)->Name + ">";
+					return DescribeInto(Value::FromObject(method), false, out);
+				out += "<function " + static_cast<NativeFunction*>(method)->Name + ">";
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::Kind:
-				return "<kind " + static_cast<Kind*>(object)->Name->Text + ">";
+				out += "<kind " + static_cast<Kind*>(object)->Name->Text + ">";
+				return out.size() <= m_TextLimit;
 			case ObjectType::Instance:
 			{
 				Instance* instance = static_cast<Instance*>(object);
 				// A kind can describe itself with a "to_text" function.
-				Closure* custom = instance->Class->FindMethod(Intern("to_text"));
-				if (custom && custom->Fn->Arity == 0 && !m_PlainText)
+				if (customText)
 				{
 					if (m_TextDepth > 8)
 						throw RuntimeError("'to_text' of " + instance->Class->Name->Text + " keeps turning itself into text forever.");
-					Value bound = Value::FromObject(Allocate<BoundMethod>(0, value, custom));
+					Value bound = Value::FromObject(Allocate<BoundMethod>(0, value, customText));
 					Handle keep(*this, bound);
 					Value result = CallFromNative(bound, {});
-					return ToText(result);
+					return DescribeInto(result, false, out);
 				}
-				std::string text = instance->Class->Name->Text + " {";
+				out += instance->Class->Name->Text + " {";
 				for (size_t i = 0; i < instance->FieldOrder.size(); i++)
 				{
 					String* name = instance->FieldOrder[i];
 					if (i > 0)
-						text += ", ";
-					text += name->Text + ": " + Describe(instance->Fields[name], true);
+						out += ", ";
+					out += name->Text + ": ";
+					if (!DescribeInto(instance->Fields[name], true, out))
+						return false;
 				}
-				return text + "}";
+				out += '}';
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::NativeObject:
 			{
 				NativeObject* native = static_cast<NativeObject*>(object);
 				if (native->Type->ToText)
-					return native->Type->ToText(native->Data);
-				return "<" + native->Type->Name + ">";
+					out += native->Type->ToText(native->Data);
+				else
+					out += "<" + native->Type->Name + ">";
+				return out.size() <= m_TextLimit;
 			}
 			case ObjectType::Module:
-				return "<script " + static_cast<Module*>(object)->Name + ">";
+				out += "<script " + static_cast<Module*>(object)->Name + ">";
+				return out.size() <= m_TextLimit;
 			case ObjectType::Upvalue:
-				return "<upvalue>";
+				out += "<upvalue>";
+				return out.size() <= m_TextLimit;
 			case ObjectType::Task:
-				return "<task>";
+				out += "<task>";
+				return out.size() <= m_TextLimit;
 		}
-		return "?";
+		out += "?";
+		return out.size() <= m_TextLimit;
 	}
 
 	// ======================================================================= Helpers

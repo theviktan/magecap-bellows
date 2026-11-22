@@ -299,6 +299,22 @@ TEST_CASE("DebuggerShowsKindsWithoutRunningTheirCode")
 	CHECK_EQ(second.Printed, std::vector<std::string> { "0" });
 }
 
+TEST_CASE("DebuggerShowsAListThatHoldsItselfQuickly")
+{
+	Debugged debug;
+	debug.Machine.SetBreakpoints("game.forge", { 8 });
+	// "loop" holds itself; "huge" would be gigabytes of text if it were written out in full.
+	Module* module = debug.Load(
+		"set loop to [1]\nloop.add(loop)\nloop.add(loop)\nset huge to [\"x\"]\n"
+		"repeat 12 times\n    set huge to [huge, huge, huge, huge, huge, huge, huge, huge]\nend\nsay 1\n");
+	REQUIRE(debug.Machine.IsStopped());
+	CHECK_EQ(FindText(debug.Machine.GetGlobals(module), "loop"), std::string("[1, [...], [...]]"));
+	const std::string text = FindText(debug.Machine.GetGlobals(module), "huge");
+	CHECK(text.size() <= 503);
+	CHECK(text.ends_with("..."));
+	debug.Machine.Continue();
+}
+
 TEST_CASE("DebuggerShortensLongValues")
 {
 	Debugged debug;

@@ -169,6 +169,12 @@ Only `false` and `nothing` count as false. Everything else counts as true, inclu
 
 `show(x)` prints a value the way a programmer reads it, with text in quotes.
 
+A list, map or object that holds itself is written as `[...]`, `{...}` or `Node {...}` where it
+comes back inside itself: after `set l to [1]` and `l.add(l)`, `say l` prints `[1, [...]]`. (An
+object whose kind has `to_text()` is written by that function, as always.) Values
+nested more than 16 deep are shortened to `...`. Text longer than 100 million bytes is a mistake:
+"Turning this into text would make more than 100000000 bytes of text".
+
 ---
 
 ## 4. Expressions
