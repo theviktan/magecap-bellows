@@ -2117,7 +2117,12 @@ namespace ForgeScript {
 		const std::string oldName(lines[static_cast<size_t>(target.Line - 1)].substr(static_cast<size_t>(target.Column - 1), static_cast<size_t>(target.Length)));
 		const std::string newName = params.GetString("newName");
 
-		// The new name must be one name, and not a keyword.
+		// The new name must be one name of a sensible length, and not a keyword.
+		if (newName.size() > 255)
+		{
+			outError = "A name can be at most 255 characters long.";
+			return Json();
+		}
 		Lexer lexer(newName);
 		const std::vector<Token> newTokens = lexer.Tokenize();
 		if (newTokens.empty() || newTokens[0].Lexeme != newName || (newTokens.size() > 1 && newTokens[1].Type != TokenType::Eof && newTokens[1].Type != TokenType::Newline))
