@@ -2084,14 +2084,32 @@ namespace ForgeScript {
 
 	std::string LanguageServer::CheckNoOtherScriptNeeds(const Document& document, const std::string& oldName) const
 	{
+		// Scripts are matched by their path in any letter case: Windows (and macOS, by default) opens
+		// Helpers.forge for 'use "helpers"', and editors may send "c:/" for "C:/". Treating two paths
+		// that differ only in case as one script can only refuse a rename, never let a wrong one through.
+		auto keyOf = [](const std::filesystem::path& path)
+		{
+			std::string key = PathToUtf8(path.lexically_normal());
+			for (char& c : key)
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			return key;
+		};
+		struct Script
+		{
+			std::filesystem::path Path;
+			std::string Text;
+		};
+
 		// Every script of the game: the editor's text for open ones, the file for the rest. A script that
 		// isn't a file yet (an unsaved editor tab) has no folder, so only the open scripts are looked at.
-		std::map<std::filesystem::path, std::string> scripts;
+		std::map<std::string, Script> scripts;
 		for (const auto& [otherUri, other] : m_Documents)
-			scripts[other.Path.lexically_normal()] = other.Text;
+			scripts[keyOf(other.Path)] = { other.Path.lexically_normal(), other.Text };
 		const std::filesystem::path useFolder = document.Path.is_absolute() ? FindUseFolder(document.Path) : std::filesystem::path();
+		// Limits so a huge folder can't stall the editor. Past either one, rename refuses rather than guess.
 		constexpr size_t c_MaxEntries = 200'000;
-		constexpr uintmax_t c_MaxScriptBytes = 4'000'000;
+		constexpr uintmax_t c_MaxTotalBytes = 64'000'000;
+		uintmax_t totalBytes = 0;
 		size_t entries = 0;
 		std::error_code error;
 		if (!useFolder.empty())
@@ -2103,31 +2121,39 @@ namespace ForgeScript {
 					return "There are too many files in '" + PathToUtf8(useFolder) + "' to find every script that uses this one, so rename "
 						"can't be sure it changes them all. Rename '" + oldName + "' by hand.";
 				std::error_code fileError;
-				if (it->path().extension() != ".forge" || !it->is_regular_file(fileError) || it->file_size(fileError) > c_MaxScriptBytes)
+				if (it->path().extension() != ".forge" || !it->is_regular_file(fileError))
 					continue;
 				const std::filesystem::path path = it->path().lexically_normal();
+				const std::string key = keyOf(path);
+				if (scripts.count(key) > 0)
+					continue;
+				const uintmax_t size = it->file_size(fileError);
+				totalBytes += fileError ? 0 : size;
+				if (totalBytes > c_MaxTotalBytes)
+					return "The scripts in '" + PathToUtf8(useFolder) + "' are too big to read through, so rename can't be sure it "
+						"changes every script that uses this one. Rename '" + oldName + "' by hand.";
 				std::string text;
-				if (scripts.count(path) == 0 && ReadTextFile(path, text))
-					scripts[path] = std::move(text);
+				if (ReadTextFile(path, text))
+					scripts[key] = { path, std::move(text) };
 			}
 		}
 
 		// Which scripts each one uses, then every script that reaches this one, and through which.
-		std::map<std::filesystem::path, std::vector<std::filesystem::path>> uses;
-		for (const auto& [path, text] : scripts)
+		std::map<std::string, std::vector<std::string>> uses;
+		for (const auto& [key, script] : scripts)
 		{
-			for (const Symbol& symbol : FindScriptSymbols(text))
+			for (const Symbol& symbol : FindScriptSymbols(script.Text))
 			{
 				if (symbol.SymbolKind == Symbol::Kind::Module)
-					uses[path].push_back(ResolveUsePath(FindUseFolder(path), symbol.File).lexically_normal());
+					uses[key].push_back(keyOf(ResolveUsePath(FindUseFolder(script.Path), symbol.File)));
 			}
 		}
-		const std::filesystem::path self = document.Path.lexically_normal();
-		std::map<std::filesystem::path, std::filesystem::path> reachedThrough; // user -> the script it uses on the way
-		std::vector<std::filesystem::path> waiting{ self };
+		const std::string self = keyOf(document.Path);
+		std::map<std::string, std::string> reachedThrough; // user -> the script it uses on the way
+		std::vector<std::string> waiting{ self };
 		while (!waiting.empty())
 		{
-			const std::filesystem::path used = waiting.back();
+			const std::string used = waiting.back();
 			waiting.pop_back();
 			for (const auto& [user, list] : uses)
 			{
@@ -2141,7 +2167,8 @@ namespace ForgeScript {
 		// Only a script that mentions the name can be broken by renaming it.
 		for (const auto& [user, through] : reachedThrough)
 		{
-			Lexer lexer(scripts[user]);
+			const Script& script = scripts[user];
+			Lexer lexer(script.Text);
 			const std::vector<Token> tokens = lexer.Tokenize();
 			for (size_t i = 0; i < tokens.size(); i++)
 			{
@@ -2149,8 +2176,9 @@ namespace ForgeScript {
 					continue;
 				if (i > 0 && (tokens[i - 1].Type == TokenType::Dot || tokens[i - 1].Type == TokenType::Possessive || tokens[i - 1].Type == TokenType::My))
 					continue;
-				const std::string how = through == self ? "uses this script" : "uses this script through '" + PathToUtf8(through.filename()) + "'";
-				return "'" + PathToUtf8(user.filename()) + "' " + how + " and says '" + oldName + "' on line " + std::to_string(tokens[i].Line) +
+				const std::string how = through == self ? "uses this script" :
+					"uses this script through '" + PathToUtf8(scripts[through].Path.filename()) + "'";
+				return "'" + PathToUtf8(script.Path.filename()) + "' " + how + " and says '" + oldName + "' on line " + std::to_string(tokens[i].Line) +
 					", and rename only changes this script. Rename '" + oldName + "' in both by hand.";
 			}
 		}

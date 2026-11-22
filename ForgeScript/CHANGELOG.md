@@ -14,6 +14,14 @@ with new language or tool features, the patch number with fixes.
   writes a moment as text; `days_between(from, to)` counts calendar days in local time, for daily
   rewards. Calendar math is the same on every platform; moments outside 1970 to 9999, infinity and
   not-a-number are refused with a clear mistake. No new words: a script's own name still wins.
+- **Fixed: `format_date` could make more text than the 100 MB limit** (audit S-10). A long pattern of
+  `Month` or `Weekday` grows into longer names (up to 171 MB in the audit). It now stops with
+  "format_date would make more than 100000000 bytes of text from this pattern", which `try` can
+  catch.
+- **Fixed: on Windows, Rename could miss a script that names this one in other capitals** (audit
+  S-11). `use "helpers"` opens Helpers.forge on Windows and macOS, so Rename now matches script
+  paths in any letter case, and refuses when such a script says the name. A big script is no
+  longer skipped: past 64 MB of scripts in all, Rename refuses and says why.
 - **Fixed: Rename could break a script that wasn't open** (reported by MFC). Renaming a function or
   variable checked only the scripts open in the editor, so with `Main.forge` closed, renaming
   `double` in the `Helpers.forge` it uses went through and left Main calling a name that was gone.
