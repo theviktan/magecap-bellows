@@ -1018,8 +1018,28 @@ namespace ForgeScript {
 	}
 
 
+	void VM::SetDetailedBreakpoints(const std::string& file, const std::vector<Breakpoint>& breakpoints)
+	{
+		std::vector<int> lines;
+		std::unordered_map<int, Breakpoint> details;
+		for (const Breakpoint& breakpoint : breakpoints)
+		{
+			if (breakpoint.Line <= 0)
+				continue;
+			lines.push_back(breakpoint.Line);
+			if (!breakpoint.Condition.empty() || !breakpoint.LogMessage.empty())
+				details[breakpoint.Line] = breakpoint;
+		}
+		SetBreakpoints(file, lines);
+		if (details.empty())
+			m_BreakpointDetails.erase(file);
+		else
+			m_BreakpointDetails[file] = std::move(details);
+	}
+
 	void VM::SetBreakpoints(const std::string& file, const std::vector<int>& lines)
 	{
+		m_BreakpointDetails.erase(file);
 		std::vector<int> sorted;
 		for (int line : lines)
 		{
@@ -1038,6 +1058,7 @@ namespace ForgeScript {
 	void VM::ClearBreakpoints()
 	{
 		m_Breakpoints.clear();
+		m_BreakpointDetails.clear();
 		RefreshDebugActive();
 	}
 
@@ -1050,6 +1071,7 @@ namespace ForgeScript {
 	void VM::StopDebugging()
 	{
 		m_Breakpoints.clear();
+		m_BreakpointDetails.clear();
 		m_PauseRequested = false;
 		for (Task* task : m_Tasks)
 			ReleaseStep(task);
@@ -1124,10 +1146,51 @@ namespace ForgeScript {
 		}
 		const std::string& file = fn->Owner ? fn->Owner->Name : std::string();
 		auto breakpoints = m_Breakpoints.find(file);
+		std::string message;
 		if (breakpoints != m_Breakpoints.end() && std::binary_search(breakpoints->second.begin(), breakpoints->second.end(), line))
 		{
-			stop = true;
-			reason = DebugStopReason::Breakpoint;
+			bool hit = true;
+			auto details = m_BreakpointDetails.find(file);
+			const Breakpoint* breakpoint = nullptr;
+			if (details != m_BreakpointDetails.end())
+			{
+				auto found = details->second.find(line);
+				if (found != details->second.end())
+					breakpoint = &found->second;
+			}
+			if (breakpoint && !breakpoint->Condition.empty())
+			{
+				Value answer;
+				std::string error;
+				if (!EvaluateIn(task, *frame, breakpoint->Condition, answer, error))
+					message = "The condition '" + breakpoint->Condition + "' couldn't be worked out: " + error;
+				else
+					hit = answer.IsTruthy();
+			}
+			if (hit && message.empty() && breakpoint && !breakpoint->LogMessage.empty())
+			{
+				// A log point prints and goes on. Its text is ForgeScript text, so {hp} is worked out.
+				std::string quoted = "\"";
+				for (char c : breakpoint->LogMessage)
+				{
+					if (c == '"' || c == '\\')
+						quoted += '\\';
+					quoted += c;
+				}
+				quoted += '"';
+				Value text;
+				std::string error;
+				if (EvaluateIn(task, *frame, quoted, text, error))
+					Print(ToText(text));
+				else
+					message = "The log message couldn't be worked out: " + error;
+				hit = !message.empty();
+			}
+			if (hit)
+			{
+				stop = true;
+				reason = DebugStopReason::Breakpoint;
+			}
 		}
 		if (!stop)
 			return false;
@@ -1137,6 +1200,7 @@ namespace ForgeScript {
 		m_PendingStop.Reason = reason;
 		m_PendingStop.File = file;
 		m_PendingStop.Line = line;
+		m_PendingStop.Message = message;
 		return true;
 	}
 
@@ -1282,7 +1346,15 @@ namespace ForgeScript {
 			return variables;
 		GCPause pause(*this);
 		const CallFrame& frame = m_StoppedTask->Frames[m_StoppedTask->Frames.size() - 1 - frameIndex];
-		const ValueStack& stack = m_StoppedTask->Stack;
+		for (const auto& [name, value] : VisibleValues(m_StoppedTask, frame))
+			variables.push_back(DescribeForDebugger(name, value));
+		return variables;
+	}
+
+	std::vector<std::pair<std::string, Value>> VM::VisibleValues(Task* task, const CallFrame& frame) const
+	{
+		std::vector<std::pair<std::string, Value>> variables;
+		const ValueStack& stack = task->Stack;
 		Function* fn = frame.Function->Fn;
 
 		// The names in use at this point; an inner variable with the same name as an outer one wins.
@@ -1301,7 +1373,7 @@ namespace ForgeScript {
 				shadowed = shadowed || visible[j]->Name == visible[i]->Name;
 			if (shadowed)
 				continue;
-			variables.push_back(DescribeForDebugger(visible[i]->Name, stack[frame.Base + visible[i]->Slot]));
+			variables.emplace_back(visible[i]->Name, stack[frame.Base + visible[i]->Slot]);
 			names.push_back(visible[i]->Name);
 		}
 		for (size_t i = 0; i < fn->UpvalueNames.size() && i < frame.Function->Upvalues.size(); i++)
@@ -1310,10 +1382,95 @@ namespace ForgeScript {
 			const std::string& name = fn->UpvalueNames[i];
 			if (!upvalue || std::find(names.begin(), names.end(), name) != names.end())
 				continue;
-			variables.push_back(DescribeForDebugger(name, upvalue->Get()));
+			variables.emplace_back(name, upvalue->Get());
 			names.push_back(name);
 		}
 		return variables;
+	}
+
+	bool VM::Evaluate(size_t frameIndex, const std::string& expression, DebugVariable& outValue, std::string& outError)
+	{
+		if (!m_StoppedTask || frameIndex >= m_StoppedTask->Frames.size())
+		{
+			outError = "Nothing is stopped in the debugger.";
+			return false;
+		}
+		GCPause pause(*this);
+		const CallFrame& frame = m_StoppedTask->Frames[m_StoppedTask->Frames.size() - 1 - frameIndex];
+		Value value;
+		if (!EvaluateIn(m_StoppedTask, frame, expression, value, outError))
+			return false;
+		outValue = DescribeForDebugger(expression, value);
+		return true;
+	}
+
+	// The code becomes 'return function(<the frame's variables>) return (<code>) end', compiled in the
+	// frame's script, so the script's variables and the engine's are there too, then called with the
+	// variables' values. The function is marked NoCalls: any call from it fails.
+	bool VM::EvaluateIn(Task* task, const CallFrame& frame, const std::string& expression, Value& outValue, std::string& outError)
+	{
+		if (expression.find_first_of("\r\n") != std::string::npos)
+		{
+			outError = "Write it on one line.";
+			return false;
+		}
+		if (expression.find_first_not_of(" \t") == std::string::npos)
+		{
+			outError = "Write something to work out, like: health * 2";
+			return false;
+		}
+		Function* owner = frame.Function->Fn;
+		Module* module = owner->Owner;
+		if (!module)
+		{
+			outError = "This code has no script to work it out in.";
+			return false;
+		}
+		GCPause pause(*this);
+		const std::vector<std::pair<std::string, Value>> visible = VisibleValues(task, frame);
+		std::string source = "return function(";
+		std::vector<Value> values;
+		for (const auto& [name, value] : visible)
+		{
+			if (name.empty() || name == "self")
+				continue;
+			source += (values.empty() ? "" : ", ") + name;
+			values.push_back(value);
+		}
+		source += ")\n\treturn (" + expression + ")\nend\n";
+
+		CompileError error;
+		Function* fn = CompileScript(*this, module, source, "(evaluate)", CompileOptions(), error);
+		if (!fn)
+		{
+			outError = error.Message;
+			return false;
+		}
+		fn->NoCalls = true;
+		const bool plainText = std::exchange(m_PlainText, true);
+		const bool evaluating = std::exchange(m_Evaluating, true);
+		bool ok = true;
+		try
+		{
+			const Value made = CallFromNative(Value::FromObject(Allocate<Closure>(0, fn)), {});
+			if (!IsObjectType(made, ObjectType::Closure))
+				throw RuntimeError("That isn't something to work out.");
+			As<Closure>(made)->Fn->NoCalls = true;
+			outValue = CallFromNative(made, values);
+		}
+		catch (const RuntimeError& failure)
+		{
+			outError = failure.what();
+			ok = false;
+		}
+		catch (const std::bad_alloc&)
+		{
+			outError = "There isn't enough memory to work this out.";
+			ok = false;
+		}
+		m_PlainText = plainText;
+		m_Evaluating = evaluating;
+		return ok;
 	}
 
 	std::vector<DebugVariable> VM::GetGlobals(Module* module)
@@ -3333,6 +3490,8 @@ namespace ForgeScript {
 				case OpCode::Call:
 				{
 					uint8_t count = FORGESCRIPT_READ_BYTE();
+					if (m_Evaluating && frame->Function->Fn->NoCalls)
+						FORGESCRIPT_FAIL("The debugger works things out without calling functions, so the game can't change. Read values instead, like: enemy.health");
 					FORGESCRIPT_CHECK(CallValue(task, stack[stack.size() - 1 - count], count));
 					FORGESCRIPT_REFRESH();
 					break;
@@ -3341,6 +3500,8 @@ namespace ForgeScript {
 				{
 					String* name = FORGESCRIPT_READ_STRING();
 					uint8_t count = FORGESCRIPT_READ_BYTE();
+					if (m_Evaluating && frame->Function->Fn->NoCalls)
+						FORGESCRIPT_FAIL("The debugger works things out without calling functions, so the game can't change. Read values instead, like: enemy.health");
 					FORGESCRIPT_CHECK(Invoke(task, name, count));
 					FORGESCRIPT_REFRESH();
 					break;
@@ -3349,6 +3510,8 @@ namespace ForgeScript {
 				{
 					String* name = FORGESCRIPT_READ_STRING();
 					uint8_t count = FORGESCRIPT_READ_BYTE();
+					if (m_Evaluating && frame->Function->Fn->NoCalls)
+						FORGESCRIPT_FAIL("The debugger works things out without calling functions, so the game can't change. Read values instead, like: enemy.health");
 					Kind* owner = frame->Function->OwnerKind;
 					if (!owner || !owner->Parent)
 						FORGESCRIPT_FAIL("'parent' was used, but this kind does not extend another kind.");
