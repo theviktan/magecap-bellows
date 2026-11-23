@@ -22,6 +22,7 @@
 #include "Bellows/Core/InputNames.h"
 #include "Bellows/Math/Easing.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
@@ -509,6 +510,26 @@ namespace Bellows::Scripting {
 			return value;
 		}
 
+		// Sends an agent toward the navmesh spot nearest 'point'; false (and nothing changes) when no
+		// agent could stand within reach of it.
+		inline bool NavAgentSetDestination(const NavAgentRef& agent, const glm::vec3& point)
+		{
+			NavAgentComponent& component = agent.Get();
+			const std::optional<glm::vec3> spot = RequireNavMesh().FindNearestPoint(point, SceneNavAgents::PlacementDistance);
+			if (!spot)
+				return false;
+			component.RuntimeDestination = *spot;
+			component.RuntimeDestinationChanged = true;
+			return true;
+		}
+
+		inline void NavAgentStop(const NavAgentRef& agent)
+		{
+			NavAgentComponent& component = agent.Get();
+			component.RuntimeDestination.reset();
+			component.RuntimeDestinationChanged = true;
+		}
+
 		inline void BakeSceneNavigation()
 		{
 			std::string error;
@@ -844,6 +865,16 @@ namespace Bellows::Scripting {
 			"Steers around other agents");
 		navAgent.ReadOnly("velocity", [](const NavAgentRef& r) { return r.Get().RuntimeVelocity; },
 			"How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running");
+		navAgent.ReadOnly("destination", [](const NavAgentRef& r) { return r.Get().RuntimeDestination; },
+			"Where it's walking (the navmesh spot set_destination found), or None while it stands");
+		navAgent.ReadOnly("moving", [](const NavAgentRef& r) { return r.Get().RuntimeDestination.has_value(); },
+			"True from set_destination until it arrives or is stopped");
+		navAgent.Method("set_destination", [](const NavAgentRef& r, const glm::vec3& point) { return Detail::NavAgentSetDestination(r, point); },
+			"Walks to the point (the nearest spot on the navmesh within 2 meters of it). It sends 'destination reached' when it gets there, "
+			"or when it can't and stops as close as it could. False, and nothing changes, when no agent can stand near the point",
+			Arg("point"));
+		navAgent.Method("stop", [](const NavAgentRef& r) { Detail::NavAgentStop(r); },
+			"Stops walking: it slows to a stop where it is, and sends no 'destination reached'");
 
 		auto animator = api.template Class<AnimatorRef>("Animator",
 			"Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them");

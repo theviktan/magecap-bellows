@@ -758,6 +758,16 @@ namespace Bellows::Scripting {
 			return AnimatorRef { entity };
 		}
 
+		// The NavAgent of the entity a phrase names (argument 0).
+		NavAgentRef PhraseNavAgent(FS::CallContext& context, const char* phrase, const std::string& example)
+		{
+			const ScriptEntity entity = PhraseEntity(context, phrase, "an entity", example);
+			Entity resolved = Guard([&] { return entity.Resolve(); });
+			if (!resolved.HasComponent<NavAgentComponent>())
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs an entity with a NavAgent, and '" + resolved.GetName() + "' has none.");
+			return NavAgentRef { entity };
+		}
+
 		// The widget a UI phrase is about.
 		ScriptEntity PhraseWidget(FS::CallContext& context, const char* phrase)
 		{
@@ -983,6 +993,27 @@ namespace Bellows::Scripting {
 						const AnimatorRef animator = PhraseAnimator(context, 0, "resume animation", "resume animation on hero");
 						Guard([&] { animator.Get().RuntimePlayer.Resume(); });
 						return FS::Value();
+					} },
+				{ { "walk (entity) to (position)", "Sends an entity's NavAgent walking to a position, and gives back whether there's navmesh to walk to near it; same as entity.get_component(\"NavAgent\").set_destination(position)", "bool", true },
+					[](FS::CallContext& context)
+					{
+						const NavAgentRef agent = PhraseNavAgent(context, "walk", "walk hero to vector(4, 0, 2)");
+						const glm::vec3 position = Convert<glm::vec3>::From(context.GetVM(), context.Arg(1), "'walk'");
+						return FS::Value::FromBool(Guard([&] { return Detail::NavAgentSetDestination(agent, position); }));
+					} },
+				{ { "halt (entity)", "Stops an entity's NavAgent where it is; same as entity.get_component(\"NavAgent\").stop()", "None", true },
+					[](FS::CallContext& context)
+					{
+						const NavAgentRef agent = PhraseNavAgent(context, "halt", "halt hero");
+						Guard([&] { Detail::NavAgentStop(agent); });
+						return FS::Value();
+					} },
+				{ { "the path from (start) to (end)", "The corners of the shortest walkable path between two positions, both ends included (an empty list when nothing connects them); same as find_path(start, end)", "list[Vec3]", true },
+					[](FS::CallContext& context)
+					{
+						const glm::vec3 start = Convert<glm::vec3>::From(context.GetVM(), context.Arg(0), "'the path from'");
+						const glm::vec3 end = Convert<glm::vec3>::From(context.GetVM(), context.Arg(1), "'the path from'");
+						return ReturnValue(context.GetVM(), Guard([&] { return Detail::RequireNavMesh().FindPath(start, end); }));
 					} },
 				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
 					[](FS::CallContext& context)

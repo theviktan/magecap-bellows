@@ -114,8 +114,10 @@ namespace Bellows {
 			BW_CORE_WARN("Navigation: '{}' {}", name, message);
 	}
 
-	void SceneNavAgents::Update(Scene& scene, float seconds)
+	std::vector<NavAgentArrival> SceneNavAgents::Update(Scene& scene, float seconds)
 	{
+		std::vector<NavAgentArrival> arrivals;
+
 		// A new navmesh (baked while the game runs, or a new scene's) gets a new crowd. The agents join
 		// it below, and walk on toward the destinations they had.
 		if (scene.GetNavMesh() != m_NavMesh)
@@ -149,7 +151,7 @@ namespace Bellows {
 			}
 			for (entt::entity handle : view)
 				view.get<NavAgentComponent>(handle).RuntimeVelocity = glm::vec3(0.0f);
-			return;
+			return arrivals;
 		}
 
 		const dtNavMeshQuery* query = m_Crowd->getNavMeshQuery();
@@ -284,25 +286,30 @@ namespace Bellows {
 			state.LastPosition = scene.GetWorldPosition(entity);
 
 			// Arrived: at the end of a path that's found, within the stopping distance (sideways, and
-			// within its height up or down).
+			// within its height up or down). Detour keeps replanning a path that can't reach its goal,
+			// so a replan doesn't stop an arrival: the path's end stays where the agent is going.
 			state.NearGoal = false;
-			if (agent.RuntimeDestination && crowdAgent->targetState == DT_CROWDAGENT_TARGET_VALID && !crowdAgent->targetReplan)
+			if (agent.RuntimeDestination && crowdAgent->targetState == DT_CROWDAGENT_TARGET_VALID)
 			{
 				const float* end = crowdAgent->corridor.getTarget();
 				const glm::vec2 offset(end[0] - feet.x, end[2] - feet.z);
 				state.NearGoal = glm::length(offset) <= agent.Radius * 2.0f + agent.StoppingDistance;
 				if (glm::length(offset) <= agent.StoppingDistance && std::abs(end[1] - feet.y) <= agent.Height)
 				{
+					arrivals.push_back({ entity.GetUUID(), !crowdAgent->partial });
 					agent.RuntimeDestination.reset();
 					m_Crowd->resetMoveTarget(state.Index);
 				}
 			}
 			else if (agent.RuntimeDestination && crowdAgent->targetState == DT_CROWDAGENT_TARGET_FAILED)
 			{
+				// No path at all: it stays where it is, as close as it can get, and scripts waiting hear so.
+				arrivals.push_back({ entity.GetUUID(), false });
 				agent.RuntimeDestination.reset();
 				m_Crowd->resetMoveTarget(state.Index);
 			}
 		}
+		return arrivals;
 	}
 
 }

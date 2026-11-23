@@ -360,6 +360,29 @@ function test_navigation()
 	check(is_navigable(vector(3, 0, 3)) and not is_navigable(vector(0, 0, -3)), "is_navigable")
 	check(nearest_navigable_point(vector(0, 0, 500)) is nothing, "nearest_navigable_point gives nothing far away")
 	check(fails(function() nearest_navigable_point(vector(0, 0, 0), -1) end), "nearest_navigable_point refuses a negative search")
+	set corners to the path from vector(0, 0, -5) to vector(0, 0, -1)
+	check(length(corners) is length(path), "'the path from (start) to (end)' is find_path")
+
+	# The Guard walks the open ground in front of the camera.
+	set guard to find_entity("Guard")
+	set agent to guard.get_component("NavAgent")
+	check(walk guard to vector(0, 0, 7), "'walk (entity) to (position)' finds navmesh there")
+	check(agent.moving, "the Guard is on its way")
+	wait_for(function() return events.contains("Guard reached it") end, 6)
+	check(events.contains("Guard reached it") and not agent.moving and near(guard.position, vector(0, 0.9, 7), 0.15),
+		"when destination reached with who, reached ({guard.position})")
+	walk guard to vector(-3, 0, 7)
+	wait 10 frames
+	halt guard
+	check(not agent.moving and agent.destination is nothing, "'halt (entity)' stops it")
+	check(not (walk guard to vector(0, 0, 500)), "'walk' gives back false where there's no navmesh")
+	set plain to create_entity("Forge Plain Walker")
+	check(fails(function() walk plain to vector(0, 0, 7) end), "'walk' needs an entity with a NavAgent")
+	plain.destroy()
+end
+
+when destination reached with who, reached
+	if who.valid and who.name is "Guard" and reached then add "Guard reached it" to events end
 end
 
 # The Dancer plays SkinnedColumn.glb's clips, "Bend" and "Wave".

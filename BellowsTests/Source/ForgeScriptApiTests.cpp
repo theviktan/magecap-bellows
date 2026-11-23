@@ -285,7 +285,7 @@ TEST_CASE("Engine phrases are listed for tools")
 	std::vector<std::string> expected = { "save screenshot", "save screenshot to (path)", "user folder",
 		"pause the game", "resume the game", "the game is paused", "keep (entity) across scenes", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)",
 		"tag (entity) as (tag)", "untag (entity) as (tag)", "everything tagged (tag)", "the data in (path)", "shake the camera by (strength) over (seconds) seconds", "shake the camera by (strength) over (seconds) second",
-		"play animation (clip) on (entity)", "pause animation on (entity)", "resume animation on (entity)", "push (entity) by (impulse)" };
+		"play animation (clip) on (entity)", "pause animation on (entity)", "resume animation on (entity)", "walk (entity) to (position)", "halt (entity)", "the path from (start) to (end)", "push (entity) by (impulse)" };
 	// Each tween phrase comes with "seconds" and "second", each with and without "with (style)".
 	for (const char* start : { "move (entity) to (position)", "move (entity) by (offset)", "turn (entity) to (angles)", "turn (entity) by (angles)",
 		"scale (entity) to (size)", "fade (entity) to (opacity)" })

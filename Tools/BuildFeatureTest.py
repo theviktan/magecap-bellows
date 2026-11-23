@@ -217,6 +217,13 @@ buddy = create("Capsule Buddy", "Builtin/Capsule", RED, position=(-4.0, 1.0, -0.
 capsule = add_body(buddy, "Dynamic", bellows.CapsuleCollider, mass=5.0, lock_rotation_x=True, lock_rotation_z=True)
 capsule.radius, capsule.half_height = 0.5, 0.5
 
+# Navigation: a guard that walks the navmesh, carrying its kinematic capsule (the feature tests send it on its way)
+guard = create("Guard", "Builtin/Capsule", RED, position=(-3.0, 0.9, 7.0), scale=(0.6, 0.9, 0.6))
+guard_capsule = add_body(guard, "Kinematic", bellows.CapsuleCollider)
+guard_capsule.radius, guard_capsule.half_height = 0.5, 0.5
+guard_agent = guard.add_component(bellows.NavAgent)
+guard_agent.radius, guard_agent.base_offset = 0.3, 0.9
+
 zone = create("Trigger Zone", "Builtin/Cube", TRIGGER, position=(6.0, 1.0, 4.0), scale=(3.0, 2.0, 3.0))
 zone.get_component(bellows.MeshRenderer).cast_shadows = False
 add_body(zone, "Static", bellows.BoxCollider, is_trigger=True)

@@ -11,6 +11,7 @@
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptApi.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -722,4 +723,58 @@ TEST_CASE("A NavAgent is saved with its scene, and loaded settings are held to t
 	nan.Clamp();
 	CHECK(nan.Speed == NavAgentComponent().Speed);
 	CHECK(nan.Height == NavAgentComponent().Height);
+}
+
+TEST_CASE("An agent that arrives sends 'destination reached', saying whether it got there")
+{
+	// Two floors with a gap no agent can cross.
+	NavMeshGeometry geometry;
+	AddFloor(geometry, -10.0f, -3.0f, 0.0f, 3.0f);
+	AddFloor(geometry, 3.0f, -3.0f, 10.0f, 3.0f);
+	Scope<Scene> scene = AgentScene(geometry);
+	Entity walker = AddAgent(*scene, "Walker", { -8.0f, 0.0f, 0.0f });
+
+	std::vector<std::pair<Scripting::ScriptEntity, bool>> reached;
+	const Scripting::ScriptEventListenerID listener = Scripting::AddScriptEventListener(
+		[&](const std::string& name, const Scripting::ScriptValueList& values, const Scripting::ScriptEventDelivery&)
+		{
+			if (name == "destination reached" && values.size() == 2)
+				reached.emplace_back(std::get<Scripting::ScriptEntity>(values[0].Data), std::get<bool>(values[1].Data));
+		});
+	scene->OnRuntimeStart();
+
+	SUBCASE("At the spot it was sent to")
+	{
+		SendTo(walker, { -2.0f, 0.0f, 1.0f });
+		REQUIRE(WalkUntilArrived(*scene, { walker }, 600) > 0);
+		REQUIRE(reached.size() == 1);
+		CHECK(reached[0].first.ID == walker.GetUUID());
+		CHECK(reached[0].second);
+		for (int i = 0; i < 30; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(reached.size() == 1);		// Once
+	}
+	SUBCASE("On the other floor: as close as it can get, and it says so")
+	{
+		SendTo(walker, { 6.0f, 0.0f, 0.0f });
+		REQUIRE(WalkUntilArrived(*scene, { walker }, 900) > 0);
+		REQUIRE(reached.size() == 1);
+		CHECK_FALSE(reached[0].second);
+		CHECK(Position(walker).x > -1.0f);
+		CHECK(Position(walker).x < 0.0f);
+	}
+	SUBCASE("Stopped on the way, it sends nothing")
+	{
+		SendTo(walker, { -2.0f, 0.0f, 1.0f });
+		for (int i = 0; i < 30; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		NavAgentComponent& agent = walker.GetComponent<NavAgentComponent>();
+		agent.RuntimeDestination.reset();
+		agent.RuntimeDestinationChanged = true;
+		for (int i = 0; i < 120; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(reached.empty());
+	}
+	scene->OnRuntimeStop();
+	Scripting::RemoveScriptEventListener(listener);
 }

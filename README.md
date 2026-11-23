@@ -21,6 +21,10 @@ can drive end to end.
   an **Animator** component, skinned on the GPU, with crossfades between clips and shadows that
   follow the pose. Scripts play clips (`play animation "Run" on hero`) and can find where a bone is. Pick the clip, speed and looping in the Inspector, and **Preview** it in the
   viewport with a time slider to look at any moment.
+* **Navigation** (Recast/Detour): bake a navmesh from the scene's static colliders in **Scene
+  Settings**, and **Nav Agent** characters walk it, steering around walls and each other
+  (`walk guard to gate.position`, then `when destination reached`). Scripts can also find paths
+  (`find_path`) and check where agents can stand.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.

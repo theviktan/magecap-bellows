@@ -697,6 +697,16 @@ class NavAgent:
     @property
     def velocity(self) -> Vec3:
         """How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running"""
+    @property
+    def destination(self) -> Vec3 | None:
+        """Where it's walking (the navmesh spot set_destination found), or None while it stands"""
+    @property
+    def moving(self) -> bool:
+        """True from set_destination until it arrives or is stopped"""
+    def set_destination(self, point: Vec3 | typing.Sequence[float]) -> bool:
+        """Walks to the point (the nearest spot on the navmesh within 2 meters of it). It sends 'destination reached' when it gets there, or when it can't and stops as close as it could. False, and nothing changes, when no agent can stand near the point"""
+    def stop(self) -> None:
+        """Stops walking: it slows to a stop where it is, and sends no 'destination reached'"""
 
 
 class PointLight:

@@ -597,7 +597,15 @@ namespace Bellows {
 		// Agents walk after scripts, so a destination set this frame is used, and before physics, so
 		// a kinematic body goes where its agent went.
 		if (!m_GamePaused && m_NavAgents)
-			m_NavAgents->Update(*this, deltaTime);
+		{
+			for (const NavAgentArrival& arrival : m_NavAgents->Update(*this, deltaTime))
+			{
+				Scripting::ScriptEntity entity;
+				entity.SceneID = m_SceneID;
+				entity.ID = arrival.Entity;
+				Scripting::EmitScriptEvent("destination reached", { entity, arrival.Reached });
+			}
+		}
 
 		// Fixed-step physics. At most a few steps per frame so a slow frame cannot spiral. The game's
 		// pause holds it (and fixed updates) where it is.

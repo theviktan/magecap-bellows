@@ -78,6 +78,7 @@ in both languages (Python's `on_event`, ForgeScript's `when <name> with ...`):
 | `scene loaded` | `name`, `path` | After `load_scene` has loaded a scene, to every script, kept ones included: the new scene's name and its asset path. New scripts have had `on_create` by then, so a kept player can find the new level's things. |
 | `tween finished` | `entity`, `property`, `id` | A tween reached its end (see [Tweens](#tweens)). |
 | `animation finished` | `entity`, `clip` | A clip that doesn't loop reached its end (see [`Animator`](#animator)). |
+| `destination reached` | `entity`, `reached` | A [`NavAgent`](#navagent) stopped at the end of its path: `reached` is true at its destination, false when it can't get there and stopped as close as it could. |
 | `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too for what isn't kept, so it can't tell the two apart; `scene loaded` follows the change). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
 
 ```python
@@ -300,8 +301,40 @@ them, and an entity a script moves walks on from where it was put.
 | `turn_speed` | Degrees per second it turns to face where it walks, from 0 (it doesn't turn) to 10000 (default 720). |
 | `avoid_others` | Steers around other agents (default on). |
 | `velocity` | Read-only: how fast and which way it walks (`Vec3`, m/s); zero while it stands or the game isn't running. |
+| `set_destination(point)` | Walks to the point: the nearest spot on the navmesh within 2 meters of it. Gives back `False`, and changes nothing, when no agent can stand near the point. Without a navmesh it raises `ValueError` saying how to bake one. |
+| `stop()` | Stops walking: it slows to a stop where it is, and sends no `destination reached`. |
+| `destination`, `moving` | Read-only: where it's walking (the spot `set_destination` found) or `None`, and whether it is. |
 
 Values outside a range raise `ValueError`, and a scene file's are held to them when it loads.
+
+When it stops at the end of its path, every script gets **`destination reached`** with the entity
+and whether it got there: `reached` is false when the destination can't be reached (on a floor no
+path leads to, say) and it stopped as close as it could. Python: `on_event(self, name, entity,
+reached)`; ForgeScript: `when destination reached with who, reached` (and `wait for destination
+reached`). ForgeScript also has `walk hero to target` and `halt hero` (see [ForgeScript entity scripts](#forgescript-entity-scripts)).
+
+```python
+class Guard(bellows.Script):
+    def on_create(self):
+        self.agent = self.entity.get_component("NavAgent")
+        self.posts = [bellows.find_entity(name).position for name in ("Gate", "Tower")]
+        self.agent.set_destination(self.posts[0])
+
+    def on_event(self, name, *values):
+        if name == "destination reached" and values[0] == self.entity:
+            self.posts.reverse()
+            self.agent.set_destination(self.posts[0])
+```
+
+```forge
+when created
+	walk self to find_entity("Gate").position
+end
+
+when destination reached with who, reached
+	if who is self then walk self to find_entity("Tower").position end
+end
+```
 
 ### `Camera`
 `projection` (`"Perspective"`/`"Orthographic"`), `fov` (vertical, degrees), `orthographic_size`
@@ -752,6 +785,9 @@ engine sends these events, which the script handles with `when`:
   | `play animation (clip) on (entity)` | `entity.get_component("Animator").play(clip)` |
   | `pause animation on (entity)` | `entity.get_component("Animator").pause()` |
   | `resume animation on (entity)` | `entity.get_component("Animator").resume()` |
+  | `walk (entity) to (position)` | `entity.get_component("NavAgent").set_destination(position)`, giving back true or false |
+  | `halt (entity)` | `entity.get_component("NavAgent").stop()` |
+  | `the path from (start) to (end)` | `find_path(start, end)`, so `for each corner in the path from a to b` works |
 
   Every tween phrase also takes `second` (`over 1 second`) and ends with an optional
   `with (style)` for the easing, which is `"in out"` otherwise: `move door to p over 2 seconds with
