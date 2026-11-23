@@ -212,6 +212,20 @@ class {Class}(bellows.Script):
 				outItems.push_back(std::move(item));
 		}
 
+		std::optional<ScriptFix> FixOf(const ForgeScript::CompileError& error)
+		{
+			if (!error.HasFix() || error.FixLine < 1 || error.FixColumn < 1 || error.FixEndLine < 1 || error.FixEndColumn < 1)
+				return std::nullopt;
+			ScriptFix fix;
+			fix.Title = error.FixTitle;
+			fix.Line = static_cast<size_t>(error.FixLine);
+			fix.Column = static_cast<size_t>(error.FixColumn);
+			fix.EndLine = static_cast<size_t>(error.FixEndLine);
+			fix.EndColumn = static_cast<size_t>(error.FixEndColumn);
+			fix.NewText = error.FixText;
+			return fix;
+		}
+
 		std::vector<ScriptDiagnostic> CheckForgeScript(std::string_view source, const std::string& fileName)
 		{
 			if (!s_CheckVM)
@@ -232,6 +246,7 @@ class {Class}(bellows.Script):
 				{
 					diagnostic.Line = error.Line > 0 ? static_cast<size_t>(error.Line) : 0;
 					diagnostic.Column = error.Column > 0 ? static_cast<size_t>(error.Column) : 0;
+					diagnostic.Fix = FixOf(error);
 				}
 				else
 				{
@@ -250,6 +265,8 @@ class {Class}(bellows.Script):
 					diagnostic.Line = warning.Line > 0 ? static_cast<size_t>(warning.Line) : 0;
 					diagnostic.Column = warning.Column > 0 ? static_cast<size_t>(warning.Column) : 0;
 					diagnostic.IsWarning = true;
+					if (warning.File.empty() || warning.File == fileName)
+						diagnostic.Fix = FixOf(warning);
 					diagnostics.push_back(std::move(diagnostic));
 				}
 			}
@@ -501,18 +518,56 @@ class {Class}(bellows.Script):
 		for (const ScriptDiagnostic& diagnostic : diagnostics)
 		{
 			const size_t lineLength = diagnostic.Line > 0 && diagnostic.Line <= lineLengths.size() ? lineLengths[diagnostic.Line - 1] : 0;
-			items.push_back({
+			Json item = {
 				{ "line", diagnostic.Line },
 				{ "column", diagnostic.Column },
 				{ "endColumn", std::max(lineLength + 1, diagnostic.Column + 1) },
 				{ "severity", diagnostic.IsWarning ? "warning" : "error" },
 				{ "message", diagnostic.Message },
-			});
+			};
+			if (diagnostic.Fix)
+			{
+				item["fix"] = {
+					{ "title", diagnostic.Fix->Title },
+					{ "line", diagnostic.Fix->Line },
+					{ "column", diagnostic.Fix->Column },
+					{ "endLine", diagnostic.Fix->EndLine },
+					{ "endColumn", diagnostic.Fix->EndColumn },
+					{ "newText", diagnostic.Fix->NewText },
+				};
+			}
+			items.push_back(std::move(item));
 		}
 		Json json;
 		json["file"] = fileName;
 		json["diagnostics"] = items;
 		return json.dump();
+	}
+
+	std::string ApplyScriptFix(std::string_view source, const ScriptFix& fix)
+	{
+		// Byte offsets of the 1-based line:column positions, held to the source (and to their line).
+		auto offsetOf = [&](size_t line, size_t column)
+		{
+			size_t start = 0;
+			for (size_t i = 1; i < line && start <= source.size(); i++)
+			{
+				const size_t next = source.find('\n', start);
+				if (next == std::string_view::npos)
+					return source.size();
+				start = next + 1;
+			}
+			size_t end = source.find('\n', start);
+			if (end == std::string_view::npos)
+				end = source.size();
+			return std::min(start + (column > 0 ? column - 1 : 0), end);
+		};
+		const size_t from = offsetOf(fix.Line, fix.Column);
+		const size_t to = std::max(from, offsetOf(fix.EndLine, fix.EndColumn));
+		std::string result(source.substr(0, from));
+		result += fix.NewText;
+		result += source.substr(to);
+		return result;
 	}
 
 	std::vector<ScriptDiagnostic> CheckScript(ScriptLanguage language, std::string_view source, const std::string& fileName)

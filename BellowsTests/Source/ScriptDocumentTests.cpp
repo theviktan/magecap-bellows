@@ -297,6 +297,44 @@ TEST_CASE("Check results are formatted for tools like forgescript --check")
 	CHECK(clean["diagnostics"].empty());
 }
 
+TEST_CASE("A ForgeScript mistake that names its fix carries it, in the JSON as forgescript --check --json writes it")
+{
+	// A block without its 'end': the checker offers to add it.
+	const std::string source = "when created\n\tsay \"hi\"\n";
+	const std::vector<ScriptDiagnostic> diagnostics = CheckScript(ScriptLanguage::ForgeScript, source, "Scripts/Fix.forge");
+	REQUIRE(diagnostics.size() == 1);
+	REQUIRE(diagnostics[0].Fix);
+	const ScriptFix& fix = *diagnostics[0].Fix;
+	CHECK(fix.Title == "Add the missing 'end'");
+
+	const Json json = Json::parse(FormatScriptDiagnosticsJson("Scripts/Fix.forge", source, diagnostics));
+	REQUIRE(json["diagnostics"].size() == 1);
+	const Json& item = json["diagnostics"][0]["fix"];
+	CHECK(item["title"] == fix.Title);
+	CHECK(item["line"] == fix.Line);
+	CHECK(item["column"] == fix.Column);
+	CHECK(item["endLine"] == fix.EndLine);
+	CHECK(item["endColumn"] == fix.EndColumn);
+	CHECK(item["newText"] == fix.NewText);
+
+	// Made, the fix leaves a script with no mistakes.
+	const std::string fixed = ApplyScriptFix(source, fix);
+	INFO(fixed);
+	CHECK_FALSE(HasScriptMistakes(CheckScript(ScriptLanguage::ForgeScript, fixed, "Scripts/Fix.forge")));
+
+	// A mistake without one has no "fix".
+	const std::vector<ScriptDiagnostic> plain = CheckScript(ScriptLanguage::ForgeScript, "when created\n\tset x to\nend\n", "Scripts/Plain.forge");
+	REQUIRE_FALSE(plain.empty());
+	CHECK_FALSE(plain[0].Fix);
+	CHECK_FALSE(Json::parse(FormatScriptDiagnosticsJson("Scripts/Plain.forge", "x", plain))["diagnostics"][0].contains("fix"));
+
+	// Edits past the end of a line or the file are held to them.
+	ScriptFix far { "Append", 9, 9, 9, 9, "!" };
+	CHECK(ApplyScriptFix("ab", far) == "ab!");
+	ScriptFix replace { "Replace", 1, 2, 1, 3, "X" };
+	CHECK(ApplyScriptFix("abc\ndef", replace) == "aXc\ndef");
+}
+
 TEST_CASE("The Script Editor's check reads scripts pulled in with use, from the asset folder")
 {
 	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "CheckUse" / "Assets";

@@ -73,3 +73,86 @@ TEST_CASE("ForgeScript help still knows the language without an API file")
 	CHECK(HasLabel(suggestions, "function"));
 	CHECK_FALSE(HasLabel(assist.Complete(script, "pla\n", 0, 3, "pla"), "play_sound"));
 }
+
+TEST_CASE("ForgeScript help converts UTF-16 columns back, and makes edits from the last to the first")
+{
+	CHECK(ForgeScriptAssist::FromUtf16Column("say 1", 3) == 3);
+	CHECK(ForgeScriptAssist::FromUtf16Column("say \"\xF0\x9F\x99\x82\" x", 8) == 7);		// The emoji's two units are one column
+	CHECK(ForgeScriptAssist::FromUtf16Column("ab", 5) == 5);
+	for (size_t column = 0; column < 10; column++)
+		CHECK(ForgeScriptAssist::FromUtf16Column("a\xC3\xA9\xF0\x9F\x99\x82z", ForgeScriptAssist::ToUtf16Column("a\xC3\xA9\xF0\x9F\x99\x82z", column)) == column);
+
+	using Edit = ForgeScriptAssist::TextEdit;
+	// Given in any order; a later edit's range is still the original text's.
+	const std::string text = "set hp to 1\r\nsay hp\n";
+	CHECK(ForgeScriptAssist::ApplyEdits(text, { Edit { { 0, 4, 0, 6 }, "health" }, Edit { { 1, 4, 1, 6 }, "health" } }) == "set health to 1\r\nsay health\n");
+	CHECK(ForgeScriptAssist::ApplyEdits(text, { Edit { { 1, 4, 1, 6 }, "health" }, Edit { { 0, 4, 0, 6 }, "health" } }) == "set health to 1\r\nsay health\n");
+	// Columns are code points, and positions past a line or the text are held to it.
+	CHECK(ForgeScriptAssist::ApplyEdits("say \"\xC3\xA9\" x\n", { Edit { { 0, 8, 0, 9 }, "y" } }) == "say \"\xC3\xA9\" y\n");
+	CHECK(ForgeScriptAssist::ApplyEdits("ab\ncd", { Edit { { 0, 9, 0, 9 }, "!" } }) == "ab!\ncd");
+	CHECK(ForgeScriptAssist::ApplyEdits("ab", { Edit { { 7, 0, 9, 0 }, "\nend" } }) == "ab\nend");
+}
+
+TEST_CASE("ForgeScript help finds every use of a name, renames it, and formats the script")
+{
+	REQUIRE(FileSystem::Exists(c_ApiFile));
+	ForgeScriptAssist assist(c_ApiFile);
+	const std::filesystem::path file = BellowsTests::GetTestOutputDirectory() / "Assist" / "Hero.forge";
+	const std::string text =
+		"set health to 3\n"
+		"function heal(amount)\n"
+		"\tset health to health + amount\n"
+		"end\n"
+		"function hurt(amount)\n"
+		"\tset health to health - amount\n"
+		"end\n";
+
+	SUBCASE("References: every use of the script's 'health', not the two different 'amount's")
+	{
+		const std::vector<ForgeScriptAssist::Reference> uses = assist.FindReferences(file, text, 2, 6);
+		REQUIRE(uses.size() == 5);
+		CHECK(uses[0].Range == ForgeScriptAssist::TextRange { 0, 4, 0, 10 });
+		CHECK(uses[0].LineText == "set health to 3");
+		CHECK(uses[4].Range.StartLine == 5);
+		CHECK(uses[0].File == file);
+		CHECK(assist.FindReferences(file, text, 2, 25).size() == 2);	// heal's 'amount' only
+	}
+	SUBCASE("Rename changes each use, and says why when it can't")
+	{
+		std::string name, error;
+		const std::optional<ForgeScriptAssist::TextRange> range = assist.PrepareRename(file, text, 0, 6, name, error);
+		REQUIRE(range);
+		CHECK(name == "health");
+		CHECK(error.empty());
+
+		const ForgeScriptAssist::RenameResult rename = assist.Rename(file, text, 0, 6, "hp");
+		CHECK(rename.Error.empty());
+		REQUIRE(rename.Edits.count(file) == 1);
+		const std::string renamed = ForgeScriptAssist::ApplyEdits(text, rename.Edits.at(file));
+		CHECK(renamed.find("health") == std::string::npos);
+		CHECK(renamed.find("set hp to hp + amount") != std::string::npos);
+
+		const ForgeScriptAssist::RenameResult keyword = assist.Rename(file, text, 0, 6, "end");
+		CHECK_FALSE(keyword.Error.empty());
+		CHECK(keyword.Edits.empty());
+		const ForgeScriptAssist::RenameResult taken = assist.Rename(file, text, 0, 6, "heal");
+		CHECK_FALSE(taken.Error.empty());
+
+		// A built-in can't be renamed here.
+		const std::string calls = "say abs(-2)\n";
+		CHECK_FALSE(assist.PrepareRename(file, calls, 0, 5, name, error));
+	}
+	SUBCASE("Format lays the script out, and refuses one with mistakes")
+	{
+		std::string error;
+		const std::optional<std::string> formatted = assist.Format(file, "function heal(amount)\nset health to amount\n    end\n", error);
+		REQUIRE(formatted);
+		CHECK(error.empty());
+		CHECK(*formatted == "function heal(amount)\n\tset health to amount\nend\n");
+		const std::optional<std::string> same = assist.Format(file, text, error);
+		REQUIRE(same);
+		CHECK(*same == text);
+		CHECK_FALSE(assist.Format(file, "function broken(\n", error));
+		CHECK_FALSE(error.empty());
+	}
+}
