@@ -380,3 +380,25 @@ TEST_CASE("Changing scenes during play brings the new scene's navmesh")
 	playing.OnRuntimeStop();
 	AssetManager::SetAssetDirectory(previous);
 }
+
+TEST_CASE("[gpu] A mesh collider made just before a bake is part of it")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	Scene scene("MeshColliders");
+	Entity floor = scene.CreateEntity("Floor");
+	floor.GetComponent<TransformComponent>().Scale = glm::vec3(10.0f, 1.0f, 10.0f);
+	floor.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	floor.AddComponent<BoxColliderComponent>();
+	// A 2 m block from the built-in cube, with no frame run yet to load its mesh.
+	Entity block = scene.CreateEntity("Block");
+	block.GetComponent<TransformComponent>().Translation = glm::vec3(0.0f, 1.5f, 0.0f);
+	block.GetComponent<TransformComponent>().Scale = glm::vec3(2.0f);
+	block.AddComponent<MeshRendererComponent>().MeshPath = "Builtin/Cube";
+	block.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	block.AddComponent<MeshColliderComponent>();
+	std::string error;
+	REQUIRE(scene.BakeNavigation(error));
+	CHECK_FALSE(scene.GetNavMesh()->IsNavigable(glm::vec3(0.0f, 0.5f, 0.0f)));
+	CHECK(scene.GetNavMesh()->IsNavigable(glm::vec3(3.0f, 0.5f, 3.0f)));
+}

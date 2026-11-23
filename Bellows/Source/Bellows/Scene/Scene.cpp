@@ -680,6 +680,8 @@ namespace Bellows {
 
 	bool Scene::BakeNavigation(std::string& error)
 	{
+		// Mesh colliders bake from their meshes, which may not have been loaded yet (an entity made this frame).
+		UpdateRuntimeCaches();
 		Scope<NavMesh> navMesh = NavMesh::Build(CollectNavigationGeometry(*this), m_Settings.Navigation, error);
 		if (!navMesh)
 			return false;
