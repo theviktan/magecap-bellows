@@ -468,3 +468,70 @@ TEST_CASE("[gpu] A textured MageCap Foundry model imports: palette sampled pixel
 	CHECK(glass.DoubleSided);
 	CHECK_FALSE(lantern->GetProperties().DoubleSided);
 }
+
+TEST_CASE("[gpu] MageCap Foundry's starter house, as Forge exports it, imports and renders")
+{
+	// BellowsTests/Data/FoundryStarterHouse.glb is a copy of magecap-forge's
+	// tests/fixtures/foundry/foundry-starter-house.glb (Forge 2.65.0, commit a60d176): a floor, a
+	// wall, a mirrored wall with a window, a lantern post, and a cube, cylinder and wedge, all with the
+	// Starter pack's palette texture.
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	const Ref<Mesh> mesh = MeshImporter::ImportGLTF(BellowsTests::GetSourceDirectory() / "BellowsTests" / "Data" / "FoundryStarterHouse.glb");
+	REQUIRE(mesh);
+
+	// Each block's parts, one per material, named after the block.
+	const std::vector<Submesh>& submeshes = mesh->GetSubmeshes();
+	REQUIRE(submeshes.size() == 11);
+	auto part = [&](const std::string& block, const std::string& material) -> const Submesh*
+	{
+		for (const Submesh& submesh : submeshes)
+			if (submesh.Name == block && mesh->GetMaterials()[submesh.MaterialIndex]->GetName() == material)
+				return &submesh;
+		return nullptr;
+	};
+	auto properties = [&](const Submesh* submesh) -> const MaterialProperties& { return mesh->GetMaterials()[submesh->MaterialIndex]->GetProperties(); };
+	const Submesh* floor = part("Floor wood 2 m", "palette");
+	const Submesh* window = part("Wall timber 2 m window", "glass");
+	const Submesh* metal = part("Lantern post large", "palette_metal");
+	const Submesh* glow = part("Lantern post large", "palette_glow");
+	const Submesh* wedge = part("Wedge", "Material6");
+	REQUIRE(floor);
+	REQUIRE(part("Wall timber 2 m", "palette"));
+	REQUIRE(part("Wall timber 2 m window", "palette"));
+	REQUIRE(window);
+	REQUIRE(metal);
+	REQUIRE(glow);
+	REQUIRE(part("Cube", "Material4"));
+	REQUIRE(part("Cylinder", "Material5"));
+	REQUIRE(wedge);
+
+	// The Starter pack's palette: one texture, sampled pixelated, repeating (glTF's default wrap).
+	const Ref<Material> palette = mesh->GetMaterials()[floor->MaterialIndex];
+	REQUIRE(palette->GetAlbedoMap());
+	CHECK(palette->GetProperties().Filter == TextureFilter::Nearest);
+	CHECK(palette->GetProperties().WrapU == TextureWrap::Repeat);
+	CHECK(palette->GetProperties().DoubleSided);
+	CHECK(palette->GetProperties().Roughness == doctest::Approx(0.8f));
+	CHECK_FALSE(palette->GetProperties().Unlit);
+	// Glass blends at 0.35 (transmission is used, not required); metal and glow keep their values.
+	CHECK(properties(window).Mode == AlphaMode::Blend);
+	CHECK(properties(window).AlbedoColor.a == doctest::Approx(0.35f));
+	CHECK(properties(window).Filter == TextureFilter::Nearest);
+	CHECK(properties(metal).Metallic == doctest::Approx(0.6f));
+	CHECK(properties(metal).Roughness == doctest::Approx(0.4f));
+	CHECK(mesh->GetMaterials()[glow->MaterialIndex]->GetEmissiveMap());
+	CHECK(properties(glow).EmissiveColor == glm::vec3(1.0f));
+	// Plain shapes: their color, linear as glTF writes it, and no texture.
+	const MaterialProperties& cube = properties(part("Cube", "Material4"));
+	CHECK(cube.AlbedoColor.r == doctest::Approx(0.57758f).epsilon(1e-4));
+	CHECK(cube.AlbedoColor.g == doctest::Approx(0.03071f).epsilon(1e-3));
+	CHECK_FALSE(mesh->GetMaterials()[part("Cube", "Material4")->MaterialIndex]->GetAlbedoMap());
+	// Node transforms: the floor sits at (1, 0, -1); the wedge is sized 1 x 1.5 x 2.
+	CHECK(glm::vec3(floor->Transform[3]) == glm::vec3(1.0f, 0.0f, -1.0f));
+	CHECK(glm::length(glm::vec3(wedge->Transform[1])) == doctest::Approx(1.5f));
+	CHECK(glm::length(glm::vec3(wedge->Transform[2])) == doctest::Approx(2.0f));
+	// The mirrored wall is mirrored in its vertices (Forge 2.60.0's fix), so nothing is drawn mirrored.
+	for (const Submesh& submesh : submeshes)
+		CHECK(glm::determinant(glm::mat3(submesh.Transform)) > 0.0f);
+}

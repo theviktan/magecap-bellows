@@ -90,6 +90,10 @@ cd build/asan/bin && ASAN_OPTIONS=detect_leaks=0 BELLOWS_FUZZ_ITERATIONS=20000 .
 the font tests read, is written by `Tools/GenerateTestFonts.py` (needs `pip install fonttools`).
 `BellowsTests/Data/SkinnedColumn.glb`, the skinned and animated model the import, animation and fuzz
 tests read, is written by `Tools/GenerateTestModels.py` (standard library only).
+`BellowsTests/Data/FoundryStarterHouse.glb` is a copy of MageCap Forge's
+`tests/fixtures/foundry/foundry-starter-house.glb` (Forge 2.65.0, commit `a60d176`), a real Foundry
+export the import and GPU tests read; copy it again from Forge when Foundry's export changes, and
+update the commit here and in the tests.
 GPU tests run with Vulkan validation enabled and fail on any validation message.
 
 ## Versions and releases
