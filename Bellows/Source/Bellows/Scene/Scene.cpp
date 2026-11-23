@@ -4,6 +4,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
@@ -123,6 +124,7 @@ namespace Bellows {
 	{
 		Ref<Scene> scene = CreateRef<Scene>(source->m_Name);
 		scene->m_Settings = source->m_Settings;
+		scene->m_NavMesh = source->m_NavMesh;
 		scene->m_ViewportWidth = source->m_ViewportWidth;
 		scene->m_ViewportHeight = source->m_ViewportHeight;
 
@@ -515,6 +517,7 @@ namespace Bellows {
 		m_Settings = SceneSettings {};
 		m_Name = "Untitled";
 		SceneSerializer::DeserializeFromJson(*this, json, true);
+		m_NavMesh = LoadSceneNavMesh(AssetManager::GetAssetDirectory() / path);
 
 		std::vector<Entity> loaded;
 		for (entt::entity handle : m_Registry.view<IDComponent>())
@@ -673,6 +676,15 @@ namespace Bellows {
 			text.RuntimeLayoutKey = key;
 		}
 		return &text.RuntimeLayout;
+	}
+
+	bool Scene::BakeNavigation(std::string& error)
+	{
+		Scope<NavMesh> navMesh = NavMesh::Build(CollectNavigationGeometry(*this), m_Settings.Navigation, error);
+		if (!navMesh)
+			return false;
+		m_NavMesh = Ref<NavMesh>(std::move(navMesh));
+		return true;
 	}
 
 	void Scene::OnUpdateEditor(Timestep timestep)

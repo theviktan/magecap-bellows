@@ -29,6 +29,7 @@ target_link_libraries(Bellows
 		pybind11::embed
 		ForgeScript
 		BellowsMsdfgen
+		BellowsRecast
 		Threads::Threads
 		${CMAKE_DL_LIBS})
 

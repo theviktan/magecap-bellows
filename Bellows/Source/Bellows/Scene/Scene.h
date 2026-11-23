@@ -4,6 +4,7 @@
 #include "Bellows/Core/Timestep.h"
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/UUID.h"
+#include "Bellows/Navigation/NavMesh.h"
 #include "Bellows/Renderer/SceneRenderer.h"
 #include "Bellows/Scene/CameraShake.h"
 #include "Bellows/UI/UILayout.h"
@@ -35,6 +36,7 @@ namespace Bellows {
 		float FixedTimestep = 1.0f / 60.0f;		// Physics step
 		glm::vec3 AmbientColor { 0.03f, 0.035f, 0.04f };
 		SceneRendererSettings Rendering;
+		NavMeshSettings Navigation;				// The agents its navmesh is baked for
 	};
 
 	// A collection of entities plus the systems that animate them during play.
@@ -178,6 +180,14 @@ namespace Bellows {
 		// The game camera's shake (shake_camera); cleared when play starts and stops.
 		CameraShake& GetCameraShake() { return m_CameraShake; }
 		const CameraShake& GetCameraShake() const { return m_CameraShake; }
+
+		// What agents walk on, or null before a bake. Loaded with the scene from its .bnav file, shared
+		// with copies (Play), and replaced by BakeNavigation.
+		const Ref<NavMesh>& GetNavMesh() const { return m_NavMesh; }
+		void SetNavMesh(Ref<NavMesh> navMesh) { m_NavMesh = std::move(navMesh); }
+		// Bakes a navmesh from the static colliders with the scene's Navigation settings. False, with the
+		// reason in 'error' and the old navmesh kept, when nothing could be baked.
+		bool BakeNavigation(std::string& error);
 		float GetTime() const { return m_Time; }
 		uint64_t GetFrameCount() const { return m_FrameCount; }
 
@@ -291,6 +301,7 @@ namespace Bellows {
 		Scope<SceneAudio> m_Audio;
 		Scope<SceneTweens> m_Tweens;
 		CameraShake m_CameraShake;
+		Ref<NavMesh> m_NavMesh;
 
 		static Scene* s_ActiveScene;
 

@@ -100,6 +100,9 @@ namespace Bellows {
 		bool OpenScene(const std::string& path);
 		bool SaveScene();
 		bool SaveSceneAs(const std::string& assetPath);
+		// Bakes the edited scene's navmesh and saves it beside the scene (which must have been saved).
+		// False with the reason in 'error'.
+		bool BakeNavigation(std::string& error);
 		const std::string& GetScenePath() const { return m_ScenePath; }
 		bool IsSceneDirty() const;
 		const Ref<Scene>& GetEditorScene() const { return m_EditorScene; }

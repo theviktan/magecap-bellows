@@ -19,6 +19,7 @@
 #include "Bellows/Core/Buffer.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Log.h"
+#include "Bellows/Navigation/NavMesh.h"
 #include "Bellows/Project/Project.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/Texture.h"
@@ -603,6 +604,50 @@ TEST_CASE("Fuzz: damaged skinned models are imported or refused, never crash")
 			mesh = MeshImporter::ImportGLTF(glbPath);
 		}
 		CheckMesh(mesh);
+	});
+}
+
+TEST_CASE("Fuzz: damaged navmesh files are loaded or refused, never crash")
+{
+	// Two tiles of floor with a wall, so links between tiles, detail meshes and search trees are all there.
+	NavMeshGeometry geometry;
+	const auto quad = [&geometry](const glm::vec3& a, const glm::vec3& b, const glm::vec3& c, const glm::vec3& d)
+	{
+		geometry.AddTriangle(a, b, c);
+		geometry.AddTriangle(a, c, d);
+	};
+	quad({ -10.0f, 0.0f, -10.0f }, { -10.0f, 0.0f, 10.0f }, { 40.0f, 0.0f, 10.0f }, { 40.0f, 0.0f, -10.0f });
+	quad({ -0.2f, 3.0f, -10.0f }, { -0.2f, 3.0f, 6.0f }, { 0.2f, 3.0f, 6.0f }, { 0.2f, 3.0f, -10.0f });
+	quad({ -0.2f, 0.0f, -10.0f }, { -0.2f, 3.0f, -10.0f }, { -0.2f, 3.0f, 6.0f }, { -0.2f, 0.0f, 6.0f });
+	quad({ 0.2f, 0.0f, -10.0f }, { 0.2f, 0.0f, 6.0f }, { 0.2f, 3.0f, 6.0f }, { 0.2f, 3.0f, -10.0f });
+	std::string error;
+	const Scope<NavMesh> baked = NavMesh::Build(geometry, {}, error);
+	REQUIRE(baked);
+	REQUIRE(baked->GetTileCount() == 2);
+	const std::vector<uint8_t> saved = baked->Save();
+	const Bytes seed(saved.begin(), saved.end());
+	const std::filesystem::path path = GetFuzzDirectory("NavMeshes") / "Level.bnav";
+	WriteInput(path, seed.data(), seed.size());
+	REQUIRE(NavMesh::Load(saved, error));
+
+	RunFuzzer(0x4E41u, 900, 1, [&](Mutator& mutator, size_t)
+	{
+		const Bytes bytes = mutator.MutateBytes(seed);
+		WriteInput(path, bytes.data(), bytes.size());
+		std::string reason;
+		const Scope<NavMesh> navMesh = NavMesh::Load(std::vector<uint8_t>(bytes.begin(), bytes.end()), reason);
+		if (!navMesh)
+		{
+			REQUIRE_FALSE(reason.empty());
+			return;
+		}
+		// Whatever loads can be searched and drawn.
+		navMesh->FindPath(glm::vec3(-5.0f, 0.0f, 0.0f), glm::vec3(30.0f, 0.0f, 0.0f));
+		navMesh->FindNearestPoint(glm::vec3(0.0f), 2.0f);
+		navMesh->IsNavigable(glm::vec3(5.0f, 0.0f, 5.0f));
+		std::vector<glm::vec3> triangles;
+		navMesh->GetTriangles(triangles);
+		REQUIRE(triangles.size() % 3 == 0);
 	});
 }
 
