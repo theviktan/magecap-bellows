@@ -21,7 +21,8 @@ usually needs the same change in its skinned twin.
 
 ## Conventions that bite
 - Clip space is Y-up, depth 0..1; projections are **not** flipped (NVRHI flips the viewport).
-  Front faces are counter-clockwise. Fullscreen UV (0,0) = top-left; use `UVToNDC`/`NDCToUV`.
+  Front faces are counter-clockwise; a draw whose transform is mirrored (negative determinant) uses
+  the pass's mirrored pipelines, whose fronts are clockwise (`MeshPassPipelines`). Fullscreen UV (0,0) = top-left; use `UVToNDC`/`NDCToUV`.
 - Binding layouts: descriptor set = register space (`setRegisterSpaceAndDescriptorSet`);
   volatile constant buffers need `VolatileConstantBuffer` layout items; push constants use slot
   `c_PushConstantSlot`. Keep `ShaderInterop.h` structs in sync with GLSL (std140, static_asserts).

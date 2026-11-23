@@ -269,6 +269,22 @@ namespace Bellows {
 		nvrhi::RasterState cullNone;
 		cullNone.setCullNone().setFrontCounterClockwise(true).setDepthClipEnable(true);
 
+		// Every pipeline of a mesh pass. A mirrored transform winds triangles the other way, so its
+		// front faces are clockwise (as glTF says for a node with a negative determinant).
+		auto createMeshPass = [&](nvrhi::IShader* ps, const nvrhi::FramebufferInfo& info, nvrhi::RenderState state)
+		{
+			MeshPassPipelines pass;
+			for (int skinned = 0; skinned < 2; skinned++)
+				for (int doubleSided = 0; doubleSided < 2; doubleSided++)
+					for (int mirrored = 0; mirrored < 2; mirrored++)
+					{
+						state.rasterState = doubleSided ? cullNone : cullBack;
+						state.rasterState.setFrontCounterClockwise(!mirrored);
+						pass.Pipelines[skinned][doubleSided][mirrored] = createMeshPipeline(skinned ? skinnedVS : meshVS, ps, Renderer::GetSceneBindingLayout(), info, state);
+					}
+			return pass;
+		};
+
 		// Shadow pass
 		{
 			nvrhi::RenderState state;
@@ -287,12 +303,7 @@ namespace Bellows {
 			info.addColorFormat(c_NormalFormat).addColorFormat(c_EntityIDFormat).setDepthFormat(c_DepthFormat);
 			nvrhi::RenderState state;
 			state.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(true).setDepthFunc(nvrhi::ComparisonFunc::Less);
-			state.rasterState = cullBack;
-			m_PrepassPipeline = createMeshPipeline(meshVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
-			m_PrepassSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
-			state.rasterState = cullNone;
-			m_PrepassPipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
-			m_PrepassSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
+			m_PrepassPipelines = createMeshPass(Renderer::GetShader("DepthNormal.frag"), info, state);
 		}
 
 		nvrhi::FramebufferInfo hdrDepthInfo;
@@ -302,12 +313,7 @@ namespace Bellows {
 		{
 			nvrhi::RenderState state;
 			state.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(nvrhi::ComparisonFunc::Equal);
-			state.rasterState = cullBack;
-			m_OpaquePipeline = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			m_OpaqueSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			state.rasterState = cullNone;
-			m_OpaquePipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			m_OpaqueSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_OpaquePipelines = createMeshPass(Renderer::GetShader("PBR.frag"), hdrDepthInfo, state);
 		}
 
 		// Transparent
@@ -317,12 +323,7 @@ namespace Bellows {
 			state.blendState.targets[0].setBlendEnable(true)
 				.setSrcBlend(nvrhi::BlendFactor::SrcAlpha).setDestBlend(nvrhi::BlendFactor::InvSrcAlpha)
 				.setSrcBlendAlpha(nvrhi::BlendFactor::One).setDestBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha);
-			state.rasterState = cullBack;
-			m_TransparentPipeline = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			m_TransparentSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			state.rasterState = cullNone;
-			m_TransparentPipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
-			m_TransparentSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_TransparentPipelines = createMeshPass(Renderer::GetShader("PBR.frag"), hdrDepthInfo, state);
 		}
 
 		nvrhi::BlendState::RenderTarget alphaBlend;
@@ -412,9 +413,8 @@ namespace Bellows {
 		lineSetDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(glm::mat4)));
 		m_LineSet = device->createBindingSet(lineSetDesc, Renderer::GetLineBindingLayout());
 
-		BW_CORE_VERIFY(m_ShadowPipeline && m_PrepassPipeline && m_OpaquePipeline && m_TransparentPipeline && m_SkyboxPipeline
-			&& m_ShadowSkinnedPipeline && m_PrepassSkinnedPipeline && m_PrepassSkinnedPipelineDoubleSided && m_OpaqueSkinnedPipeline
-			&& m_OpaqueSkinnedPipelineDoubleSided && m_TransparentSkinnedPipeline && m_TransparentSkinnedPipelineDoubleSided
+		BW_CORE_VERIFY(m_ShadowPipeline && m_ShadowSkinnedPipeline && m_SkyboxPipeline
+			&& m_PrepassPipelines.IsComplete() && m_OpaquePipelines.IsComplete() && m_TransparentPipelines.IsComplete()
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
 			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline,
@@ -699,6 +699,7 @@ namespace Bellows {
 			draw.SubmeshIndex = i;
 			draw.MaterialPtr = materialOverride ? materialOverride.get() : materials[submesh.MaterialIndex].get();
 			draw.Transform = transform * submesh.Transform;
+			draw.Mirrored = glm::determinant(glm::mat3(draw.Transform)) < 0.0f;
 			draw.EntityID = entityID;
 			draw.CastShadows = castShadows;
 			draw.Bounds = submesh.BoundingBox.Transformed(draw.Transform);
@@ -1153,6 +1154,16 @@ namespace Bellows {
 			commandList->writeBuffer(m_JointBuffer, m_JointMatrices.data(), m_JointMatrices.size() * sizeof(glm::mat4));
 	}
 
+	bool SceneRenderer::MeshPassPipelines::IsComplete() const
+	{
+		for (const auto& skinned : Pipelines)
+			for (const auto& sided : skinned)
+				for (const nvrhi::GraphicsPipelineHandle& pipeline : sided)
+					if (!pipeline)
+						return false;
+		return true;
+	}
+
 	void SceneRenderer::DrawMeshes(nvrhi::ICommandList* commandList, const std::vector<DrawCommand>& draws, nvrhi::IFramebuffer* framebuffer,
 		const MeshPassPipelines& pipelines)
 	{
@@ -1163,10 +1174,7 @@ namespace Bellows {
 			const bool doubleSided = draw.MaterialPtr->GetProperties().DoubleSided;
 
 			nvrhi::GraphicsState state;
-			if (draw.Skinned)
-				state.pipeline = doubleSided ? pipelines.SkinnedDoubleSided : pipelines.SkinnedSingleSided;
-			else
-				state.pipeline = doubleSided ? pipelines.DoubleSided : pipelines.SingleSided;
+			state.pipeline = pipelines.Get(draw.Skinned, doubleSided, draw.Mirrored);
 			state.framebuffer = framebuffer;
 			state.viewport.addViewportAndScissorRect(viewport);
 			state.bindings = { m_SceneSet, draw.MaterialPtr->Prepare(commandList) };
@@ -1218,7 +1226,7 @@ namespace Bellows {
 		commandList->clearTextureFloat(m_NormalTexture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 0.0f));
 		commandList->clearTextureUInt(m_EntityIDTexture, nvrhi::AllSubresources, 0);
 		DrawMeshes(commandList, m_OpaqueDraws, m_PrepassFramebuffer,
-			{ m_PrepassPipeline, m_PrepassPipelineDoubleSided, m_PrepassSkinnedPipeline, m_PrepassSkinnedPipelineDoubleSided });
+			m_PrepassPipelines);
 	}
 
 	void SceneRenderer::RenderSSAO(nvrhi::ICommandList* commandList)
@@ -1254,7 +1262,7 @@ namespace Bellows {
 	{
 		commandList->clearTextureFloat(m_HDRTexture, nvrhi::AllSubresources, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
 		DrawMeshes(commandList, m_OpaqueDraws, m_HDRDepthFramebuffer,
-			{ m_OpaquePipeline, m_OpaquePipelineDoubleSided, m_OpaqueSkinnedPipeline, m_OpaqueSkinnedPipelineDoubleSided });
+			m_OpaquePipelines);
 	}
 
 	void SceneRenderer::RenderSkybox(nvrhi::ICommandList* commandList)
@@ -1272,7 +1280,7 @@ namespace Bellows {
 	void SceneRenderer::RenderTransparent(nvrhi::ICommandList* commandList)
 	{
 		DrawMeshes(commandList, m_TransparentDraws, m_HDRDepthFramebuffer,
-			{ m_TransparentPipeline, m_TransparentPipelineDoubleSided, m_TransparentSkinnedPipeline, m_TransparentSkinnedPipelineDoubleSided });
+			m_TransparentPipelines);
 	}
 
 	void SceneRenderer::RenderBloom(nvrhi::ICommandList* commandList)

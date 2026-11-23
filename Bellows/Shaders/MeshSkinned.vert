@@ -29,7 +29,8 @@ void main()
 
 	v_WorldPosition = worldPosition.xyz;
 	v_Normal = normalize(SkinNormalMatrix(skin) * a_Normal);
-	v_Tangent = vec4(normalize(mat3(skin) * a_Tangent.xyz), a_Tangent.w);
+	// A mirrored pose flips the bitangent the fragment shader rebuilds from the normal and tangent.
+	v_Tangent = vec4(normalize(mat3(skin) * a_Tangent.xyz), determinant(mat3(skin)) < 0.0 ? -a_Tangent.w : a_Tangent.w);
 	v_TexCoord = a_TexCoord;
 	v_ViewDepth = -(u_Frame.View * worldPosition).z;
 

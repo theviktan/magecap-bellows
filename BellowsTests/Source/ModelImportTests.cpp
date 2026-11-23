@@ -6,9 +6,16 @@
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Project/Project.h"
+#include "Bellows/Renderer/Material.h"
+#include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
 #include <array>
+#include <cstring>
+#include <vector>
 
 using namespace Bellows;
 
@@ -31,6 +38,36 @@ namespace {
 			"accessors": [ { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
 				"min": [ -0.5, 0, 1 ], "max": [ 0.5, 1, 2 ] } ]
 		})"));
+	}
+
+	// A binary glTF (.glb): the JSON chunk, then the BIN chunk, each padded to 4 bytes.
+	std::vector<uint8_t> MakeGLB(const Json& document, std::vector<uint8_t> bin)
+	{
+		std::string json = document.dump();
+		while (json.size() % 4 != 0)
+			json.push_back(' ');
+		while (bin.size() % 4 != 0)
+			bin.push_back(0);
+		std::vector<uint8_t> glb;
+		auto put32 = [&](uint32_t value) { for (int i = 0; i < 4; i++) glb.push_back(static_cast<uint8_t>(value >> (8 * i))); };
+		put32(0x46546C67);	// "glTF"
+		put32(2);
+		put32(static_cast<uint32_t>(12 + 8 + json.size() + 8 + bin.size()));
+		put32(static_cast<uint32_t>(json.size()));
+		put32(0x4E4F534A);	// "JSON"
+		glb.insert(glb.end(), json.begin(), json.end());
+		put32(static_cast<uint32_t>(bin.size()));
+		put32(0x004E4942);	// "BIN"
+		glb.insert(glb.end(), bin.begin(), bin.end());
+		return glb;
+	}
+
+	template<typename T>
+	void Append(std::vector<uint8_t>& bytes, const std::vector<T>& values)
+	{
+		const size_t start = bytes.size();
+		bytes.resize(start + values.size() * sizeof(T));
+		std::memcpy(bytes.data() + start, values.data(), values.size() * sizeof(T));
 	}
 
 	std::filesystem::path MakeModelFolder(const char* name)
@@ -200,4 +237,92 @@ TEST_CASE("A glTF file that requires an extension Bellows can't read is refused"
 	document["extensionsUsed"] = { "KHR_materials_variants" };
 	REQUIRE(FileSystem::WriteTextFile(folder / "Used.gltf", document.dump()));
 	CHECK(MeshImporter::ImportGLTF(folder / "Used.gltf"));
+}
+
+TEST_CASE("A MageCap Foundry model imports: shared accessors, both index sizes, linear colors, blending, node transforms and extras")
+{
+	// What Foundry writes (MFC, Nov 23): float positions and normals; uint16 or uint32 indices; one
+	// accessor set shared by several meshes; linear baseColorFactor with metallic 0 and roughness 1,
+	// BLEND when see-through; node translation, rotation and scale; extras.magecapFoundry; no extensions.
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "FoundryImport";
+	REQUIRE(FileSystem::CreateDirectories(folder));
+
+	std::vector<uint8_t> bin;
+	Append(bin, std::vector<float> { -0.5f, 0.0f, -0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.5f });	// 0: positions
+	Append(bin, std::vector<float> { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 });										// 48: normals
+	Append(bin, std::vector<uint16_t> { 0, 3, 2, 0, 2, 1 });														// 96: uint16 indices
+	Append(bin, std::vector<uint32_t> { 0, 3, 2, 0, 2, 1 });														// 108: uint32 indices
+	REQUIRE(bin.size() == 132);
+
+	const glm::quat quarterTurn = glm::angleAxis(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+	const Json extras = { { "magecapFoundry", { { "shape", "slab" }, { "size", { 1.0, 0.25, 1.0 } }, { "color", "#cc2222" } } } };
+	const Json document = {
+		{ "asset", { { "version", "2.0" }, { "generator", "MageCap Foundry" } } },
+		{ "scene", 0 },
+		{ "scenes", { { { "nodes", { 0, 1, 2 } } } } },
+		{ "nodes", {
+			{ { "name", "slab" }, { "mesh", 0 }, { "translation", { 1.0, 2.0, 3.0 } },
+				{ "rotation", { quarterTurn.x, quarterTurn.y, quarterTurn.z, quarterTurn.w } }, { "scale", { 2.0, 1.0, 1.0 } }, { "extras", extras } },
+			{ { "name", "glass" }, { "mesh", 1 }, { "translation", { 0.0, 1.0, 0.0 } }, { "extras", extras } },
+			{ { "name", "slab mirrored" }, { "mesh", 2 }, { "scale", { -1.0, 1.0, 1.0 } }, { "extras", extras } } } },
+		{ "meshes", {
+			{ { "primitives", { { { "attributes", { { "POSITION", 0 }, { "NORMAL", 1 } } }, { "indices", 2 }, { "material", 0 } } } } },
+			{ { "primitives", { { { "attributes", { { "POSITION", 0 }, { "NORMAL", 1 } } }, { "indices", 3 }, { "material", 1 } } } } },
+			{ { "primitives", { { { "attributes", { { "POSITION", 0 }, { "NORMAL", 1 } } }, { "indices", 2 }, { "material", 0 } } } } } } },
+		{ "materials", {
+			{ { "name", "red" }, { "pbrMetallicRoughness", { { "baseColorFactor", { 0.6, 0.016, 0.016, 1.0 } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 1.0 } } } },
+			{ { "name", "glass" }, { "alphaMode", "BLEND" },
+				{ "pbrMetallicRoughness", { { "baseColorFactor", { 0.2, 0.4, 0.8, 0.35 } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 1.0 } } } } } },
+		{ "buffers", { { { "byteLength", 132 } } } },
+		{ "bufferViews", {
+			{ { "buffer", 0 }, { "byteOffset", 0 }, { "byteLength", 48 }, { "target", 34962 } },
+			{ { "buffer", 0 }, { "byteOffset", 48 }, { "byteLength", 48 }, { "target", 34962 } },
+			{ { "buffer", 0 }, { "byteOffset", 96 }, { "byteLength", 12 }, { "target", 34963 } },
+			{ { "buffer", 0 }, { "byteOffset", 108 }, { "byteLength", 24 }, { "target", 34963 } } } },
+		{ "accessors", {
+			{ { "bufferView", 0 }, { "componentType", 5126 }, { "count", 4 }, { "type", "VEC3" }, { "min", { -0.5, 0.0, -0.5 } }, { "max", { 0.5, 0.0, 0.5 } } },
+			{ { "bufferView", 1 }, { "componentType", 5126 }, { "count", 4 }, { "type", "VEC3" } },
+			{ { "bufferView", 2 }, { "componentType", 5123 }, { "count", 6 }, { "type", "SCALAR" } },
+			{ { "bufferView", 3 }, { "componentType", 5125 }, { "count", 6 }, { "type", "SCALAR" } } } } };
+	const std::vector<uint8_t> glb = MakeGLB(document, bin);
+	REQUIRE(FileSystem::WriteBinaryFile(folder / "Foundry.glb", glb.data(), glb.size()));
+
+	const Ref<Mesh> mesh = MeshImporter::ImportGLTF(folder / "Foundry.glb");
+	REQUIRE(mesh);
+	const std::vector<Submesh>& submeshes = mesh->GetSubmeshes();
+	REQUIRE(submeshes.size() == 3);
+
+	// Each node gets the shared vertices and its own triangles, wound as written.
+	for (const Submesh& submesh : submeshes)
+	{
+		CHECK(submesh.VertexCount == 4);
+		REQUIRE(submesh.IndexCount == 6);
+		const std::vector<uint32_t> expected = { 0, 3, 2, 0, 2, 1 };
+		for (uint32_t i = 0; i < 6; i++)
+			CHECK(mesh->GetIndices()[submesh.BaseIndex + i] == expected[i]);
+		const Vertex& corner = mesh->GetVertices()[submesh.BaseVertex + 2];
+		CHECK(corner.Position == glm::vec3(0.5f, 0.0f, 0.5f));
+		CHECK(corner.Normal == glm::vec3(0.0f, 1.0f, 0.0f));
+	}
+	CHECK(submeshes[0].Name == "slab");
+	CHECK(submeshes[1].Name == "glass");
+
+	// Node transforms: translation, then rotation, then scale, as glTF composes them.
+	const glm::mat4 expected = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f)) * glm::mat4_cast(quarterTurn)
+		* glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, 1.0f));
+	for (int column = 0; column < 4; column++)
+		for (int row = 0; row < 4; row++)
+			CHECK(submeshes[0].Transform[column][row] == doctest::Approx(expected[column][row]).epsilon(1e-5));
+	CHECK(glm::vec3(submeshes[1].Transform[3]) == glm::vec3(0.0f, 1.0f, 0.0f));
+	CHECK(glm::determinant(glm::mat3(submeshes[2].Transform)) == doctest::Approx(-1.0f));	// The renderer draws it mirrored
+
+	// Colors stay linear, as glTF writes them; see-through blends.
+	const MaterialProperties& red = mesh->GetMaterials()[submeshes[0].MaterialIndex]->GetProperties();
+	CHECK(red.AlbedoColor == glm::vec4(0.6f, 0.016f, 0.016f, 1.0f));
+	CHECK(red.Metallic == 0.0f);
+	CHECK(red.Roughness == 1.0f);
+	CHECK(red.Mode == AlphaMode::Opaque);
+	const MaterialProperties& glass = mesh->GetMaterials()[submeshes[1].MaterialIndex]->GetProperties();
+	CHECK(glass.AlbedoColor == glm::vec4(0.2f, 0.4f, 0.8f, 0.35f));
+	CHECK(glass.Mode == AlphaMode::Blend);
 }
