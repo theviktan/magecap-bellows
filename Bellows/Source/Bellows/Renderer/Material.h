@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <nvrhi/nvrhi.h>
 
+#include <optional>
 #include <string>
 
 namespace Bellows {
@@ -19,6 +20,26 @@ namespace Bellows {
 
 	const char* AlphaModeToString(AlphaMode mode);
 	AlphaMode AlphaModeFromString(std::string_view text);
+
+	// How a material's textures are read between their pixels.
+	enum class TextureFilter : uint8_t
+	{
+		Linear = 0,		// Smooth: trilinear and anisotropic
+		Nearest,		// Pixelated: each pixel a sharp square (pixel art, palette textures)
+	};
+
+	// What a material's textures do past their edges (UVs outside 0 to 1).
+	enum class TextureWrap : uint8_t
+	{
+		Repeat = 0,
+		Clamp,			// The edge pixels stretch on
+		Mirror,			// Every other repeat is flipped
+	};
+
+	const char* TextureFilterToString(TextureFilter filter);
+	std::optional<TextureFilter> TextureFilterFromString(std::string_view text);
+	const char* TextureWrapToString(TextureWrap wrap);
+	std::optional<TextureWrap> TextureWrapFromString(std::string_view text);
 
 	// Scalar PBR parameters of a material (metallic/roughness workflow).
 	struct MaterialProperties
@@ -34,6 +55,9 @@ namespace Bellows {
 		glm::vec2 UVOffset { 0.0f };
 		AlphaMode Mode = AlphaMode::Opaque;
 		bool DoubleSided = false;
+		TextureFilter Filter = TextureFilter::Linear;	// For all of its textures
+		TextureWrap WrapU = TextureWrap::Repeat;
+		TextureWrap WrapV = TextureWrap::Repeat;
 
 		bool operator==(const MaterialProperties&) const = default;
 	};
@@ -87,6 +111,7 @@ namespace Bellows {
 		nvrhi::BindingSetHandle m_BindingSet;
 		bool m_Dirty = true;
 		bool m_BindingSetDirty = true;
+		nvrhi::ISampler* m_BoundSampler = nullptr;	// The sampler m_BindingSet has, to rebuild it when Filter or a wrap changes
 	};
 
 }

@@ -123,6 +123,34 @@ namespace Bellows {
 			return true;
 		}
 
+		TextureWrap WrapOf(cgltf_wrap_mode mode)
+		{
+			switch (mode)
+			{
+				case cgltf_wrap_mode_clamp_to_edge:		return TextureWrap::Clamp;
+				case cgltf_wrap_mode_mirrored_repeat:	return TextureWrap::Mirror;
+				default:								return TextureWrap::Repeat;
+			}
+		}
+
+		// A Bellows material has one sampler for all its textures: it takes the sampler of the first of
+		// its textures that has one, base color first. Magnified NEAREST (pixel art, palettes) is pixelated.
+		void ImportSampler(const cgltf_material& source, MaterialProperties& properties)
+		{
+			const cgltf_texture_view* views[] = { &source.pbr_metallic_roughness.base_color_texture, &source.emissive_texture,
+				&source.pbr_metallic_roughness.metallic_roughness_texture, &source.normal_texture, &source.occlusion_texture };
+			for (const cgltf_texture_view* view : views)
+			{
+				if (!view->texture || !view->texture->sampler)
+					continue;
+				const cgltf_sampler& sampler = *view->texture->sampler;
+				properties.Filter = sampler.mag_filter == cgltf_filter_type_nearest ? TextureFilter::Nearest : TextureFilter::Linear;
+				properties.WrapU = WrapOf(sampler.wrap_s);
+				properties.WrapV = WrapOf(sampler.wrap_t);
+				return;
+			}
+		}
+
 		Ref<Texture2D> LoadTexture(GLTFImportContext& context, const cgltf_texture_view& view, TextureColorSpace colorSpace)
 		{
 			if (!view.texture || !view.texture->image)
@@ -187,6 +215,7 @@ namespace Bellows {
 			material->SetOcclusionMap(LoadTexture(context, source.occlusion_texture, TextureColorSpace::Linear));
 			material->SetEmissiveMap(LoadTexture(context, source.emissive_texture, TextureColorSpace::SRGB));
 
+			ImportSampler(source, properties);
 			properties.EmissiveColor = glm::make_vec3(source.emissive_factor);
 			properties.EmissiveIntensity = source.has_emissive_strength ? source.emissive_strength.emissive_strength : 1.0f;
 

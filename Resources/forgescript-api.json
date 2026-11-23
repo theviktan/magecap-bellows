@@ -866,6 +866,24 @@
 					"doc": ""
 				},
 				{
+					"name": "texture_filter",
+					"kind": "property",
+					"type": "str",
+					"doc": "How its textures are read between pixels: \"Linear\" (smooth) or \"Nearest\" (pixelated, for pixel art and palettes)"
+				},
+				{
+					"name": "wrap_u",
+					"kind": "property",
+					"type": "str",
+					"doc": "What its textures do past their left and right edges: \"Repeat\", \"Clamp\" or \"Mirror\""
+				},
+				{
+					"name": "wrap_v",
+					"kind": "property",
+					"type": "str",
+					"doc": "What its textures do past their top and bottom edges: \"Repeat\", \"Clamp\" or \"Mirror\""
+				},
+				{
 					"name": "normal_strength",
 					"kind": "property",
 					"type": "float",

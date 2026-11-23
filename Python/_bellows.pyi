@@ -563,6 +563,21 @@ class Material:
     @double_sided.setter
     def double_sided(self, value: bool) -> None: ...
     @property
+    def texture_filter(self) -> str:
+        """How its textures are read between pixels: "Linear" (smooth) or "Nearest" (pixelated, for pixel art and palettes)"""
+    @texture_filter.setter
+    def texture_filter(self, value: str) -> None: ...
+    @property
+    def wrap_u(self) -> str:
+        """What its textures do past their left and right edges: "Repeat", "Clamp" or "Mirror\""""
+    @wrap_u.setter
+    def wrap_u(self, value: str) -> None: ...
+    @property
+    def wrap_v(self) -> str:
+        """What its textures do past their top and bottom edges: "Repeat", "Clamp" or "Mirror\""""
+    @wrap_v.setter
+    def wrap_v(self, value: str) -> None: ...
+    @property
     def normal_strength(self) -> float: ...
     @normal_strength.setter
     def normal_strength(self, value: float) -> None: ...
