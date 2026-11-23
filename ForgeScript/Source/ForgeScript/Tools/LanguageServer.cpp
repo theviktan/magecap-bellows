@@ -1019,9 +1019,12 @@ namespace ForgeScript {
 		return replies;
 	}
 
-	Json LanguageServer::Initialize(const Json&)
+	Json LanguageServer::Initialize(const Json& params)
 	{
 		m_Initialized = true;
+		// {"initializationOptions": {"strict": true}}: warnings are shown as mistakes, for teams that
+		// want none (as 'forgescript --check --strict' does). It changes nothing about how scripts run.
+		m_Strict = params.Get("initializationOptions").Get("strict").AsBool();
 		Json sync;
 		sync.Set("openClose", true).Set("change", 1);
 		Json completion;
@@ -1121,7 +1124,7 @@ namespace ForgeScript {
 		if (diagnostics.AsArray().empty())
 		{
 			for (const CompileError& warning : FindWarningsIn(document.Path, document.Text))
-				add(WarningRange(document.Text, warning), warning.Message, c_SeverityWarning);
+				add(WarningRange(document.Text, warning), warning.Message, m_Strict ? c_SeverityError : c_SeverityWarning);
 		}
 
 		// A script this one uses that has mistakes of its own: shown on the 'use' line, because the script

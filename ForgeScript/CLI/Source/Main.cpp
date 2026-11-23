@@ -33,7 +33,8 @@
 //   forgescript --realtime game.forge   run with real time, so "wait 2 seconds" really waits
 //   forgescript --test game.forge    run the script, then its 'test "..." ... end' blocks
 //
-// Exit codes (tools depend on them): 0 no mistakes / ran fine / every test passed, 1 a test failed,
+// Exit codes (tools depend on them): 0 no mistakes / ran fine / every test passed, 1 a test failed
+// (or, with --check --strict, the script has warnings),
 // 64 wrong usage, 65 the script has mistakes, 66 the file could not be opened, 70 the script failed
 // while running.
 
@@ -107,6 +108,7 @@ namespace {
 			"      --json                          print the mistakes as JSON\n"
 			"      --stdin                         read the script from standard input\n"
 			"      --name <path>                   the script's path, for messages and 'use' (with --stdin)\n"
+			"      --strict                        count warnings too: exit with 1 when there are any (for CI)\n"
 			"  forgescript --lsp                   run as a language server for editors (LSP over stdin/stdout)\n"
 			"      --api <file>                    the engine API description, for --lsp and --check\n"
 			"                                      (default: forgescript-api.json\n"
@@ -489,6 +491,7 @@ namespace {
 		bool ApiGiven = false;           // --api was given, so a file that can't be read is a mistake
 		bool Json = false;
 		bool FromStdin = false;
+		bool Strict = false;             // --strict: a warning fails the check too, for CI
 	};
 
 	int CheckScript(const CheckOptions& options)
@@ -537,10 +540,15 @@ namespace {
 				shown.Message = "warning: " + shown.Message;
 				std::cerr << shown.ToString() << std::endl;
 			}
-			if (mistakes.empty())
+			if (mistakes.empty() && (!options.Strict || warnings.empty()))
 				std::cout << fileName << ": no mistakes found." << std::endl;
+			else if (mistakes.empty())
+				std::cout << fileName << ": no mistakes found, but " << warnings.size() << (warnings.size() == 1 ? " warning" : " warnings") <<
+					", and --strict counts warnings." << std::endl;
 		}
-		return mistakes.empty() ? 0 : 65;
+		if (!mistakes.empty())
+			return 65;
+		return options.Strict && !warnings.empty() ? 1 : 0;
 	}
 
 	bool NeedsMoreInput(const std::string& message)
@@ -655,6 +663,8 @@ int main(int argc, char** argv)
 			checkOptions.Json = true;
 		else if (std::strcmp(argv[i], "--stdin") == 0)
 			checkOptions.FromStdin = true;
+		else if (std::strcmp(argv[i], "--strict") == 0)
+			checkOptions.Strict = true;
 		else if (std::strcmp(argv[i], "--name") == 0)
 		{
 			if (i + 1 >= argc)
@@ -729,6 +739,11 @@ int main(int argc, char** argv)
 	if ((checkOptions.Json || checkOptions.FromStdin) && !check)
 	{
 		std::cerr << "--json and --stdin work together with --check." << std::endl;
+		return 64;
+	}
+	if (checkOptions.Strict && (!check || format))
+	{
+		std::cerr << "--strict works together with --check, like: forgescript --check --strict game.forge" << std::endl;
 		return 64;
 	}
 	if (test && (check || realtime))
