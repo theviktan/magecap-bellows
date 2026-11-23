@@ -69,13 +69,15 @@ Derive from `bellows.Script`. The engine sets `self.entity` before any callback 
 | `on_event(self, name, *values)` | An event sent by any script with `bellows.emit` (Python) or `trigger` (ForgeScript), this one included. |
 | `on_reload(self)` | After the script's file was saved during play and its new code took over (hot reload, below). |
 
-**Engine events.** Besides the events scripts send each other, the engine sends two to every script,
+**Engine events.** Besides the events scripts send each other, the engine sends these to every script,
 in both languages (Python's `on_event`, ForgeScript's `when <name> with ...`):
 
 | Event | Values | When |
 |-------|--------|------|
 | `script error` | `message`, `file`, `line`, `stack`, `language`, `name` | A script raised an error (it is also logged as before). `file` is the script's asset path with forward slashes (`Scripts/player.py`), or just a file name for code outside the assets; `line` is 0 when unknown. `stack` is a list of the calls, innermost first, each `"file:line in function"` or `"file:line"` for code at the top of a file. `language` is `"python"` or `"forgescript"`; `name` is the Python exception's class (`"AttributeError"`), or `""`. An error raised while a `script error` handler runs is only logged, never sent again. |
 | `scene loaded` | `name`, `path` | After `load_scene` has loaded a scene, to every script, kept ones included: the new scene's name and its asset path. New scripts have had `on_create` by then, so a kept player can find the new level's things. |
+| `tween finished` | `entity`, `property`, `id` | A tween reached its end (see [Tweens](#tweens)). |
+| `animation finished` | `entity`, `clip` | A clip that doesn't loop reached its end (see [`Animator`](#animator)). |
 | `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too for what isn't kept, so it can't tell the two apart; `scene loaded` follows the change). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
 
 ```python
