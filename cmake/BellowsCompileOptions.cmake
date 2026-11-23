@@ -3,8 +3,10 @@
 function(bellows_set_compile_options target)
 	if(MSVC)
 		# Third-party headers (included with <...>) are compiled without warnings; ours stay at /W4.
+		# /bigobj: the script API binders instantiate more templates than an object file's default
+		# section limit allows.
 		target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8 /MP /Zc:__cplusplus /Zc:preprocessor /wd4100 /wd4201
-			/external:anglebrackets /external:W0)
+			/external:anglebrackets /external:W0 /bigobj)
 		target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
 	else()
 		target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-missing-field-initializers)

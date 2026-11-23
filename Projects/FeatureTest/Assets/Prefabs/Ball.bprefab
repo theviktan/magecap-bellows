@@ -3,7 +3,7 @@
 	"Version": 1,
 	"Entities": [
 		{
-			"ID": 9029878044192254957,
+			"ID": 9173035277559379372,
 			"Name": "Ball",
 			"Parent": 0,
 			"Transform": {
@@ -54,6 +54,7 @@
 			"Script": {
 				"Script": "Scripts/BounceSound.py",
 				"Class": "",
+				"RunWhilePaused": false,
 				"Fields": {}
 			},
 			"AudioSource": {

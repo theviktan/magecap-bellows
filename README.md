@@ -18,7 +18,8 @@ can drive end to end.
   their materials and textures (models made facing +Z, as Blender exports them, can be turned to
   face forward: right-click the model, **Front Faces**).
 * **Skeletal animation**: rigged, animated glTF models play their clips (walk, run, wave) through
-  an **Animator** component, skinned on the GPU, with shadows that follow the pose. Pick the clip, speed and looping in the Inspector, and **Preview** it in the
+  an **Animator** component, skinned on the GPU, with crossfades between clips and shadows that
+  follow the pose. Scripts play clips (`play animation "Run" on hero`) and can find where a bone is. Pick the clip, speed and looping in the Inspector, and **Preview** it in the
   viewport with a time slider to look at any moment.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
