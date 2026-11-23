@@ -18,6 +18,38 @@ namespace ForgeScript::Utf8 {
 		return 1; // Invalid byte: treat it as one character so we never get stuck.
 	}
 
+	// The byte offset of the first byte that isn't part of a valid UTF-8 character, or npos when all of
+	// text is valid. Overlong forms, surrogates and values past U+10FFFF count as invalid.
+	inline size_t FirstInvalid(std::string_view text)
+	{
+		size_t i = 0;
+		while (i < text.size())
+		{
+			const unsigned char lead = static_cast<unsigned char>(text[i]);
+			if (lead < 0x80)
+			{
+				i++;
+				continue;
+			}
+			const size_t length = CharLength(lead);
+			if (length == 1 || i + length > text.size())
+				return i;
+			unsigned int code = lead & (0xFF >> (length + 1));
+			for (size_t k = 1; k < length; k++)
+			{
+				const unsigned char next = static_cast<unsigned char>(text[i + k]);
+				if ((next & 0xC0) != 0x80)
+					return i;
+				code = (code << 6) | (next & 0x3F);
+			}
+			static constexpr unsigned int c_Smallest[] = { 0, 0, 0x80, 0x800, 0x10000 };
+			if (code < c_Smallest[length] || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
+				return i;
+			i += length;
+		}
+		return std::string_view::npos;
+	}
+
 	inline size_t Length(std::string_view text)
 	{
 		size_t count = 0;
