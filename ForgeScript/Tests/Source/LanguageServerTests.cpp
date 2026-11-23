@@ -1170,6 +1170,34 @@ TEST_CASE("OutlineShowsParameterTypes")
 	CHECK_EQ(outline[0].EndLine, 3);
 }
 
+TEST_CASE("SignaturesShowReturnTypes")
+{
+	// 'as number' after the ')' (1.7.0) shows in the outline and in hover's signature.
+	const std::string source = "function health_left(hp as number) as number\n\treturn hp\nend\nkind Enemy\n\tfunction hp() as number\n\t\treturn 1\n\tend\nend\n";
+	const std::vector<OutlineItem> outline = FindOutline(source);
+	REQUIRE_FALSE(outline.empty());
+	CHECK_EQ(outline[0].Detail, std::string("function health_left(hp as number) as number"));
+	bool sawFunction = false;
+	bool sawMethod = false;
+	for (const LanguageServer::Symbol& symbol : FindScriptSymbols(source))
+	{
+		if (symbol.Name == "health_left")
+		{
+			sawFunction = true;
+			CHECK_EQ(symbol.Signature, std::string("function health_left(hp as number) as number"));
+		}
+		if (symbol.Name == "hp" && symbol.Signature.find("function") != std::string::npos)
+		{
+			sawMethod = true;
+			CHECK_EQ(symbol.Signature, std::string("function Enemy.hp() as number"));
+		}
+	}
+	CHECK(sawFunction);
+	CHECK(sawMethod);
+	// Without one, nothing is added.
+	CHECK_EQ(FindOutline("function f(a)\n\treturn a\nend\n")[0].Detail, std::string("function f(a)"));
+}
+
 TEST_CASE("OutlineListsTests")
 {
 	const std::vector<OutlineItem> outline = FindOutline("test \"adds\"\n\texpect 1 + 1 is 2\nend\nset test to 3\n");
