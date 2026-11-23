@@ -14,6 +14,11 @@ description: Change the MageCap Bellows renderer or shaders (new pass, shader ed
 6. Bloom (downsample chain + tent upsample), tonemapping (ACES/AgX/Reinhard), vignette, dither.
 7. FXAA, then editor overlays (grid, debug lines, selection outline).
 
+Skinned meshes go through the same passes with their own vertex shaders (`MeshSkinned.vert`,
+`ShadowSkinned.vert`): a second vertex stream of joints and weights, and the frame's world-space joint
+matrices in a storage buffer (set 2, `Include/Skinning.glsl`). A change to `Mesh.vert` or `Shadow.vert`
+usually needs the same change in its skinned twin.
+
 ## Conventions that bite
 - Clip space is Y-up, depth 0..1; projections are **not** flipped (NVRHI flips the viewport).
   Front faces are counter-clockwise. Fullscreen UV (0,0) = top-left; use `UVToNDC`/`NDCToUV`.

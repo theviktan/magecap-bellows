@@ -206,6 +206,18 @@ namespace Bellows {
 		};
 		m_MeshInputLayout = device->createInputLayout(meshAttributes, 4, meshVS);
 
+		// Skinned meshes add a second stream (buffer 1) of joints and weights.
+		nvrhi::ShaderHandle skinnedVS = Renderer::GetShader("MeshSkinned.vert");
+		nvrhi::ShaderHandle shadowSkinnedVS = Renderer::GetShader("ShadowSkinned.vert");
+		const nvrhi::VertexAttributeDesc skinnedAttributes[] = {
+			meshAttributes[0], meshAttributes[1], meshAttributes[2], meshAttributes[3],
+			nvrhi::VertexAttributeDesc().setName("JOINTS").setFormat(nvrhi::Format::RGBA8_UINT).setBufferIndex(1)
+				.setOffset(offsetof(SkinVertex, Joints)).setElementStride(sizeof(SkinVertex)),
+			nvrhi::VertexAttributeDesc().setName("WEIGHTS").setFormat(nvrhi::Format::RGBA32_FLOAT).setBufferIndex(1)
+				.setOffset(offsetof(SkinVertex, Weights)).setElementStride(sizeof(SkinVertex)),
+		};
+		m_SkinnedMeshInputLayout = device->createInputLayout(skinnedAttributes, 6, skinnedVS);
+
 		const nvrhi::VertexAttributeDesc lineAttributes[] = {
 			nvrhi::VertexAttributeDesc().setName("POSITION").setFormat(nvrhi::Format::RGB32_FLOAT).setOffset(offsetof(LineVertex, Position)).setElementStride(sizeof(LineVertex)),
 			nvrhi::VertexAttributeDesc().setName("COLOR").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(LineVertex, Color)).setElementStride(sizeof(LineVertex)),
@@ -238,12 +250,15 @@ namespace Bellows {
 		auto createMeshPipeline = [&](nvrhi::IShader* vs, nvrhi::IShader* ps, nvrhi::IBindingLayout* passLayout, const nvrhi::FramebufferInfo& info,
 			const nvrhi::RenderState& state)
 		{
+			const bool skinned = vs == skinnedVS.Get() || vs == shadowSkinnedVS.Get();
 			nvrhi::GraphicsPipelineDesc desc;
 			desc.VS = vs;
 			desc.PS = ps;
-			desc.inputLayout = m_MeshInputLayout;
+			desc.inputLayout = skinned ? m_SkinnedMeshInputLayout : m_MeshInputLayout;
 			desc.primType = nvrhi::PrimitiveType::TriangleList;
 			desc.bindingLayouts = { passLayout, Renderer::GetMaterialBindingLayout() };
+			if (skinned)
+				desc.bindingLayouts.push_back(Renderer::GetSkinBindingLayout());
 			desc.renderState = state;
 			return device->createGraphicsPipeline(desc, info);
 		};
@@ -262,6 +277,8 @@ namespace Bellows {
 			state.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(true).setDepthFunc(nvrhi::ComparisonFunc::Less);
 			m_ShadowPipeline = createMeshPipeline(shadowVS, Renderer::GetShader("Shadow.frag"), Renderer::GetShadowBindingLayout(),
 				nvrhi::FramebufferInfo().setDepthFormat(c_DepthFormat), state);
+			m_ShadowSkinnedPipeline = createMeshPipeline(shadowSkinnedVS, Renderer::GetShader("Shadow.frag"), Renderer::GetShadowBindingLayout(),
+				nvrhi::FramebufferInfo().setDepthFormat(c_DepthFormat), state);
 		}
 
 		// Depth/normal/ID prepass
@@ -272,8 +289,10 @@ namespace Bellows {
 			state.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(true).setDepthFunc(nvrhi::ComparisonFunc::Less);
 			state.rasterState = cullBack;
 			m_PrepassPipeline = createMeshPipeline(meshVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
+			m_PrepassSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
 			state.rasterState = cullNone;
 			m_PrepassPipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
+			m_PrepassSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("DepthNormal.frag"), Renderer::GetSceneBindingLayout(), info, state);
 		}
 
 		nvrhi::FramebufferInfo hdrDepthInfo;
@@ -285,8 +304,10 @@ namespace Bellows {
 			state.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(nvrhi::ComparisonFunc::Equal);
 			state.rasterState = cullBack;
 			m_OpaquePipeline = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_OpaqueSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
 			state.rasterState = cullNone;
 			m_OpaquePipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_OpaqueSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
 		}
 
 		// Transparent
@@ -298,8 +319,10 @@ namespace Bellows {
 				.setSrcBlendAlpha(nvrhi::BlendFactor::One).setDestBlendAlpha(nvrhi::BlendFactor::InvSrcAlpha);
 			state.rasterState = cullBack;
 			m_TransparentPipeline = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_TransparentSkinnedPipeline = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
 			state.rasterState = cullNone;
 			m_TransparentPipelineDoubleSided = createMeshPipeline(meshVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
+			m_TransparentSkinnedPipelineDoubleSided = createMeshPipeline(skinnedVS, Renderer::GetShader("PBR.frag"), Renderer::GetSceneBindingLayout(), hdrDepthInfo, state);
 		}
 
 		nvrhi::BlendState::RenderTarget alphaBlend;
@@ -390,6 +413,8 @@ namespace Bellows {
 		m_LineSet = device->createBindingSet(lineSetDesc, Renderer::GetLineBindingLayout());
 
 		BW_CORE_VERIFY(m_ShadowPipeline && m_PrepassPipeline && m_OpaquePipeline && m_TransparentPipeline && m_SkyboxPipeline
+			&& m_ShadowSkinnedPipeline && m_PrepassSkinnedPipeline && m_PrepassSkinnedPipelineDoubleSided && m_OpaqueSkinnedPipeline
+			&& m_OpaqueSkinnedPipelineDoubleSided && m_TransparentSkinnedPipeline && m_TransparentSkinnedPipelineDoubleSided
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
 			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline,
@@ -592,6 +617,7 @@ namespace Bellows {
 		m_SpotLights.clear();
 		m_OpaqueDraws.clear();
 		m_TransparentDraws.clear();
+		m_JointMatrices.clear();
 		m_LineVertices.clear();
 		m_TextVertices.clear();
 		m_TextDraws.clear();
@@ -635,7 +661,7 @@ namespace Bellows {
 	}
 
 	void SceneRenderer::SubmitMesh(const Ref<Mesh>& mesh, const glm::mat4& transform, uint32_t entityID,
-		const Ref<Material>& materialOverride, bool castShadows)
+		const Ref<Material>& materialOverride, bool castShadows, const std::vector<glm::mat4>* skinMatrices)
 	{
 		if (!mesh || !mesh->GetVertexBuffer())
 			return;
@@ -643,6 +669,25 @@ namespace Bellows {
 		m_FrameMeshes.push_back(mesh);
 		if (materialOverride)
 			m_FrameMaterials.push_back(materialOverride);
+
+		// A skinned mesh's pose goes into the frame's joint matrices once, in world space, shared by its
+		// skinned submeshes (which all share one transform, the model's turn).
+		const MeshSkin* skin = mesh->GetSkin();
+		const std::vector<glm::mat4>* pose = nullptr;
+		if (skin && mesh->GetSkinVertexBuffer())
+		{
+			pose = skinMatrices && skinMatrices->size() == skin->RestSkinMatrices.size() ? skinMatrices : &skin->RestSkinMatrices;
+			if (m_JointMatrices.size() + pose->size() > MaxFrameJoints)
+			{
+				if (!m_WarnedJointLimit)
+					BW_CORE_WARN("More than {} joints are drawn this frame; the skinned meshes past them are drawn as made", MaxFrameJoints);
+				m_WarnedJointLimit = true;
+				pose = nullptr;
+			}
+		}
+		const size_t jointOffset = m_JointMatrices.size();
+		std::optional<glm::mat4> poseTransform;
+		AABB poseBounds;
 
 		const auto& submeshes = mesh->GetSubmeshes();
 		const auto& materials = mesh->GetMaterials();
@@ -656,8 +701,27 @@ namespace Bellows {
 			draw.Transform = transform * submesh.Transform;
 			draw.EntityID = entityID;
 			draw.CastShadows = castShadows;
+			draw.Bounds = submesh.BoundingBox.Transformed(draw.Transform);
 
-			const AABB worldBounds = submesh.BoundingBox.Transformed(draw.Transform);
+			if (pose && submesh.Skinned && (!poseTransform || *poseTransform == draw.Transform))
+			{
+				if (!poseTransform)
+				{
+					poseTransform = draw.Transform;
+					for (size_t joint = 0; joint < pose->size(); joint++)
+					{
+						const glm::mat4 world = draw.Transform * (*pose)[joint];
+						m_JointMatrices.push_back(world);
+						poseBounds.Expand(skin->JointBounds[joint].Transformed(world));
+					}
+				}
+				draw.Skinned = true;
+				draw.JointOffset = static_cast<uint32_t>(jointOffset);
+				if (poseBounds.IsValid())
+					draw.Bounds = poseBounds;
+			}
+
+			const AABB& worldBounds = draw.Bounds;
 			m_SceneBounds.Expand(worldBounds);
 			const glm::vec3 center = worldBounds.GetCenter();
 			draw.SortKey = glm::dot(center - m_Camera.Position, center - m_Camera.Position);
@@ -668,6 +732,8 @@ namespace Bellows {
 				m_OpaqueDraws.push_back(draw);
 		}
 		m_Statistics.Meshes++;
+		if (poseTransform)
+			m_Statistics.SkinnedMeshes++;
 	}
 
 	void SceneRenderer::SubmitLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)
@@ -940,11 +1006,7 @@ namespace Bellows {
 
 		// Frustum culling and sorting.
 		const FrustumPlanes frustum(m_Camera.Projection * m_Camera.View);
-		auto culled = [&frustum](const DrawCommand& draw)
-		{
-			const Submesh& submesh = draw.MeshPtr->GetSubmeshes()[draw.SubmeshIndex];
-			return !frustum.Intersects(submesh.BoundingBox.Transformed(draw.Transform));
-		};
+		auto culled = [&frustum](const DrawCommand& draw) { return !frustum.Intersects(draw.Bounds); };
 
 		std::vector<DrawCommand> shadowCasters;
 		shadowCasters.reserve(m_OpaqueDraws.size());
@@ -978,6 +1040,7 @@ namespace Bellows {
 		}
 
 		UpdateFrameConstants(commandList);
+		UploadJointMatrices(commandList);
 
 		RenderShadows(commandList, shadowCasters);
 		RenderPrepass(commandList);
@@ -1011,7 +1074,7 @@ namespace Bellows {
 				for (const DrawCommand& draw : casters)
 				{
 					const Submesh& submesh = draw.MeshPtr->GetSubmeshes()[draw.SubmeshIndex];
-					const AABB bounds = submesh.BoundingBox.Transformed(draw.Transform);
+					const AABB& bounds = draw.Bounds;
 					// Only cull sideways against the cascade: casters in front of the near plane still cast.
 					bool outside = false;
 					for (int plane = 0; plane < 4 && !outside; plane++)
@@ -1024,18 +1087,33 @@ namespace Bellows {
 						continue;
 
 					nvrhi::GraphicsState state;
-					state.pipeline = m_ShadowPipeline;
+					state.pipeline = draw.Skinned ? m_ShadowSkinnedPipeline : m_ShadowPipeline;
 					state.framebuffer = framebuffer;
 					state.viewport.addViewportAndScissorRect(nvrhi::Viewport(static_cast<float>(size), static_cast<float>(size)));
 					state.bindings = { m_ShadowSet, draw.MaterialPtr->Prepare(commandList) };
 					state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(draw.MeshPtr->GetVertexBuffer()).setSlot(0).setOffset(0) };
+					if (draw.Skinned)
+					{
+						state.bindings.push_back(m_SkinSet);
+						state.vertexBuffers.push_back(nvrhi::VertexBufferBinding().setBuffer(draw.MeshPtr->GetSkinVertexBuffer()).setSlot(1).setOffset(0));
+					}
 					state.indexBuffer = nvrhi::IndexBufferBinding().setBuffer(draw.MeshPtr->GetIndexBuffer()).setFormat(nvrhi::Format::R32_UINT).setOffset(0);
 					commandList->setGraphicsState(state);
 
-					ShaderInterop::ShadowObjectData push;
-					push.Model = draw.Transform;
-					push.LightViewProjection = lightViewProjection;
-					commandList->setPushConstants(&push, sizeof(push));
+					if (draw.Skinned)
+					{
+						ShaderInterop::ShadowSkinnedData push {};
+						push.LightViewProjection = lightViewProjection;
+						push.Skin.x = draw.JointOffset;
+						commandList->setPushConstants(&push, sizeof(push));
+					}
+					else
+					{
+						ShaderInterop::ShadowObjectData push;
+						push.Model = draw.Transform;
+						push.LightViewProjection = lightViewProjection;
+						commandList->setPushConstants(&push, sizeof(push));
+					}
 
 					nvrhi::DrawArguments args;
 					args.vertexCount = submesh.IndexCount;
@@ -1048,29 +1126,67 @@ namespace Bellows {
 		}
 	}
 
+	void SceneRenderer::UploadJointMatrices(nvrhi::ICommandList* commandList)
+	{
+		// Room for this frame's matrices (at least one, so the binding set always has a buffer), growing
+		// by doubling so a growing crowd doesn't make a new buffer every frame.
+		const size_t needed = std::max<size_t>(m_JointMatrices.size(), 1);
+		const size_t capacity = m_JointBuffer ? m_JointBuffer->getDesc().byteSize / sizeof(glm::mat4) : 0;
+		if (needed > capacity)
+		{
+			size_t newCapacity = std::max<size_t>(capacity, 256);
+			while (newCapacity < needed)
+				newCapacity *= 2;
+			nvrhi::BufferDesc desc;
+			desc.byteSize = newCapacity * sizeof(glm::mat4);
+			desc.structStride = sizeof(glm::mat4);
+			desc.debugName = "JointMatrices";
+			desc.initialState = nvrhi::ResourceStates::ShaderResource;
+			desc.keepInitialState = true;
+			nvrhi::IDevice* device = Renderer::GetDevice();
+			m_JointBuffer = device->createBuffer(desc);
+			nvrhi::BindingSetDesc setDesc;
+			setDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_JointBuffer));
+			m_SkinSet = device->createBindingSet(setDesc, Renderer::GetSkinBindingLayout());
+		}
+		if (!m_JointMatrices.empty())
+			commandList->writeBuffer(m_JointBuffer, m_JointMatrices.data(), m_JointMatrices.size() * sizeof(glm::mat4));
+	}
+
 	void SceneRenderer::DrawMeshes(nvrhi::ICommandList* commandList, const std::vector<DrawCommand>& draws, nvrhi::IFramebuffer* framebuffer,
-		nvrhi::IGraphicsPipeline* singleSided, nvrhi::IGraphicsPipeline* doubleSided)
+		const MeshPassPipelines& pipelines)
 	{
 		const nvrhi::Viewport viewport(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight));
 		for (const DrawCommand& draw : draws)
 		{
 			const Submesh& submesh = draw.MeshPtr->GetSubmeshes()[draw.SubmeshIndex];
+			const bool doubleSided = draw.MaterialPtr->GetProperties().DoubleSided;
 
 			nvrhi::GraphicsState state;
-			state.pipeline = draw.MaterialPtr->GetProperties().DoubleSided ? doubleSided : singleSided;
+			if (draw.Skinned)
+				state.pipeline = doubleSided ? pipelines.SkinnedDoubleSided : pipelines.SkinnedSingleSided;
+			else
+				state.pipeline = doubleSided ? pipelines.DoubleSided : pipelines.SingleSided;
 			state.framebuffer = framebuffer;
 			state.viewport.addViewportAndScissorRect(viewport);
 			state.bindings = { m_SceneSet, draw.MaterialPtr->Prepare(commandList) };
 			state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(draw.MeshPtr->GetVertexBuffer()).setSlot(0).setOffset(0) };
+			if (draw.Skinned)
+			{
+				state.bindings.push_back(m_SkinSet);
+				state.vertexBuffers.push_back(nvrhi::VertexBufferBinding().setBuffer(draw.MeshPtr->GetSkinVertexBuffer()).setSlot(1).setOffset(0));
+			}
 			state.indexBuffer = nvrhi::IndexBufferBinding().setBuffer(draw.MeshPtr->GetIndexBuffer()).setFormat(nvrhi::Format::R32_UINT).setOffset(0);
 			commandList->setGraphicsState(state);
 
+			// A skinned draw's joint matrices are already in world space.
 			ShaderInterop::ObjectData push {};
-			push.Model = draw.Transform;
-			const glm::mat3 normalMatrix = NormalMatrix(draw.Transform);
+			push.Model = draw.Skinned ? glm::mat4(1.0f) : draw.Transform;
+			const glm::mat3 normalMatrix = draw.Skinned ? glm::mat3(1.0f) : NormalMatrix(draw.Transform);
 			for (int i = 0; i < 3; i++)
 				push.NormalMatrix[i] = glm::vec4(normalMatrix[i], 0.0f);
 			push.EntityID = draw.EntityID;
+			push.JointOffset = draw.JointOffset;
 			commandList->setPushConstants(&push, sizeof(push));
 
 			nvrhi::DrawArguments args;
@@ -1101,7 +1217,8 @@ namespace Bellows {
 		commandList->clearDepthStencilTexture(m_DepthTexture, nvrhi::AllSubresources, true, 1.0f, false, 0);
 		commandList->clearTextureFloat(m_NormalTexture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 0.0f));
 		commandList->clearTextureUInt(m_EntityIDTexture, nvrhi::AllSubresources, 0);
-		DrawMeshes(commandList, m_OpaqueDraws, m_PrepassFramebuffer, m_PrepassPipeline, m_PrepassPipelineDoubleSided);
+		DrawMeshes(commandList, m_OpaqueDraws, m_PrepassFramebuffer,
+			{ m_PrepassPipeline, m_PrepassPipelineDoubleSided, m_PrepassSkinnedPipeline, m_PrepassSkinnedPipelineDoubleSided });
 	}
 
 	void SceneRenderer::RenderSSAO(nvrhi::ICommandList* commandList)
@@ -1136,7 +1253,8 @@ namespace Bellows {
 	void SceneRenderer::RenderOpaque(nvrhi::ICommandList* commandList)
 	{
 		commandList->clearTextureFloat(m_HDRTexture, nvrhi::AllSubresources, nvrhi::Color(0.0f, 0.0f, 0.0f, 1.0f));
-		DrawMeshes(commandList, m_OpaqueDraws, m_HDRDepthFramebuffer, m_OpaquePipeline, m_OpaquePipelineDoubleSided);
+		DrawMeshes(commandList, m_OpaqueDraws, m_HDRDepthFramebuffer,
+			{ m_OpaquePipeline, m_OpaquePipelineDoubleSided, m_OpaqueSkinnedPipeline, m_OpaqueSkinnedPipelineDoubleSided });
 	}
 
 	void SceneRenderer::RenderSkybox(nvrhi::ICommandList* commandList)
@@ -1153,7 +1271,8 @@ namespace Bellows {
 
 	void SceneRenderer::RenderTransparent(nvrhi::ICommandList* commandList)
 	{
-		DrawMeshes(commandList, m_TransparentDraws, m_HDRDepthFramebuffer, m_TransparentPipeline, m_TransparentPipelineDoubleSided);
+		DrawMeshes(commandList, m_TransparentDraws, m_HDRDepthFramebuffer,
+			{ m_TransparentPipeline, m_TransparentPipelineDoubleSided, m_TransparentSkinnedPipeline, m_TransparentSkinnedPipelineDoubleSided });
 	}
 
 	void SceneRenderer::RenderBloom(nvrhi::ICommandList* commandList)

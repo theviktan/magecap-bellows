@@ -64,7 +64,7 @@ namespace Bellows::ShaderInterop {
 		glm::vec4 NormalMatrix[3];
 		uint32_t EntityID;
 		uint32_t ObjectFlags;
-		uint32_t Padding0;
+		uint32_t JointOffset;	// Skinned draws: the first of the draw's joint matrices
 		uint32_t Padding1;
 	};
 
@@ -72,6 +72,15 @@ namespace Bellows::ShaderInterop {
 	{
 		glm::mat4 Model;
 		glm::mat4 LightViewProjection;
+	};
+
+	// ShadowSkinned.vert's push constants. The joint matrices are already in world space, so there's no
+	// model matrix; the padding keeps it the size of ShadowObjectData, so one binding set serves both.
+	struct ShadowSkinnedData
+	{
+		glm::mat4 LightViewProjection;
+		glm::uvec4 Skin;		// x = the first of the draw's joint matrices
+		glm::vec4 Padding[3];
 	};
 
 	struct MaterialData
@@ -106,6 +115,7 @@ namespace Bellows::ShaderInterop {
 	static_assert(sizeof(LightData) == MaxPointLights * 32 + MaxSpotLights * 64, "LightData layout mismatch");
 	static_assert(sizeof(ObjectData) == 128, "ObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(ShadowObjectData) == 128, "ShadowObjectData must fit the 128-byte push constant minimum");
+	static_assert(sizeof(ShadowSkinnedData) == sizeof(ShadowObjectData), "ShadowSkinnedData shares the shadow pass's push constants");
 	static_assert(sizeof(MaterialData) == 80, "MaterialData layout mismatch");
 	static_assert(sizeof(TextData) == 80, "TextData layout mismatch");
 

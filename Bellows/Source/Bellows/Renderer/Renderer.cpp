@@ -21,6 +21,7 @@ namespace Bellows {
 			nvrhi::BindingLayoutHandle SceneLayout;
 			nvrhi::BindingLayoutHandle MaterialLayout;
 			nvrhi::BindingLayoutHandle ShadowLayout;
+			nvrhi::BindingLayoutHandle SkinLayout;
 			nvrhi::BindingLayoutHandle PostProcessLayout;
 			nvrhi::BindingLayoutHandle ComputeLayout;
 			nvrhi::BindingLayoutHandle LineLayout;
@@ -101,6 +102,15 @@ namespace Bellows {
 				s_Data->ShadowLayout = device->createBindingLayout(desc);
 			}
 			{
+				// Skinned draws add the frame's joint matrices as set 2.
+				nvrhi::BindingLayoutDesc desc;
+				desc.visibility = nvrhi::ShaderType::Vertex;
+				desc.bindingOffsets = c_NoBindingOffsets;
+				desc.setRegisterSpaceAndDescriptorSet(2);
+				desc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0));
+				s_Data->SkinLayout = device->createBindingLayout(desc);
+			}
+			{
 				nvrhi::BindingLayoutDesc desc;
 				desc.visibility = nvrhi::ShaderType::All;
 				desc.bindingOffsets = c_NoBindingOffsets;
@@ -142,7 +152,7 @@ namespace Bellows {
 				s_Data->TextLayout = device->createBindingLayout(desc);
 			}
 
-			return s_Data->SceneLayout && s_Data->MaterialLayout && s_Data->ShadowLayout
+			return s_Data->SceneLayout && s_Data->MaterialLayout && s_Data->ShadowLayout && s_Data->SkinLayout
 				&& s_Data->PostProcessLayout && s_Data->ComputeLayout && s_Data->LineLayout && s_Data->TextLayout;
 		}
 
@@ -363,6 +373,7 @@ namespace Bellows {
 	nvrhi::IBindingLayout* Renderer::GetSceneBindingLayout() { return s_Data->SceneLayout; }
 	nvrhi::IBindingLayout* Renderer::GetMaterialBindingLayout() { return s_Data->MaterialLayout; }
 	nvrhi::IBindingLayout* Renderer::GetShadowBindingLayout() { return s_Data->ShadowLayout; }
+	nvrhi::IBindingLayout* Renderer::GetSkinBindingLayout() { return s_Data->SkinLayout; }
 	nvrhi::IBindingLayout* Renderer::GetPostProcessBindingLayout() { return s_Data->PostProcessLayout; }
 	nvrhi::IBindingLayout* Renderer::GetComputeBindingLayout() { return s_Data->ComputeLayout; }
 	nvrhi::IBindingLayout* Renderer::GetLineBindingLayout() { return s_Data->LineLayout; }

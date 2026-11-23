@@ -26,7 +26,7 @@ layout(push_constant) uniform ObjectBlock
 	vec4 NormalMatrix[3];
 	uint EntityID;
 	uint ObjectFlags;
-	uint Padding0;
+	uint JointOffset;		// Skinned draws: the first of the draw's joint matrices in u_Joints
 	uint Padding1;
 } u_Object;
 

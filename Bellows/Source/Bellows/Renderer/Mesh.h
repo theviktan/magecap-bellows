@@ -42,6 +42,12 @@ namespace Bellows {
 		std::vector<SkinVertex> Vertices;
 		std::vector<Ref<AnimationClip>> Clips;
 
+		// Filled by Mesh::SetSkin. The skin matrices of the rest pose (drawn when nothing animates the
+		// mesh), and per joint the box around every skinned vertex it moves, in the model's space: moved
+		// by their joints' skin matrices, these boxes hold the posed mesh, whatever the pose.
+		std::vector<glm::mat4> RestSkinMatrices;
+		std::vector<AABB> JointBounds;
+
 		// The clip with that name, or null.
 		Ref<AnimationClip> FindClip(std::string_view name) const;
 	};
@@ -77,6 +83,8 @@ namespace Bellows {
 		// The skeleton, weights and clips of a skinned model, or null for a static mesh.
 		const MeshSkin* GetSkin() const { return m_Skin ? m_Skin.get() : nullptr; }
 		void SetSkin(MeshSkin skin);
+		// The skin's SkinVertex stream on the GPU (null without a skin or a renderer).
+		nvrhi::IBuffer* GetSkinVertexBuffer() const { return m_SkinVertexBuffer; }
 
 		nvrhi::IBuffer* GetVertexBuffer() const { return m_VertexBuffer; }
 		nvrhi::IBuffer* GetIndexBuffer() const { return m_IndexBuffer; }
@@ -95,6 +103,7 @@ namespace Bellows {
 		Scope<MeshSkin> m_Skin;
 
 		nvrhi::BufferHandle m_VertexBuffer;
+		nvrhi::BufferHandle m_SkinVertexBuffer;
 		nvrhi::BufferHandle m_IndexBuffer;
 	};
 

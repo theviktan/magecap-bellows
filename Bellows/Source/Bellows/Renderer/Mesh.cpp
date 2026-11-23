@@ -20,7 +20,41 @@ namespace Bellows {
 	void Mesh::SetSkin(MeshSkin skin)
 	{
 		BW_CORE_ASSERT(skin.Rig && skin.Vertices.size() == m_Vertices.size(), "A skin needs a skeleton and a SkinVertex per vertex");
+		const Skeleton& skeleton = *skin.Rig;
+		std::vector<glm::mat4> rest;
+		skeleton.ComputeModelMatrices(skeleton.GetRestPose(), rest);
+		skeleton.ComputeSkinMatrices(rest, skin.RestSkinMatrices);
+
+		skin.JointBounds.assign(skeleton.GetJointCount(), AABB());
+		for (const Submesh& submesh : m_Submeshes)
+		{
+			if (!submesh.Skinned)
+				continue;
+			for (uint32_t v = submesh.BaseVertex; v < submesh.BaseVertex + submesh.VertexCount; v++)
+			{
+				const SkinVertex& vertex = skin.Vertices[v];
+				for (int k = 0; k < 4; k++)
+				{
+					if (vertex.Weights[k] > 0.0f && vertex.Joints[k] < skin.JointBounds.size())
+						skin.JointBounds[vertex.Joints[k]].Expand(m_Vertices[v].Position);
+				}
+			}
+		}
 		m_Skin = CreateScope<MeshSkin>(std::move(skin));
+
+		if (!m_VertexBuffer)
+			return;
+		nvrhi::BufferDesc desc;
+		desc.byteSize = m_Skin->Vertices.size() * sizeof(SkinVertex);
+		desc.isVertexBuffer = true;
+		desc.debugName = m_Name + "_SkinVertices";
+		desc.initialState = nvrhi::ResourceStates::VertexBuffer;
+		desc.keepInitialState = true;
+		m_SkinVertexBuffer = Renderer::GetDevice()->createBuffer(desc);
+		Renderer::ExecuteImmediate([this](nvrhi::ICommandList* commandList)
+		{
+			commandList->writeBuffer(m_SkinVertexBuffer, m_Skin->Vertices.data(), m_Skin->Vertices.size() * sizeof(SkinVertex));
+		});
 	}
 
 	Mesh::Mesh(std::string name, std::vector<Vertex> vertices, std::vector<uint32_t> indices,
