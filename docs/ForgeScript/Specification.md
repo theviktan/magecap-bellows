@@ -49,7 +49,7 @@ Grammar rules use this notation:
 
 ### 2.1 Characters and lines
 
-A script is UTF-8 text. Letter case matters everywhere: `Set` is not `set`, and `score` and `Score` are two different names.
+A script is UTF-8 text. Text in quotes that holds bytes that aren't UTF-8 (a file saved as Windows-1252, say) still runs as it always has, but the checker warns, because it shows up garbled. Letter case matters everywhere: `Set` is not `set`, and `score` and `Score` are two different names.
 
 A script is a sequence of **lines**. A line break ends a statement, except:
 
@@ -599,6 +599,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 - In 1.6.0: a `match` with no `otherwise` whose cases are all choices of one set ([5.1](#51-variables-and-constants)) and leave one out: "This match has no case for State.jumping, and no otherwise."
 - In 1.7.0: a `repeat forever`, `while true` or `until false` loop that has no `wait`, `stop`, `return` or `fail` inside and calls nothing that might wait: "This 'repeat forever' loop never waits, so nothing else in the game can run while it does."
 - In 1.7.0: a script's own function, kind or choices that takes the name of a built-in or engine function: "Your function 'tween' takes the name of the built-in 'tween', so 'tween' in this script now means yours." The script's own name still wins, so the script works as before; the warning is there because a new engine release can add a name a game already uses.
+- In 1.7.0: text in quotes with a byte that isn't UTF-8: "This text has a byte that isn't readable text, so it will show up garbled in the game. Save the script as UTF-8 (in most editors: Save As, then Encoding: UTF-8)." It points at the first such byte, once per piece of text. The script runs as before.
 - In 1.7.0: a name read as a value that nothing sets: not this script (anywhere in it), not a script it uses, not the language and not the engine. "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean 'health'?" A name is suggested only when it is the one close name. Calls (`helth()`) are left alone.
 
 A mistake or warning whose message says exactly what to write instead also carries that change, so an editor can offer it as a one-click fix (1.7.0; see the language server's quick fixes).

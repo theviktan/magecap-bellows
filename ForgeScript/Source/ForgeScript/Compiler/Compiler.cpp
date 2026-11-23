@@ -4,6 +4,7 @@
 #include "ForgeScript/Compiler/Phrase.h"
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/Core/Suggest.h"
+#include "ForgeScript/Core/Utf8.h"
 #include "ForgeScript/VM/VM.h"
 
 #if defined(_MSC_VER)
@@ -285,6 +286,7 @@ namespace ForgeScript {
 
 				WarnTypesOfCalls();
 				WarnNamesNeverSet();
+				WarnUnreadableText();
 				if (m_AllErrors && !m_AllErrors->empty())
 					throw CompileAbort();
 				EmitOp(OpCode::Nothing);
@@ -2208,6 +2210,39 @@ namespace ForgeScript {
 				}
 			}
 			m_PendingReads.push_back(std::move(read));
+		}
+
+		// Text with bytes that aren't UTF-8 (a script saved as Windows-1252 or Latin-1, say) still runs,
+		// but shows up garbled in the game and breaks text functions like length. Warn once per piece of
+		// text, at the first such byte.
+		void WarnUnreadableText()
+		{
+			if (!m_Options.Warnings)
+				return;
+			for (const Token& token : m_Tokens)
+			{
+				if (token.Type != TokenType::String && token.Type != TokenType::Interpolation)
+					continue;
+				const size_t bad = Utf8::FirstInvalid(token.Lexeme);
+				if (bad == std::string_view::npos)
+					continue;
+				// Lexer columns count bytes, so the bad byte's place is found by walking up to it.
+				Token at = token;
+				for (size_t i = 0; i < bad; i++)
+				{
+					if (token.Lexeme[i] == '\n')
+					{
+						at.Line++;
+						at.Column = 1;
+					}
+					else
+					{
+						at.Column++;
+					}
+				}
+				Warn(at, "This text has a byte that isn't readable text, so it will show up garbled in the game. "
+					"Save the script as UTF-8 (in most editors: Save As, then Encoding: UTF-8).");
+			}
 		}
 
 		void WarnNamesNeverSet()

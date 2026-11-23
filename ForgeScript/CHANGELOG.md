@@ -7,6 +7,13 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **A warning for text that isn't UTF-8** (asked for by Ron; MFC agreed). Text in quotes saved in
+  another encoding, like `say "café"` from a Windows-1252 file, ran without a word and showed up
+  garbled in the game. `--check` and the language server now warn at the first bad byte of each piece
+  of text: "This text has a byte that isn't readable text, so it will show up garbled in the game.
+  Save the script as UTF-8 (in most editors: Save As, then Encoding: UTF-8)." Long text and the parts
+  around `{...}` are checked too, and so are overlong forms and surrogates. The script still runs
+  exactly as before.
 - **Faster scripts, same results** (step 2 of the plan on the Sync Board). Measured in CPU instructions
   against 1.7.0 before this change: calls 30% fewer, math 30%, text 40%, numbers in text 30%, methods
   20%, lists 14%, closures 10%, events 5%, tasks 3%. On the release build, `fib(32)` went from 0.50 to

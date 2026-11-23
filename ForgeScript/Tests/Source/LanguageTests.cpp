@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 
 #include "ForgeScript/Compiler/ScriptVariables.h"
+#include "ForgeScript/Core/Utf8.h"
 
 #include <algorithm>
 
@@ -1267,4 +1268,52 @@ TEST_CASE("UseOnlyReachesScriptsInItsPlace")
 	vm.FindMistakes("use \"../secret\"\nuse \"ok\"\n", "test.forge");
 	CHECK(std::find(asked.begin(), asked.end(), "../secret") == asked.end());
 	CHECK(std::find(asked.begin(), asked.end(), "ok") != asked.end());
+}
+
+TEST_CASE("TextWithBytesThatArentUtf8Warns")
+{
+	// A script saved as Windows-1252 still runs, but its text shows up garbled: the checker says so,
+	// once per piece of text, at the first such byte.
+	VM vm;
+	auto unreadable = [&vm](const std::string& source)
+	{
+		std::vector<CompileError> found;
+		for (CompileError& warning : vm.FindWarnings(source, "t.forge", {}))
+		{
+			if (warning.Message.find("isn't readable text") != std::string::npos)
+				found.push_back(std::move(warning));
+		}
+		return found;
+	};
+	std::vector<CompileError> found = unreadable("say \"caf\xE9\"\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("This text has a byte that isn't readable text, so it will show up garbled in the game. "
+		"Save the script as UTF-8 (in most editors: Save As, then Encoding: UTF-8)."));
+	CHECK_EQ(found[0].Line, 1);
+	CHECK_EQ(found[0].Column, 9);
+	// After a filled-in value, inside long text, two bad bytes in one text, and an encoded surrogate.
+	found = unreadable("set n to 1\nsay \"a {n} \xFF\"\nset t to \"\"\"\n\tok\n\tno \xC0\xAF\n\t\"\"\"\nsay \"\xFF\xFE\"\nsay \"\xED\xA0\x80\"\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(4));
+	CHECK_EQ(found[0].Line, 2);
+	CHECK_EQ(found[0].Column, 12);
+	CHECK_EQ(found[1].Line, 5);
+	CHECK_EQ(found[1].Column, 5);
+	CHECK_EQ(found[2].Line, 7);
+	CHECK_EQ(found[3].Line, 8);
+	// Real UTF-8 (two, three and four bytes) stays quiet, and the script still runs as before.
+	CHECK(unreadable("say \"caf\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x8E\xAE\"\n").empty());
+	CHECK_EQ(Output("say \"caf\xE9\"\n"), std::string("caf\xE9\n"));
+}
+
+TEST_CASE("Utf8FirstInvalidFindsTheFirstBadByte")
+{
+	CHECK_EQ(Utf8::FirstInvalid("plain"), std::string_view::npos);
+	CHECK_EQ(Utf8::FirstInvalid("caf\xC3\xA9"), std::string_view::npos);
+	CHECK_EQ(Utf8::FirstInvalid("\xF4\x8F\xBF\xBF"), std::string_view::npos); // U+10FFFF
+	CHECK_EQ(Utf8::FirstInvalid("ab\xE9"), static_cast<size_t>(2));          // Latin-1 é
+	CHECK_EQ(Utf8::FirstInvalid("a\xC3"), static_cast<size_t>(1));           // cut short
+	CHECK_EQ(Utf8::FirstInvalid("\xC0\xAF"), static_cast<size_t>(0));        // overlong
+	CHECK_EQ(Utf8::FirstInvalid("\xED\xA0\x80"), static_cast<size_t>(0));    // surrogate
+	CHECK_EQ(Utf8::FirstInvalid("\xF4\x90\x80\x80"), static_cast<size_t>(0)); // past U+10FFFF
+	CHECK_EQ(Utf8::FirstInvalid("\x80"), static_cast<size_t>(0));            // lone continuation
 }
