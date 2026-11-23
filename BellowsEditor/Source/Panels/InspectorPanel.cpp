@@ -213,6 +213,39 @@ namespace Bellows {
 		DrawComponent<MeshRendererComponent>(m_Editor, entity, ICON_BOX, "Mesh Renderer", [&](MeshRendererComponent& c) { DrawMeshRenderer(entity, c); });
 		DrawComponent<AnimatorComponent>(m_Editor, entity, ICON_PERSON_STANDING, "Animator", [&](AnimatorComponent& c) { DrawAnimator(entity, c); });
 
+		DrawComponent<NavAgentComponent>(m_Editor, entity, ICON_FOOTPRINTS, "Nav Agent", [&](NavAgentComponent& c)
+		{
+			if (UI::BeginPropertyGrid("NavAgent"))
+			{
+				UI::Property("Speed", c.Speed, 0.05f, 0.0f, NavAgentComponent::MaxSpeed, "%.2f", "Top speed, meters per second");
+				UI::Property("Acceleration", c.Acceleration, 0.1f, NavAgentComponent::MinAcceleration, NavAgentComponent::MaxAcceleration, "%.2f",
+					"How fast it speeds up and slows down, meters per second per second");
+				UI::Property("Radius", c.Radius, 0.01f, NavAgentComponent::MinRadius, NavAgentComponent::MaxRadius, "%.2f", "Meters it keeps from other agents");
+				UI::Property("Height", c.Height, 0.01f, NavAgentComponent::MinHeight, NavAgentComponent::MaxHeight, "%.2f");
+				UI::Property("Base Offset", c.BaseOffset, 0.01f, -NavAgentComponent::MaxBaseOffset, NavAgentComponent::MaxBaseOffset, "%.2f",
+					"How far the entity's origin is above the ground (half a capsule's height, say)");
+				UI::Property("Stopping Distance", c.StoppingDistance, 0.01f, NavAgentComponent::MinStoppingDistance, NavAgentComponent::MaxStoppingDistance, "%.2f",
+					"It arrives this close to its destination, meters");
+				UI::Property("Turn Speed", c.TurnSpeed, 1.0f, 0.0f, NavAgentComponent::MaxTurnSpeed, "%.0f",
+					"Degrees per second it turns to face where it walks; 0 keeps it facing as it is");
+				UI::Property("Avoid Others", c.AvoidOthers, "Steers around other agents");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			const RigidBodyComponent* body = entity.TryGetComponent<RigidBodyComponent>();
+			const char* warning = nullptr;
+			if (body && body->Type == RigidBodyType::Dynamic)
+				warning = "Physics moves a dynamic body, so this agent can't: make the Rigid Body Kinematic, or remove it.";
+			else if (!entity.GetScene()->GetNavMesh())
+				warning = "This scene has no navmesh yet: bake one in Scene Settings > Navigation.";
+			if (warning)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+				ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", warning);
+				ImGui::PopStyleColor();
+			}
+		});
+
 		DrawComponent<CameraComponent>(m_Editor, entity, ICON_CAMERA, "Camera", [](CameraComponent& c)
 		{
 			if (UI::BeginPropertyGrid("Camera"))
@@ -1054,6 +1087,7 @@ namespace Bellows {
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Behavior");
 		entry.operator()<ScriptComponent>(ICON_FILE_CODE, "Script", "Behavior");
+		entry.operator()<NavAgentComponent>(ICON_FOOTPRINTS, "Nav Agent", "Behavior");
 		entry.operator()<AudioSourceComponent>(ICON_VOLUME_2, "Audio Source", "Audio");
 		entry.operator()<AudioListenerComponent>(ICON_MUSIC, "Audio Listener", "Audio");
 		if (m_ComponentFilter.empty())

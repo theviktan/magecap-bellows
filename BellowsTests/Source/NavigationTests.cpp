@@ -4,6 +4,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Navigation/NavMesh.h"
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/Components.h"
@@ -13,9 +14,12 @@
 #include "Bellows/Serialization/JsonUtils.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cmath>
 #include <cstring>
+#include <functional>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <vector>
@@ -67,6 +71,51 @@ namespace {
 		REQUIRE(navMesh);
 		return navMesh;
 	}
+
+	// A running scene on 'geometry''s navmesh, for agents to walk in.
+	Scope<Scene> AgentScene(const NavMeshGeometry& geometry)
+	{
+		Scope<Scene> scene = CreateScope<Scene>("Agents");
+		scene->SetNavMesh(Ref<NavMesh>(Bake(geometry).release()));
+		return scene;
+	}
+
+	Entity AddAgent(Scene& scene, const char* name, const glm::vec3& position)
+	{
+		Entity entity = scene.CreateEntity(name);
+		entity.GetComponent<TransformComponent>().Translation = position;
+		entity.AddComponent<NavAgentComponent>();
+		return entity;
+	}
+
+	void SendTo(Entity entity, const glm::vec3& destination)
+	{
+		NavAgentComponent& agent = entity.GetComponent<NavAgentComponent>();
+		agent.RuntimeDestination = destination;
+		agent.RuntimeDestinationChanged = true;
+	}
+
+	constexpr float c_Frame = 1.0f / 60.0f;
+
+	// Plays frames until every agent given has arrived (has no destination), or 'maxFrames' pass.
+	// Returns the frames it took, or -1.
+	int WalkUntilArrived(Scene& scene, std::initializer_list<Entity> agents, int maxFrames, const std::function<void()>& eachFrame = {})
+	{
+		for (int frame = 1; frame <= maxFrames; frame++)
+		{
+			scene.OnUpdateRuntime(Timestep(c_Frame));
+			if (eachFrame)
+				eachFrame();
+			bool arrived = true;
+			for (Entity agent : agents)
+				arrived &= !agent.GetComponent<NavAgentComponent>().RuntimeDestination.has_value();
+			if (arrived)
+				return frame;
+		}
+		return -1;
+	}
+
+	glm::vec3 Position(Entity entity) { return entity.GetComponent<TransformComponent>().Translation; }
 
 	float PathLength(const std::vector<glm::vec3>& path)
 	{
@@ -401,4 +450,276 @@ TEST_CASE("[gpu] A mesh collider made just before a bake is part of it")
 	REQUIRE(scene.BakeNavigation(error));
 	CHECK_FALSE(scene.GetNavMesh()->IsNavigable(glm::vec3(0.0f, 0.5f, 0.0f)));
 	CHECK(scene.GetNavMesh()->IsNavigable(glm::vec3(3.0f, 0.5f, 3.0f)));
+}
+
+TEST_CASE("A NavAgent walks around a wall to its destination, at its speed, facing the way it goes")
+{
+	Scope<Scene> scene = AgentScene(WalledFloor());
+	Entity walker = AddAgent(*scene, "Walker", { -5.0f, 0.0f, -5.0f });
+	NavAgentComponent& agent = walker.GetComponent<NavAgentComponent>();
+	scene->OnRuntimeStart();
+	REQUIRE(scene->GetNavAgents());
+
+	// Standing: nothing moves it sideways. With no colliders to stand on, it stands on the navmesh,
+	// which lies up to a cell above the triangles it was baked from.
+	for (int i = 0; i < 10; i++)
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+	CHECK(glm::distance(glm::vec2(Position(walker).x, Position(walker).z), glm::vec2(-5.0f, -5.0f)) < 0.01f);
+	CHECK(Position(walker).y >= 0.0f);
+	CHECK(Position(walker).y <= scene->GetNavMesh()->GetCellHeight() * 2.0f);
+	CHECK(scene->GetNavAgents()->GetAgentCount() == 1);
+
+	SendTo(walker, { 5.0f, 0.0f, -5.0f });
+	glm::vec3 previous = Position(walker);
+	float fastest = 0.0f, walked = 0.0f;
+	bool crossedWall = false, facedAhead = false;
+	const int frames = WalkUntilArrived(*scene, { walker }, 1200, [&]()
+	{
+		const glm::vec3 now = Position(walker);
+		fastest = std::max(fastest, glm::distance(now, previous) / c_Frame);
+		walked += glm::distance(now, previous);
+		// The wall runs along x = 0 up to z = 6: only past it may the agent cross.
+		if ((previous.x < 0.0f) != (now.x < 0.0f) && now.z < 6.0f)
+			crossedWall = true;
+		// Mid-walk, at speed, it faces where it walks (forward is -Z).
+		const glm::vec3 velocity = agent.RuntimeVelocity;
+		if (glm::length(velocity) > 3.0f)
+		{
+			const glm::vec3 forward = walker.GetComponent<TransformComponent>().GetRotation() * glm::vec3(0.0f, 0.0f, -1.0f);
+			if (glm::dot(glm::normalize(forward), glm::normalize(velocity)) > 0.95f)
+				facedAhead = true;
+		}
+		previous = now;
+	});
+	INFO("frames ", frames, ", at ", Position(walker).x, ", ", Position(walker).z);
+	REQUIRE(frames > 0);
+	CHECK_FALSE(crossedWall);
+	CHECK(facedAhead);
+	CHECK(walked > 20.0f);								// Around the wall's end, not through it
+	CHECK(fastest <= agent.Speed * 1.05f);
+	CHECK(fastest > agent.Speed * 0.8f);
+	CHECK(glm::distance(Position(walker), glm::vec3(5.0f, 0.0f, -5.0f)) <= agent.StoppingDistance + 0.05f);
+	CHECK(Position(walker).y <= scene->GetNavMesh()->GetCellHeight() * 2.0f);
+
+	// Arrived, it slows to a stop and stays.
+	for (int i = 0; i < 60; i++)
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+	CHECK(glm::length(agent.RuntimeVelocity) < 0.05f);
+	CHECK(glm::distance(Position(walker), glm::vec3(5.0f, 0.0f, -5.0f)) < 0.5f);
+	scene->OnRuntimeStop();
+	CHECK_FALSE(scene->GetNavAgents());
+}
+
+TEST_CASE("NavAgents pass each other, stop when told, and hold while the game is paused")
+{
+	NavMeshGeometry geometry;
+	AddFloor(geometry, -10.0f, -4.0f, 10.0f, 4.0f);
+	Scope<Scene> scene = AgentScene(geometry);
+	Entity east = AddAgent(*scene, "East", { -6.0f, 0.0f, 0.0f });
+	Entity west = AddAgent(*scene, "West", { 6.0f, 0.0f, 0.0f });
+	scene->OnRuntimeStart();
+
+	SUBCASE("Head on, they steer around each other and both arrive")
+	{
+		SendTo(east, { 6.0f, 0.0f, 0.0f });
+		SendTo(west, { -6.0f, 0.0f, 0.0f });
+		float closest = 100.0f;
+		const int frames = WalkUntilArrived(*scene, { east, west }, 1200, [&]() { closest = std::min(closest, glm::distance(Position(east), Position(west))); });
+		REQUIRE(frames > 0);
+		CHECK(closest > 0.6f);		// Their radii add to 0.8 m
+		CHECK(Position(east).x > 5.5f);
+		CHECK(Position(west).x < -5.5f);
+	}
+	SUBCASE("Another agent standing beside its destination doesn't hold it short")
+	{
+		// West stands 1.2 m from it: well inside the range agents keep apart over.
+		SendTo(east, { 6.0f, 0.0f, -1.2f });
+		REQUIRE(WalkUntilArrived(*scene, { east }, 600) > 0);
+		CHECK(glm::distance(glm::vec2(Position(east).x, Position(east).z), glm::vec2(6.0f, -1.2f)) <= 0.15f);
+		CHECK(glm::distance(Position(west), glm::vec3(6.0f, Position(west).y, 0.0f)) < 0.5f);
+	}
+	SUBCASE("Stopped, it comes to rest where it is")
+	{
+		SendTo(east, { 5.0f, 0.0f, -2.0f });
+		for (int i = 0; i < 60; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		const float halfway = Position(east).x;
+		CHECK(halfway > -5.0f);
+		NavAgentComponent& agent = east.GetComponent<NavAgentComponent>();
+		agent.RuntimeDestination.reset();
+		agent.RuntimeDestinationChanged = true;
+		for (int i = 0; i < 60; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(glm::length(agent.RuntimeVelocity) < 0.05f);
+		CHECK(Position(east).x < halfway + 2.0f);		// Slowing down at 8 m/s², not walking on
+	}
+	SUBCASE("The game's pause holds it")
+	{
+		SendTo(east, { 5.0f, 0.0f, -2.0f });
+		for (int i = 0; i < 20; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		const glm::vec3 paused = Position(east);
+		scene->SetGamePaused(true);
+		for (int i = 0; i < 30; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(Position(east) == paused);
+		scene->SetGamePaused(false);
+		REQUIRE(WalkUntilArrived(*scene, { east }, 600) > 0);
+	}
+	SUBCASE("Sent where no agent can stand, it stays put")
+	{
+		SendTo(east, { 0.0f, 0.0f, 50.0f });
+		for (int i = 0; i < 30; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK_FALSE(east.GetComponent<NavAgentComponent>().RuntimeDestination);
+		CHECK(glm::distance(glm::vec2(Position(east).x, Position(east).z), glm::vec2(-6.0f, 0.0f)) < 0.01f);
+	}
+	SUBCASE("Moved by a script mid-walk, it walks on from where it was put")
+	{
+		SendTo(east, { 5.0f, 0.0f, -2.0f });
+		for (int i = 0; i < 30; i++)
+			scene->OnUpdateRuntime(Timestep(c_Frame));
+		east.GetComponent<TransformComponent>().Translation = { 3.0f, 0.0f, 3.0f };
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(glm::distance(glm::vec2(Position(east).x, Position(east).z), glm::vec2(3.0f, 3.0f)) < 0.2f);
+		REQUIRE(WalkUntilArrived(*scene, { east }, 600) > 0);
+		CHECK(glm::distance(Position(east), glm::vec3(5.0f, Position(east).y, -2.0f)) < 0.2f);
+	}
+	SUBCASE("A destroyed agent leaves the crowd")
+	{
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(scene->GetNavAgents()->GetAgentCount() == 2);
+		scene->DestroyEntity(west);
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(scene->GetNavAgents()->GetAgentCount() == 1);
+		east.RemoveComponent<NavAgentComponent>();
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+		CHECK(scene->GetNavAgents()->GetAgentCount() == 0);
+	}
+	scene->OnRuntimeStop();
+}
+
+TEST_CASE("A NavAgent moves a kinematic or static body, keeps its base offset, and leaves a dynamic body to physics")
+{
+	// A collider floor this time, so the agent stands on the ground itself, not on the navmesh just above it.
+	Scope<Scene> scene = CreateScope<Scene>("Bodies");
+	Entity floor = scene->CreateEntity("Floor");
+	floor.GetComponent<TransformComponent>().Translation = glm::vec3(0.0f, -0.5f, 0.0f);
+	floor.GetComponent<TransformComponent>().Scale = glm::vec3(20.0f, 1.0f, 8.0f);
+	floor.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	floor.AddComponent<BoxColliderComponent>();
+	std::string error;
+	REQUIRE(scene->BakeNavigation(error));
+
+	Entity capsule = AddAgent(*scene, "Capsule", { -6.0f, 0.9f, -2.0f });
+	capsule.GetComponent<NavAgentComponent>().BaseOffset = 0.9f;
+	capsule.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Kinematic;
+	capsule.AddComponent<CapsuleColliderComponent>();
+
+	Entity ball = AddAgent(*scene, "Ball", { -6.0f, 0.5f, 2.0f });
+	RigidBodyComponent& body = ball.AddComponent<RigidBodyComponent>();
+	body.Type = RigidBodyType::Dynamic;
+	body.GravityScale = 0.0f;
+	ball.AddComponent<SphereColliderComponent>();
+
+	// A static body moved by its agent: its own box must not count as the ground under it.
+	Entity crate = AddAgent(*scene, "Crate", { -6.0f, 0.5f, 0.0f });
+	crate.GetComponent<NavAgentComponent>().BaseOffset = 0.5f;
+	crate.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	crate.AddComponent<BoxColliderComponent>();
+
+	scene->OnRuntimeStart();
+	SendTo(capsule, { 6.0f, 0.0f, -2.0f });
+	SendTo(ball, { 6.0f, 0.0f, 2.0f });
+	SendTo(crate, { 0.0f, 0.0f, 0.0f });
+	for (int i = 0; i < 300 && capsule.GetComponent<NavAgentComponent>().RuntimeDestination; i++)
+		scene->OnUpdateRuntime(Timestep(c_Frame));
+
+	CHECK_FALSE(capsule.GetComponent<NavAgentComponent>().RuntimeDestination);
+	CHECK(Position(capsule).x > 5.5f);
+	CHECK(Position(capsule).y == doctest::Approx(0.9f).epsilon(0.002));	// Its origin rides 0.9 m over the floor
+	CHECK(Position(ball).x == doctest::Approx(-6.0f));
+	CHECK(Position(crate).x > -1.0f);
+	CHECK(Position(crate).y == doctest::Approx(0.5f).epsilon(0.002));
+	CHECK(scene->GetNavAgents()->GetAgentCount() == 2);
+	scene->OnRuntimeStop();
+}
+
+TEST_CASE("NavAgents wait for a navmesh, and walk on when one is baked during play")
+{
+	Scene scene("Bare");
+	Entity floor = scene.CreateEntity("Floor");
+	floor.GetComponent<TransformComponent>().Scale = glm::vec3(20.0f, 1.0f, 20.0f);
+	floor.GetComponent<TransformComponent>().Translation = glm::vec3(0.0f, -0.5f, 0.0f);
+	floor.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	floor.AddComponent<BoxColliderComponent>();
+	Entity walker = AddAgent(scene, "Walker", { -4.0f, 0.0f, 0.0f });
+
+	scene.OnRuntimeStart();
+	SendTo(walker, { 4.0f, 0.0f, 0.0f });
+	for (int i = 0; i < 30; i++)
+		scene.OnUpdateRuntime(Timestep(c_Frame));
+	CHECK(Position(walker) == glm::vec3(-4.0f, 0.0f, 0.0f));
+	CHECK(walker.GetComponent<NavAgentComponent>().RuntimeDestination);	// Kept for when it can walk
+	CHECK(scene.GetNavAgents()->GetAgentCount() == 0);
+
+	std::string error;
+	REQUIRE(scene.BakeNavigation(error));
+	REQUIRE(WalkUntilArrived(scene, { walker }, 600) > 0);
+	CHECK(Position(walker).x == doctest::Approx(4.0f).epsilon(0.05));
+	scene.OnRuntimeStop();
+}
+
+TEST_CASE("A NavAgent is saved with its scene, and loaded settings are held to their ranges")
+{
+	Scene scene("Saved");
+	Entity entity = scene.CreateEntity("Guard");
+	NavAgentComponent& agent = entity.AddComponent<NavAgentComponent>();
+	agent.Speed = 2.5f;
+	agent.Acceleration = 12.0f;
+	agent.Radius = 0.3f;
+	agent.Height = 1.6f;
+	agent.BaseOffset = 0.8f;
+	agent.StoppingDistance = 0.5f;
+	agent.TurnSpeed = 180.0f;
+	agent.AvoidOthers = false;
+	Json json = SceneSerializer::SerializeToJson(scene);
+
+	Scene loaded("Loaded");
+	REQUIRE(SceneSerializer::DeserializeFromJson(loaded, json));
+	auto view = loaded.GetAllEntitiesWith<NavAgentComponent>();
+	REQUIRE(view.size() == 1);
+	const NavAgentComponent& read = view.get<NavAgentComponent>(*view.begin());
+	CHECK(read.Speed == 2.5f);
+	CHECK(read.Acceleration == 12.0f);
+	CHECK(read.Radius == 0.3f);
+	CHECK(read.Height == 1.6f);
+	CHECK(read.BaseOffset == 0.8f);
+	CHECK(read.StoppingDistance == 0.5f);
+	CHECK(read.TurnSpeed == 180.0f);
+	CHECK_FALSE(read.AvoidOthers);
+
+	// A hand-edited file: too fast, too small, and a number JSON can't hold as a float.
+	Json& saved = json["Entities"][0]["NavAgent"];
+	saved["Speed"] = 500.0;
+	saved["Radius"] = 0.0;
+	saved["Acceleration"] = -3.0;
+	saved["TurnSpeed"] = 1e300;
+	Scene clamped("Clamped");
+	REQUIRE(SceneSerializer::DeserializeFromJson(clamped, json));
+	auto clampedView = clamped.GetAllEntitiesWith<NavAgentComponent>();
+	REQUIRE(clampedView.size() == 1);
+	const NavAgentComponent& held = clampedView.get<NavAgentComponent>(*clampedView.begin());
+	CHECK(held.Speed == NavAgentComponent::MaxSpeed);
+	CHECK(held.Radius == NavAgentComponent::MinRadius);
+	CHECK(held.Acceleration == NavAgentComponent::MinAcceleration);
+	CHECK(std::isfinite(held.TurnSpeed));
+
+	NavAgentComponent nan;
+	nan.Speed = std::numeric_limits<float>::quiet_NaN();
+	nan.Height = std::numeric_limits<float>::infinity();
+	nan.Clamp();
+	CHECK(nan.Speed == NavAgentComponent().Speed);
+	CHECK(nan.Height == NavAgentComponent().Height);
 }

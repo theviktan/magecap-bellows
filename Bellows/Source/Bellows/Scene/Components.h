@@ -17,6 +17,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -105,6 +106,37 @@ namespace Bellows {
 		Ref<Mesh> RuntimeMesh;						// The mesh RuntimePlayer's clips come from
 		std::vector<glm::mat4> RuntimeSkinMatrices;	// The pose drawn; empty = the rest pose
 		bool RuntimePreview = false;				// The editor plays it while the game isn't running
+	};
+
+	// Walks the entity over the scene's navmesh to a destination, steering around walls and other
+	// agents. It moves the entity's transform, so it suits an entity with no rigid body or a kinematic
+	// one; physics would fight it on a dynamic body, so an agent there stands still (with a warning).
+	struct NavAgentComponent
+	{
+		float Speed = 3.5f;				// Top speed, m/s
+		float Acceleration = 8.0f;		// m/s²
+		float Radius = 0.4f;			// Meters it keeps from other agents
+		float Height = 1.8f;			// Meters
+		float BaseOffset = 0.0f;		// The entity's origin above the ground, meters (half a capsule's height, say)
+		float StoppingDistance = 0.1f;	// It arrives this close to its destination, meters
+		float TurnSpeed = 720.0f;		// Degrees per second it turns to face where it walks; 0 = it doesn't turn
+		bool AvoidOthers = true;		// Steers around other agents
+
+		static constexpr float MaxSpeed = 100.0f;
+		static constexpr float MinAcceleration = 0.1f, MaxAcceleration = 1000.0f;
+		static constexpr float MinRadius = 0.05f, MaxRadius = 5.0f;
+		static constexpr float MinHeight = 0.1f, MaxHeight = 20.0f;
+		static constexpr float MaxBaseOffset = 20.0f;	// Either way
+		static constexpr float MinStoppingDistance = 0.01f, MaxStoppingDistance = 100.0f;
+		static constexpr float MaxTurnSpeed = 10000.0f;
+
+		// Holds every value to its range (and a NaN to its default), as a loaded or edited agent needs.
+		void Clamp();
+
+		// Runtime state (not serialized)
+		std::optional<glm::vec3> RuntimeDestination;	// Where it's walking; none = it stands
+		bool RuntimeDestinationChanged = false;			// Not yet handed to the navigation update
+		glm::vec3 RuntimeVelocity { 0.0f };				// m/s, as of the last navigation update
 	};
 
 	enum class ProjectionType : uint8_t
@@ -471,7 +503,7 @@ namespace Bellows {
 	{
 	};
 
-	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, CameraComponent,
+	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
 		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,

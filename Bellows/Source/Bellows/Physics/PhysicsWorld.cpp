@@ -11,6 +11,7 @@
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -521,7 +522,43 @@ namespace Bellows {
 		}
 	}
 
+	namespace {
+
+		class StaticBroadPhaseFilter final : public JPH::BroadPhaseLayerFilter
+		{
+		public:
+			bool ShouldCollide(JPH::BroadPhaseLayer layer) const override { return layer == BroadPhaseLayers::NonMoving; }
+		};
+
+		class StaticObjectFilter final : public JPH::ObjectLayerFilter
+		{
+		public:
+			bool ShouldCollide(JPH::ObjectLayer layer) const override { return layer == Layers::NonMoving; }
+		};
+
+		class SolidBodyFilter final : public JPH::BodyFilter
+		{
+		public:
+			explicit SolidBodyFilter(JPH::BodyID ignore) : m_Ignore(ignore) {}
+			bool ShouldCollide(const JPH::BodyID& body) const override { return body != m_Ignore; }
+			bool ShouldCollideLocked(const JPH::Body& body) const override { return !body.IsSensor(); }
+		private:
+			JPH::BodyID m_Ignore;
+		};
+
+	}
+
 	bool PhysicsWorld::Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit) const
+	{
+		return CastRay(origin, direction, maxDistance, false, 0, outHit);
+	}
+
+	bool PhysicsWorld::RaycastStatic(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore) const
+	{
+		return CastRay(origin, direction, maxDistance, true, ignore, outHit);
+	}
+
+	bool PhysicsWorld::CastRay(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, bool staticOnly, UUID ignore, RaycastHit& outHit) const
 	{
 		const float length = glm::length(direction);
 		if (length < 1e-6f || maxDistance <= 0.0f)
@@ -530,7 +567,13 @@ namespace Bellows {
 
 		JPH::RRayCast ray(JPH::RVec3(origin.x, origin.y, origin.z), ToJolt(normalizedDirection * maxDistance));
 		JPH::RayCastResult result;
-		if (!m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result))
+		JPH::BodyID ignoreBody;
+		if (auto it = m_Jolt->Bodies.find(ignore); ignore != 0 && it != m_Jolt->Bodies.end())
+			ignoreBody = it->second;
+		const bool hit = staticOnly
+			? m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result, StaticBroadPhaseFilter(), StaticObjectFilter(), SolidBodyFilter(ignoreBody))
+			: m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result);
+		if (!hit)
 			return false;
 
 		const JPH::RVec3 point = ray.GetPointOnRay(result.mFraction);

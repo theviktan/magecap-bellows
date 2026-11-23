@@ -58,6 +58,9 @@ namespace Bellows {
 		const std::vector<ContactEvent>& GetContactEvents() const { return m_ContactEvents; }
 
 		bool Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit) const;
+		// The same, hitting only the ground a navmesh is baked from: static bodies that aren't triggers,
+		// other than 'ignore''s.
+		bool RaycastStatic(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore = 0) const;
 
 		void SetGravity(const glm::vec3& gravity);
 		glm::vec3 GetGravity() const;
@@ -83,6 +86,7 @@ namespace Bellows {
 		static void InitializeGlobals();
 		static void ShutdownGlobals();
 	private:
+		bool CastRay(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, bool staticOnly, UUID ignore, RaycastHit& outHit) const;
 		void CreateBody(Entity entity);
 	private:
 		struct JoltState;

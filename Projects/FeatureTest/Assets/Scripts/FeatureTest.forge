@@ -153,7 +153,13 @@ function test_components()
 	check(source.bus is "Music", "AudioSource bus")
 	check(fails(function() set source.bus to "Nowhere" end), "unknown buses are rejected for sources")
 
-	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource", "components list ({thing.components})")
+	set agent to thing.add_component("NavAgent")
+	set agent.speed to 2
+	set agent.base_offset to 0.5
+	check(agent.speed is 2 and agent.base_offset is 0.5 and agent.avoid_others, "NavAgent properties")
+	check(fails(function() set agent.speed to 500 end), "a NavAgent's speed is held to its range")
+
+	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent", "components list ({thing.components})")
 	thing.remove_component("PointLight")
 	check(not thing.has_component("PointLight") and thing.get_component("PointLight") is nothing, "remove_component")
 	thing.destroy()
