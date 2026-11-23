@@ -246,6 +246,15 @@ namespace Bellows {
 				}
 			}
 
+			if (auto it = json.find("Animator"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<AnimatorComponent>();
+				JsonRead(*it, "Clip", component.Clip);
+				JsonRead(*it, "PlayOnStart", component.PlayOnStart);
+				JsonRead(*it, "Loop", component.Loop);
+				JsonRead(*it, "Speed", component.Speed);
+			}
+
 			if (auto it = json.find("AudioSource"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<AudioSourceComponent>();
@@ -551,6 +560,15 @@ namespace Bellows {
 			for (const auto& [name, value] : c->Fields)
 				fields[name] = SerializeScriptField(value);
 			j["Fields"] = fields;
+		}
+
+		if (const auto* c = entity.TryGetComponent<AnimatorComponent>())
+		{
+			Json& j = json["Animator"];
+			j["Clip"] = c->Clip;
+			j["PlayOnStart"] = c->PlayOnStart;
+			j["Loop"] = c->Loop;
+			j["Speed"] = c->Speed;
 		}
 
 		if (const auto* c = entity.TryGetComponent<AudioSourceComponent>())

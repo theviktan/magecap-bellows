@@ -211,6 +211,7 @@ namespace Bellows {
 		}, false);
 
 		DrawComponent<MeshRendererComponent>(m_Editor, entity, ICON_BOX, "Mesh Renderer", [&](MeshRendererComponent& c) { DrawMeshRenderer(entity, c); });
+		DrawComponent<AnimatorComponent>(m_Editor, entity, ICON_PERSON_STANDING, "Animator", [&](AnimatorComponent& c) { DrawAnimator(entity, c); });
 
 		DrawComponent<CameraComponent>(m_Editor, entity, ICON_CAMERA, "Camera", [](CameraComponent& c)
 		{
@@ -728,6 +729,87 @@ namespace Bellows {
 		}
 	}
 
+	void InspectorPanel::DrawAnimator(Entity entity, AnimatorComponent& c)
+	{
+		const MeshRendererComponent* meshRenderer = entity.TryGetComponent<MeshRendererComponent>();
+		const MeshSkin* skin = meshRenderer && meshRenderer->RuntimeMesh ? meshRenderer->RuntimeMesh->GetSkin() : nullptr;
+		const bool hasClips = skin && !skin->Clips.empty();
+		if (UI::BeginPropertyGrid("Animator"))
+		{
+			if (hasClips)
+			{
+				// "First Clip" is an empty Clip; a name the mesh doesn't have stays listed, marked missing.
+				std::vector<std::string> names = { "First Clip" };
+				int selected = 0;
+				for (const Ref<AnimationClip>& clip : skin->Clips)
+				{
+					if (clip->GetName() == c.Clip)
+						selected = static_cast<int>(names.size());
+					names.push_back(clip->GetName());
+				}
+				if (selected == 0 && !c.Clip.empty())
+				{
+					selected = static_cast<int>(names.size());
+					names.push_back(c.Clip + " (missing)");
+				}
+				std::vector<const char*> items;
+				for (const std::string& name : names)
+					items.push_back(name.c_str());
+				if (UI::PropertyCombo("Clip", selected, items.data(), static_cast<int>(items.size()), "The clip played when the game starts"))
+				{
+					if (selected == 0)
+						c.Clip.clear();
+					else if (selected <= static_cast<int>(skin->Clips.size()))
+						c.Clip = skin->Clips[static_cast<size_t>(selected - 1)]->GetName();
+				}
+			}
+			else
+				UI::Property("Clip", c.Clip, "The clip played when the game starts; empty plays the mesh's first");
+			UI::Property("Play On Start", c.PlayOnStart, "Starts the clip when the game starts; otherwise scripts play one");
+			UI::Property("Loop", c.Loop);
+			UI::PropertySlider("Speed", c.Speed, -AnimationPlayer::MaxSpeed, AnimationPlayer::MaxSpeed, "%.2f", "Times as fast; negative plays backward");
+
+			// The preview plays the clip here without changing the scene: nothing it does is saved or undone.
+			if (hasClips)
+			{
+				UI::Property("Preview", c.RuntimePreview, "Plays the clip in the viewport while the game isn't running");
+				AnimationPlayer& player = c.RuntimePlayer;
+				if (c.RuntimePreview && player.GetClip())
+				{
+					float time = player.GetTime();
+					if (UI::PropertySlider("Time", time, 0.0f, player.GetClip()->GetDuration(), "%.2f s", "Drag to look at any moment of the clip"))
+					{
+						player.Pause();
+						player.SetTime(time);
+					}
+				}
+			}
+			UI::EndPropertyGrid();
+		}
+
+		if (!skin)
+		{
+			UI::TextMuted(meshRenderer ? "This entity's mesh has no skeleton, so there is nothing to animate. Use a glTF model with a skin."
+				: "Add a Mesh Renderer with a skinned glTF model to animate.");
+		}
+		else if (!hasClips)
+			UI::TextMuted("This model has a skeleton but no animations.");
+		else if (c.RuntimePreview && c.RuntimePlayer.GetClip())
+		{
+			AnimationPlayer& player = c.RuntimePlayer;
+			const bool moving = player.IsPlaying();
+			if (ImGui::Button(moving ? ICON_PAUSE "  Pause Preview" : ICON_PLAY "  Play Preview", ImVec2(-FLT_MIN, 0.0f)))
+			{
+				if (moving)
+					player.Pause();
+				else if (player.IsPaused())
+					player.Resume();
+				else
+					player.Play(player.GetClip(), 0.0f, c.Speed);
+			}
+		}
+	}
+
 	void InspectorPanel::DrawMeshRenderer(Entity entity, MeshRendererComponent& c)
 	{
 		if (UI::BeginPropertyGrid("MeshRenderer"))
@@ -955,6 +1037,7 @@ namespace Bellows {
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Rendering");
 		entry.operator()<MeshRendererComponent>(ICON_BOX, "Mesh Renderer", "Rendering");
+		entry.operator()<AnimatorComponent>(ICON_PERSON_STANDING, "Animator", "Rendering");
 		entry.operator()<CameraComponent>(ICON_CAMERA, "Camera", "Rendering");
 		entry.operator()<DirectionalLightComponent>(ICON_SUN, "Directional Light", "Rendering");
 		entry.operator()<PointLightComponent>(ICON_LIGHTBULB, "Point Light", "Rendering");

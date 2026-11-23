@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Bellows/Animation/AnimationPlayer.h"
 #include "Bellows/Core/UUID.h"
 #include "Bellows/Renderer/Environment.h"
 #include "Bellows/Renderer/Material.h"
@@ -89,6 +90,21 @@ namespace Bellows {
 		Ref<Material> RuntimeMaterial;
 		std::string LoadedMeshPath;
 		std::string LoadedMaterialPath;
+	};
+
+	// Plays the animation clips of the entity's skinned MeshRenderer mesh.
+	struct AnimatorComponent
+	{
+		std::string Clip;			// Played when the game starts; empty = the mesh's first clip
+		bool PlayOnStart = true;
+		bool Loop = true;
+		float Speed = 1.0f;			// Times as fast; -10 to 10, negative plays backward
+
+		// Runtime state (not serialized)
+		AnimationPlayer RuntimePlayer;
+		Ref<Mesh> RuntimeMesh;						// The mesh RuntimePlayer's clips come from
+		std::vector<glm::mat4> RuntimeSkinMatrices;	// The pose drawn; empty = the rest pose
+		bool RuntimePreview = false;				// The editor plays it while the game isn't running
 	};
 
 	enum class ProjectionType : uint8_t
@@ -455,7 +471,7 @@ namespace Bellows {
 	{
 	};
 
-	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, CameraComponent,
+	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
 		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,

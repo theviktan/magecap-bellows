@@ -1529,7 +1529,7 @@ def load_data(name: str, default: typing.Any = None) -> typing.Any:
     """The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)"""
 
 def load_json(path: str) -> typing.Any:
-    """Reads a JSON data file from the Assets folder ("Data/items.json"): objects become dicts (ForgeScript maps), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"""
+    """Reads a JSON data file from the Assets folder ("Data/items.json"): objects become maps (dicts in Python), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"""
 
 def load_scene(path: str) -> bool:
     """Switches to another scene at the end of the frame"""
