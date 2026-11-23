@@ -71,6 +71,18 @@ foreach(doc IN LISTS DOCS)
 			list(APPEND failures "${docName}:${line}: uses a built-in or engine name for its own:\n${said}")
 			continue()
 		endif()
+		# A Cookbook recipe is code to copy into a game, so it must have no warning at all: a new warning
+		# that fires on one (a checker change, or a new engine name) shows up in the change that causes it.
+		# The other guides show some warnings on purpose, to teach them.
+		if(docName STREQUAL "Cookbook.md")
+			execute_process(COMMAND "${FORGESCRIPT}" --check --strict --api "${API}" "${file}"
+				RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
+			if(NOT exitCode EQUAL 0)
+				string(STRIP "${out}${err}" said)
+				list(APPEND failures "${docName}:${line}: a recipe must have no warnings:\n${said}")
+				continue()
+			endif()
+		endif()
 		# Each example is laid out the way 'forgescript --format' lays it out, so the docs teach one style.
 		execute_process(COMMAND "${FORGESCRIPT}" --format --check "${file}"
 			RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
