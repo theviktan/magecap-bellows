@@ -259,8 +259,9 @@ namespace ForgeScript {
 		// (and 'wait for "Start" is clicked'): those run only when it matches their name, ignoring letter
 		// case, and never for an event without a source.
 		bool Emit(Module* module, const std::string& event, const std::vector<Value>& values = {}, const std::string& source = {});
-		// Sends an event to every loaded module.
-		void EmitAll(const std::string& event, const std::vector<Value>& values = {});
+		// Sends an event to every loaded module. With a source, handlers written 'when "Hero" is
+		// destination reached' run too, as with Emit.
+		void EmitAll(const std::string& event, const std::vector<Value>& values = {}, const std::string& source = {});
 
 		// The names of a module's 'test "name" ... end' blocks, in the order they were written. Tests never
 		// run when the script runs; a host runs them with RunTest ('forgescript --test' does).

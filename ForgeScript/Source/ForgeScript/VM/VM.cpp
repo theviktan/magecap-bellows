@@ -705,7 +705,7 @@ namespace ForgeScript {
 		return success;
 	}
 
-	void VM::EmitAll(const std::string& event, const std::vector<Value>& values)
+	void VM::EmitAll(const std::string& event, const std::vector<Value>& values, const std::string& source)
 	{
 		std::vector<Value> held = values;
 		std::vector<Module*> modules = m_Modules;
@@ -713,7 +713,7 @@ namespace ForgeScript {
 		{
 			// The module may have been unloaded by an earlier handler.
 			if (std::find(m_Modules.begin(), m_Modules.end(), module) != m_Modules.end())
-				Emit(module, event, held);
+				Emit(module, event, held, source);
 		}
 	}
 

@@ -211,7 +211,8 @@ namespace Bellows::Scripting {
 
 		// Broadcasts from other languages (Python's bellows.emit) reach every ForgeScript 'when' handler.
 		// An event for one entity (a UI widget's, on its way up the hierarchy) reaches only that entity's
-		// script, with the name of the entity that raised it for 'when "Start" is clicked'.
+		// script. Either way, the name of the entity it is about (its Source) goes with it, for
+		// 'when "Start" is clicked' and 'when "Hero" is destination reached'.
 		m_EventListener = AddScriptEventListener([this](const std::string& event, const ScriptValueList& values, const ScriptEventDelivery& delivery)
 		{
 			if (!m_VM)
@@ -219,16 +220,16 @@ namespace Bellows::Scripting {
 			std::vector<ForgeScript::Value> converted;
 			for (const ScriptValue& value : values)
 				converted.push_back(FromScriptValue(*m_VM, value));
-			if (!delivery.Target)
-			{
-				m_VM->EmitAll(event, converted);
-				return;
-			}
 			std::string source;
 			if (delivery.Source)
 			{
 				if (const Entity raisedBy = delivery.Source->TryResolve())
 					source = raisedBy.GetName();
+			}
+			if (!delivery.Target)
+			{
+				m_VM->EmitAll(event, converted, source);
+				return;
 			}
 			Emit(delivery.Target->ID, event, converted, source);
 		});

@@ -45,6 +45,18 @@ expect_run("json warnings" 0
 	"{\"file\":\"${warns}\",\"diagnostics\":[{\"line\":1,\"column\":5,\"endColumn\":14,\"severity\":\"warning\",\"message\":\"Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'.\"}]}"
 	ARGS --check --json "${warns}")
 expect_run("json no mistakes" 0 "{\"file\":\"${good}\",\"diagnostics\":[]}" ARGS --check --json "${good}")
+# --strict (for CI): the same output and JSON, but a warning makes the exit code 1.
+expect_run("strict warnings" 1
+	"${warns}: no mistakes found, but 1 warning, and --strict counts warnings.\nwarns.forge:1:5: warning: Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'."
+	ARGS --check --strict "${warns}")
+expect_run("strict json warnings" 1
+	"{\"file\":\"${warns}\",\"diagnostics\":[{\"line\":1,\"column\":5,\"endColumn\":14,\"severity\":\"warning\",\"message\":\"Naming a value 'max' hides the built-in function 'max', so max(...) on line 2 won't call it. Pick another name, like 'max_value'.\"}]}"
+	ARGS --check --strict --json "${warns}")
+expect_run("strict no warnings" 0 "${good}: no mistakes found." ARGS --check --strict "${good}")
+expect_run("strict mistakes" 65
+	"mistakes.forge:2:5: 'to' is a ForgeScript keyword and cannot be used as a variable name.\nmistakes.forge:4:9: Expected a value here, but found '*'."
+	ARGS --check --strict "${mistakes}")
+expect_run("strict alone" 64 "--strict works together with --check, like: forgescript --check --strict game.forge" ARGS --strict "${good}")
 # A mistake whose message names the change carries it as "fix", for editors that read the JSON.
 set(fixable "${FOLDER}/fixable.forge")
 expect_run("json fix" 65
