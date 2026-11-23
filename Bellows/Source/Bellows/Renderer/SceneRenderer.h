@@ -142,6 +142,7 @@ namespace Bellows {
 		uint32_t ShadowDrawCalls = 0;
 		uint64_t Triangles = 0;
 		uint32_t Meshes = 0;
+		uint32_t SkinnedMeshes = 0;		// Meshes drawn in a pose (each also counts in Meshes)
 		uint32_t PointLights = 0;
 		uint32_t SpotLights = 0;
 	};
@@ -172,9 +173,15 @@ namespace Bellows {
 		void SubmitPointLight(const PointLightData& light);
 		void SubmitSpotLight(const SpotLightData& light);
 
+		// The most joint matrices a frame can draw (4 MB); skinned meshes past it are drawn as made.
+		static constexpr size_t MaxFrameJoints = 65536;
+
 		// Submits every submesh of 'mesh'. 'materialOverride' replaces all of the mesh's own materials.
+		// A skinned mesh's skinned submeshes are drawn in the pose 'skinMatrices' gives (one per joint,
+		// from Skeleton::ComputeSkinMatrices), or in its rest pose without them.
 		void SubmitMesh(const Ref<Mesh>& mesh, const glm::mat4& transform, uint32_t entityID = 0,
-			const Ref<Material>& materialOverride = nullptr, bool castShadows = true);
+			const Ref<Material>& materialOverride = nullptr, bool castShadows = true,
+			const std::vector<glm::mat4>* skinMatrices = nullptr);
 
 		// Overlay lines (drawn after tonemapping, depth-tested against the scene).
 		void SubmitLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
@@ -221,9 +228,21 @@ namespace Bellows {
 			uint32_t SubmeshIndex = 0;
 			Material* MaterialPtr = nullptr;
 			glm::mat4 Transform { 1.0f };
+			AABB Bounds;					// World space; for a skinned draw, of its pose
 			uint32_t EntityID = 0;
+			uint32_t JointOffset = 0;		// Skinned: the first of its joint matrices in m_JointMatrices
+			bool Skinned = false;
 			bool CastShadows = true;
 			float SortKey = 0.0f;
+		};
+
+		// The pipelines of one mesh pass, for one- and two-sided materials, static and skinned.
+		struct MeshPassPipelines
+		{
+			nvrhi::IGraphicsPipeline* SingleSided = nullptr;
+			nvrhi::IGraphicsPipeline* DoubleSided = nullptr;
+			nvrhi::IGraphicsPipeline* SkinnedSingleSided = nullptr;
+			nvrhi::IGraphicsPipeline* SkinnedDoubleSided = nullptr;
 		};
 
 		struct LineVertex
@@ -301,7 +320,8 @@ namespace Bellows {
 		void DrawFullscreen(nvrhi::ICommandList* commandList, nvrhi::IGraphicsPipeline* pipeline, nvrhi::IFramebuffer* framebuffer,
 			nvrhi::IBindingSet* bindingSet, uint32_t width, uint32_t height);
 		void DrawMeshes(nvrhi::ICommandList* commandList, const std::vector<DrawCommand>& draws, nvrhi::IFramebuffer* framebuffer,
-			nvrhi::IGraphicsPipeline* singleSided, nvrhi::IGraphicsPipeline* doubleSided);
+			const MeshPassPipelines& pipelines);
+		void UploadJointMatrices(nvrhi::ICommandList* commandList);
 
 		nvrhi::BindingSetHandle CreatePostProcessSet(nvrhi::IBuffer* constants, std::initializer_list<nvrhi::ITexture*> textures,
 			nvrhi::TextureDimension firstDimension = nvrhi::TextureDimension::Texture2D);
@@ -325,6 +345,8 @@ namespace Bellows {
 		std::vector<SpotLightData> m_SpotLights;
 		std::vector<DrawCommand> m_OpaqueDraws;
 		std::vector<DrawCommand> m_TransparentDraws;
+		std::vector<glm::mat4> m_JointMatrices;		// World space, of every skinned draw this frame
+		bool m_WarnedJointLimit = false;
 		std::vector<LineVertex> m_LineVertices;
 		std::vector<TextVertex> m_TextVertices;
 		std::vector<TextDraw> m_TextDraws;
@@ -341,6 +363,7 @@ namespace Bellows {
 
 		nvrhi::CommandListHandle m_CommandList;
 		nvrhi::InputLayoutHandle m_MeshInputLayout;
+		nvrhi::InputLayoutHandle m_SkinnedMeshInputLayout;	// Vertex and SkinVertex streams
 		nvrhi::InputLayoutHandle m_LineInputLayout;
 		nvrhi::InputLayoutHandle m_TextInputLayout;
 		nvrhi::InputLayoutHandle m_UIInputLayout;
@@ -376,6 +399,10 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_PrepassPipeline, m_PrepassPipelineDoubleSided;
 		nvrhi::GraphicsPipelineHandle m_OpaquePipeline, m_OpaquePipelineDoubleSided;
 		nvrhi::GraphicsPipelineHandle m_TransparentPipeline, m_TransparentPipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_ShadowSkinnedPipeline;
+		nvrhi::GraphicsPipelineHandle m_PrepassSkinnedPipeline, m_PrepassSkinnedPipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_OpaqueSkinnedPipeline, m_OpaqueSkinnedPipelineDoubleSided;
+		nvrhi::GraphicsPipelineHandle m_TransparentSkinnedPipeline, m_TransparentSkinnedPipelineDoubleSided;
 		nvrhi::GraphicsPipelineHandle m_SkyboxPipeline;
 		nvrhi::GraphicsPipelineHandle m_SSAOPipeline, m_SSAOBlurPipeline;
 		nvrhi::GraphicsPipelineHandle m_BloomDownsamplePipeline, m_BloomUpsamplePipeline;
@@ -402,6 +429,8 @@ namespace Bellows {
 		// Binding sets
 		nvrhi::BindingSetHandle m_SceneSet;
 		nvrhi::BindingSetHandle m_ShadowSet;
+		nvrhi::BufferHandle m_JointBuffer;			// m_JointMatrices on the GPU; grows as needed
+		nvrhi::BindingSetHandle m_SkinSet;
 		nvrhi::BindingSetHandle m_LineSet;
 		nvrhi::BindingSetHandle m_SSAOSet, m_SSAOBlurSetH, m_SSAOBlurSetV;
 		nvrhi::BindingSetHandle m_SkySet;

@@ -7,6 +7,7 @@
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/Buffer.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Math/AABB.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Serialization/JsonUtils.h"
 
@@ -167,6 +168,35 @@ TEST_CASE("In its rest pose a skinned model stays where it was made")
 				CHECK(matrix[column][row] == doctest::Approx(column == row ? 1.0f : 0.0f));
 		}
 	}
+}
+
+TEST_CASE("A skin knows its rest pose and the box each joint moves")
+{
+	const Ref<Mesh> mesh = MeshImporter::ImportGLTF(GetSkinnedColumnPath());
+	REQUIRE(mesh);
+	REQUIRE(mesh->GetSkin());
+	const MeshSkin& skin = *mesh->GetSkin();
+	REQUIRE(skin.RestSkinMatrices.size() == 2);
+	CheckNear(glm::vec3(skin.RestSkinMatrices[1] * glm::vec4(0.1f, 2.0f, 0.1f, 1.0f)), glm::vec3(0.1f, 2.0f, 0.1f));
+
+	// Base moves the rings up to the knee (1 m), Top the rings from the knee up; both share the knee.
+	REQUIRE(skin.JointBounds.size() == 2);
+	CHECK(skin.JointBounds[0].Min.y == doctest::Approx(0.0f));
+	CHECK(skin.JointBounds[0].Max.y == doctest::Approx(1.0f));
+	CHECK(skin.JointBounds[1].Min.y == doctest::Approx(1.0f));
+	CHECK(skin.JointBounds[1].Max.y == doctest::Approx(2.0f));
+	CHECK(skin.JointBounds[1].Max.x == doctest::Approx(0.1f));
+
+	// Moved by the bent pose's matrices, Top's box covers where the top half lies.
+	std::vector<JointPose> pose = skin.Rig->GetRestPose();
+	skin.FindClip("Bend")->Sample(1.0f, pose);
+	std::vector<glm::mat4> model;
+	std::vector<glm::mat4> matrices;
+	skin.Rig->ComputeModelMatrices(pose, model);
+	skin.Rig->ComputeSkinMatrices(model, matrices);
+	const AABB top = skin.JointBounds[1].Transformed(matrices[1]);
+	CHECK(top.Min.x == doctest::Approx(-1.0f));
+	CHECK(top.Max.y == doctest::Approx(1.1f));
 }
 
 TEST_CASE("A clip poses the skeleton between and at its keys")

@@ -173,7 +173,8 @@ namespace Bellows {
   Vulkan backend flips the viewport, so projections are **not** Y-flipped and front faces are
   counter-clockwise. Fullscreen-pass UV (0,0) is the top-left (`UVToNDC`/`NDCToUV` in `Common.glsl`).
 * Descriptor set *n* = NVRHI `registerSpace` *n* (`setRegisterSpaceAndDescriptorSet`). Set 0 is
-  per-frame scene data, set 1 is per-material. Push constants are per-draw.
+  per-frame scene data, set 1 is per-material, set 2 (skinned draws only) the frame's joint matrices.
+  Push constants are per-draw.
 * Entities are identified by `UUID` (persistent) and drawn with render ID = `entt` handle + 1
   (0 = nothing, used by picking). Scripts (Python and ForgeScript) hold `(sceneID, UUID)` handles,
   never pointers.

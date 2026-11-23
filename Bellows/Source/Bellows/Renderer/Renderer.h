@@ -36,6 +36,7 @@ namespace Bellows {
 		static nvrhi::IBindingLayout* GetSceneBindingLayout();		// set 0 of mesh passes
 		static nvrhi::IBindingLayout* GetMaterialBindingLayout();	// set 1 of mesh passes
 		static nvrhi::IBindingLayout* GetShadowBindingLayout();		// set 0 of the shadow pass
+		static nvrhi::IBindingLayout* GetSkinBindingLayout();		// set 2 of skinned mesh passes: joint matrices
 		static nvrhi::IBindingLayout* GetPostProcessBindingLayout();	// fullscreen passes
 		static nvrhi::IBindingLayout* GetComputeBindingLayout();		// image-based lighting compute passes
 		static nvrhi::IBindingLayout* GetLineBindingLayout();		// debug lines
