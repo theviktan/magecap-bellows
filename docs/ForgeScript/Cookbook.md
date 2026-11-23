@@ -1143,8 +1143,8 @@ function ease_out_back(t)
 	return 1 + (c + 1) * (t - 1) ^ 3 + c * (t - 1) ^ 2
 end
 
-function tween(start_value, end_value, t, ease)
-	return lerp(start_value, end_value, ease(clamp(t, 0, 1)))
+function eased_between(start_value, end_value, t, curve)
+	return lerp(start_value, end_value, curve(clamp(t, 0, 1)))
 end
 
 test "eases start and end where they should"
@@ -1153,7 +1153,7 @@ test "eases start and end where they should"
 	expect ease_in_out(0.5) is 0.5
 	expect round(ease_out_back(1), 6) is 1
 	expect ease_out_back(0.8) is above 1
-	expect tween(10, 20, 2, ease_in_out) is 20
+	expect eased_between(10, 20, 2, ease_in_out) is 20
 end
 ```
 
@@ -1173,11 +1173,13 @@ end
 ```
 
 **How it works.** An easing function turns a straight 0-to-1 into a curve: slow at the ends, or
-overshooting. `tween` takes the easing as a value, so any function can be passed in.
+overshooting. `eased_between` takes the easing as a value (`curve`), so any function can be passed
+in. Its names stay clear of the built-in `ease` and of Bellows' `tween`, so neither is hidden.
 
 **Going further.** ForgeScript has the common curves built in: `ease(t, "back out")` is the same as
 `ease_out_back(t)`, and `"in"`, `"out"`, `"in out"`, `"bounce out"` and `"elastic out"` are there
-too. Write your own, as here, when you want a curve of your own.
+too. Write your own, as here, when you want a curve of your own. In Bellows, `tween(self,
+"position", vector(0, 5, 0), 2, "out")` moves a property over time with the same curves.
 
 ### 30. Money, time and plurals
 

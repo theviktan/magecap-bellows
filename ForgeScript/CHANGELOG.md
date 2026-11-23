@@ -34,7 +34,8 @@ with new language or tool features, the patch number with fixes.
   Language Guide's "Saving progress" example set a value only inside `when created` and read it in
   another `when` block or function, where it was never set ("'_target' has not been given a value
   yet"). Each now sets it at the top of the script (`set _target to nothing`), so the blocks share
-  it, and recipe 3 explains why.
+  it, and recipe 3 explains why. Recipe 29's helper is now `eased_between(..., curve)`, so it no
+  longer hides the built-in `ease` (its parameter) or Bellows' new `tween` (audit S-14).
 - **A phrase works as a statement beside a variable with its first word** (reported by MCBellows).
   In a function with `set move to tween(...)`, the statement `move box to p over 2 seconds` failed
   with "Expected the end of the line, but found 'box'", because a local hid the phrase everywhere.
