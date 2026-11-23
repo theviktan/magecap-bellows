@@ -106,6 +106,12 @@ namespace ForgeScript {
 			std::string ReturnType;
 			size_t ReturnTypeAt = 0;     // the type's token
 			bool GivesBackValue = false; // a 'return' with a value, or a 'fail', in this function itself
+			// Values of noted calls that are one of this function's own variables: their types are worked out
+			// when the function ends (KnownTypeOf), when all of its lines are known.
+			size_t BodyStart = 0;
+			std::vector<std::string> ParamNames;
+			std::vector<std::string> ParamTypes;
+			std::vector<std::pair<size_t, size_t>> VariableValues; // m_NotedCalls index, value index
 		};
 
 		enum class TargetType
@@ -2380,14 +2386,101 @@ namespace ForgeScript {
 						value.Token = first;
 						if (!value.Type.empty())
 							call.Values.push_back(value);
+						else if (first + 1 == i && m_Tokens[first].Type == TokenType::Identifier && m_State->Kind != ScopeKind::Script &&
+							ResolveLocal(m_State, std::string(m_Tokens[first].Lexeme)) > 0)
+						{
+							// One of this function's own variables: its type, if it has one, is known when the function ends.
+							value.Variable = std::string(m_Tokens[first].Lexeme);
+							call.Values.push_back(value);
+						}
 					}
 				}
 				start = i + 1;
 				if (closes)
 					break;
 			}
-			if (!call.Values.empty())
-				m_NotedCalls.push_back(std::move(call));
+			if (call.Values.empty())
+				return;
+			for (size_t v = 0; v < call.Values.size(); v++)
+			{
+				if (!call.Values[v].Variable.empty())
+					m_State->VariableValues.emplace_back(m_NotedCalls.size(), v);
+			}
+			m_NotedCalls.push_back(std::move(call));
+		}
+
+		// The type a function's own variable always has, or "" when that isn't certain: a parameter with
+		// 'as' that the function never sets, or a variable that every line sets only to plain values of one
+		// type ('set name to "Ana"'). Any other way the name gets a value (another kind of value, 'for
+		// each', 'with', 'catch', 'set a, b to', a parameter without a type) makes it unknown. Lines of
+		// inner functions count too, which can only make it unknown, so a warning is never a guess.
+		std::string KnownTypeOf(const FunctionState& state, const std::string& name, size_t end, std::string& why) const
+		{
+			const auto param = std::find(state.ParamNames.begin(), state.ParamNames.end(), name);
+			std::string type;
+			if (param != state.ParamNames.end())
+			{
+				const size_t index = static_cast<size_t>(param - state.ParamNames.begin());
+				type = index < state.ParamTypes.size() ? state.ParamTypes[index] : std::string();
+				static const std::vector<std::string_view> c_Plain = { "number", "text", "boolean", "list", "map", "vector" };
+				if (std::find(c_Plain.begin(), c_Plain.end(), type) == c_Plain.end())
+					return {};
+				why = name + " as " + type;
+			}
+			for (size_t i = state.BodyStart; i < end && i < m_Tokens.size(); i++)
+			{
+				const Token& token = m_Tokens[i];
+				if (token.Type != TokenType::Identifier || token.Lexeme != name)
+					continue;
+				const TokenType before = i > 0 ? m_Tokens[i - 1].Type : TokenType::Newline;
+				const TokenType after = i + 1 < m_Tokens.size() ? m_Tokens[i + 1].Type : TokenType::Eof;
+				if (before == TokenType::Dot || before == TokenType::Possessive)
+					continue; // someone's field with the same name
+				const bool named = before == TokenType::Each || before == TokenType::For || before == TokenType::With ||
+					before == TokenType::By || before == TokenType::Catch || before == TokenType::Function ||
+					(before == TokenType::Identifier && (m_Tokens[i - 1].Lexeme == "as" || m_Tokens[i - 1].Lexeme == "and"));
+				if (named || (before == TokenType::Comma && after != TokenType::RightParen && after != TokenType::Comma))
+				{
+					if (before == TokenType::Comma)
+					{
+						// 'set a, name to ...' (a name list) as opposed to a value in a call or a list.
+						size_t j = i;
+						while (j > state.BodyStart && m_Tokens[j - 1].Type != TokenType::Newline)
+							j--;
+						if (m_Tokens[j].Type != TokenType::Set)
+							continue;
+					}
+					return {};
+				}
+				if (before != TokenType::Set)
+					continue; // read, or changed in place ('add 1 to name' keeps a number a number)
+				if (after == TokenType::Comma)
+					return {};
+				if (after != TokenType::To)
+					continue; // 'set name[1] to', 'set name.x to': the variable itself stays
+				size_t last = i + 2;
+				while (last < m_Tokens.size() && m_Tokens[last].Type != TokenType::Newline && m_Tokens[last].Type != TokenType::Eof)
+					last++;
+				if (last <= i + 2)
+					return {};
+				const std::string set = PlainValueType(i + 2, last - 1);
+				if (set.empty() || set == "nothing" || (!type.empty() && set != type))
+					return {};
+				if (type.empty())
+					why = "it is only ever set to " + WithArticle(set);
+				type = set;
+			}
+			return param != state.ParamNames.end() || !type.empty() ? type : std::string();
+		}
+
+		// When a function ends: the types of its own variables given to noted calls.
+		void FillVariableTypes(const FunctionState& state)
+		{
+			for (const auto& [callIndex, valueIndex] : state.VariableValues)
+			{
+				CallValue& value = m_NotedCalls[callIndex].Values[valueIndex];
+				value.Type = KnownTypeOf(state, value.Variable, m_Pos, value.Why);
+			}
 		}
 
 		// 'return "full"' in 'function health_left() as number': a warning on the value. Only plain values
@@ -2440,7 +2533,7 @@ namespace ForgeScript {
 							continue;
 						index = static_cast<size_t>(named - function.Params.begin());
 					}
-					if (index >= function.Types.size() || function.Types[index].empty() || function.Types[index] == value.Type)
+					if (value.Type.empty() || index >= function.Types.size() || function.Types[index].empty() || function.Types[index] == value.Type)
 						continue;
 					const std::string& wanted = function.Types[index];
 					const std::string& param = function.Params[index];
@@ -2450,6 +2543,16 @@ namespace ForgeScript {
 							return word;
 						return std::string(std::string("aeiouAEIOU").find(word[0]) != std::string::npos ? "an " : "a ") + word;
 					};
+					if (!value.Variable.empty())
+					{
+						// Only the plain types are compared for variables: a kind's name or 'object' may hold many things.
+						static const std::vector<std::string_view> c_Plain = { "number", "text", "boolean", "list", "map", "vector" };
+						if (std::find(c_Plain.begin(), c_Plain.end(), wanted) == c_Plain.end())
+							continue;
+						Warn(m_Tokens[value.Token], "'" + call.Function + "' takes " + article(wanted) + " for '" + param + "' (" + param +
+							" as " + wanted + "), but '" + value.Variable + "' is " + article(value.Type) + " (" + value.Why + ").");
+						continue;
+					}
 					Warn(m_Tokens[value.Token], "'" + call.Function + "' takes " + article(wanted) + " for '" + param + "' (" + param +
 						" as " + wanted + "), but this is " + article(value.Type) + ".");
 				}
@@ -2841,6 +2944,10 @@ namespace ForgeScript {
 			state.Kind = kind;
 			state.ReturnType = std::exchange(m_PendingReturnType, std::string());
 			state.ReturnTypeAt = m_PendingReturnTypeAt;
+			state.ParamNames = params;
+			// Only a parameter list read just now has types; handlers' values ('with who') have none.
+			if (std::exchange(m_ParamTypesFresh, false) && m_ParamTypes.size() == params.size())
+				state.ParamTypes = m_ParamTypes;
 			m_State = &state;
 
 			BeginScope();
@@ -2878,12 +2985,14 @@ namespace ForgeScript {
 			}
 
 			fn->BodyIp = CurrentChunk().Size();
+			state.BodyStart = m_Pos;
 			if (body)
 				body();
 			else
 				Block();
 			ConsumeEnd(opener, what);
 			WarnIfNeverGivesBack(name);
+			FillVariableTypes(state);
 			// Returning at the end belongs to the body's last line; the closure made from it, and what
 			// the definition does with it, to the line that opened it.
 			m_ClosingLine = LineBeforeEnd();
@@ -2934,6 +3043,7 @@ namespace ForgeScript {
 		std::vector<std::string> ParameterList(std::vector<DefaultValue>* defaults = nullptr)
 		{
 			m_ParamTypes.clear();
+			m_ParamTypesFresh = true;
 			std::vector<std::string> params;
 			Consume(TokenType::LeftParen, "Expected '(' after the function name, like: function heal(amount)");
 			if (!Check(TokenType::RightParen))
@@ -5102,6 +5212,7 @@ namespace ForgeScript {
 		// ("" for none); and, for checkers, each script function's names and types, and the plain values
 		// calls by name give, to compare once every function is known.
 		std::vector<std::string> m_ParamTypes;
+		bool m_ParamTypesFresh = false;  // m_ParamTypes belong to the next FunctionBody
 		std::string m_PendingReturnType; // from ReturnTypeAfterParameters, for the next FunctionBody
 		size_t m_PendingReturnTypeAt = 0;
 		struct FunctionTypes
@@ -5116,6 +5227,8 @@ namespace ForgeScript {
 			size_t Position = 0;   // its place among the values given in order
 			std::string Type;      // the plain value's type ("number", "text", ... "nothing")
 			size_t Token = 0;
+			std::string Variable;  // a variable given as the value; Type is filled in when its function ends
+			std::string Why;       // how its type is known, for the warning
 		};
 		struct NotedCall
 		{
