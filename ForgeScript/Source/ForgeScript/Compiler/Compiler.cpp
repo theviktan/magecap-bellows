@@ -102,6 +102,10 @@ namespace ForgeScript {
 			std::vector<FinallyContext> Finally;
 			int ScopeDepth = 0;
 			int TryDepth = 0;
+			// 'function heal(amount) as number': the type it says it gives back, for checkers only.
+			std::string ReturnType;
+			size_t ReturnTypeAt = 0;     // the type's token
+			bool GivesBackValue = false; // a 'return' with a value, or a 'fail', in this function itself
 		};
 
 		enum class TargetType
@@ -2386,6 +2390,36 @@ namespace ForgeScript {
 				m_NotedCalls.push_back(std::move(call));
 		}
 
+		// 'return "full"' in 'function health_left() as number': a warning on the value. Only plain values
+		// are compared, as for calls, so a warning is never a guess. Giving back nothing is left alone: it
+		// is how a function says "none found" ('function nearest_enemy() as Enemy').
+		void WarnIfReturnsOtherType(const Token& at, const std::string& type)
+		{
+			if (!m_Options.Warnings || m_State->ReturnType.empty() || type.empty() || type == "nothing" || type == m_State->ReturnType)
+				return;
+			const std::string name = m_State->Fn && m_State->Fn->Name ? m_State->Fn->Name->Text : "function";
+			Warn(at, "'" + name + "' says it gives back " + WithArticle(m_State->ReturnType) + " (as " + m_State->ReturnType +
+				"), but this gives back " + WithArticle(type) + ".");
+		}
+
+		// A function that says what it gives back but has no 'return' with a value (and no 'fail') always
+		// gives back nothing. There is no quick fix: adding 'return nothing' would hide the mistake.
+		void WarnIfNeverGivesBack(const std::string& name)
+		{
+			if (!m_Options.Warnings || m_State->ReturnType.empty() || m_State->GivesBackValue || m_State->ReturnTypeAt >= m_Tokens.size())
+				return;
+			Warn(m_Tokens[m_State->ReturnTypeAt], "'" + name + "' says it gives back " + WithArticle(m_State->ReturnType) + " (as " +
+				m_State->ReturnType + "), but it never returns a value, so it always gives back nothing. Add 'return' with the " +
+				m_State->ReturnType + " it should give back.");
+		}
+
+		static std::string WithArticle(const std::string& word)
+		{
+			if (word == "text" || word == "nothing")
+				return word;
+			return std::string(std::string("aeiouAEIOU").find(word[0]) != std::string::npos ? "an " : "a ") + word;
+		}
+
 		// 'heal("ten")' where heal is 'function heal(amount as number)': a warning on the value. Only
 		// plain values are compared, so a warning is never a guess.
 		void WarnTypesOfCalls()
@@ -2805,6 +2839,8 @@ namespace ForgeScript {
 			state.Enclosing = m_State;
 			state.Fn = fn;
 			state.Kind = kind;
+			state.ReturnType = std::exchange(m_PendingReturnType, std::string());
+			state.ReturnTypeAt = m_PendingReturnTypeAt;
 			m_State = &state;
 
 			BeginScope();
@@ -2847,6 +2883,7 @@ namespace ForgeScript {
 			else
 				Block();
 			ConsumeEnd(opener, what);
+			WarnIfNeverGivesBack(name);
 			// Returning at the end belongs to the body's last line; the closure made from it, and what
 			// the definition does with it, to the line that opened it.
 			m_ClosingLine = LineBeforeEnd();
@@ -2972,6 +3009,21 @@ namespace ForgeScript {
 			return params;
 		}
 
+		// 'as number' after a function's ')': the type it gives back, for checkers only (1.7.0). It was a
+		// mistake before, so no script that ran changes. Only a type on the same line counts: a lone 'as'
+		// after ')' is still read as it always was. FunctionBody takes what this notes.
+		void ReturnTypeAfterParameters()
+		{
+			m_PendingReturnType.clear();
+			if (!CheckWord("as"))
+				return;
+			const TokenType next = Peek(1).Type;
+			if (next != TokenType::Identifier && next != TokenType::Function && next != TokenType::Kind)
+				return;
+			m_PendingReturnTypeAt = m_Pos + 1;
+			m_PendingReturnType = ParameterType();
+		}
+
 		// The code that fills in default values, at the start of the function. A call that leaves values
 		// out starts at the first one it left out (Function::DefaultIps); each default is worked out, in
 		// order, seeing only the values before it, then the body runs. A call with every value skips it all.
@@ -3079,6 +3131,7 @@ namespace ForgeScript {
 
 			std::vector<DefaultValue> defaults;
 			std::vector<std::string> params = ParameterList(&defaults);
+			ReturnTypeAfterParameters();
 			// A script function's parameter types, for checking calls by name (read before the body,
 			// whose own functions have parameter lists of their own).
 			if (!isLocal && m_Options.Warnings &&
@@ -3130,9 +3183,17 @@ namespace ForgeScript {
 			if (m_State->Kind == ScopeKind::FieldInit)
 				ErrorAt(keyword, "'return' cannot be used here.");
 			if (Check(TokenType::Newline) || IsBlockEnd())
+			{
 				EmitOp(OpCode::Nothing);
+			}
 			else
+			{
+				const size_t first = m_Pos;
 				Expression();
+				m_State->GivesBackValue = true;
+				if (m_Pos > first)
+					WarnIfReturnsOtherType(m_Tokens[first], PlainValueType(first, m_Pos - 1));
+			}
 			int depth = m_State->TryDepth;
 			if (!m_State->Finally.empty())
 			{
@@ -3248,6 +3309,7 @@ namespace ForgeScript {
 					std::string methodName = ConsumeMemberName();
 					std::vector<DefaultValue> defaults;
 			std::vector<std::string> params = ParameterList(&defaults);
+					ReturnTypeAfterParameters();
 					FunctionBody(methodName, ScopeKind::Method, params, methodOpener, "function", {}, defaults);
 					EmitWithName(OpCode::Method, methodName);
 				}
@@ -3553,6 +3615,8 @@ namespace ForgeScript {
 		{
 			Advance();
 			Expression();
+			// A function that only fails never ends normally, so it isn't warned for giving back nothing.
+			m_State->GivesBackValue = true;
 			EmitOp(OpCode::Fail);
 		}
 
@@ -5038,6 +5102,8 @@ namespace ForgeScript {
 		// ("" for none); and, for checkers, each script function's names and types, and the plain values
 		// calls by name give, to compare once every function is known.
 		std::vector<std::string> m_ParamTypes;
+		std::string m_PendingReturnType; // from ReturnTypeAfterParameters, for the next FunctionBody
+		size_t m_PendingReturnTypeAt = 0;
 		struct FunctionTypes
 		{
 			std::vector<std::string> Params;

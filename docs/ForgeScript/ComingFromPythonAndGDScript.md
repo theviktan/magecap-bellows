@@ -290,6 +290,9 @@ set double to function(x) return x * 2 end
 - Type hints (Python's `damage: int`, GDScript's `damage: int`) are written `damage as number`. Like
   Python's, they never change what runs: the checker and the editor warn when a call gives a plain
   value of another type, such as `attack("goblin", "ten")`.
+- Return types (Python's `-> int`, GDScript's `-> int`) go after the `)`: `function damage() as number`
+  (1.7.0). The checker warns on a `return` with a plain value of another type, and on a function that
+  never returns a value.
 
 ### Phrases: your own commands
 
