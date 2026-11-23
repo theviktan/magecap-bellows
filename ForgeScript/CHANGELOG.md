@@ -51,7 +51,8 @@ with new language or tool features, the patch number with fixes.
     (as text), but it never returns a value, so it always gives back nothing. Add 'return' with the
     text it should give back." It has no quick fix, since `return nothing` would hide the mistake.
   - `return nothing` and a bare `return` are never warned about ("none found").
-  Hover shows the type with the function's first line.
+  Hover, completion and the outline show it in the function's signature (`function health_left() as
+  number`).
 - **Building text is more than twice as fast.** On the release build, adding a million `"w{i}"` texts
   to a list went from 1.43 to 0.62 seconds, and the `text` and `numbers_to_text` benchmarks run 27% and
   20% fewer CPU instructions. What changed:

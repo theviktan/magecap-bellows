@@ -70,6 +70,19 @@ namespace ForgeScript {
 			return {};
 		}
 
+		// ' as number' when the ')' at tokens[close] is followed by a return type (1.7.0), for signatures.
+		std::string ReturnTypeAfter(const std::vector<Token>& tokens, size_t close)
+		{
+			if (close + 2 >= tokens.size() || tokens[close].Type != TokenType::RightParen)
+				return {};
+			const Token& as = tokens[close + 1];
+			const Token& type = tokens[close + 2];
+			if (as.Type != TokenType::Identifier || as.Lexeme != "as" ||
+				(type.Type != TokenType::Identifier && type.Type != TokenType::Function && type.Type != TokenType::Kind))
+				return {};
+			return " as " + std::string(type.Lexeme);
+		}
+
 		// The words of a line from 'start', for a symbol's signature.
 		std::string LineText(const std::vector<Token>& tokens, size_t start)
 		{
@@ -574,7 +587,8 @@ namespace ForgeScript {
 					}
 				}
 				const std::string label = std::string(name.Lexeme);
-				add(Kind::Function, name, label, "function " + (owner.empty() ? "" : owner + ".") + label + "(" + params + ")", docAbove(token.Line), owner);
+				add(Kind::Function, name, label, "function " + (owner.empty() ? "" : owner + ".") + label + "(" + params + ")" + ReturnTypeAfter(tokens, j),
+					docAbove(token.Line), owner);
 			}
 			else if (token.Type == TokenType::Phrase && opens)
 			{
@@ -1796,7 +1810,8 @@ namespace ForgeScript {
 			if (listed && opens && token.Type == TokenType::Function && next && next->Type == TokenType::Identifier)
 			{
 				std::string params;
-				for (size_t j = i + 3; j < tokens.size() && tokens[i + 2].Type == TokenType::LeftParen && tokens[j].Type != TokenType::RightParen &&
+				size_t j = i + 3;
+				for (; j < tokens.size() && tokens[i + 2].Type == TokenType::LeftParen && tokens[j].Type != TokenType::RightParen &&
 					tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof; j++)
 				{
 					if (tokens[j].Type == TokenType::Identifier && tokens[j].Lexeme == "as" && j + 1 < tokens.size())
@@ -1807,7 +1822,7 @@ namespace ForgeScript {
 					if (tokens[j].Type == TokenType::Identifier)
 						params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme) + (CollectsTheRest(tokens, j) ? "..." : "");
 				}
-				item = add(Kind::Function, std::string(next->Lexeme), "function " + std::string(next->Lexeme) + "(" + params + ")", token, *next,
+				item = add(Kind::Function, std::string(next->Lexeme), "function " + std::string(next->Lexeme) + "(" + params + ")" + ReturnTypeAfter(tokens, j), token, *next,
 					static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && !inKind && opens && token.Type == TokenType::Phrase && next)
