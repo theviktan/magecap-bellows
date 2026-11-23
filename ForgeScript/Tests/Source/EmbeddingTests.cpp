@@ -871,3 +871,30 @@ TEST_CASE("WholeNumbersPrintAsBefore")
 	CHECK_EQ(FormatNumber(1e15), std::string("1e+15"));
 	CHECK_EQ(FormatNumber(2.5), std::string("2.5"));
 }
+
+TEST_CASE("TextIsStillInternedAndCollected")
+{
+	// Equal texts are one String, however they were made, and texts nothing uses are forgotten.
+	VM vm;
+	const Value a = vm.MakeText("hello");
+	const Value b = vm.MakeText(std::string("hel") + "lo");
+	CHECK_EQ(a.AsObject(), b.AsObject());
+	CHECK_NE(vm.MakeText("hello!").AsObject(), a.AsObject());
+	CHECK_EQ(As<String>(a)->Hash, std::hash<std::string>{}("hello"));
+
+	// Many texts at once: the table grows, and every one is still found.
+	std::vector<Object*> made;
+	for (int i = 0; i < 5000; i++)
+		made.push_back(vm.MakeText("t" + std::to_string(i)).AsObject());
+	for (int i = 0; i < 5000; i += 499)
+		CHECK_EQ(vm.MakeText("t" + std::to_string(i)).AsObject(), made[static_cast<size_t>(i)]);
+
+	// A script that builds and drops many texts, with a collection on every instruction, still sees
+	// its kept texts as equal.
+	ForgeTest::RunOptions options;
+	options.StressGC = true;
+	const ForgeTest::ScriptRun run = ForgeTest::RunScript(
+		"set kept to \"k{1}\"\nfor i from 1 to 300 do\n\tset dropped to \"d{i}\"\nend\nsay kept is \"k1\"\nsay \"d{300}\" is dropped\n", options);
+	CHECK_EQ(run.Output, std::string("true\ntrue\n"));
+	CHECK(run.Errors.empty());
+}

@@ -302,14 +302,12 @@ namespace ForgeScript {
 
 	String* VM::Intern(std::string_view text)
 	{
-		auto it = m_Strings.find(text);
-		if (it != m_Strings.end())
-			return it->second;
-
-		std::string owned(text);
-		size_t hash = std::hash<std::string>{}(owned);
-		String* string = Allocate<String>(owned.size(), std::move(owned), hash);
-		m_Strings.emplace(std::string_view(string->Text), string);
+		// The same hash as std::hash<std::string>, which the standard guarantees, so String::Hash is unchanged.
+		const size_t hash = std::hash<std::string_view>{}(text);
+		if (String* found = m_Strings.Find(text, hash))
+			return found;
+		String* string = Allocate<String>(text.size(), std::string(text), hash);
+		m_Strings.Add(string);
 		return string;
 	}
 
@@ -1606,13 +1604,15 @@ namespace ForgeScript {
 				(receiver.IsNothing() ? ". The value has not been set yet." : "." + OtherLanguageMethodHint(TypeOf(receiver), name->Text)));
 		}
 
-		// 'properties' are the type's values read without brackets, like a list's length.
+		// 'propertyNames' are the type's values read without brackets, like a list's length. They are only
+		// copied into a list for the mistake, so a call that works allocates nothing here.
 		auto callBuiltin = [&](std::unordered_map<String*, NativeFunction*>& table, const char* typeName,
-			std::vector<std::string_view> properties) -> bool
+			std::initializer_list<std::string_view> propertyNames) -> bool
 		{
 			auto it = table.find(name);
 			if (it == table.end())
 			{
+				std::vector<std::string_view> properties(propertyNames);
 				if (std::find(properties.begin(), properties.end(), name->Text) != properties.end())
 				{
 					return Fail("'" + name->Text + "' of a " + typeName + " is a value, not a function. Write it without brackets: ." +
@@ -3476,13 +3476,24 @@ namespace ForgeScript {
 					bool ok = true;
 					for (size_t i = first; i < stack.size() && ok; i++)
 					{
+						// Text and numbers, most of what is filled in, skip the general conversion (same result).
 						std::string part;
-						ok = SafeToText(stack[i], part);
-						if (ok && text.size() + part.size() > c_MaxTextBytes)
+						std::string_view piece;
+						if (IsObjectType(stack[i], ObjectType::String))
+							piece = As<String>(stack[i])->Text;
+						else
+						{
+							if (stack[i].IsNumber())
+								part = FormatNumber(stack[i].AsNumber());
+							else
+								ok = SafeToText(stack[i], part);
+							piece = part;
+						}
+						if (ok && text.size() + piece.size() > c_MaxTextBytes)
 							ok = Fail("Filling in this text would make more than " + FormatNumber(static_cast<double>(c_MaxTextBytes)) +
 								" bytes of text. Is a loop making it bigger and bigger?");
 						if (ok)
-							text += part;
+							text += piece;
 					}
 					FORGESCRIPT_CHECK(ok);
 					stack.resize(first);
@@ -3890,13 +3901,7 @@ namespace ForgeScript {
 	void VM::Sweep()
 	{
 		// Text is interned weakly: forget texts that nothing uses any more.
-		for (auto it = m_Strings.begin(); it != m_Strings.end();)
-		{
-			if (!it->second->m_Marked)
-				it = m_Strings.erase(it);
-			else
-				++it;
-		}
+		m_Strings.RemoveUnless([](const String* string) { return string->m_Marked; });
 
 		Object** link = &m_Objects;
 		while (*link)
