@@ -392,11 +392,16 @@ function test_field_changed()
 	wait_for(function() return events.contains("label: authored to changed") end, 2)
 	check(events.contains("label: authored to changed"), "when field changed with who, field, now, before")
 	check(events.count("label: authored to changed") is 1, "setting the same value again changes nothing")
+	check(events.contains("only mine: label"), "when \"ForgeScript Test Runner\" is field changed hears this entity's changes")
 	set label to "authored"
 end
 
 when field changed with who, field, now, before
 	if who is self and field is "label" then add "label: {before} to {now}" to events end
+end
+
+when "ForgeScript Test Runner" is field changed with who, field, now, before
+	if field is "label" then add "only mine: {field}" to events end
 end
 
 # The Dancer plays SkinnedColumn.glb's clips, "Bend" and "Wave".

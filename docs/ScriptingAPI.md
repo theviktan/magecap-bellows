@@ -734,7 +734,8 @@ engine sends these events, which the script handles with `when`:
   Inspector replace the script's own values after the top level has run and before `when created`.
 - **Fields that tell when they change.** After `when created`, an Inspector field that gets a
   different value, from this script or another, sends `field changed` to every script:
-  `when field changed with who, field, now, before` (check `who` for the entity you care about).
+  `when field changed with who, field, now, before`, or only one entity's with
+  `when "Player" is field changed with who, field, now, before`.
   A list or map field counts as
   changed only when it's set to another list or map, not when what's in it changes.
 - **Decimal or whole number?** How you write the starting value decides the Inspector field:
