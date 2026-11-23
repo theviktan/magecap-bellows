@@ -75,6 +75,9 @@ namespace Bellows::Scripting {
 		// events, so nothing else runs until the editor continues or steps through GetMachine(). Stop()
 		// ends a stop without running the rest of the held code, and 'when destroyed' does not stop.
 		void SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines);
+		// The same with conditions and log messages (VM::SetDetailedBreakpoints); replaces the script's
+		// earlier breakpoints, and an empty list removes them.
+		void SetDetailedBreakpoints(const std::string& scriptPath, const std::vector<ForgeScript::Breakpoint>& breakpoints);
 		void ClearBreakpoints();
 		void SetDebugHandler(ForgeScript::DebugHandler handler);
 		// The play session's machine, for Continue, the steps, GetCallStack, GetVariables and GetGlobals.
@@ -124,7 +127,7 @@ namespace Bellows::Scripting {
 		std::unordered_map<ForgeScript::Module*, UUID> m_InstanceByModule;
 		// "script|field" pairs already warned about a value 'field changed' couldn't carry.
 		std::unordered_set<std::string> m_WarnedFields;
-		std::unordered_map<std::string, std::vector<int>> m_Breakpoints;
+		std::unordered_map<std::string, std::vector<ForgeScript::Breakpoint>> m_Breakpoints;
 		ForgeScript::DebugHandler m_DebugHandler;
 		ScriptEventListenerID m_EventListener = 0;
 		std::unordered_set<std::string> m_WarnedEvents;

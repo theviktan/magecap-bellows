@@ -6,6 +6,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Core/Log.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
@@ -78,6 +79,16 @@ namespace {
 		{
 			if (variable.Name == name)
 				return variable.Text == text;
+		}
+		return false;
+	}
+
+	bool Logged(uint64_t since, const std::string& text)
+	{
+		for (const LogMessage& message : Log::GetMessagesSince(since))
+		{
+			if (message.Text.find(text) != std::string::npos)
+				return true;
 		}
 		return false;
 	}
@@ -250,5 +261,109 @@ TEST_CASE("ScriptDebugger.EndSession lets 'game quitting' run to the end, and ke
 	CHECK_EQ(debugger.GetStopCount(), stops);
 	CHECK_EQ(session.Stepper.GetName(), std::string("quitting"));
 	CHECK_EQ(debugger.GetBreakpoints(c_Script), std::vector<int> { 7, 14 });
+	CHECK(session.Errors.empty());
+}
+
+TEST_CASE("ScriptDebugger keeps conditions and log messages with their lines")
+{
+	ScriptDebugger debugger;
+	CHECK(debugger.SetBreakpoint(c_Script, 8, "  ticks > 2 ", ""));
+	CHECK(debugger.SetBreakpoint(c_Script, 3, "", "amount is {amount}"));
+	CHECK_FALSE(debugger.SetBreakpoint("", 3, "ticks > 2", ""));
+	CHECK_FALSE(debugger.SetBreakpoint(c_Script, 0, "ticks > 2", ""));
+	CHECK_EQ(debugger.GetBreakpoints(c_Script), std::vector<int> { 3, 8 });
+	const ForgeScript::Breakpoint* condition = debugger.FindBreakpoint(c_Script, 8);
+	REQUIRE(condition);
+	CHECK_EQ(condition->Condition, std::string("ticks > 2"));	// Trimmed
+	CHECK(condition->LogMessage.empty());
+	REQUIRE(debugger.FindBreakpoint(c_Script, 3));
+	CHECK_EQ(debugger.FindBreakpoint(c_Script, 3)->LogMessage, std::string("amount is {amount}"));
+	CHECK_FALSE(debugger.FindBreakpoint(c_Script, 4));
+
+	// Toggling another line, or setting the lines again, keeps the details of the lines that stay.
+	CHECK(debugger.ToggleBreakpoint(c_Script, 11));
+	CHECK_EQ(debugger.FindBreakpoint(c_Script, 8)->Condition, std::string("ticks > 2"));
+	debugger.SetBreakpoints(c_Script, { 8, 11 });
+	CHECK_EQ(debugger.FindBreakpoint(c_Script, 8)->Condition, std::string("ticks > 2"));
+	CHECK_FALSE(debugger.FindBreakpoint(c_Script, 3));
+
+	// Changing a condition is a change the views redraw for; the same one again is not.
+	uint64_t revision = debugger.GetBreakpointRevision();
+	debugger.SetBreakpoint(c_Script, 8, "ticks > 5", "");
+	CHECK_GT(debugger.GetBreakpointRevision(), revision);
+	revision = debugger.GetBreakpointRevision();
+	debugger.SetBreakpoint(c_Script, 8, "ticks > 5", "");
+	CHECK_EQ(debugger.GetBreakpointRevision(), revision);
+	// Clearing the condition leaves a plain breakpoint.
+	debugger.SetBreakpoint(c_Script, 8, "", "");
+	CHECK(debugger.HasBreakpoint(c_Script, 8));
+	CHECK(debugger.FindBreakpoint(c_Script, 8)->Condition.empty());
+
+	// Of two breakpoints at one line, the last one given is kept.
+	debugger.SetDetailedBreakpoints(c_Script, { { 5, "a", "" }, { -1, "b", "" }, { 5, "c", "" }, { 2, "", "" } });
+	REQUIRE_EQ(debugger.GetDetailedBreakpoints(c_Script).size(), static_cast<size_t>(2));
+	CHECK_EQ(debugger.GetDetailedBreakpoints(c_Script)[0].Line, 2);
+	CHECK_EQ(debugger.GetDetailedBreakpoints(c_Script)[1].Condition, std::string("c"));
+	CHECK_EQ(debugger.GetBreakpointCount(), static_cast<size_t>(2));
+
+	// Nothing to work out without a stopped script.
+	ForgeScript::DebugVariable value;
+	std::string error;
+	CHECK_FALSE(debugger.Evaluate(0, "1 + 1", value, error));
+	CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("ScriptDebugger conditions, log points and Evaluate reach the game")
+{
+	DebugSession session;
+	ScriptDebugger debugger;
+	debugger.Connect(&session.Runtime);
+	// Line 8 runs after bump has added 1 to ticks: it stops only on the third update. Line 3 logs.
+	debugger.SetBreakpoint(c_Script, 8, "ticks >= 3", "");
+	debugger.SetBreakpoint(c_Script, 3, "", "bumping by {amount}, ticks {ticks}");
+	const uint64_t logStart = Log::GetLatestSequence();
+	session.Start();
+
+	session.Update();
+	session.Update();
+	CHECK_FALSE(debugger.IsStopped());
+	CHECK_EQ(session.Stepper.GetName(), std::string("ticks 2"));
+	CHECK(Logged(logStart, "bumping by 1, ticks 0"));
+	CHECK(Logged(logStart, "bumping by 1, ticks 1"));
+	session.Update();
+	REQUIRE(debugger.IsStopped());
+	CHECK_EQ(debugger.GetStop().Line, 8);
+	CHECK(debugger.GetStop().Message.empty());
+
+	// Evaluate reads the stopped call's variables and the script's, and refuses calls.
+	ForgeScript::DebugVariable value;
+	std::string error;
+	REQUIRE(debugger.Evaluate(0, "value * 10 + ticks", value, error));
+	CHECK_EQ(value.Text, std::string("33"));
+	CHECK(debugger.Evaluate(0, "  ticks is 3 ", value, error));
+	CHECK_EQ(value.Text, std::string("true"));
+	CHECK_EQ(value.Type, std::string("boolean"));
+	// An engine property, read through the entity the script belongs to (set by the last update).
+	REQUIRE(debugger.Evaluate(0, "my name", value, error));
+	CHECK_EQ(value.Text, std::string("\"ticks 2\""));	// Text is shown quoted, as in the Variables table
+	CHECK_FALSE(debugger.Evaluate(0, "bump(5)", value, error));
+	CHECK_FALSE(error.empty());
+	CHECK_FALSE(debugger.Evaluate(0, "   ", value, error));
+	CHECK_FALSE(debugger.Evaluate(5, "ticks", value, error));
+	// Nothing it worked out changed the game.
+	CHECK(HasVariable(debugger.GetScriptVariables(0), "ticks", "3"));
+	REQUIRE(debugger.Continue());
+	CHECK_EQ(session.Stepper.GetName(), std::string("ticks 3"));
+
+	// A condition that can't be worked out stops there with the reason, and the breakpoints (details
+	// and all) reach the next play session.
+	debugger.SetBreakpoint(c_Script, 8, "nothing.hp > 1", "");
+	session.Runtime.Stop();
+	session.Start();
+	session.Update();
+	REQUIRE(debugger.IsStopped());
+	CHECK_EQ(debugger.GetStop().Line, 8);
+	CHECK(debugger.GetStop().Message.find("nothing.hp > 1") != std::string::npos);
+	CHECK(debugger.Continue());
 	CHECK(session.Errors.empty());
 }

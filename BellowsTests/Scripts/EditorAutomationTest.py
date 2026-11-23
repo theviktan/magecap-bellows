@@ -207,6 +207,44 @@ check(debug["stopped"] and debug["reason"] == "pause", f"pause stops the next li
 editor.stop()
 check(editor.state() == "edit" and not editor.debug_state()["stopped"], "play stops even while a script is held")
 check(not editor.debug_continue(), "nothing to continue after play stops")
+
+# Conditions, log points and Evaluate
+editor.set_breakpoint("Scripts/Counter.forge", 4, condition="ticks >= 3")
+editor.set_breakpoint("Scripts/Counter.forge", 3, log_message="tick {ticks}")
+details = editor.breakpoint_details("Scripts/Counter.forge")
+check(details == [{"line": 3, "condition": "", "log_message": "tick {ticks}"},
+                  {"line": 4, "condition": "ticks >= 3", "log_message": ""}], f"breakpoint details ({details})")
+editor.set_breakpoints("Scripts/Counter.forge", [3, 4])
+check(editor.breakpoint_details("Scripts/Counter.forge") == details, "setting the same lines keeps their details")
+try:
+    editor.set_breakpoint("Scripts/Counter.forge", 0)
+    check(False, "a breakpoint at line 0 is refused")
+except ValueError:
+    pass
+try:
+    editor.debug_evaluate("ticks")
+    check(False, "nothing to evaluate while nothing is stopped")
+except ValueError:
+    pass
+editor.play()
+editor.run_frames(6)
+debug = editor.debug_state()
+check(debug["stopped"] and debug["line"] == 4 and debug["message"] == "", f"a condition stops only when it is true ({debug})")
+check(editor.debug_evaluate("ticks") == {"type": "number", "value": "3"}, "Evaluate reads a script variable")
+check(editor.debug_evaluate("ticks * 2 + delta * 0")["value"] == "6", "Evaluate reads the handler's variables")
+try:
+    editor.debug_evaluate("ticks +")
+    check(False, "a line with a mistake can't be worked out")
+except ValueError as error:
+    check(str(error) != "", "Evaluate says why it can't work a line out")
+check(editor.debug_evaluate("ticks")["value"] == "3", "working things out never changes the game")
+editor.set_breakpoint("Scripts/Counter.forge", 4, condition="nothing.size > 1")
+check(editor.debug_continue(), "continue past the condition")
+editor.run_frames(1)
+debug = editor.debug_state()
+check(debug["stopped"] and debug["line"] == 4 and "nothing.size > 1" in debug["message"],
+      f"a condition that can't be worked out stops, with the reason ({debug})")
+editor.stop()
 editor.clear_breakpoints()
 check(editor.script_error_count() == 0, "no script errors while debugging")
 

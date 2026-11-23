@@ -137,7 +137,10 @@ While playing, `bellows.*` functions act on the running copy of the scene.
 | Function | Description |
 |----------|-------------|
 | `set_breakpoints(script, lines)`, `breakpoints(script)`, `clear_breakpoints()` | Breakpoint lines (1-based) of a ForgeScript asset such as `"Scripts/Player.forge"`; `[]` removes them. They last for the editor session. |
-| `debug_state()` | `{"stopped", "file", "line", "reason", "stack", "variables", "script_variables"}`: where a stopped script is (`reason` is `"breakpoint"`, `"step"` or `"pause"`), its calls innermost first (`function`, `file`, `line`), and the variables (`name`, `type`, `value`) of the innermost call and of its script. |
+| `set_breakpoint(script, line, condition="", log_message="")` | Adds a breakpoint, or changes the one at that line. With a `condition` it stops only when that is true there (`"hp < 10"`); with a `log_message` it prints that to the Console instead of stopping (`"hp is {hp}"`, `{...}` worked out as in ForgeScript text); with both it prints when the condition is true. Empty ones make it a plain breakpoint. `ValueError` for a line below 1. `set_breakpoints` keeps the details of lines that stay. |
+| `breakpoint_details(script)` | `[{"line", "condition", "log_message"}]`, sorted by line (`""` when not set). |
+| `debug_state()` | `{"stopped", "file", "line", "reason", "message", "stack", "variables", "script_variables"}`: where a stopped script is (`reason` is `"breakpoint"`, `"step"` or `"pause"`), its calls innermost first (`function`, `file`, `line`), and the variables (`name`, `type`, `value`) of the innermost call and of its script. `message` says why a breakpoint's condition or log message couldn't be worked out; such a breakpoint stops, so a typo is never skipped silently (`""` otherwise). |
+| `debug_evaluate(expression, frame=0)` | Works out one line of ForgeScript in a call of the stopped script (`0` is the innermost): `{"type", "value"}`. It reads variables and engine values (`my position`) but never calls a function, so it can't change the game. `ValueError`, with the reason, when nothing is stopped or the line can't be worked out. |
 | `debug_continue()`, `debug_step_over()`, `debug_step_in()`, `debug_step_out()` | Let the stopped script go on; the game runs again unless the script stops again. `False` when nothing is stopped. |
 | `debug_pause()` | Stops at the next ForgeScript line that runs (play mode). |
 
@@ -152,7 +155,12 @@ editor.run_frames(2)
 state = editor.debug_state()
 if state["stopped"]:
     print(state["line"], state["variables"])
+    print(editor.debug_evaluate("health * 2"))
     editor.debug_step_over()
+
+# Stop only when health is low, and log every hit without stopping:
+editor.set_breakpoint("Scripts/Player.forge", 12, condition="health < 10")
+editor.set_breakpoint("Scripts/Player.forge", 20, log_message="hit for {amount}")
 ```
 
 ### Editing helpers

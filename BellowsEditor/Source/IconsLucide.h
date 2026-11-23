@@ -130,3 +130,4 @@
 #define ICON_PERSON_STANDING             "\xee\x88\x9e"	// U+E21E
 #define ICON_ROUTE                       "\xee\x94\xbe"	// U+E53E
 #define ICON_FOOTPRINTS                  "\xee\x8e\xb9"	// U+E3B9
+#define ICON_DIAMOND                     "\xee\x8b\x92"	// U+E2D2
