@@ -8,6 +8,7 @@
 #include "ForgeScript/VM/StringTable.h"
 #include "ForgeScript/VM/Task.h"
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <random>
@@ -131,6 +132,14 @@ namespace ForgeScript {
 
 	// One function's part of a profile (VM::StartProfile): the instructions executed in its own code
 	// (not in the functions it calls, nor inside built-in functions) and how often it was called.
+	// One line's share of a profile (ProfileEntry::Lines).
+	struct ProfileLine
+	{
+		int Line = 0;
+		uint64_t Instructions = 0;
+		double Seconds = 0.0; // about: see ProfileEntry::Seconds
+	};
+
 	struct ProfileEntry
 	{
 		std::string Function; // "" for the code at the top of a script, "(a function value)" for function(x) ... end
@@ -138,6 +147,11 @@ namespace ForgeScript {
 		int Line = 0;
 		uint64_t Instructions = 0;
 		uint64_t Calls = 0;
+		// About how long its code ran, engine calls included, by the real clock: the time between samples
+		// taken every 256 instructions goes to the code running at the sample. Instructions stay the exact
+		// measure; time shows where engine calls (which count as one instruction) are slow.
+		double Seconds = 0.0;
+		std::vector<ProfileLine> Lines; // its lines that ran, busiest first (by instructions)
 	};
 
 	struct VMConfig
@@ -503,6 +517,17 @@ namespace ForgeScript {
 		std::unordered_map<const Function*, ProfileEntry> m_Profile;
 		const Function* m_ProfiledFunction = nullptr; // the last function counted, and its entry
 		ProfileEntry* m_ProfiledEntry = nullptr;
+		// Per function, by line number: instructions and seconds, gathered into ProfileEntry::Lines.
+		struct LineCounts
+		{
+			std::vector<uint64_t> Instructions;
+			std::vector<double> Seconds;
+		};
+		std::unordered_map<const Function*, LineCounts> m_ProfileLines;
+		LineCounts* m_ProfiledLines = nullptr;
+		uint32_t m_ProfileTick = 0;
+		std::chrono::steady_clock::time_point m_ProfileClock;
+		void ProfileSample(int line);
 		ProfileEntry& ProfileOf(const Function* fn);
 		bool m_PauseRequested = false;
 		size_t m_SteppingTasks = 0;

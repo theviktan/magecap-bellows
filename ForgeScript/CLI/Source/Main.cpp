@@ -120,6 +120,8 @@ namespace {
 			"      --stdin                         read the script from standard input, print the result\n"
 			"  forgescript --benchmark <scripts>   run each script 5 times: its instructions and median time\n"
 			"  forgescript --profile <script>      run the script, then list where its instructions went\n"
+			"      --lines                         also list the busiest lines, with about how long each took\n"
+			"      --json                          the profile as JSON (\"format\": 1), with every line, for tools\n"
 			"      --output <file>                 write the profile to a file instead of the screen\n"
 			"  forgescript --version               show the version\n";
 	}
@@ -228,7 +230,81 @@ namespace {
 		return out.str();
 	}
 
-	int RunFile(const std::string& fileName, bool realtime, bool profile = false, const std::string& profileOutput = std::string())
+	// --profile --lines: the 20 busiest lines over every function, after the functions' table. The time
+	// is "about": it comes from samples of the real clock (see ProfileEntry::Seconds).
+	std::string ProfileLinesReport(const std::vector<ForgeScript::ProfileEntry>& entries)
+	{
+		struct Place
+		{
+			const ForgeScript::ProfileEntry* Entry;
+			ForgeScript::ProfileLine Line;
+		};
+		std::vector<Place> places;
+		uint64_t total = 0;
+		for (const ForgeScript::ProfileEntry& entry : entries)
+		{
+			total += entry.Instructions;
+			for (const ForgeScript::ProfileLine& line : entry.Lines)
+				places.push_back({ &entry, line });
+		}
+		std::stable_sort(places.begin(), places.end(), [](const Place& a, const Place& b) { return a.Line.Instructions > b.Line.Instructions; });
+		std::ostringstream out;
+		out << "Busiest lines:\n";
+		out << "  instructions       %   about ms  line\n";
+		const size_t shown = std::min<size_t>(places.size(), 20);
+		for (size_t i = 0; i < shown; i++)
+		{
+			const Place& place = places[i];
+			char line[96];
+			std::snprintf(line, sizeof(line), "  %12llu  %5.1f%%  %9.1f  ", static_cast<unsigned long long>(place.Line.Instructions),
+				total ? 100.0 * static_cast<double>(place.Line.Instructions) / static_cast<double>(total) : 0.0, place.Line.Seconds * 1000.0);
+			out << line << place.Entry->File << " line " << place.Line.Line << " ("
+				<< (place.Entry->Function.empty() ? std::string("top of the script") : place.Entry->Function) << ")\n";
+		}
+		if (places.size() > shown)
+			out << "  ... and " << places.size() - shown << " more lines\n";
+		return out.str();
+	}
+
+	// --profile --json: the whole profile for tools. "format" goes up when a field changes meaning, so
+	// a tool can say "newer than I read" instead of guessing; new fields may come without it.
+	std::string ProfileJson(const std::string& scriptName, const std::vector<ForgeScript::ProfileEntry>& entries)
+	{
+		uint64_t total = 0;
+		double seconds = 0;
+		ForgeScript::Json::Array functions;
+		for (const ForgeScript::ProfileEntry& entry : entries)
+		{
+			total += entry.Instructions;
+			seconds += entry.Seconds;
+			ForgeScript::Json::Array lines;
+			for (const ForgeScript::ProfileLine& line : entry.Lines)
+			{
+				ForgeScript::Json item;
+				item.Set("line", line.Line).Set("instructions", static_cast<double>(line.Instructions)).Set("seconds", line.Seconds);
+				lines.push_back(std::move(item));
+			}
+			ForgeScript::Json function;
+			function.Set("function", entry.Function).Set("file", entry.File).Set("line", entry.Line)
+				.Set("instructions", static_cast<double>(entry.Instructions)).Set("calls", static_cast<double>(entry.Calls))
+				.Set("seconds", entry.Seconds).Set("lines", ForgeScript::Json(std::move(lines)));
+			functions.push_back(std::move(function));
+		}
+		ForgeScript::Json profile;
+		profile.Set("format", 1).Set("script", scriptName).Set("instructions", static_cast<double>(total)).Set("seconds", seconds)
+			.Set("functions", ForgeScript::Json(std::move(functions)));
+		return profile.Dump() + "\n";
+	}
+
+	struct ProfileOptions
+	{
+		bool On = false;
+		bool Lines = false; // --lines: the busiest lines too
+		bool Json = false;  // --json: JSON instead of the tables
+		std::string Output; // --output: a file instead of the screen
+	};
+
+	int RunFile(const std::string& fileName, bool realtime, const ProfileOptions& profile = ProfileOptions())
 	{
 		std::string source;
 		if (!ReadFile(fileName, source))
@@ -248,7 +324,7 @@ namespace {
 			std::cerr << error.ToString() << std::endl;
 		});
 
-		if (profile)
+		if (profile.On)
 			vm.StartProfile();
 		ForgeScript::LoadResult result = vm.Load(source, path.filename().string());
 		if (!result.Success)
@@ -273,21 +349,31 @@ namespace {
 				vm.Update(step);
 			}
 		}
-		if (profile)
+		if (profile.On)
 		{
-			const std::string report = ProfileReport(ForgeScript::PathToUtf8(path.filename()), vm.TakeProfile());
-			if (profileOutput.empty())
+			const std::string scriptName = ForgeScript::PathToUtf8(path.filename());
+			const std::vector<ForgeScript::ProfileEntry> entries = vm.TakeProfile();
+			std::string report;
+			if (profile.Json)
+				report = ProfileJson(scriptName, entries);
+			else
+			{
+				report = ProfileReport(scriptName, entries);
+				if (profile.Lines)
+					report += ProfileLinesReport(entries);
+			}
+			if (profile.Output.empty())
 				std::cout << report << std::flush;
 			else
 			{
-				std::ofstream out(ForgeScript::PathFromUtf8(profileOutput), std::ios::binary | std::ios::trunc);
+				std::ofstream out(ForgeScript::PathFromUtf8(profile.Output), std::ios::binary | std::ios::trunc);
 				out << report;
 				if (!out.flush())
 				{
-					std::cerr << "Could not write '" << profileOutput << "'." << std::endl;
+					std::cerr << "Could not write '" << profile.Output << "'." << std::endl;
 					return 66;
 				}
-				std::cout << "Profile written to " << profileOutput << std::endl;
+				std::cout << "Profile written to " << profile.Output << std::endl;
 			}
 		}
 		return hadError ? 70 : 0;
@@ -606,8 +692,7 @@ int main(int argc, char** argv)
 	bool test = false;
 	bool format = false;
 	bool benchmark = false;
-	bool profile = false;
-	std::string profileOutput;
+	ProfileOptions profile;
 	std::vector<std::string> files;
 	bool lsp = false;
 	std::filesystem::path apiFile;
@@ -637,7 +722,9 @@ int main(int argc, char** argv)
 		else if (std::strcmp(argv[i], "--benchmark") == 0)
 			benchmark = true;
 		else if (std::strcmp(argv[i], "--profile") == 0)
-			profile = true;
+			profile.On = true;
+		else if (std::strcmp(argv[i], "--lines") == 0)
+			profile.Lines = true;
 		else if (std::strcmp(argv[i], "--output") == 0)
 		{
 			if (i + 1 >= argc)
@@ -645,7 +732,7 @@ int main(int argc, char** argv)
 				std::cerr << "--output needs a file name after it, like: --output profile.txt" << std::endl;
 				return 64;
 			}
-			profileOutput = argv[++i];
+			profile.Output = argv[++i];
 		}
 		else if (std::strcmp(argv[i], "--lsp") == 0)
 			lsp = true;
@@ -687,14 +774,17 @@ int main(int argc, char** argv)
 		}
 	}
 
-	if (profile || !profileOutput.empty())
+	if (profile.On || profile.Lines || !profile.Output.empty())
 	{
-		if (!profile || check || test || format || benchmark || lsp || apiGiven || checkOptions.Json || checkOptions.FromStdin || files.size() != 1)
+		if (!profile.On || check || test || format || benchmark || lsp || apiGiven || checkOptions.FromStdin || checkOptions.Strict ||
+			files.size() != 1 || (checkOptions.Json && profile.Lines))
 		{
-			std::cerr << "--profile takes one script, and --output only goes with --profile, like: forgescript --profile game.forge --output profile.txt" << std::endl;
+			std::cerr << "--profile takes one script, and --lines, --json and --output only go with --profile, like: "
+				"forgescript --profile game.forge --lines (--json holds every line already)" << std::endl;
 			return 64;
 		}
-		return RunFile(file, realtime, true, profileOutput);
+		profile.Json = checkOptions.Json;
+		return RunFile(file, realtime, profile);
 	}
 	if (benchmark)
 	{

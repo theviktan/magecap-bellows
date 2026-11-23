@@ -843,10 +843,26 @@ namespace ForgeScript {
 	void VM::StartProfile()
 	{
 		m_Profile.clear();
+		m_ProfileLines.clear();
 		m_ProfiledFunction = nullptr;
 		m_ProfiledEntry = nullptr;
+		m_ProfiledLines = nullptr;
+		m_ProfileTick = 0;
+		m_ProfileClock = std::chrono::steady_clock::now();
 		m_Profiling = true;
 		m_WatchEachInstruction = true;
+	}
+
+	// Every 256 profiled instructions: the time since the last sample goes to the code running now.
+	void VM::ProfileSample(int line)
+	{
+		const auto now = std::chrono::steady_clock::now();
+		const double seconds = std::chrono::duration<double>(now - m_ProfileClock).count();
+		m_ProfileClock = now;
+		m_ProfiledEntry->Seconds += seconds;
+		std::vector<double>& lines = m_ProfiledLines->Seconds;
+		if (line >= 0 && static_cast<size_t>(line) < lines.size())
+			lines[static_cast<size_t>(line)] += seconds;
 	}
 
 	std::vector<ProfileEntry> VM::TakeProfile()
@@ -855,10 +871,25 @@ namespace ForgeScript {
 		m_WatchEachInstruction = m_Config.InstructionLimit || m_Config.CountInstructions;
 		std::vector<ProfileEntry> entries;
 		for (auto& [fn, entry] : m_Profile)
+		{
+			auto lines = m_ProfileLines.find(fn);
+			if (lines != m_ProfileLines.end())
+			{
+				for (size_t line = 0; line < lines->second.Instructions.size(); line++)
+				{
+					if (lines->second.Instructions[line] > 0)
+						entry.Lines.push_back({ static_cast<int>(line), lines->second.Instructions[line], lines->second.Seconds[line] });
+				}
+				std::stable_sort(entry.Lines.begin(), entry.Lines.end(),
+					[](const ProfileLine& a, const ProfileLine& b) { return a.Instructions > b.Instructions; });
+			}
 			entries.push_back(std::move(entry));
+		}
 		m_Profile.clear();
+		m_ProfileLines.clear();
 		m_ProfiledFunction = nullptr;
 		m_ProfiledEntry = nullptr;
+		m_ProfiledLines = nullptr;
 		std::stable_sort(entries.begin(), entries.end(), [](const ProfileEntry& a, const ProfileEntry& b)
 		{
 			if (a.Instructions != b.Instructions)
@@ -2720,6 +2751,9 @@ namespace ForgeScript {
 	{
 		ValueStack& stack = task->Stack;
 		CallFrame* frame = &task->Frames.back();
+		// Time between runs (a task waiting, the game's own work) isn't any script's.
+		if (m_Profiling && m_RunningTasks.size() <= 1)
+			m_ProfileClock = std::chrono::steady_clock::now();
 		const uint8_t* code = frame->Function->Fn->Chunk.GetCode().data();
 		const Value* constants = frame->Function->Fn->Chunk.GetConstants().data();
 		uint64_t instructions = 0;
@@ -2770,9 +2804,25 @@ namespace ForgeScript {
 					if (fn != m_ProfiledFunction)
 					{
 						m_ProfiledEntry = &ProfileOf(fn);
+						m_ProfiledLines = &m_ProfileLines[fn];
 						m_ProfiledFunction = fn;
 					}
 					m_ProfiledEntry->Instructions++;
+					const int line = fn->Chunk.GetLine(frame->Ip);
+					if (line >= 0)
+					{
+						if (static_cast<size_t>(line) >= m_ProfiledLines->Instructions.size())
+						{
+							m_ProfiledLines->Instructions.resize(static_cast<size_t>(line) + 1, 0);
+							m_ProfiledLines->Seconds.resize(static_cast<size_t>(line) + 1, 0.0);
+						}
+						m_ProfiledLines->Instructions[static_cast<size_t>(line)]++;
+					}
+					if (++m_ProfileTick >= 256)
+					{
+						m_ProfileTick = 0;
+						ProfileSample(line);
+					}
 				}
 				if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
 				{

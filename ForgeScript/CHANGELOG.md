@@ -7,6 +7,11 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **The profiler by line and by time** (expert features item 4): `forgescript --profile --lines`
+  adds the 20 busiest lines, with about how many milliseconds each took (the real clock, sampled
+  every 256 instructions, so engine calls count). `--profile --json` writes the whole profile with
+  `"format": 1` (MFC's ask), every function and every line. `VM::TakeProfile()` gives each
+  `ProfileEntry` its `Seconds` and its `Lines`. The default table is unchanged.
 - **`VM::EmitAll(event, values, source)`** takes the name of the entity a broadcast is about, so
   `when "Hero" is destination reached` works for events every script hears. MageCap Bellows passes it
   for broadcasts that name their entity (asked for by MCBellows for navigation and `field changed`).
