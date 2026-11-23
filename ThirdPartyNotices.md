@@ -24,6 +24,7 @@ Exported games include the runtime libraries marked with *.
 | [cgltf](https://github.com/jkuhlmann/cgltf) * | 1.15 | glTF loading | MIT |
 | [stb](https://github.com/nothings/stb) * | master | Image loading and writing; font outlines and kerning (stb_truetype), atlas packing (stb_rect_pack); Ogg Vorbis decoding (stb_vorbis) | MIT / Public domain |
 | [msdfgen](https://github.com/Chlumsky/msdfgen) * | 1.9.2 (core only) | Multi-channel signed distance fields for crisp text | MIT |
+| [Recast & Detour](https://github.com/recastnavigation/recastnavigation) * | 1.6.0 (Recast, Detour, DetourCrowd) | Navigation meshes, pathfinding and crowds | zlib |
 | [tinyexr](https://github.com/syoyo/tinyexr) * | 3.4.0 | OpenEXR image loading | BSD-3-Clause (includes OpenEXR code, BSD-3-Clause) |
 | [nlohmann/json](https://github.com/nlohmann/json) * | 3.12.0 | Scene, prefab and project files | MIT |
 | [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | master | Native file dialogs in the editor | WTFPL / public domain |

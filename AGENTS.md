@@ -13,7 +13,7 @@ fully scriptable so agents can build games through it.
 
 | Folder | Contents |
 |--------|----------|
-| `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Animation: skeletons and clips, Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui, Text: fonts with MSDF atlases and text layout, UI: game UI layout math) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
+| `Bellows/` | The engine, a static library. `Source/Bellows/<Module>/` (Core, Animation: skeletons and clips, Navigation: navmeshes (Recast/Detour), Renderer, Scene, Physics, Audio, Scripting, Asset, Project, Serialization, Math, ImGui, Text: fonts with MSDF atlases and text layout, UI: game UI layout math) and `Shaders/` (GLSL, compiled to SPIR-V at build time). |
 | `BellowsEditor/` | The editor executable: `EditorLayer` (scene/play/undo/viewport, Scene/Script workspaces), `Panels/` (including `ScriptEditorPanel`, the built-in code editor and Attach Script dialog), `ProjectManager` (the window shown when no project is open, and the New Project dialog), UI-free logic compiled into `BellowsTests` (`ScriptDocument`: script languages, templates, outlines, syntax checks; `ProjectList`: project names, scanning, sorting, new-project checks; `UITemplates`: what Create → UI makes, and the anchor presets, shared with `bellows.editor`; `ForgeScriptAssist`: ForgeScript completion and hover from the language server; `ScriptDebugger`: the ForgeScript debugger's breakpoints, stops and stepping; `GameWindowSession`: Play in a game window, running `BellowsRuntime` as a child process (`Core/Process`) and moving its log into the Console; `EditorSettings`), `EditorScriptAPI` (`bellows.editor`), `AgentServer`. |
 | `BellowsRuntime/` | The game player. Exported games are this executable renamed. |
 | `BellowsTests/` | doctest unit/integration tests (`Source/`) and editor automation tests (`Scripts/`). |
@@ -71,7 +71,7 @@ Run a single doctest case with `build/linux-debug/bin/BellowsTests -tc="*name*"`
 
 `BellowsTests/Source/FuzzTests.cpp` fuzzes every loader that reads a file a user or a download can
 hand the engine (images, glTF, fonts, audio, scenes, prefabs, materials, themes, `.bimport`,
-`.bproject`). It mutates valid files from a fixed seed, so a run is the same everywhere, and writes
+`.bproject`, `.bnav` navmeshes). It mutates valid files from a fixed seed, so a run is the same everywhere, and writes
 each input to `TestOutput/Fuzz/<target>/` before loading it, so a crash leaves its file there. A
 loader that reads a new kind of file gets a fuzz test there too. CI runs a few hundred inputs per
 loader; before a release, or after changing a loader, run longer and under AddressSanitizer, which

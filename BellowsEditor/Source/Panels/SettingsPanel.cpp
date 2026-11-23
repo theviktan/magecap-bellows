@@ -7,6 +7,7 @@
 
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/InputNames.h"
+#include "Bellows/Navigation/SceneNavigation.h"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -124,6 +125,9 @@ namespace Bellows {
 			UI::EndPropertyGrid();
 		}
 
+		if (ImGui::CollapsingHeader(ICON_ROUTE "  Navigation"))
+			DrawNavigationSettings(*scene);
+
 		if (ImGui::CollapsingHeader(ICON_SPARKLES "  Bloom") && UI::BeginPropertyGrid("Bloom"))
 		{
 			UI::Property("Enabled", rendering.BloomEnabled);
@@ -134,6 +138,51 @@ namespace Bellows {
 			UI::EndPropertyGrid();
 		}
 		ImGui::EndChild();
+	}
+
+	void SettingsPanel::DrawNavigationSettings(Scene& scene)
+	{
+		NavMeshSettings& navigation = scene.GetSettings().Navigation;
+		if (UI::BeginPropertyGrid("Navigation"))
+		{
+			UI::Property("Agent Radius", navigation.AgentRadius, 0.01f, NavMeshSettings::MinRadius, NavMeshSettings::MaxRadius, "%.2f m",
+				"How far agents keep from walls");
+			UI::Property("Agent Height", navigation.AgentHeight, 0.01f, NavMeshSettings::MinHeight, NavMeshSettings::MaxHeight, "%.2f m",
+				"The headroom agents need: lower ceilings aren't walked under");
+			UI::Property("Step Height", navigation.MaxClimb, 0.01f, 0.0f, NavMeshSettings::MaxClimbLimit, "%.2f m", "The highest step agents walk up");
+			UI::PropertySlider("Max Slope", navigation.MaxSlope, 0.0f, NavMeshSettings::MaxSlopeLimit, "%.0f deg", "The steepest ground agents walk on");
+			UI::EndPropertyGrid();
+		}
+
+		// Whether the navmesh still matches the scene, worked out at most twice a second (it reads
+		// every static collider).
+		const Ref<NavMesh>& navMesh = scene.GetNavMesh();
+		const double now = ImGui::GetTime();
+		if (navMesh && (now - m_NavigationCheckTime > 0.5 || m_NavigationCheckedMesh != navMesh.get()))
+		{
+			m_NavigationUpToDate = CollectNavigationGeometry(scene).ComputeHash(navigation) == navMesh->GetSourceHash();
+			m_NavigationCheckTime = now;
+			m_NavigationCheckedMesh = navMesh.get();
+		}
+		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
+		if (!navMesh)
+			ImGui::TextDisabled("Not baked: agents have nothing to walk on yet.");
+		else
+		{
+			ImGui::TextDisabled("%d tiles, %d polygons", navMesh->GetTileCount(), navMesh->GetPolygonCount());
+			if (!m_NavigationUpToDate)
+				ImGui::TextColored(Theme::ToVec4(Theme::Warning), ICON_TRIANGLE_ALERT "  Out of date: the static colliders or settings changed.");
+		}
+		ImGui::PopFont();
+		if (ImGui::Button(ICON_ROUTE "  Bake Navigation", ImVec2(-FLT_MIN, 0.0f)))
+		{
+			std::string error;
+			m_NavigationMessage = m_Editor.BakeNavigation(error) ? std::string() : error;
+			m_NavigationCheckedMesh = nullptr;
+		}
+		UI::Tooltip("Builds what agents walk on from the static colliders, and saves it beside the scene");
+		if (!m_NavigationMessage.empty())
+			ImGui::TextWrapped("%s", m_NavigationMessage.c_str());
 	}
 
 	void SettingsPanel::DrawProjectSettings()

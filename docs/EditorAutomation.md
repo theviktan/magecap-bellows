@@ -112,6 +112,7 @@ Errors in the request itself (bad token, unknown method) return `{"ok": false, "
 | `new_scene(name="Untitled")` | Replaces the open scene with a new one (camera, sun, sky). |
 | `open_scene(path)` | Opens a scene by asset path. |
 | `save_scene(path=None)` | Saves (to `path` if given, e.g. `"Scenes/Level2.bscene"`). Returns success. |
+| `bake_navigation()` | Bakes the edited scene's navmesh from its static colliders (Scene Settings → Navigation) and saves it beside the scene as `<scene>.bnav`. Returns `{"tiles": n, "polygons": n}`; raises `RuntimeError` with the reason when the scene isn't saved yet or has nothing to walk on. |
 | `scene_path()`, `is_dirty()` | Path of the open scene; unsaved changes? |
 
 ### Play mode
