@@ -6,6 +6,7 @@
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Project/Project.h"
+#include "Bellows/Renderer/Image.h"
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Serialization/JsonUtils.h"
@@ -325,4 +326,94 @@ TEST_CASE("A MageCap Foundry model imports: shared accessors, both index sizes, 
 	const MaterialProperties& glass = mesh->GetMaterials()[submeshes[1].MaterialIndex]->GetProperties();
 	CHECK(glass.AlbedoColor == glm::vec4(0.2f, 0.4f, 0.8f, 0.35f));
 	CHECK(glass.Mode == AlphaMode::Blend);
+}
+
+TEST_CASE("[gpu] A textured MageCap Foundry model imports: palette sampled pixelated, glass, glow and both sides")
+{
+	// What Foundry 2.60.0 writes besides seq 1694's list (MFC, board seq 1743): TEXCOORD_0, an embedded PNG
+	// with a NEAREST sampler, emissiveFactor with an emissiveTexture, KHR_materials_transmission (used, not
+	// required) on a BLEND material with alpha 0.35, and doubleSided.
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "FoundryTextured";
+	REQUIRE(FileSystem::CreateDirectories(folder));
+
+	Image palette;
+	palette.Width = palette.Height = 2;
+	palette.Pixels = { 200, 40, 40, 255, 40, 200, 40, 255, 40, 40, 200, 255, 230, 230, 230, 255 };
+	REQUIRE(palette.SavePNG(folder / "Palette.png"));
+	const Buffer png = FileSystem::ReadBinaryFile(folder / "Palette.png");
+	REQUIRE(png.Size() > 0);
+
+	std::vector<uint8_t> bin;
+	Append(bin, std::vector<float> { -0.5f, 0.0f, -0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.5f });	// 0: positions
+	Append(bin, std::vector<float> { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 });										// 48: normals
+	Append(bin, std::vector<float> { 0, 0, 1, 0, 1, 1, 0, 1 });													// 96: TEXCOORD_0
+	Append(bin, std::vector<uint16_t> { 0, 3, 2, 0, 2, 1 });														// 128: indices
+	const size_t imageOffset = 140;
+	bin.resize(imageOffset);
+	bin.insert(bin.end(), png.Data(), png.Data() + png.Size());
+
+	const Json attributes = { { "POSITION", 0 }, { "NORMAL", 1 }, { "TEXCOORD_0", 2 } };
+	const Json document = {
+		{ "asset", { { "version", "2.0" }, { "generator", "MageCap Foundry" } } },
+		{ "extensionsUsed", { "KHR_materials_transmission" } },
+		{ "scene", 0 },
+		{ "scenes", { { { "nodes", { 0, 1, 2 } } } } },
+		{ "nodes", { { { "name", "wall" }, { "mesh", 0 } }, { { "name", "glass" }, { "mesh", 1 } }, { { "name", "lantern" }, { "mesh", 2 } } } },
+		{ "meshes", {
+			{ { "primitives", { { { "attributes", attributes }, { "indices", 3 }, { "material", 0 } } } } },
+			{ { "primitives", { { { "attributes", attributes }, { "indices", 3 }, { "material", 1 } } } } },
+			{ { "primitives", { { { "attributes", attributes }, { "indices", 3 }, { "material", 2 } } } } } } },
+		{ "materials", {
+			{ { "name", "palette" }, { "doubleSided", true },
+				{ "pbrMetallicRoughness", { { "baseColorTexture", { { "index", 0 } } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 1.0 } } } },
+			{ { "name", "glass" }, { "alphaMode", "BLEND" }, { "doubleSided", true },
+				{ "pbrMetallicRoughness", { { "baseColorFactor", { 0.8, 0.9, 1.0, 0.35 } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 0.1 } } },
+				{ "extensions", { { "KHR_materials_transmission", { { "transmissionFactor", 0.9 } } } } } },
+			{ { "name", "glow" }, { "emissiveFactor", { 1.0, 0.8, 0.4 } }, { "emissiveTexture", { { "index", 0 } } },
+				{ "pbrMetallicRoughness", { { "baseColorTexture", { { "index", 0 } } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 1.0 } } } } } },
+		{ "samplers", { { { "magFilter", 9728 }, { "minFilter", 9984 }, { "wrapS", 33071 }, { "wrapT", 33648 } } } },
+		{ "images", { { { "bufferView", 4 }, { "mimeType", "image/png" } } } },
+		{ "textures", { { { "source", 0 }, { "sampler", 0 } } } },
+		{ "buffers", { { { "byteLength", bin.size() } } } },
+		{ "bufferViews", {
+			{ { "buffer", 0 }, { "byteOffset", 0 }, { "byteLength", 48 } },
+			{ { "buffer", 0 }, { "byteOffset", 48 }, { "byteLength", 48 } },
+			{ { "buffer", 0 }, { "byteOffset", 96 }, { "byteLength", 32 } },
+			{ { "buffer", 0 }, { "byteOffset", 128 }, { "byteLength", 12 } },
+			{ { "buffer", 0 }, { "byteOffset", imageOffset }, { "byteLength", png.Size() } } } },
+		{ "accessors", {
+			{ { "bufferView", 0 }, { "componentType", 5126 }, { "count", 4 }, { "type", "VEC3" }, { "min", { -0.5, 0.0, -0.5 } }, { "max", { 0.5, 0.0, 0.5 } } },
+			{ { "bufferView", 1 }, { "componentType", 5126 }, { "count", 4 }, { "type", "VEC3" } },
+			{ { "bufferView", 2 }, { "componentType", 5126 }, { "count", 4 }, { "type", "VEC2" } },
+			{ { "bufferView", 3 }, { "componentType", 5123 }, { "count", 6 }, { "type", "SCALAR" } } } } };
+	const std::vector<uint8_t> glb = MakeGLB(document, bin);
+	REQUIRE(FileSystem::WriteBinaryFile(folder / "Textured.glb", glb.data(), glb.size()));
+
+	const Ref<Mesh> mesh = MeshImporter::ImportGLTF(folder / "Textured.glb");
+	REQUIRE(mesh);
+	REQUIRE(mesh->GetSubmeshes().size() == 3);
+	auto material = [&](size_t submesh) { return mesh->GetMaterials()[mesh->GetSubmeshes()[submesh].MaterialIndex]; };
+
+	// 1: the palette texture, sampled pixelated, with its wraps; UVs as written.
+	const Ref<Material> wall = material(0);
+	CHECK(wall->GetAlbedoMap());
+	CHECK(wall->GetProperties().Filter == TextureFilter::Nearest);
+	CHECK(wall->GetProperties().WrapU == TextureWrap::Clamp);
+	CHECK(wall->GetProperties().WrapV == TextureWrap::Mirror);
+	CHECK(mesh->GetVertices()[mesh->GetSubmeshes()[0].BaseVertex + 2].TexCoord == glm::vec2(1.0f, 1.0f));
+	// 2: glass blends with its alpha (Bellows draws transmission as that, and the extension doesn't stop the import).
+	const MaterialProperties& glass = material(1)->GetProperties();
+	CHECK(glass.Mode == AlphaMode::Blend);
+	CHECK(glass.AlbedoColor.a == doctest::Approx(0.35f));
+	CHECK(glass.Filter == TextureFilter::Linear);		// No texture, so nothing to sample
+	// 3: glow, its color and its map.
+	const Ref<Material> lantern = material(2);
+	CHECK(lantern->GetEmissiveMap());
+	CHECK(lantern->GetProperties().EmissiveColor == glm::vec3(1.0f, 0.8f, 0.4f));
+	// 4: both sides.
+	CHECK(wall->GetProperties().DoubleSided);
+	CHECK(glass.DoubleSided);
+	CHECK_FALSE(lantern->GetProperties().DoubleSided);
 }

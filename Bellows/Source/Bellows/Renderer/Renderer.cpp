@@ -31,7 +31,7 @@ namespace Bellows {
 			nvrhi::SamplerHandle LinearWrap;
 			nvrhi::SamplerHandle PointClamp;
 			nvrhi::SamplerHandle ShadowCompare;
-			nvrhi::SamplerHandle MaterialSampler;
+			nvrhi::SamplerHandle MaterialSamplers[2][3][3];		// [filter][wrap U][wrap V]
 
 			Ref<Texture2D> WhiteTexture;
 			Ref<Texture2D> BlackTexture;
@@ -170,8 +170,28 @@ namespace Bellows {
 				.setAllFilters(true).setMipFilter(false)
 				.setAllAddressModes(nvrhi::SamplerAddressMode::Border).setBorderColor(nvrhi::Color(1.0f))
 				.setReductionType(nvrhi::SamplerReductionType::Comparison));
-			s_Data->MaterialSampler = device->createSampler(nvrhi::SamplerDesc()
-				.setAllFilters(true).setAllAddressModes(nvrhi::SamplerAddressMode::Wrap).setMaxAnisotropy(8.0f));
+			auto addressMode = [](int wrap)
+			{
+				switch (static_cast<TextureWrap>(wrap))
+				{
+					case TextureWrap::Clamp:	return nvrhi::SamplerAddressMode::Clamp;
+					case TextureWrap::Mirror:	return nvrhi::SamplerAddressMode::Mirror;
+					case TextureWrap::Repeat:	break;
+				}
+				return nvrhi::SamplerAddressMode::Wrap;
+			};
+			for (int filter = 0; filter < 2; filter++)
+				for (int wrapU = 0; wrapU < 3; wrapU++)
+					for (int wrapV = 0; wrapV < 3; wrapV++)
+					{
+						// Pixelated textures take the nearest pixel of the nearest mip level, so a palette
+						// cell never blends into its neighbor; anisotropy would filter, so it's off.
+						const bool smooth = static_cast<TextureFilter>(filter) == TextureFilter::Linear;
+						nvrhi::SamplerDesc desc;
+						desc.setAllFilters(smooth).setMaxAnisotropy(smooth ? 8.0f : 1.0f)
+							.setAddressU(addressMode(wrapU)).setAddressV(addressMode(wrapV)).setAddressW(nvrhi::SamplerAddressMode::Wrap);
+						s_Data->MaterialSamplers[filter][wrapU][wrapV] = device->createSampler(desc);
+					}
 		}
 
 		void CreateDefaultTextures()
@@ -383,7 +403,11 @@ namespace Bellows {
 	nvrhi::ISampler* Renderer::GetLinearWrapSampler() { return s_Data->LinearWrap; }
 	nvrhi::ISampler* Renderer::GetPointClampSampler() { return s_Data->PointClamp; }
 	nvrhi::ISampler* Renderer::GetShadowCompareSampler() { return s_Data->ShadowCompare; }
-	nvrhi::ISampler* Renderer::GetMaterialSampler() { return s_Data->MaterialSampler; }
+	nvrhi::ISampler* Renderer::GetMaterialSampler(TextureFilter filter, TextureWrap wrapU, TextureWrap wrapV)
+	{
+		const auto index = [](auto value, size_t count) { return std::min(static_cast<size_t>(value), count - 1); };
+		return s_Data->MaterialSamplers[index(filter, 2)][index(wrapU, 3)][index(wrapV, 3)];
+	}
 
 	const Ref<Texture2D>& Renderer::GetWhiteTexture() { return s_Data->WhiteTexture; }
 	const Ref<Texture2D>& Renderer::GetBlackTexture() { return s_Data->BlackTexture; }

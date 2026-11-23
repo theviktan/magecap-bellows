@@ -1627,6 +1627,19 @@ FAIL armor lowers damage
 - `expect` works anywhere, not just in tests: outside a test, a failed `expect` is an error like
   `fail`, which makes it a handy check while you build.
 - `forgescript --test` ends with exit code 1 when a test failed, so a build or CI can stop on it.
+
+### Finding slow code
+
+`forgescript --profile game.forge` runs the script, then lists the functions that ran the most
+instructions, with their share and how many times each was called. Two more options:
+
+- `--lines` adds the 20 busiest lines over every function, with **about** how many milliseconds
+  each took. The time comes from the real clock, sampled every 256 instructions, so it includes
+  engine calls (which count as one instruction each) and changes a little from run to run.
+  Instructions are the exact measure: they're the same on every machine.
+- `--json` gives the whole profile as JSON for tools, with every line of every function, and a
+  `"format": 1` field that goes up if a field ever changes meaning. Add `--output profile.json` to
+  keep it apart from what the script prints.
 - `test` and `expect` aren't reserved: `set test to 3` and a function called `expect` still work.
   Because of that, an `expect` can't start with `(` or `[` (`expect (x)` is a call to `expect`):
   write `expect 2 is in [1, 2]`, not `expect [1, 2] contains 2`.

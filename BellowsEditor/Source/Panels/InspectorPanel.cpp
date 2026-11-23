@@ -907,6 +907,26 @@ namespace Bellows {
 			if (properties.Mode == AlphaMode::Mask)
 				changed |= UI::PropertySlider("Alpha Cutoff", properties.AlphaCutoff, 0.0f, 1.0f);
 			changed |= UI::Property("Double Sided", properties.DoubleSided);
+			const char* filters[] = { "Smooth", "Pixelated" };
+			int filter = static_cast<int>(properties.Filter);
+			if (UI::PropertyCombo("Texture Filter", filter, filters, 2, "Pixelated keeps each texture pixel a sharp square, for pixel art and palette textures"))
+			{
+				properties.Filter = static_cast<TextureFilter>(filter);
+				changed = true;
+			}
+			const char* wraps[] = { "Repeat", "Clamp", "Mirror" };
+			int wrapU = static_cast<int>(properties.WrapU);
+			if (UI::PropertyCombo("Wrap U", wrapU, wraps, 3, "What textures do past their left and right edges"))
+			{
+				properties.WrapU = static_cast<TextureWrap>(wrapU);
+				changed = true;
+			}
+			int wrapV = static_cast<int>(properties.WrapV);
+			if (UI::PropertyCombo("Wrap V", wrapV, wraps, 3, "What textures do past their top and bottom edges"))
+			{
+				properties.WrapV = static_cast<TextureWrap>(wrapV);
+				changed = true;
+			}
 			changed |= UI::PropertyVec2("UV Tiling", properties.UVTiling);
 			changed |= UI::PropertyVec2("UV Offset", properties.UVOffset);
 

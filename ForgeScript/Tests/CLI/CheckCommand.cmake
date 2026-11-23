@@ -152,5 +152,16 @@ if(NOT written STREQUAL profileTable)
 	message(FATAL_ERROR "profile to a file: the file holds\n${written}")
 endif()
 file(REMOVE "${profileFile}")
-expect_run("output without profile" 64 "--profile takes one script, and --output only goes with --profile, like: forgescript --profile game.forge --output profile.txt"
+# --profile --lines: the busiest lines after the table. A script this short takes no time sample
+# (one comes every 256 instructions), so its times are 0.0 on every machine.
+set(profileLines "Busiest lines:\n  instructions       %   about ms  line\n            30   44.1%        0.0  profile.forge line 6 (top of the script)\n            14   20.6%        0.0  profile.forge line 5 (top of the script)\n            12   17.6%        0.0  profile.forge line 2 (square)\n             6    8.8%        0.0  profile.forge line 8 (top of the script)\n             3    4.4%        0.0  profile.forge line 1 (top of the script)\n             3    4.4%        0.0  profile.forge line 4 (top of the script)")
+expect_run("profile lines" 0 "14\n${profileTable}\n${profileLines}" ARGS --profile --lines "${profiled}")
+# --profile --json: everything, for tools, with "format": 1.
+expect_run("profile json" 0
+	"14\n{\"format\":1,\"script\":\"profile.forge\",\"instructions\":68,\"seconds\":0,\"functions\":[{\"function\":\"\",\"file\":\"profile.forge\",\"line\":1,\"instructions\":56,\"calls\":1,\"seconds\":0,\"lines\":[{\"line\":6,\"instructions\":30,\"seconds\":0},{\"line\":5,\"instructions\":14,\"seconds\":0},{\"line\":8,\"instructions\":6,\"seconds\":0},{\"line\":1,\"instructions\":3,\"seconds\":0},{\"line\":4,\"instructions\":3,\"seconds\":0}]},{\"function\":\"square\",\"file\":\"profile.forge\",\"line\":2,\"instructions\":12,\"calls\":3,\"seconds\":0,\"lines\":[{\"line\":2,\"instructions\":12,\"seconds\":0}]}]}"
+	ARGS --profile --json "${profiled}")
+expect_run("profile lines alone" 64
+	"--profile takes one script, and --lines, --json and --output only go with --profile, like: forgescript --profile game.forge --lines (--json holds every line already)"
+	ARGS --lines "${profiled}")
+expect_run("output without profile" 64 "--profile takes one script, and --lines, --json and --output only go with --profile, like: forgescript --profile game.forge --lines (--json holds every line already)"
 	ARGS --output "${profileFile}" "${profiled}")
