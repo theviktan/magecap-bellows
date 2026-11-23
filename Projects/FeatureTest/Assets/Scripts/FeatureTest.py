@@ -111,6 +111,7 @@ class FeatureTest(bellows.Script):
         self.test_events()
         self.test_ui_focus()
         self.test_navigation()
+        yield from self.test_nav_agents()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -981,6 +982,38 @@ class FeatureTest(bellows.Script):
                    "'animation finished' reaches on_event once, with the entity and the clip")
         animator.loop = True
         animator.play("Wave", 0.5)
+
+    def test_nav_agents(self):
+        """The Guard, a NavAgent carrying a kinematic capsule, walks the open ground in front of the camera (z = 7)."""
+        guard = bellows.find_entity("Guard")
+        agent = guard.get_component(bellows.NavAgent)
+        # FeatureTest.forge halted it on its way: it comes to rest, and stays.
+        yield from self.wait_until(lambda: agent.velocity.length() < 0.01, 2.0)
+        self.check(not agent.moving and agent.destination is None and agent.velocity.length() < 0.01, "the Guard stands until it's sent")
+        start = guard.position
+        self.events.clear()
+        self.check(agent.set_destination(bellows.Vec3(3.0, 0.0, 7.0)), "set_destination on open ground")
+        self.check(agent.moving and close(agent.destination, bellows.Vec3(3.0, 0.0, 7.0), 0.2), f"destination ({agent.destination})")
+        yield from self.wait_frames(20)
+        self.check(agent.velocity.length() > 1.0 and agent.velocity.length() <= agent.speed * 1.05, f"it walks at its speed ({agent.velocity})")
+        yield from self.wait_until(lambda: not agent.moving, 8.0)
+        self.check(not agent.moving and close(guard.position, bellows.Vec3(3.0, 0.9, 7.0), 0.15),
+                   f"the Guard walks there, its capsule on the ground ({guard.position})")
+        reached = [values for name, values in self.events if name == "destination reached"]
+        self.check(reached == [(guard, True)], f"'destination reached' with the entity and True ({reached})")
+        self.check(not agent.set_destination(bellows.Vec3(0.0, 0.0, 500.0)) and agent.destination is None,
+                   "set_destination refuses a point off the navmesh, and changes nothing")
+        self.check(raises(lambda: agent.set_destination(bellows.Vec3(float("nan"), 0.0, 0.0)), ValueError), "set_destination refuses NaN")
+
+        # Sent back, then stopped on the way: it slows to a stop and says nothing.
+        self.events.clear()
+        agent.set_destination(start)
+        yield from self.wait_frames(20)
+        agent.stop()
+        self.check(not agent.moving and agent.destination is None, "stop")
+        yield from self.wait_frames(60)
+        self.check(agent.velocity.length() < 0.05 and not any(name == "destination reached" for name, _ in self.events),
+                   "stopped, it comes to rest and sends no 'destination reached'")
 
     def test_navigation(self):
         """The scene's navmesh is baked from its static colliders; the pedestals (0.6 m, above a 0.4 m step) block the

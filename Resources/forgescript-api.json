@@ -1610,6 +1610,39 @@
 					"type": "Vec3",
 					"readonly": true,
 					"doc": "How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running"
+				},
+				{
+					"name": "destination",
+					"kind": "property",
+					"type": "Vec3 | None",
+					"readonly": true,
+					"doc": "Where it's walking (the navmesh spot set_destination found), or None while it stands"
+				},
+				{
+					"name": "moving",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True from set_destination until it arrives or is stopped"
+				},
+				{
+					"name": "set_destination",
+					"kind": "method",
+					"params": [
+						{
+							"name": "point",
+							"type": "Vec3"
+						}
+					],
+					"returns": "bool",
+					"doc": "Walks to the point (the nearest spot on the navmesh within 2 meters of it). It sends 'destination reached' when it gets there, or when it can't and stops as close as it could. False, and nothing changes, when no agent can stand near the point"
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Stops walking: it slows to a stop where it is, and sends no 'destination reached'"
 				}
 			]
 		},
@@ -2848,6 +2881,24 @@
 			"pattern": "resume animation on (entity)",
 			"doc": "Lets a paused animation go on; same as entity.get_component(\"Animator\").resume()",
 			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "walk (entity) to (position)",
+			"doc": "Sends an entity's NavAgent walking to a position, and gives back whether there's navmesh to walk to near it; same as entity.get_component(\"NavAgent\").set_destination(position)",
+			"returns": "bool",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "halt (entity)",
+			"doc": "Stops an entity's NavAgent where it is; same as entity.get_component(\"NavAgent\").stop()",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "the path from (start) to (end)",
+			"doc": "The corners of the shortest walkable path between two positions, both ends included (an empty list when nothing connects them); same as find_path(start, end)",
+			"returns": "list[Vec3]",
 			"yields_to_calls": true
 		},
 		{

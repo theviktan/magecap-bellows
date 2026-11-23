@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 class dtCrowd;
 
@@ -15,6 +16,13 @@ namespace Bellows {
 
 	class NavMesh;
 	class Scene;
+
+	// An agent that stopped at the end of its path in an update.
+	struct NavAgentArrival
+	{
+		UUID Entity = 0;
+		bool Reached = true;	// False: the destination can't be reached, and it stopped as close as it could
+	};
 
 	// Moves a running scene's NavAgent entities with Detour's crowd: each follows its path, slows down
 	// to arrive, and steers around walls and other agents. It's play-time state only, built for the
@@ -35,8 +43,8 @@ namespace Bellows {
 		// Moves every agent on by 'seconds' and writes where each got to into its transform (and its
 		// RuntimeVelocity). Destinations set since the last update are used first; an agent that
 		// arrives (or, when its destination can't be reached, gets as close as it can) loses its
-		// destination and stands.
-		void Update(Scene& scene, float seconds);
+		// destination and stands. Returns those agents, in the scene's order.
+		std::vector<NavAgentArrival> Update(Scene& scene, float seconds);
 
 		// Agents on the navmesh being moved.
 		int GetAgentCount() const { return static_cast<int>(m_Agents.size()); }
