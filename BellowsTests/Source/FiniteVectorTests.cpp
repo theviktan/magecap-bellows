@@ -31,6 +31,8 @@ TEST_CASE("Python can't give the engine a vector with NaN or infinity")
 		{ "box.transform.scale = [1, nan, 1]", "Transform.scale needs ordinary numbers" },
 		{ "box.position = bellows.Vec3(nan, nan, nan)", "Entity.position needs ordinary numbers" },
 		{ "bellows.raycast(bellows.Vec3(0, 0, 0), bellows.Vec3(0, nan, 0), 10)", "raycast needs ordinary numbers" },
+		{ "bellows.shake_camera(nan, 0.4)", "shake_camera needs ordinary numbers, not NaN or infinity" },
+		{ "bellows.shake_camera(0.3, inf)", "shake_camera needs ordinary numbers" },
 	};
 	for (const auto& [line, message] : cases)
 	{
@@ -62,7 +64,8 @@ TEST_CASE("ForgeScript can't give the engine a vector with NaN or infinity")
 
 	// 1e308 * 10 is infinity, and 1e39 is too big for the engine's floats.
 	for (const char* line : { "set box.position to vector(1e308 * 10, 0, 0)", "set box.scale to vector(1, 1e39, 1)",
-		"set box.rotation to [0, 0, -1e308 * 10]", "set box.transform.position to vector(0, 0, 1e39)" })
+		"set box.rotation to [0, 0, -1e308 * 10]", "set box.transform.position to vector(0, 0, 1e39)",
+		"shake_camera(1e308 * 10, 1)", "shake the camera by 0.3 over 1e308 * 10 seconds" })
 	{
 		CAPTURE(line);
 		errors.clear();

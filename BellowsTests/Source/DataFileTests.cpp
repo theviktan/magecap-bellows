@@ -93,6 +93,38 @@ TEST_CASE("A data file is read again only when it changes")
 	CHECK(LoadDataJson("Data/level.json") == ScriptValue(ScriptValueList { 3.0, 4.0, 5.0 }));
 }
 
+TEST_CASE("Values read from JSON count toward the data file cache's size")
+{
+	DataFolder folder;
+	// About 1 MB of text that reads as 300,000 values, each far bigger than its 3 characters.
+	std::string text = "[";
+	for (int i = 0; i < 300000; i++)
+		text += i == 0 ? "1" : ",1 ";
+	text += "]";
+	for (int i = 0; i < 6; i++)
+		folder.Write("Data/big" + std::to_string(i) + ".json", text);
+
+	CHECK(LoadDataText("Data/big0.json").size() == text.size());
+	CHECK(GetDataFileCacheBytes() == text.size());
+	const ScriptValue first = LoadDataJson("Data/big0.json");
+	REQUIRE(std::get_if<ScriptValueList>(&first.Data));
+	CHECK(std::get<ScriptValueList>(first.Data).size() == 300000);
+	CHECK(GetDataFileCacheBytes() > text.size() + 300000 * sizeof(ScriptValue) - 1);
+
+	// More of them than fit: the cache makes room and never grows past its limit.
+	for (int round = 0; round < 2; round++)
+	{
+		for (int i = 0; i < 6; i++)
+		{
+			const ScriptValue value = LoadDataJson("Data/big" + std::to_string(i) + ".json");
+			CHECK(std::get<ScriptValueList>(value.Data).size() == 300000);
+			CHECK(GetDataFileCacheBytes() <= MaxDataFileCacheBytes);
+		}
+	}
+	ClearDataFileCache();
+	CHECK(GetDataFileCacheBytes() == 0);
+}
+
 TEST_CASE("Data files outside the Assets folder, too big or broken are refused with the reason")
 {
 	DataFolder folder;

@@ -17,11 +17,12 @@ namespace Bellows::Scripting {
 			uintmax_t Size = 0;
 			std::string Text;
 			std::optional<ScriptValue> Json;	// Filled the first time the file is read as JSON
+			uintmax_t JsonBytes = 0;			// About how much memory Json takes
+			uintmax_t GetBytes() const { return Text.size() + JsonBytes; }
 		};
 
-		// Keyed by the file's full path. Dropped whole when it grows past this, which only a game reading
-		// many large files at once reaches.
-		constexpr uintmax_t c_MaxCachedBytes = 64 * 1024 * 1024;
+		// Keyed by the file's full path; the text and the values read from it both count. Dropped whole
+		// when it grows past MaxDataFileCacheBytes, which only a game reading many large files at once reaches.
 		std::unordered_map<std::string, CachedFile> s_Cache;
 		uintmax_t s_CachedBytes = 0;
 
@@ -41,11 +42,13 @@ namespace Bellows::Scripting {
 		CachedFile& ReadFile(const std::string& path)
 		{
 			const std::filesystem::path file = ResolveDataFile(path);
-			std::error_code error;
-			const uintmax_t size = std::filesystem::file_size(file, error);
-			const std::filesystem::file_time_type writeTime = std::filesystem::last_write_time(file, error);
-			if (error)
-				throw ScriptValueError("Can't read the data file '" + path + "': " + error.message());
+			// Each call gets its own error, so a failed size can't pass for a huge file.
+			std::error_code sizeError;
+			std::error_code timeError;
+			const uintmax_t size = std::filesystem::file_size(file, sizeError);
+			const std::filesystem::file_time_type writeTime = std::filesystem::last_write_time(file, timeError);
+			if (sizeError || timeError)
+				throw ScriptValueError("Can't read the data file '" + path + "': " + (sizeError ? sizeError : timeError).message());
 			if (size > MaxDataFileBytes)
 				throw ScriptValueError("The data file '" + path + "' is " + std::to_string(size / (1024 * 1024)) + " MB; data files can be at most 16 MB");
 
@@ -62,16 +65,35 @@ namespace Bellows::Scripting {
 
 			if (auto it = s_Cache.find(key); it != s_Cache.end())
 			{
-				s_CachedBytes -= it->second.Text.size();
+				s_CachedBytes -= it->second.GetBytes();
 				s_Cache.erase(it);
 			}
-			if (s_CachedBytes + text.size() > c_MaxCachedBytes)
+			if (s_CachedBytes + text.size() > MaxDataFileCacheBytes)
 			{
 				s_Cache.clear();
 				s_CachedBytes = 0;
 			}
 			s_CachedBytes += text.size();
 			return s_Cache[key] = CachedFile { writeTime, size, std::move(text), std::nullopt };
+		}
+
+		// The memory a value read from JSON takes, near enough to keep the cache's size honest.
+		uintmax_t EstimateBytes(const ScriptValue& value)
+		{
+			uintmax_t bytes = sizeof(ScriptValue);
+			if (const std::string* text = std::get_if<std::string>(&value.Data))
+				bytes += text->capacity();
+			else if (const ScriptValueList* items = std::get_if<ScriptValueList>(&value.Data))
+			{
+				for (const ScriptValue& item : *items)
+					bytes += EstimateBytes(item);
+			}
+			else if (const ScriptValueMap* entries = std::get_if<ScriptValueMap>(&value.Data))
+			{
+				for (const auto& [key, item] : *entries)
+					bytes += sizeof(std::string) + key.capacity() + EstimateBytes(item);
+			}
+			return bytes;
 		}
 
 		ScriptValue ToScriptValue(const Json& json, const std::string& path, int depth)
@@ -180,7 +202,19 @@ namespace Bellows::Scripting {
 			{
 				throw ScriptValueError("The data file '" + path + "' isn't valid JSON: " + DescribeParseError(error.what()));
 			}
-			file.Json = ToScriptValue(json, path, 0);
+			ScriptValue value = ToScriptValue(json, path, 0);
+			const uintmax_t bytes = EstimateBytes(value);
+			if (s_CachedBytes + bytes > MaxDataFileCacheBytes)
+			{
+				// Make room by dropping every other file; a file too big to keep even then is read each time.
+				std::erase_if(s_Cache, [&file](const auto& entry) { return &entry.second != &file; });
+				s_CachedBytes = file.GetBytes();
+				if (s_CachedBytes + bytes > MaxDataFileCacheBytes)
+					return value;
+			}
+			file.JsonBytes = bytes;
+			s_CachedBytes += bytes;
+			file.Json = std::move(value);
 		}
 		return *file.Json;
 	}
@@ -189,6 +223,11 @@ namespace Bellows::Scripting {
 	{
 		s_Cache.clear();
 		s_CachedBytes = 0;
+	}
+
+	uintmax_t GetDataFileCacheBytes()
+	{
+		return s_CachedBytes;
 	}
 
 }

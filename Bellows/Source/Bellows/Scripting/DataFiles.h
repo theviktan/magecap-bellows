@@ -32,4 +32,9 @@ namespace Bellows::Scripting {
 	// Forgets every file read so far (the next read goes to disk).
 	void ClearDataFileCache();
 
+	// About how much memory the files read so far take: their text and the values read from it.
+	// It stays at most MaxDataFileCacheBytes.
+	constexpr uintmax_t MaxDataFileCacheBytes = 64 * 1024 * 1024;
+	uintmax_t GetDataFileCacheBytes();
+
 }
