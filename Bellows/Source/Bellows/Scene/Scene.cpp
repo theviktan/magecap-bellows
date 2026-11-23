@@ -4,6 +4,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Renderer/Renderer.h"
@@ -421,8 +422,16 @@ namespace Bellows {
 			animator.RuntimePreview = false;
 		}
 		UpdateAnimators(0.0f);
+		for (entt::entity handle : m_Registry.view<NavAgentComponent>())
+		{
+			NavAgentComponent& agent = m_Registry.get<NavAgentComponent>(handle);
+			agent.RuntimeDestination.reset();
+			agent.RuntimeDestinationChanged = false;
+			agent.RuntimeVelocity = glm::vec3(0.0f);
+		}
 
 		m_PhysicsWorld = CreateScope<PhysicsWorld>(*this);
+		m_NavAgents = CreateScope<SceneNavAgents>();
 		m_PhysicsWorld->SyncBodies();
 		m_Tweens = CreateScope<SceneTweens>();
 		m_CameraShake.Clear();
@@ -450,6 +459,7 @@ namespace Bellows {
 		m_Tweens.reset();
 		m_CameraShake.Clear();
 		m_Audio.reset();
+		m_NavAgents.reset();
 		m_PhysicsWorld.reset();
 		m_IsRunning = false;
 		ResetUIInput();
@@ -583,6 +593,11 @@ namespace Bellows {
 			ScriptEngine::InstantiatePendingScripts(*this);
 			ScriptEngine::OnUpdate(*this, deltaTime);
 		}
+
+		// Agents walk after scripts, so a destination set this frame is used, and before physics, so
+		// a kinematic body goes where its agent went.
+		if (!m_GamePaused && m_NavAgents)
+			m_NavAgents->Update(*this, deltaTime);
 
 		// Fixed-step physics. At most a few steps per frame so a slow frame cannot spiral. The game's
 		// pause holds it (and fixed updates) where it is.

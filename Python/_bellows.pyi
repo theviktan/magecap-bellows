@@ -411,6 +411,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['Animator']) -> Animator | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['NavAgent']) -> NavAgent | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['AudioListener']) -> AudioListener | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['Text']) -> Text | None: ...
@@ -470,6 +472,8 @@ class Entity:
     def add_component(self, component: typing.Literal['AudioSource']) -> AudioSource: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Animator']) -> Animator: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['NavAgent']) -> NavAgent: ...
     @typing.overload
     def add_component(self, component: typing.Literal['AudioListener']) -> AudioListener: ...
     @typing.overload
@@ -646,6 +650,53 @@ class MeshRenderer:
     def visible(self) -> bool: ...
     @visible.setter
     def visible(self, value: bool) -> None: ...
+
+
+class NavAgent:
+    """Walks the entity over the scene's navmesh, steering around walls and other agents. It moves the transform, so the entity has no rigid body or a kinematic one"""
+    @property
+    def speed(self) -> float:
+        """Top speed in meters per second, from 0 to 100"""
+    @speed.setter
+    def speed(self, value: float) -> None: ...
+    @property
+    def acceleration(self) -> float:
+        """How fast it speeds up and slows down, in meters per second per second, from 0.1 to 1000"""
+    @acceleration.setter
+    def acceleration(self, value: float) -> None: ...
+    @property
+    def radius(self) -> float:
+        """Meters it keeps from other agents, from 0.05 to 5"""
+    @radius.setter
+    def radius(self, value: float) -> None: ...
+    @property
+    def height(self) -> float:
+        """Meters, from 0.1 to 20"""
+    @height.setter
+    def height(self, value: float) -> None: ...
+    @property
+    def base_offset(self) -> float:
+        """How far the entity's origin is above the ground, in meters (half a capsule's height, say), from -20 to 20"""
+    @base_offset.setter
+    def base_offset(self, value: float) -> None: ...
+    @property
+    def stopping_distance(self) -> float:
+        """It arrives this close to its destination, in meters, from 0.01 to 100"""
+    @stopping_distance.setter
+    def stopping_distance(self, value: float) -> None: ...
+    @property
+    def turn_speed(self) -> float:
+        """Degrees per second it turns to face where it walks, from 0 (it doesn't turn) to 10000"""
+    @turn_speed.setter
+    def turn_speed(self, value: float) -> None: ...
+    @property
+    def avoid_others(self) -> bool:
+        """Steers around other agents"""
+    @avoid_others.setter
+    def avoid_others(self, value: bool) -> None: ...
+    @property
+    def velocity(self) -> Vec3:
+        """How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running"""
 
 
 class PointLight:

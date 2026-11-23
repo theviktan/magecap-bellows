@@ -257,6 +257,20 @@ namespace Bellows {
 				component.Speed = std::isfinite(component.Speed) ? std::clamp(component.Speed, -AnimationPlayer::MaxSpeed, AnimationPlayer::MaxSpeed) : 1.0f;
 			}
 
+			if (auto it = json.find("NavAgent"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<NavAgentComponent>();
+				JsonRead(*it, "Speed", component.Speed);
+				JsonRead(*it, "Acceleration", component.Acceleration);
+				JsonRead(*it, "Radius", component.Radius);
+				JsonRead(*it, "Height", component.Height);
+				JsonRead(*it, "BaseOffset", component.BaseOffset);
+				JsonRead(*it, "StoppingDistance", component.StoppingDistance);
+				JsonRead(*it, "TurnSpeed", component.TurnSpeed);
+				JsonRead(*it, "AvoidOthers", component.AvoidOthers);
+				component.Clamp();
+			}
+
 			if (auto it = json.find("AudioSource"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<AudioSourceComponent>();
@@ -571,6 +585,19 @@ namespace Bellows {
 			j["PlayOnStart"] = c->PlayOnStart;
 			j["Loop"] = c->Loop;
 			j["Speed"] = c->Speed;
+		}
+
+		if (const auto* c = entity.TryGetComponent<NavAgentComponent>())
+		{
+			Json& j = json["NavAgent"];
+			j["Speed"] = c->Speed;
+			j["Acceleration"] = c->Acceleration;
+			j["Radius"] = c->Radius;
+			j["Height"] = c->Height;
+			j["BaseOffset"] = c->BaseOffset;
+			j["StoppingDistance"] = c->StoppingDistance;
+			j["TurnSpeed"] = c->TurnSpeed;
+			j["AvoidOthers"] = c->AvoidOthers;
 		}
 
 		if (const auto* c = entity.TryGetComponent<AudioSourceComponent>())

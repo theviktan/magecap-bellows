@@ -1092,6 +1092,7 @@ namespace Bellows {
 		const glm::vec4 colliderColor = Rgba(IM_COL32(110, 220, 140, 220));
 		const glm::vec4 lightColor = Rgba(IM_COL32(250, 210, 90, 200));
 		const glm::vec4 cameraColor = Rgba(IM_COL32(200, 205, 215, 200));
+		const glm::vec4 agentColor = Rgba(IM_COL32(120, 190, 250, 220));
 
 		auto drawColliders = [&](Entity entity)
 		{
@@ -1166,6 +1167,27 @@ namespace Bellows {
 					const glm::vec3 start = position + right * (0.3f * static_cast<float>(i)) + up * (0.15f * static_cast<float>(i * i));
 					renderer.SubmitLine(start, start + forward * 2.0f, lightColor);
 				}
+			}
+
+			if (auto* agent = entity.TryGetComponent<NavAgentComponent>())
+			{
+				// The space it takes, standing on its feet, and the way it's heading during play.
+				const glm::vec3 feet = position - glm::vec3(0.0f, agent->BaseOffset, 0.0f);
+				const glm::vec3 head = feet + glm::vec3(0.0f, agent->Height, 0.0f);
+				constexpr int segments = 32;
+				for (int i = 0; i < segments; i++)
+				{
+					const float a0 = static_cast<float>(i) / segments * glm::two_pi<float>();
+					const float a1 = static_cast<float>(i + 1) / segments * glm::two_pi<float>();
+					const glm::vec3 d0(std::cos(a0) * agent->Radius, 0.0f, std::sin(a0) * agent->Radius);
+					const glm::vec3 d1(std::cos(a1) * agent->Radius, 0.0f, std::sin(a1) * agent->Radius);
+					renderer.SubmitLine(feet + d0, feet + d1, agentColor);
+					renderer.SubmitLine(head + d0, head + d1, agentColor);
+					if (i % 8 == 0)
+						renderer.SubmitLine(feet + d0, head + d0, agentColor);
+				}
+				if (agent->RuntimeDestination)
+					renderer.SubmitLine(feet, *agent->RuntimeDestination, agentColor);
 			}
 
 			if (auto* camera = entity.TryGetComponent<CameraComponent>())

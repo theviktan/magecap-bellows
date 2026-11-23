@@ -396,6 +396,19 @@ class FeatureTest(bellows.Script):
         # The test entity's sphere has no skeleton: nothing to play, and no clips or bones.
         self.check(animator.clips == [] and animator.bones == [] and animator.clip == "" and not animator.playing, "an Animator without a skeleton")
         self.check(raises(lambda: animator.play("Run"), ValueError), "an Animator without a skeleton can't play")
+        agent = entity.add_component(bellows.NavAgent)
+        self.check(close(agent.speed, 3.5) and close(agent.acceleration, 8.0) and close(agent.radius, 0.4) and close(agent.height, 1.8)
+                   and close(agent.base_offset, 0.0) and close(agent.stopping_distance, 0.1) and close(agent.turn_speed, 720.0) and agent.avoid_others,
+                   "NavAgent defaults")
+        agent.speed, agent.acceleration, agent.radius, agent.height = 2.0, 20.0, 0.3, 1.2
+        agent.base_offset, agent.stopping_distance, agent.turn_speed, agent.avoid_others = 0.6, 0.5, 0.0, False
+        self.check(close(agent.speed, 2.0) and close(agent.acceleration, 20.0) and close(agent.radius, 0.3) and close(agent.height, 1.2)
+                   and close(agent.base_offset, 0.6) and close(agent.stopping_distance, 0.5) and close(agent.turn_speed, 0.0) and not agent.avoid_others,
+                   "NavAgent properties")
+        self.check(raises(lambda: setattr(agent, "speed", 101.0), ValueError) and raises(lambda: setattr(agent, "radius", 0.0), ValueError)
+                   and raises(lambda: setattr(agent, "base_offset", -21.0), ValueError) and raises(lambda: setattr(agent, "height", float("nan")), ValueError),
+                   "NavAgent limits")
+        self.check(close(agent.velocity, (0.0, 0.0, 0.0)), "a NavAgent with nowhere to go stands still")
         listener = entity.add_component(bellows.AudioListener)
         listener.active = False
         self.check(not listener.active, "AudioListener properties")
@@ -522,7 +535,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:

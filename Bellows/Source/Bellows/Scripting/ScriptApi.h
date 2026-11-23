@@ -239,6 +239,7 @@ namespace Bellows::Scripting {
 	using ScriptRef = ComponentRef<ScriptComponent>;
 	using AudioSourceRef = ComponentRef<AudioSourceComponent>;
 	using AnimatorRef = ComponentRef<AnimatorComponent>;
+	using NavAgentRef = ComponentRef<NavAgentComponent>;
 	using AudioListenerRef = ComponentRef<AudioListenerComponent>;
 	using TextRef = ComponentRef<TextComponent>;
 	using UICanvasRef = ComponentRef<UICanvasComponent>;
@@ -255,7 +256,7 @@ namespace Bellows::Scripting {
 	// Any component handle (what get_component and add_component return).
 	using ComponentHandle = std::variant<TransformRef, MeshRendererRef, CameraRef, DirectionalLightRef, PointLightRef,
 		SpotLightRef, SkyLightRef, RigidBodyRef, BoxColliderRef, SphereColliderRef, CapsuleColliderRef, MeshColliderRef,
-		ScriptRef, AudioSourceRef, AnimatorRef, AudioListenerRef, TextRef, UICanvasRef, UIRectRef, UIImageRef, UILayoutRef, UIScrollRef,
+		ScriptRef, AudioSourceRef, AnimatorRef, NavAgentRef, AudioListenerRef, TextRef, UICanvasRef, UIRectRef, UIImageRef, UILayoutRef, UIScrollRef,
 		UIButtonRef, UIToggleRef, UISliderRef, UIDropdownRef, UITextInputRef>;
 
 	// A handle to a tween (what tween and tween_by return). It keeps the entity and property it was

@@ -34,6 +34,7 @@ namespace Bellows {
 			if (entity.HasComponent<SpotLightComponent>()) return ICON_FLASHLIGHT;
 			if (entity.HasComponent<SkyLightComponent>()) return ICON_CLOUD;
 			if (entity.HasComponent<PrefabComponent>()) return ICON_PACKAGE;
+			if (entity.HasComponent<NavAgentComponent>()) return ICON_FOOTPRINTS;
 			if (entity.HasComponent<AnimatorComponent>()) return ICON_PERSON_STANDING;
 			if (entity.HasComponent<MeshRendererComponent>()) return ICON_BOX;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;

@@ -19,7 +19,7 @@ namespace Bellows {
 		constexpr uint32_t c_FileVersion = 1;
 		constexpr size_t c_MaxTileBytes = 64 * 1024 * 1024;
 		constexpr int c_MaxCount = 1 << 20;		// Of any one thing in a tile
-		constexpr unsigned short c_WalkableFlag = 1;
+		constexpr unsigned short c_WalkableFlag = NavMesh::WalkableFlag;
 		constexpr int c_QueryNodes = 4096;
 		// Coordinates Detour's distance math stays finite with (its squared distances stay below FLT_MAX).
 		constexpr float c_MaxCoordinate = 1e7f;
@@ -628,6 +628,11 @@ namespace Bellows {
 			count += tile && tile->header ? 1 : 0;
 		}
 		return count;
+	}
+
+	float NavMesh::GetCellHeight() const
+	{
+		return CellHeight(m_Settings);
 	}
 
 	int NavMesh::GetPolygonCount() const

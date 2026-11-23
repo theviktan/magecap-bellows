@@ -282,6 +282,27 @@ class Hero(bellows.Script):
         animator.play("Run" if bellows.is_action_down("move") else "Idle")
 ```
 
+### `NavAgent`
+Walks the entity over the scene's [navmesh](#navigation): it follows its path, slows down to arrive,
+turns to face the way it walks, and steers around walls and other agents. It moves the entity's
+transform, so the entity has no rigid body or a **kinematic** one (which follows it); on a dynamic
+body physics would fight it, so that agent stands still and the log says why. It stands on the
+static colliders the navmesh was baked from. Agents walk in game time, so `set_paused(True)` holds
+them, and an entity a script moves walks on from where it was put.
+
+| Member | Description |
+|--------|-------------|
+| `speed` | Top speed in meters per second, from 0 to 100 (default 3.5). |
+| `acceleration` | How fast it speeds up and slows down, in m/s², from 0.1 to 1000 (default 8). |
+| `radius`, `height` | Its size in meters: the radius it keeps from other agents (0.05 to 5, default 0.4) and its height (0.1 to 20, default 1.8). |
+| `base_offset` | How far the entity's origin is above the ground, from -20 to 20 meters: half the height of a capsule whose origin is its middle, say. |
+| `stopping_distance` | It arrives this close to its destination, from 0.01 to 100 meters (default 0.1). |
+| `turn_speed` | Degrees per second it turns to face where it walks, from 0 (it doesn't turn) to 10000 (default 720). |
+| `avoid_others` | Steers around other agents (default on). |
+| `velocity` | Read-only: how fast and which way it walks (`Vec3`, m/s); zero while it stands or the game isn't running. |
+
+Values outside a range raise `ValueError`, and a scene file's are held to them when it loads.
+
 ### `Camera`
 `projection` (`"Perspective"`/`"Orthographic"`), `fov` (vertical, degrees), `orthographic_size`
 (visible height in meters), `near_clip`, `far_clip`, `primary`.

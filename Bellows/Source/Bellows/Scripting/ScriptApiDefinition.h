@@ -499,6 +499,16 @@ namespace Bellows::Scripting {
 			return RequireNavMesh().FindNearestPoint(point, static_cast<float>(search));
 		}
 
+		// A NavAgent setting from a script: an ordinary number within its range, or a ValueError saying so.
+		inline float NavAgentValue(const char* property, float value, float minimum, float maximum, const char* range)
+		{
+			if (!std::isfinite(value))
+				throw ScriptValueError(std::string("NavAgent.") + property + " needs ordinary numbers, not NaN or infinity");
+			if (value < minimum || value > maximum)
+				throw ScriptValueError(std::string("A NavAgent's ") + property + " is from " + range);
+			return value;
+		}
+
 		inline void BakeSceneNavigation()
 		{
 			std::string error;
@@ -805,6 +815,35 @@ namespace Bellows::Scripting {
 		audioSource.Method("stop", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Stop(e); }, "");
 		audioSource.Method("pause", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Pause(e); }, "");
 		audioSource.ReadOnly("is_playing", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); return GetAudio(e) ? GetAudio(e)->IsPlaying(e) : false; }, "");
+
+		auto navAgent = api.template Class<NavAgentRef>("NavAgent",
+			"Walks the entity over the scene's navmesh, steering around walls and other agents. It moves the transform, so the entity "
+			"has no rigid body or a kinematic one");
+		navAgent.Property("speed", [](const NavAgentRef& r) { return r.Get().Speed; },
+			[](const NavAgentRef& r, float v) { r.Get().Speed = Detail::NavAgentValue("speed", v, 0.0f, NavAgentComponent::MaxSpeed, "0 to 100"); },
+			"Top speed in meters per second, from 0 to 100");
+		navAgent.Property("acceleration", [](const NavAgentRef& r) { return r.Get().Acceleration; },
+			[](const NavAgentRef& r, float v) { r.Get().Acceleration = Detail::NavAgentValue("acceleration", v, NavAgentComponent::MinAcceleration, NavAgentComponent::MaxAcceleration, "0.1 to 1000"); },
+			"How fast it speeds up and slows down, in meters per second per second, from 0.1 to 1000");
+		navAgent.Property("radius", [](const NavAgentRef& r) { return r.Get().Radius; },
+			[](const NavAgentRef& r, float v) { r.Get().Radius = Detail::NavAgentValue("radius", v, NavAgentComponent::MinRadius, NavAgentComponent::MaxRadius, "0.05 to 5"); },
+			"Meters it keeps from other agents, from 0.05 to 5");
+		navAgent.Property("height", [](const NavAgentRef& r) { return r.Get().Height; },
+			[](const NavAgentRef& r, float v) { r.Get().Height = Detail::NavAgentValue("height", v, NavAgentComponent::MinHeight, NavAgentComponent::MaxHeight, "0.1 to 20"); },
+			"Meters, from 0.1 to 20");
+		navAgent.Property("base_offset", [](const NavAgentRef& r) { return r.Get().BaseOffset; },
+			[](const NavAgentRef& r, float v) { r.Get().BaseOffset = Detail::NavAgentValue("base_offset", v, -NavAgentComponent::MaxBaseOffset, NavAgentComponent::MaxBaseOffset, "-20 to 20"); },
+			"How far the entity's origin is above the ground, in meters (half a capsule's height, say), from -20 to 20");
+		navAgent.Property("stopping_distance", [](const NavAgentRef& r) { return r.Get().StoppingDistance; },
+			[](const NavAgentRef& r, float v) { r.Get().StoppingDistance = Detail::NavAgentValue("stopping_distance", v, NavAgentComponent::MinStoppingDistance, NavAgentComponent::MaxStoppingDistance, "0.01 to 100"); },
+			"It arrives this close to its destination, in meters, from 0.01 to 100");
+		navAgent.Property("turn_speed", [](const NavAgentRef& r) { return r.Get().TurnSpeed; },
+			[](const NavAgentRef& r, float v) { r.Get().TurnSpeed = Detail::NavAgentValue("turn_speed", v, 0.0f, NavAgentComponent::MaxTurnSpeed, "0 to 10000"); },
+			"Degrees per second it turns to face where it walks, from 0 (it doesn't turn) to 10000");
+		navAgent.Property("avoid_others", [](const NavAgentRef& r) { return r.Get().AvoidOthers; }, [](const NavAgentRef& r, bool v) { r.Get().AvoidOthers = v; },
+			"Steers around other agents");
+		navAgent.ReadOnly("velocity", [](const NavAgentRef& r) { return r.Get().RuntimeVelocity; },
+			"How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running");
 
 		auto animator = api.template Class<AnimatorRef>("Animator",
 			"Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them");

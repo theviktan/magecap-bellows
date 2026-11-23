@@ -1553,6 +1553,67 @@
 			]
 		},
 		{
+			"name": "NavAgent",
+			"doc": "Walks the entity over the scene's navmesh, steering around walls and other agents. It moves the transform, so the entity has no rigid body or a kinematic one",
+			"members": [
+				{
+					"name": "speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Top speed in meters per second, from 0 to 100"
+				},
+				{
+					"name": "acceleration",
+					"kind": "property",
+					"type": "float",
+					"doc": "How fast it speeds up and slows down, in meters per second per second, from 0.1 to 1000"
+				},
+				{
+					"name": "radius",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters it keeps from other agents, from 0.05 to 5"
+				},
+				{
+					"name": "height",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters, from 0.1 to 20"
+				},
+				{
+					"name": "base_offset",
+					"kind": "property",
+					"type": "float",
+					"doc": "How far the entity's origin is above the ground, in meters (half a capsule's height, say), from -20 to 20"
+				},
+				{
+					"name": "stopping_distance",
+					"kind": "property",
+					"type": "float",
+					"doc": "It arrives this close to its destination, in meters, from 0.01 to 100"
+				},
+				{
+					"name": "turn_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees per second it turns to face where it walks, from 0 (it doesn't turn) to 10000"
+				},
+				{
+					"name": "avoid_others",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Steers around other agents"
+				},
+				{
+					"name": "velocity",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "How fast and which way it's walking, in meters per second; zero while it stands or the game isn't running"
+				}
+			]
+		},
+		{
 			"name": "Animator",
 			"doc": "Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them",
 			"members": [

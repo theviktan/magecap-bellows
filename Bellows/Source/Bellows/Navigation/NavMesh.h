@@ -56,6 +56,7 @@ namespace Bellows {
 		static constexpr int MaxTiles = 16384;					// 4096 x 4096 m in all (any shape)
 		static constexpr size_t MaxTriangles = 4'000'000;
 		static constexpr size_t MaxPathCorners = 256;
+		static constexpr unsigned short WalkableFlag = 1;		// Detour flags of polygons agents walk on
 
 		~NavMesh();
 		NavMesh(const NavMesh&) = delete;
@@ -72,6 +73,8 @@ namespace Bellows {
 		uint64_t GetSourceHash() const { return m_SourceHash; }
 		int GetTileCount() const;
 		int GetPolygonCount() const;
+		// The height of its voxel cells, meters: its surface lies up to this far above the ground it was baked from.
+		float GetCellHeight() const;
 
 		// The corners of the shortest path from start to end, both ends included; empty when either end
 		// is off the navmesh or nothing connects them. When the end can't be reached, the path goes as

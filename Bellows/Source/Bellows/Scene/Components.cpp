@@ -7,6 +7,27 @@
 
 namespace Bellows {
 
+	namespace {
+
+		float ClampOrDefault(float value, float minimum, float maximum, float fallback)
+		{
+			return std::isfinite(value) ? std::clamp(value, minimum, maximum) : fallback;
+		}
+
+	}
+
+	void NavAgentComponent::Clamp()
+	{
+		const NavAgentComponent defaults;
+		Speed = ClampOrDefault(Speed, 0.0f, MaxSpeed, defaults.Speed);
+		Acceleration = ClampOrDefault(Acceleration, MinAcceleration, MaxAcceleration, defaults.Acceleration);
+		Radius = ClampOrDefault(Radius, MinRadius, MaxRadius, defaults.Radius);
+		Height = ClampOrDefault(Height, MinHeight, MaxHeight, defaults.Height);
+		BaseOffset = ClampOrDefault(BaseOffset, -MaxBaseOffset, MaxBaseOffset, defaults.BaseOffset);
+		StoppingDistance = ClampOrDefault(StoppingDistance, MinStoppingDistance, MaxStoppingDistance, defaults.StoppingDistance);
+		TurnSpeed = ClampOrDefault(TurnSpeed, 0.0f, MaxTurnSpeed, defaults.TurnSpeed);
+	}
+
 	const char* ScriptFieldTypeToString(ScriptFieldType type)
 	{
 		switch (type)

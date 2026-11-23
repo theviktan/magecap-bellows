@@ -27,6 +27,7 @@ namespace Bellows {
 	class Entity;
 	class Mesh;
 	struct AnimatorComponent;
+	class SceneNavAgents;
 	class PhysicsWorld;
 	class SceneAudio;
 	class SceneTweens;
@@ -194,6 +195,8 @@ namespace Bellows {
 		// Bakes a navmesh from the static colliders with the scene's Navigation settings. False, with the
 		// reason in 'error' and the old navmesh kept, when nothing could be baked.
 		bool BakeNavigation(std::string& error);
+		// The NavAgents being moved during play; null while the game isn't running.
+		SceneNavAgents* GetNavAgents() const { return m_NavAgents.get(); }
 		float GetTime() const { return m_Time; }
 		uint64_t GetFrameCount() const { return m_FrameCount; }
 
@@ -308,6 +311,7 @@ namespace Bellows {
 		Scope<SceneTweens> m_Tweens;
 		CameraShake m_CameraShake;
 		Ref<NavMesh> m_NavMesh;
+		Scope<SceneNavAgents> m_NavAgents;
 
 		static Scene* s_ActiveScene;
 
