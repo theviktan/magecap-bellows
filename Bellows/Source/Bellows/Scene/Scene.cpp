@@ -409,6 +409,16 @@ namespace Bellows {
 		ResetUIInput();
 
 		UpdateRuntimeCaches();
+		// The edited scene's copy may carry the editor's preview: every Animator starts afresh.
+		for (entt::entity handle : m_Registry.view<AnimatorComponent>())
+		{
+			AnimatorComponent& animator = m_Registry.get<AnimatorComponent>(handle);
+			animator.RuntimePlayer.Reset();
+			animator.RuntimeMesh = nullptr;
+			animator.RuntimeSkinMatrices.clear();
+			animator.RuntimePreview = false;
+		}
+		UpdateAnimators(0.0f);
 
 		m_PhysicsWorld = CreateScope<PhysicsWorld>(*this);
 		m_PhysicsWorld->SyncBodies();
@@ -548,9 +558,12 @@ namespace Bellows {
 		// The UI goes first, so scripts see this frame's UI events and only the input it left the game.
 		UpdateUIInput();
 
-		// A camera shake runs in game time, so a paused game holds it.
+		// A camera shake and animations run in game time, so a paused game holds them.
 		if (!m_GamePaused)
+		{
 			m_CameraShake.Update(deltaTime);
+			UpdateAnimators(deltaTime);
+		}
 
 		// Tweens next, so scripts see this frame's values; while the game is paused only those marked
 		// to run while paused move.
@@ -665,6 +678,60 @@ namespace Bellows {
 	void Scene::OnUpdateEditor(Timestep timestep)
 	{
 		UpdateRuntimeCaches();
+		UpdateAnimators(timestep.GetSeconds());
+	}
+
+	namespace {
+
+		// The clip an Animator starts with: its Clip, or the mesh's first. Null for an unknown name.
+		Ref<AnimationClip> FindStartClip(const AnimatorComponent& animator, const MeshSkin& skin)
+		{
+			if (animator.Clip.empty())
+				return skin.Clips.empty() ? nullptr : skin.Clips.front();
+			return skin.FindClip(animator.Clip);
+		}
+
+	}
+
+	void Scene::UpdateAnimators(float seconds)
+	{
+		auto animators = m_Registry.view<AnimatorComponent, MeshRendererComponent>();
+		for (entt::entity handle : animators)
+		{
+			AnimatorComponent& animator = animators.get<AnimatorComponent>(handle);
+			const Ref<Mesh>& mesh = animators.get<MeshRendererComponent>(handle).RuntimeMesh;
+			const MeshSkin* skin = mesh ? mesh->GetSkin() : nullptr;
+			const bool active = m_IsRunning || animator.RuntimePreview;
+			if (!active || !skin)
+			{
+				if (animator.RuntimeMesh || !animator.RuntimeSkinMatrices.empty())
+				{
+					animator.RuntimePlayer.Reset();
+					animator.RuntimeMesh = nullptr;
+					animator.RuntimeSkinMatrices.clear();
+				}
+				continue;
+			}
+
+			// A new mesh (or the game's start) begins with the Animator's clip; the editor's preview
+			// always plays it, and follows a change of clip.
+			const Ref<AnimationClip> startClip = FindStartClip(animator, *skin);
+			const bool newMesh = animator.RuntimeMesh != mesh;
+			const bool clipChanged = !m_IsRunning && animator.RuntimePlayer.GetClip() != startClip;
+			if (newMesh || clipChanged)
+			{
+				animator.RuntimeMesh = mesh;
+				animator.RuntimePlayer.Reset();
+				if (!startClip && !animator.Clip.empty() && newMesh)
+					BW_CORE_WARN("Animator on '{}': the mesh has no clip '{}'", Entity(handle, this).GetName(), animator.Clip);
+				if (startClip && (animator.PlayOnStart || !m_IsRunning))
+					animator.RuntimePlayer.Play(startClip, 0.0f, animator.Speed);
+			}
+
+			animator.RuntimePlayer.Update(seconds, animator.Speed, animator.Loop);
+			if (!animator.RuntimePlayer.ComputeSkinMatrices(*skin->Rig, animator.RuntimeSkinMatrices))
+				animator.RuntimeSkinMatrices.clear();
+		}
 	}
 
 	void Scene::UpdateRuntimeCaches()
@@ -860,8 +927,10 @@ namespace Bellows {
 			if (!meshRenderer.Visible || !meshRenderer.RuntimeMesh)
 				continue;
 			Entity entity(handle, this);
+			const AnimatorComponent* animator = m_Registry.try_get<AnimatorComponent>(handle);
+			const bool posed = animator && animator->RuntimeMesh == meshRenderer.RuntimeMesh && !animator->RuntimeSkinMatrices.empty();
 			renderer.SubmitMesh(meshRenderer.RuntimeMesh, GetWorldTransform(entity), entity.GetRenderID(),
-				meshRenderer.RuntimeMaterial, meshRenderer.CastShadows);
+				meshRenderer.RuntimeMaterial, meshRenderer.CastShadows, posed ? &animator->RuntimeSkinMatrices : nullptr);
 		}
 
 		// World text: centered on its entity in the entity's XY plane, or turned toward the camera.

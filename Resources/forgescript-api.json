@@ -570,7 +570,7 @@
 				}
 			],
 			"returns": "Value",
-			"doc": "Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become dicts (ForgeScript maps), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"
+			"doc": "Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become maps (dicts in Python), arrays lists. Read-only game data that ships with the game, unlike save_data; read again only when the file changes"
 		},
 		{
 			"name": "load_text",

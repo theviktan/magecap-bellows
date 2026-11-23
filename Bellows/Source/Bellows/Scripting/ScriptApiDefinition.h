@@ -1196,7 +1196,7 @@ namespace Bellows::Scripting {
 			"The value saved under the name, or default when there is none (a damaged save is kept as <name>.damaged.json)",
 			Arg("name"), Arg("default", ScriptValue()));
 		api.Function("load_json", [](const std::string& path) { return LoadDataJson(path); },
-			"Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become dicts (ForgeScript maps), arrays lists. "
+			"Reads a JSON data file from the Assets folder (\"Data/items.json\"): objects become maps (dicts in Python), arrays lists. "
 			"Read-only game data that ships with the game, unlike save_data; read again only when the file changes",
 			Arg("path"));
 		api.Function("load_text", [](const std::string& path) { return LoadDataText(path); },

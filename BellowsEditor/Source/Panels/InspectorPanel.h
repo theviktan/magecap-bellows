@@ -28,6 +28,7 @@ namespace Bellows {
 		void DrawTags(Entity entity);
 		void DrawScriptComponent(Entity entity, ScriptComponent& component);
 		void DrawMeshRenderer(Entity entity, MeshRendererComponent& component);
+		void DrawAnimator(Entity entity, AnimatorComponent& component);
 		bool DrawMaterialEditor(const Ref<Material>& material, const std::string& assetPath);
 		const ScriptClassInfo* GetScriptInfo(const std::string& scriptPath, const std::string& className);
 	private:
