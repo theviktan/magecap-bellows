@@ -480,6 +480,9 @@ namespace ForgeScript {
 		bool m_DebugActive = false;
 		uint64_t m_InstructionsRun = 0;
 		bool m_Profiling = false;
+		// InstructionLimit, CountInstructions or profiling: anything that looks at every instruction. One
+		// test of this per instruction is cheaper than testing all three.
+		bool m_WatchEachInstruction = false;
 		std::unordered_map<const Function*, ProfileEntry> m_Profile;
 		const Function* m_ProfiledFunction = nullptr; // the last function counted, and its entry
 		ProfileEntry* m_ProfiledEntry = nullptr;

@@ -3,6 +3,7 @@
 #include "ForgeScript/API/Native.h"
 #include "ForgeScript/Core/Object.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -150,10 +151,11 @@ namespace ForgeScript {
 		char buffer[64];
 		if (number == std::floor(number) && std::fabs(number) < 1e15)
 		{
-			std::snprintf(buffer, sizeof(buffer), "%.0f", number);
-			// Avoid printing "-0".
-			if (buffer[0] == '-' && buffer[1] == '0' && buffer[2] == '\0')
-				return "0";
+			// Whole numbers are most of what scripts print. Under 1e15 they fit a 64-bit integer exactly,
+			// which prints the same digits as "%.0f" several times faster. -0 becomes 0, so no "-0".
+			const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), static_cast<long long>(number));
+			(void)error;
+			return std::string(buffer, end);
 		}
 		else
 		{

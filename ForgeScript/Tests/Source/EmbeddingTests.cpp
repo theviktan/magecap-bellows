@@ -827,3 +827,47 @@ TEST_CASE("TryEaseMatchesTheScriptsEase")
 	CHECK_FALSE(TryEase("wobble", 0.5, value));
 	CHECK_EQ(value, 42.0);
 }
+
+TEST_CASE("ValueStackActsLikeAVector")
+{
+	ValueStack stack;
+	CHECK(stack.empty());
+	stack.push_back(Value::FromNumber(1));
+	// Pushing a value that lives in the stack itself, while the stack has to grow, keeps the value.
+	for (int i = 0; i < 100; i++)
+		stack.push_back(stack.back());
+	CHECK_EQ(stack.size(), size_t(101));
+	CHECK_EQ(stack[100].AsNumber(), 1.0);
+
+	stack.resize(103);
+	CHECK(stack[101].IsNothing());
+	CHECK(stack[102].IsNothing());
+	stack.resize(2);
+	stack.pop_back();
+	CHECK_EQ(stack.size(), size_t(1));
+
+	const std::vector<Value> more { Value::FromBool(true), Value::FromNumber(7) };
+	stack.insert(stack.end(), more.begin(), more.end());
+	CHECK_EQ(stack.size(), size_t(3));
+	CHECK(stack[1].AsBool());
+	CHECK_EQ(stack.back().AsNumber(), 7.0);
+
+	ValueStack copy;
+	copy.assign(stack.begin() + 1, stack.end());
+	CHECK_EQ(copy.size(), size_t(2));
+	CHECK_EQ(copy[1].AsNumber(), 7.0);
+	stack.clear();
+	CHECK(stack.empty());
+}
+
+TEST_CASE("WholeNumbersPrintAsBefore")
+{
+	CHECK_EQ(FormatNumber(0), std::string("0"));
+	CHECK_EQ(FormatNumber(-0.0), std::string("0"));
+	CHECK_EQ(FormatNumber(42), std::string("42"));
+	CHECK_EQ(FormatNumber(-17), std::string("-17"));
+	CHECK_EQ(FormatNumber(999999999999999.0), std::string("999999999999999"));
+	CHECK_EQ(FormatNumber(-999999999999999.0), std::string("-999999999999999"));
+	CHECK_EQ(FormatNumber(1e15), std::string("1e+15"));
+	CHECK_EQ(FormatNumber(2.5), std::string("2.5"));
+}

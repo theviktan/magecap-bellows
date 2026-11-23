@@ -7,6 +7,16 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Faster scripts, same results** (step 2 of the plan on the Sync Board). Measured in CPU instructions
+  against 1.7.0 before this change: calls 30% fewer, math 30%, text 40%, numbers in text 30%, methods
+  20%, lists 14%, closures 10%, events 5%, tasks 3%. On the release build, `fib(32)` went from 0.50 to
+  0.33 seconds, a 20-million-step loop from 0.83 to 0.61, and building and checking a million short
+  texts from 1.78 to 1.53. What changed: numbers are added, subtracted, multiplied and compared right
+  in the VM's main loop; a task's values live in a small stack type of its own, so adding one is no
+  longer a function call; one test per instruction replaces three for the instruction limit,
+  counting and the profiler; and whole numbers become text without `snprintf`. Every script prints
+  and fails exactly as before, and two new benchmarks (`math.forge`, `numbers_to_text.forge`) keep
+  this from slipping back.
 - **Dates and the real clock** (the last of Roadmap 2.0 Tier 4 #3's built-ins): `real_time()` is
   seconds since 1970 by the computer's clock, which keeps counting while the game is paused or
   closed; `date([moment])` and `utc_date([moment])` give a map of year, month, day, hour, minute,

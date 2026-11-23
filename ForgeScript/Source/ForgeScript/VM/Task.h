@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ForgeScript/Core/Object.h"
+#include "ForgeScript/Core/ValueStack.h"
 
 #include <cstdint>
 #include <vector>
@@ -58,7 +59,7 @@ namespace ForgeScript {
 	// scripts "wait 2 seconds" without freezing the game.
 	struct Task : public Object
 	{
-		std::vector<Value> Stack;
+		ValueStack Stack;
 		std::vector<CallFrame> Frames;
 		std::vector<TryHandler> Handlers;
 		// Names for the last values of the next call, set by NamedArgs just before it (kept alive by the
