@@ -17,6 +17,10 @@ functions and classes of this package; see ``docs/ScriptingAPI.md`` for the full
 
 from _bellows import *  # noqa: F401,F403  (re-export the native API)
 from _bellows import Entity as _Entity
+from _bellows import Vec2 as _Vec2
+from _bellows import Vec3 as _Vec3
+from _bellows import Vec4 as _Vec4
+from _bellows import _field_changed
 
 __all__ = [name for name in dir() if not name.startswith("_")] + ["Script"]
 
@@ -38,6 +42,9 @@ class Script:
       ``trigger``, by any script (this one included)
     * ``on_reload(self)``                 - after the script's file was saved during play and its new
       code took over (the object and its attribute values stay; only the methods change)
+
+    When one of its fields changes after ``on_create``, every script gets the ``field changed`` event
+    with the entity, the field's name, and its new and old values.
 
     Class attributes with type annotations (bool, int, float, str, Vec2, Vec3, Vec4) are exposed
     as editable fields in the inspector and stored with the scene.
@@ -74,6 +81,33 @@ class Script:
 
     def on_reload(self):
         pass
+
+    # Fields that tell when they change -------------------------------------
+    _FIELD_TYPES = (bool, int, float, str, _Vec2, _Vec3, _Vec4)
+
+    @classmethod
+    def _bellows_field_names(cls):
+        """The class's Inspector fields: annotated attributes of the field types, inherited ones too."""
+        names = set()
+        for klass in reversed(cls.__mro__):
+            for name, annotation in vars(klass).get("__annotations__", {}).items():
+                if annotation in Script._FIELD_TYPES and not name.startswith("_"):
+                    names.add(name)
+        return frozenset(names)
+
+    def _bellows_watch_fields(self):
+        """Called by the engine after on_create: from now on a field's change sends 'field changed'."""
+        object.__setattr__(self, "_bellows_watched", type(self)._bellows_field_names())
+
+    def __setattr__(self, name, value):
+        watched = self.__dict__.get("_bellows_watched")
+        if watched is None or name not in watched:
+            object.__setattr__(self, name, value)
+            return
+        before = getattr(self, name, None)
+        object.__setattr__(self, name, value)
+        if type(value) is not type(before) or value != before:
+            _field_changed(self.entity, name, value, before)
 
     # Convenience accessors -------------------------------------------------
 

@@ -126,6 +126,16 @@ namespace Bellows::Scripting {
 	// Delivers an event to every script, as EmitScriptEvent does, naming the entity it is about as its
 	// Source (with no Target), so ForgeScript's 'when "Hero" is destination reached' hears only Hero's.
 	void EmitScriptEventAbout(ScriptEntity source, const std::string& name, const ScriptValueList& values);
+	// The same, sent later, from FlushQueuedScriptEvents: for events raised where no script may run,
+	// like a script variable changing in the middle of that script's own instruction ('field changed').
+	void QueueScriptEventAbout(ScriptEntity source, const std::string& name, const ScriptValueList& values);
+	// Sends the queued events in order (skipping those about entities that are gone), and those their
+	// handlers queue, up to c_MaxQueuedEventsPerFlush
+	// (past that the rest are dropped with an error, so two fields that keep changing each other stop).
+	// The scene calls it after scripts run; ClearQueuedScriptEvents drops them when play stops.
+	void FlushQueuedScriptEvents();
+	void ClearQueuedScriptEvents();
+	inline constexpr size_t c_MaxQueuedEventsPerFlush = 10000;
 
 	// A script error, as each language's runtime reports it to scripts that watch for errors (a crash
 	// reporter). File is the script's asset path with forward slashes ("Scripts/player.py"), or a file

@@ -241,6 +241,22 @@ namespace Bellows::Scripting {
 			m_VM->EmitAll(event, values);
 			ForwardEvent(event, values);
 		});
+
+		// An Inspector field changed: 'field changed' goes to every script, queued, since this runs in the
+		// middle of the script's own instruction.
+		m_VM->SetScriptVariableChangedHandler([this](ForgeScript::Module* module, const std::string& name, const ForgeScript::Value& now,
+			const ForgeScript::Value& before)
+		{
+			for (const auto& [uuid, instance] : m_Instances)
+			{
+				if (instance.Module != module)
+					continue;
+				std::vector<std::string> unsendable;
+				QueueScriptEventAbout(instance.Owner, "field changed", { instance.Owner, name, ToScriptValue(*m_VM, now, unsendable),
+					ToScriptValue(*m_VM, before, unsendable) });
+				return;
+			}
+		});
 	}
 
 	void ForgeScriptRuntime::ForwardEvent(const std::string& event, const std::vector<ForgeScript::Value>& values)
@@ -343,6 +359,7 @@ namespace Bellows::Scripting {
 		instance.Owner = ScriptEntity(entity);
 		instance.Module = module;
 		instance.ScriptPath = component.ScriptPath;
+		instance.Fields = FieldNames(source);
 		m_Instances[entity.GetUUID()] = instance;
 		return true;
 	}
@@ -427,8 +444,12 @@ namespace Bellows::Scripting {
 			}
 			again->second.Module = newModule;
 			again->second.ErrorCount = 0;
+			again->second.Fields = FieldNames(sources[scriptPath]);
 			if (again->second.Created)
+			{
+				m_VM->WatchScriptVariables(newModule, again->second.Fields);
 				Emit(uuid, "reloaded", {});
+			}
 		}
 		return allReloaded;
 	}
@@ -462,6 +483,17 @@ namespace Bellows::Scripting {
 			return;
 		it->second.Created = true;
 		Emit(entity, "created", {});
+		// Watched from now on, so its starting values (and what 'when created' sets up) aren't changes.
+		if (auto again = m_Instances.find(entity); again != m_Instances.end())
+			m_VM->WatchScriptVariables(again->second.Module, again->second.Fields);
+	}
+
+	std::vector<std::string> ForgeScriptRuntime::FieldNames(const std::string& source)
+	{
+		std::vector<std::string> names;
+		for (const ForgeScript::ScriptVariable& variable : ForgeScript::FindScriptVariables(source))
+			names.push_back(variable.Name);
+		return names;
 	}
 
 	bool ForgeScriptRuntime::RunsWhilePaused(Scene& scene, UUID uuid) const

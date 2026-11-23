@@ -78,6 +78,7 @@ in both languages (Python's `on_event`, ForgeScript's `when <name> with ...`):
 | `scene loaded` | `name`, `path` | After `load_scene` has loaded a scene, to every script, kept ones included: the new scene's name and its asset path. New scripts have had `on_create` by then, so a kept player can find the new level's things. |
 | `tween finished` | `entity`, `property`, `id` | A tween reached its end (see [Tweens](#tweens)). |
 | `animation finished` | `entity`, `clip` | A clip that doesn't loop reached its end (see [`Animator`](#animator)). |
+| `field changed` | `entity`, `field`, `now`, `before` | An entity script's Inspector field got a different value, after `on_create` (or `when created`), from any script or the Inspector during play: a HUD can show a player's health without checking it every frame. Sent after the script's line has finished, in the same frame. Setting the same value sends nothing. |
 | `destination reached` | `entity`, `reached` | A [`NavAgent`](#navagent) stopped at the end of its path: `reached` is true at its destination, false when it can't get there and stopped as close as it could. |
 | `game quitting` | none | Once, just before a normal quit: the window closing, `quit()`, the end of a `--frames` run, and the editor's Stop. Never when `load_scene` changes the scene (`on_destroy` runs then too for what isn't kept, so it can't tell the two apart; `scene loaded` follows the change). Everything waits for the handlers to finish, so they can still save or use the network. A crash, or stopping a game window from the editor (which ends its program at once), sends nothing. |
 
@@ -91,7 +92,9 @@ class CrashReporter(bellows.Script):
 
 **Exposed fields.** Class attributes with a type annotation of `bool`, `int`, `float`, `str`,
 `Vec2`, `Vec3` or `Vec4` appear in the Inspector. Values edited there are saved with the scene and
-assigned to the instance before `on_create`.
+assigned to the instance before `on_create`. After `on_create`, a field that gets a different value
+(from any script, or the Inspector during play) sends [`field changed`](#script-lifecycle) to every
+script.
 
 `Script` also offers the shortcuts `self.transform` and `self.get_component(component)`.
 
@@ -731,6 +734,12 @@ engine sends these events, which the script handles with `when`:
   numbers, text, `true`/`false`/`yes`/`no`, `vector(x, y)`, `vector(x, y, z)` and colors
   (`[r, g, b]` or `[r, g, b, a]`). Names starting with `_` stay hidden. Values edited in the
   Inspector replace the script's own values after the top level has run and before `when created`.
+- **Fields that tell when they change.** After `when created`, an Inspector field that gets a
+  different value, from this script or another, sends `field changed` to every script:
+  `when field changed with who, field, now, before`, or only one entity's with
+  `when "Player" is field changed with who, field, now, before`.
+  A list or map field counts as
+  changed only when it's set to another list or map, not when what's in it changes.
 - **Decimal or whole number?** How you write the starting value decides the Inspector field:
   `set speed to 4.0` makes a decimal field (you can type 4.5), while `set lives to 4` makes a
   whole-number field (4, 5, 6...). Write `.0` when a setting should take decimals.

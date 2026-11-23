@@ -385,6 +385,25 @@ when destination reached with who, reached
 	if who.valid and who.name is "Guard" and reached then add "Guard reached it" to events end
 end
 
+# 'label' is an Inspector field ("authored" in the scene): changing it tells every script.
+function test_field_changed()
+	set label to "changed"
+	set label to "changed"
+	wait_for(function() return events.contains("label: authored to changed") end, 2)
+	check(events.contains("label: authored to changed"), "when field changed with who, field, now, before")
+	check(events.count("label: authored to changed") is 1, "setting the same value again changes nothing")
+	check(events.contains("only mine: label"), "when \"ForgeScript Test Runner\" is field changed hears this entity's changes")
+	set label to "authored"
+end
+
+when field changed with who, field, now, before
+	if who is self and field is "label" then add "label: {before} to {now}" to events end
+end
+
+when "ForgeScript Test Runner" is field changed with who, field, now, before
+	if field is "label" then add "only mine: {field}" to events end
+end
+
 # The Dancer plays SkinnedColumn.glb's clips, "Bend" and "Wave".
 function test_animation()
 	set dancer to find_entity("Dancer")
@@ -442,6 +461,7 @@ function run_tests()
 		test_tweens()
 		test_animation()
 		test_navigation()
+		test_field_changed()
 	catch problem
 		add "unexpected error: {problem}" to failures
 	end

@@ -536,6 +536,59 @@ namespace Bellows::Scripting {
 		DeliverToListeners(name, values, delivery, 0);
 	}
 
+	namespace {
+
+		struct QueuedEvent
+		{
+			ScriptEntity Source;
+			std::string Name;
+			ScriptValueList Values;
+		};
+		std::vector<QueuedEvent> s_QueuedEvents;
+
+	}
+
+	void QueueScriptEventAbout(ScriptEntity source, const std::string& name, const ScriptValueList& values)
+	{
+		s_QueuedEvents.push_back({ source, name, values });
+	}
+
+	void FlushQueuedScriptEvents()
+	{
+		size_t sent = 0;
+		while (!s_QueuedEvents.empty())
+		{
+			std::vector<QueuedEvent> events = std::move(s_QueuedEvents);
+			s_QueuedEvents.clear();
+			for (const QueuedEvent& event : events)
+			{
+				// About an entity that's gone since (destroyed, or its scene closed): nothing to tell.
+				if (!event.Source.TryResolve())
+					continue;
+				if (++sent > c_MaxQueuedEventsPerFlush)
+				{
+					BW_CORE_ERROR("Script events: more than {} '{}' events in one frame, each causing more; the rest are dropped. "
+						"Do two fields keep changing each other?", c_MaxQueuedEventsPerFlush, event.Name);
+					s_QueuedEvents.clear();
+					return;
+				}
+				try
+				{
+					EmitScriptEventAbout(event.Source, event.Name, event.Values);
+				}
+				catch (const ScriptValueError& error)
+				{
+					BW_CORE_ERROR("The '{}' event could not be sent: {}", event.Name, error.what());
+				}
+			}
+		}
+	}
+
+	void ClearQueuedScriptEvents()
+	{
+		s_QueuedEvents.clear();
+	}
+
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values)
 	{
 		EventNesting nesting(name);

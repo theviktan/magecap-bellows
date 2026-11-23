@@ -94,9 +94,12 @@ namespace Bellows::Scripting {
 			std::string ScriptPath;
 			bool Created = false;
 			uint32_t ErrorCount = 0;
+			std::vector<std::string> Fields;	// Its Inspector fields, watched for 'field changed' once created
 		};
 
 		Scope<ForgeScript::VM> CreateMachine();
+		// The names of a script's Inspector fields, as GetClassInfo lists them.
+		static std::vector<std::string> FieldNames(const std::string& source);
 		// Sends a ForgeScript 'trigger' to the other languages' scripts through the event hub.
 		void ForwardEvent(const std::string& event, const std::vector<ForgeScript::Value>& values);
 		// Runs a script's top level in a new module for 'entity'. Errors are reported; returns nullptr then.
