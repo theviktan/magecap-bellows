@@ -1,7 +1,7 @@
 # ForgeScript Cookbook
 
-Thirty short recipes for things almost every game needs: moving, fighting, inventories, saving,
-timers, menus and the math in between. Each recipe is a complete script you can copy, followed by
+Thirty-one short recipes for things almost every game needs: moving, fighting, inventories, saving,
+timers, menus, getting around a level and the math in between. Each recipe is a complete script you can copy, followed by
 **how it works** for people new to ForgeScript and **going further** for people who know it.
 
 Every recipe here is checked with `forgescript --check` against MageCap Bellows' API each time
@@ -56,6 +56,9 @@ the [Quick Reference](Reference.md).
 28. [Snapping to a grid](#28-snapping-to-a-grid)
 29. [Easing a value](#29-easing-a-value)
 30. [Money, time and plurals](#30-money-time-and-plurals)
+
+**Getting around a level**
+31. [Chase the player around walls](#31-chase-the-player-around-walls)
 
 ---
 
@@ -1204,3 +1207,57 @@ end
 `format_time(seconds)` gives minutes and seconds, with hours when there are any.
 
 **Going further.** Keep money in whole cents, as here, so adding prices never gives 0.30000000000000004.
+
+## Getting around a level
+
+### 31. Chase the player around walls
+
+Attach to an enemy that has a **Nav Agent** component (**Add Component > Behavior > Nav Agent**), in
+a scene with a baked navmesh (the **Settings** panel, **Scene** tab, **Navigation**, then **Bake
+Navigation**). It walks around walls to the player when the player comes
+close, and stops when the player gets away.
+
+```forge
+set chase_range to 12
+set check_every to 0.5
+
+function chase()
+	repeat forever
+		set player to find_entity("Player")
+		if player is not nothing and my position.distance_to(player.position) is below chase_range then
+			walk self to player.position
+		else
+			halt self
+		end
+		wait check_every seconds
+	end
+end
+
+when created
+	start chase()
+end
+
+when reloaded
+	start chase()
+end
+
+when destination reached with who, reached
+	if who is self and not reached then
+		say "{self.name} can't get to the player from here"
+	end
+end
+```
+
+**How it works.** `walk self to player.position` gives the Nav Agent a destination, and the agent
+finds a way around walls and steps around other agents on its own. Doing it again every half second
+keeps up with a player who moves, without working out a new path every frame. `halt self` stops it
+where it stands. `destination reached` comes when an agent arrives, with `reached` false when the
+place couldn't be reached and the agent stopped as close as it could get. Every agent's arrival
+reaches every script, so `who is self` picks this one.
+
+**Going further.** `the path from my position to player.position` gives the corners of the way
+there, as a list of vectors: add up the distances between them to know how far the walk really is,
+not just how far away the player stands. `nearest_navigable_point(point)` moves a spawn point or a
+clicked spot onto the navmesh, and `is_navigable(point)` says whether an agent could stand there.
+Set the agent's `speed`, `acceleration` and `stopping_distance` in the Inspector or from a script
+(`set my_agent.speed to 6` after `set my_agent to self.get_component("NavAgent")`).
