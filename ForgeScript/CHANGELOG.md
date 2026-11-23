@@ -7,6 +7,17 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Return types** (expert features item 1, design on the Sync Board): `function health_left() as
+  number` says what a function gives back, for script functions and kinds' functions. Like parameter types, it is
+  for checkers only and never changes what runs; before, it was a mistake, so no script that ran
+  changes. `--check` and the language server warn:
+  - for a `return` with a plain value of another type: "'status' says it gives back text (as text),
+    but this gives back a number.";
+  - for a function with no `return` with a value (and no `fail`): "'status' says it gives back text
+    (as text), but it never returns a value, so it always gives back nothing. Add 'return' with the
+    text it should give back." It has no quick fix, since `return nothing` would hide the mistake.
+  - `return nothing` and a bare `return` are never warned about ("none found").
+  Hover shows the type with the function's first line.
 - **Building text is more than twice as fast.** On the release build, adding a million `"w{i}"` texts
   to a list went from 1.43 to 0.62 seconds, and the `text` and `numbers_to_text` benchmarks run 27% and
   20% fewer CPU instructions. What changed:
