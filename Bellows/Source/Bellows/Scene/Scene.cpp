@@ -603,7 +603,7 @@ namespace Bellows {
 				Scripting::ScriptEntity entity;
 				entity.SceneID = m_SceneID;
 				entity.ID = arrival.Entity;
-				Scripting::EmitScriptEvent("destination reached", { entity, arrival.Reached });
+				Scripting::EmitScriptEventAbout(entity, "destination reached", { entity, arrival.Reached });
 			}
 		}
 
