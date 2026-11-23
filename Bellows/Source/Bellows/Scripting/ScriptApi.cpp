@@ -237,6 +237,7 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<MeshColliderComponent>("MeshCollider"),
 			MakeComponentInfo<ScriptComponent>("Script"),
 			MakeComponentInfo<AudioSourceComponent>("AudioSource"),
+			MakeComponentInfo<AnimatorComponent>("Animator"),
 			MakeComponentInfo<AudioListenerComponent>("AudioListener"),
 			MakeComponentInfo<TextComponent>("Text"),
 			MakeComponentInfo<UICanvasComponent>("UICanvas"),
@@ -285,6 +286,7 @@ namespace Bellows::Scripting {
 		if (type == typeid(MeshColliderComponent)) return "MeshCollider";
 		if (type == typeid(ScriptComponent)) return "Script";
 		if (type == typeid(AudioSourceComponent)) return "AudioSource";
+		if (type == typeid(AnimatorComponent)) return "Animator";
 		if (type == typeid(AudioListenerComponent)) return "AudioListener";
 		if (type == typeid(TextComponent)) return "Text";
 		if (type == typeid(UICanvasComponent)) return "UICanvas";

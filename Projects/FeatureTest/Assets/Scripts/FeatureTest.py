@@ -117,6 +117,7 @@ class FeatureTest(bellows.Script):
         yield from self.test_raycasts()
         yield from self.test_gameplay_scripts()
         yield from self.test_tweens()
+        yield from self.test_animation()
 
     def test_forgescript(self):
         """FeatureTest.forge tests the API from ForgeScript first; it reports by renaming its entity."""
@@ -384,6 +385,16 @@ class FeatureTest(bellows.Script):
         source.loop, source.play_on_start, source.spatial = True, False, True
         source.min_distance, source.max_distance = 2.0, 30.0
         self.check(source.clip == "Audio/Chime.wav" and close(source.pitch, 1.2) and source.loop and source.spatial, "AudioSource properties")
+        animator = entity.add_component(bellows.Animator)
+        self.check(animator.start_clip == "" and animator.play_on_start and animator.loop and close(animator.speed, 1.0), "Animator defaults")
+        animator.start_clip, animator.play_on_start, animator.loop, animator.speed = "Run", False, False, -2.0
+        self.check(animator.start_clip == "Run" and not animator.play_on_start and not animator.loop and close(animator.speed, -2.0),
+                   "Animator properties")
+        self.check(raises(lambda: setattr(animator, "speed", 11.0), ValueError) and raises(lambda: setattr(animator, "speed", float("nan")), ValueError),
+                   "Animator speed limits")
+        # The test entity's sphere has no skeleton: nothing to play, and no clips or bones.
+        self.check(animator.clips == [] and animator.bones == [] and animator.clip == "" and not animator.playing, "an Animator without a skeleton")
+        self.check(raises(lambda: animator.play("Run"), ValueError), "an Animator without a skeleton can't play")
         listener = entity.add_component(bellows.AudioListener)
         listener.active = False
         self.check(not listener.active, "AudioListener properties")
@@ -510,7 +521,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
@@ -901,3 +912,58 @@ class FeatureTest(bellows.Script):
         bellows.destroy(image)
         bellows.destroy(box)
         yield
+
+    def test_animation(self):
+        """The Dancer plays SkinnedColumn.glb's clips: "Bend" (2 s) turns its Top bone about Z to 90 degrees
+        at 1 s and back; "Wave" (1 s) turns its Base about Y."""
+        dancer = bellows.find_entity("Dancer")
+        self.check(dancer is not None and dancer.has_component("Animator"), "the Dancer is in the scene")
+        if dancer is None:
+            return
+        animator = dancer.get_component(bellows.Animator)
+        self.check(animator.clips == ["Bend", "Wave"] and animator.bones == ["Base", "Top"], "Animator clips and bones")
+        self.check(animator.clip == "Wave" and animator.playing and close(animator.length, 1.0), "the Dancer plays Wave (its start clip; FeatureTest.forge plays it again at its end)")
+        self.check(raises(lambda: animator.play("Dance"), ValueError), "an unknown clip is refused")
+        try:
+            animator.play("Dance")
+        except ValueError as error:
+            self.check("Bend, Wave" in str(error), "the refusal lists the clips")
+        self.check(raises(lambda: animator.bone_position("Hand"), ValueError), "an unknown bone is refused")
+        self.check(raises(lambda: animator.play("Bend", -1.0), ValueError), "a negative fade is refused")
+
+        # Bend, cut in, and held at 1 s: the Top bone has turned 90 degrees, and stays at the knee.
+        animator.speed = 1.0
+        animator.play("Bend", 0.0)
+        self.check(animator.clip == "Bend" and close(animator.time, 0.0) and close(animator.length, 2.0), "play switches clip")
+        animator.time = 1.0
+        animator.pause()
+        self.check(not animator.playing, "pause holds the clip")
+        knee = dancer.position + bellows.Vec3(0.0, 1.0, 0.0)
+        self.check(close(animator.bone_position("Top"), knee, 1e-3), "bone_position follows the pose")
+        self.check(close(animator.bone_rotation("Top").z, 90.0, 0.05), "bone_rotation follows the pose")
+        before = animator.time
+        yield from self.wait_frames(3)
+        self.check(close(animator.time, before), "a paused clip doesn't move")
+        animator.resume()
+        yield from self.wait_frames(3)
+        self.check(animator.playing and animator.time > before, "resume lets it go on")
+
+        # Playing the clip that's playing changes nothing; a new clip fades in.
+        time_now = animator.time
+        animator.play("Bend")
+        self.check(close(animator.time, time_now), "playing the current clip changes nothing")
+        animator.stop()
+        self.check(not animator.playing and animator.clip == "Bend", "stop holds the pose")
+
+        # A clip that doesn't loop ends once and says so.
+        self.events.clear()
+        animator.loop = False
+        animator.play("Wave", 0.0)
+        animator.time = 0.9
+        yield from self.wait_until(lambda: not animator.playing, 2.0)
+        yield from self.wait_frames(1)
+        self.check(not animator.playing and close(animator.time, 1.0), "a clip that doesn't loop stops at its end")
+        self.check([values for name, values in self.events if name == "animation finished"] == [(dancer, "Wave")],
+                   "'animation finished' reaches on_event once, with the entity and the clip")
+        animator.loop = True
+        animator.play("Wave", 0.5)

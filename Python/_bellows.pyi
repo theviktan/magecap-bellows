@@ -121,6 +121,59 @@ class MouseButton(enum.IntEnum):
     Button4 = 4
 
 
+class Animator:
+    """Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them"""
+    @property
+    def start_clip(self) -> str:
+        """The clip played when the game starts; empty plays the mesh's first"""
+    @start_clip.setter
+    def start_clip(self, value: str) -> None: ...
+    @property
+    def play_on_start(self) -> bool: ...
+    @play_on_start.setter
+    def play_on_start(self, value: bool) -> None: ...
+    @property
+    def loop(self) -> bool:
+        """When off, a clip stops at its end, holds its last pose and sends 'animation finished'"""
+    @loop.setter
+    def loop(self, value: bool) -> None: ...
+    @property
+    def speed(self) -> float:
+        """Times as fast, from -10 to 10; negative plays backward"""
+    @speed.setter
+    def speed(self, value: float) -> None: ...
+    @property
+    def time(self) -> float:
+        """Seconds into the clip (held to its length); set it to 0 to start the clip over"""
+    @time.setter
+    def time(self, value: float) -> None: ...
+    @property
+    def clip(self) -> str:
+        """The clip playing or held, or "" for none (the model stands in its rest pose)"""
+    @property
+    def playing(self) -> bool:
+        """True while the clip moves: not stopped, paused or at the end of a clip that doesn't loop"""
+    @property
+    def length(self) -> float:
+        """The current clip's length in seconds (0 for none)"""
+    @property
+    def clips(self) -> list[str]:
+        """The model's clip names, in file order"""
+    @property
+    def bones(self) -> list[str]:
+        """The model's bone (joint) names, parents first"""
+    def play(self, clip: str, fade: float = 0.2) -> None:
+        """Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Playing the clip that's already playing changes nothing, so it's safe to call every frame; set time to 0 to restart it"""
+    def stop(self) -> None:
+        """Stops the clip and holds the current pose"""
+    def pause(self) -> None: ...
+    def resume(self) -> None: ...
+    def bone_position(self, bone: str) -> Vec3:
+        """Where a bone is in the world this frame, to put something in a hand"""
+    def bone_rotation(self, bone: str) -> Vec3:
+        """A bone's rotation in the world this frame, in degrees like rotation"""
+
+
 class AudioListener:
     @property
     def active(self) -> bool: ...
@@ -356,6 +409,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['AudioSource']) -> AudioSource | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['Animator']) -> Animator | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['AudioListener']) -> AudioListener | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['Text']) -> Text | None: ...
@@ -413,6 +468,8 @@ class Entity:
     def add_component(self, component: typing.Literal['ScriptComponent']) -> ScriptComponent: ...
     @typing.overload
     def add_component(self, component: typing.Literal['AudioSource']) -> AudioSource: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['Animator']) -> Animator: ...
     @typing.overload
     def add_component(self, component: typing.Literal['AudioListener']) -> AudioListener: ...
     @typing.overload

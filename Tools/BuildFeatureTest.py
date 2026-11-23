@@ -175,6 +175,12 @@ add_body(plinth, "Static", bellows.BoxCollider)
 bottle = create("Water Bottle", "Models/WaterBottle.glb", position=(-3.5, 1.9, 2.0), scale=(8.0, 8.0, 8.0))
 add_script(bottle, "Scripts/Spinner.py", speed=60.0)
 
+# Skeletal animation: a column that waves (Tools/GenerateTestModels.py)
+dancer = create("Dancer", "Models/SkinnedColumn.glb", position=(5.5, 0.0, -0.5))
+dancer_animator = dancer.add_component(bellows.Animator)
+dancer_animator.start_clip = "Wave"
+dancer_animator.speed = 0.5
+
 lantern = create("Lantern", "Models/Lantern.glb", position=(3.0, 0.0, 1.0), rotation=(0.0, -30.0, 0.0), scale=(0.15, 0.15, 0.15))
 spot_entity = create("Spot Light", position=(3.0, 6.0, 4.0), rotation=(-60.0, 0.0, 0.0))
 spot = spot_entity.add_component(bellows.SpotLight)

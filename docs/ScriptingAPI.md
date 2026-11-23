@@ -253,6 +253,33 @@ than storing components for a long time.
 `None` for the mesh's own materials), `color` (`Vec4`; setting it gives the entity its own material
 instance), `cast_shadows`, `visible`.
 
+### `Animator`
+Plays the animation clips of the entity's skinned model (its `MeshRenderer`'s `.gltf`/`.glb` mesh,
+with a skeleton), one at a time. Clips run in game time, so `set_paused(True)` holds them.
+
+| Member | Description |
+|--------|-------------|
+| `start_clip`, `play_on_start` | The clip played when the game starts (empty plays the model's first). |
+| `loop` | When off, a clip stops at its end, holds its last pose and sends `animation finished`. |
+| `speed` | Times as fast, from -10 to 10; negative plays backward. Other values raise `ValueError`. |
+| `time` | Seconds into the clip, held to its length. Set it to 0 to start the clip over. |
+| `clip`, `playing`, `length` | Read-only: the clip playing or held (`""` for none, the rest pose), whether it moves, its length in seconds. |
+| `clips`, `bones` | Read-only: the model's clip names in file order, and its bone names, parents first. |
+| `play(clip, fade=0.2)` | Plays a clip, fading from the current pose over `fade` seconds (0 cuts, at most 10). Playing the clip that's already playing changes nothing, so it's safe every frame. An unknown clip raises `ValueError` listing the clips. Only while the game is playing. |
+| `stop()`, `pause()`, `resume()` | `stop` holds the current pose; `pause` and `resume` hold it and let it go on. |
+| `bone_position(bone)`, `bone_rotation(bone)` | A bone's world position and rotation (degrees, like `rotation`) this frame, to put something in a hand. |
+
+When a clip that doesn't loop reaches its end (or its start, played backward), every script gets
+**`animation finished`** with the entity and the clip's name: `on_event(self, name, entity, clip)`,
+or ForgeScript's `when animation finished with who, clip` (and `wait for animation finished`).
+
+```python
+class Hero(bellows.Script):
+    def on_update(self, dt):
+        animator = self.entity.get_component("Animator")
+        animator.play("Run" if bellows.is_action_down("move") else "Idle")
+```
+
 ### `Camera`
 `projection` (`"Perspective"`/`"Orthographic"`), `fov` (vertical, degrees), `orthographic_size`
 (visible height in meters), `near_clip`, `far_clip`, `primary`.
@@ -677,6 +704,9 @@ engine sends these events, which the script handles with `when`:
   | `everything tagged (tag)` | `find_tagged(tag)`, so `for each enemy in everything tagged "enemy"` works |
   | `the data in (path)` | `load_json(path)`, so `set items to the data in "Data/items.json"` works |
   | `shake the camera by (strength) over (seconds) seconds` | `shake_camera(strength, seconds)`; `second` works too |
+  | `play animation (clip) on (entity)` | `entity.get_component("Animator").play(clip)` |
+  | `pause animation on (entity)` | `entity.get_component("Animator").pause()` |
+  | `resume animation on (entity)` | `entity.get_component("Animator").resume()` |
 
   Every tween phrase also takes `second` (`over 1 second`) and ends with an optional
   `with (style)` for the easing, which is `"in out"` otherwise: `move door to p over 2 seconds with
@@ -688,7 +718,8 @@ engine sends these events, which the script handles with `when`:
   Phrases give back the same values, so `set shot to save screenshot to "bug.png"` works. The widget
   phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still
   ForgeScript's `show` function, which prints the value. A non-entity gets "'hide' needs a UI entity,
-  like: hide find_entity("Pause Menu")".
+  like: hide find_entity("Pause Menu")". The animation phrases need an entity with an Animator, and
+say so when it has none.
 
 ```forge
 when clicked
