@@ -1565,6 +1565,14 @@ Here **Variables** shows `other` as `Entity('Gold Coin')`: the coins in this lev
 
 After a `for` or `while` round, stepping goes back to the loop's own line, so you can watch each round. Stepping never stops on an `end` line.
 
+**4. Stop only when it matters, and watch values.** A breakpoint inside `when update` stops 60 times a second, which is rarely what you want. Right-click its red dot (or put the cursor on the line and press **Shift+F9**) to open **Edit Breakpoint**:
+
+- **Stop only when** takes a condition, like `coins is 3`. The game stops at the line only when it's true there. The dot shows `=`.
+- **Log a message instead of stopping** prints a message to the Console each time the line runs, and the game goes on. Values go in `{ }`, as in text: `coins is {coins}, bonus is {bonus}`. The dot becomes a diamond. With a condition too, it prints only when the condition is true.
+- In the Debugger panel, **Watch** works out the lines you add (`bonus + 10`, `other.name`) in the selected call, at every stop.
+
+Conditions, messages and Watch lines read your variables, the script's variables and engine values such as `my position`. They never call a function, so they can't change the game while you look; a line that tries says so. If a condition has a mistake (a typo, or `nothing.size`), the game stops at that line and the Debugger panel says why, so a broken condition is never skipped without you knowing.
+
 Things worth knowing:
 
 - **A `wait` lets the game go on.** Stepping over `wait 2 seconds` plays the game for two seconds, then stops at the line after it.
