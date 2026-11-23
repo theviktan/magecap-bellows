@@ -10,8 +10,10 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <imgui_stdlib.h>
 
 #include <map>
+#include <optional>
 #include <string>
 
 namespace Bellows {
@@ -135,6 +137,27 @@ namespace Bellows {
 			m_ShownFrame = m_SelectedFrame;
 			m_Variables = debugger.GetVariables(m_SelectedFrame);
 			m_ScriptVariables = debugger.GetScriptVariables(m_SelectedFrame);
+			EvaluateWatches();
+		}
+	}
+
+	void DebuggerPanel::EvaluateWatches()
+	{
+		ScriptDebugger& debugger = m_Editor.GetScriptDebugger();
+		for (Watch& watch : m_Watches)
+		{
+			if (!m_ShownStopped)
+			{
+				watch.Ok = false;
+				watch.Type.clear();
+				watch.Text.clear();
+				continue;
+			}
+			ForgeScript::DebugVariable value;
+			std::string error;
+			watch.Ok = debugger.Evaluate(m_SelectedFrame, watch.Expression, value, error);
+			watch.Type = watch.Ok ? value.Type : std::string();
+			watch.Text = watch.Ok ? value.Text : error;
 		}
 	}
 
@@ -172,6 +195,13 @@ namespace Bellows {
 			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
 			ImGui::Text("Stopped at %s line %d (%s)", stop.File.c_str(), stop.Line, DescribeReason(stop.Reason));
 			ImGui::PopStyleColor();
+			if (!stop.Message.empty())
+			{
+				// A condition or log message that couldn't be worked out stops the script, with the reason.
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+				ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", stop.Message.c_str());
+				ImGui::PopStyleColor();
+			}
 		}
 		else if (playing)
 		{
@@ -207,7 +237,10 @@ namespace Bellows {
 	{
 		if (!m_ShownStopped)
 		{
-			UI::CenteredText("The variables of a stopped script show here.");
+			// Watches can be set up before play; they are worked out at the next stop.
+			UI::TextMuted("The variables of a stopped script show here.");
+			ImGui::Spacing();
+			DrawWatch();
 			return;
 		}
 		UI::SectionHeader("Variables");
@@ -215,6 +248,77 @@ namespace Bellows {
 		ImGui::Spacing();
 		UI::SectionHeader("Script variables");
 		DrawVariableTable("##Globals", m_ScriptVariables);
+		ImGui::Spacing();
+		DrawWatch();
+	}
+
+	void DebuggerPanel::DrawWatch()
+	{
+		UI::SectionHeader("Watch");
+		std::optional<size_t> removed;
+		const ImGuiTableFlags flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
+		if (!m_Watches.empty() && ImGui::BeginTable("##Watch", 3, flags))
+		{
+			ImGui::TableSetupColumn("Line", ImGuiTableColumnFlags_WidthStretch, 0.40f);
+			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch, 0.15f);
+			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.45f);
+			ImGui::TableHeadersRow();
+			for (size_t i = 0; i < m_Watches.size(); i++)
+			{
+				const Watch& watch = m_Watches[i];
+				ImGui::PushID(static_cast<int>(i));
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				if (UI::IconButton(ICON_X, "Remove this watch"))
+					removed = i;
+				ImGui::SameLine();
+				ImGui::AlignTextToFramePadding();
+				ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+				ImGui::TextUnformatted(watch.Expression.c_str());
+				ImGui::PopFont();
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
+				UI::TextMuted(watch.Type.c_str());
+				ImGui::TableNextColumn();
+				ImGui::AlignTextToFramePadding();
+				if (!m_ShownStopped)
+				{
+					UI::TextMuted("Worked out when a script stops");
+				}
+				else if (watch.Ok)
+				{
+					ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+					ImGui::TextUnformatted(watch.Text.c_str());
+					ImGui::PopFont();
+				}
+				else
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+					ImGui::TextUnformatted(watch.Text.c_str());
+					ImGui::PopStyleColor();
+				}
+				if (ImGui::IsItemHovered() && ImGui::CalcTextSize(watch.Text.c_str()).x > ImGui::GetColumnWidth())
+					ImGui::SetTooltip("%s", watch.Text.c_str());
+				ImGui::PopID();
+			}
+			ImGui::EndTable();
+		}
+		if (removed)
+			m_Watches.erase(m_Watches.begin() + static_cast<std::ptrdiff_t>(*removed));
+
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+		const bool add = ImGui::InputTextWithHint("##NewWatch", "Add a line to watch, like: health * 2   (Enter)", &m_NewWatch, ImGuiInputTextFlags_EnterReturnsTrue);
+		ImGui::PopFont();
+		if (ImGui::IsItemHovered())
+			ImGui::SetTooltip("Worked out in the selected call each time a script stops. It can read variables and engine values (my position), but never calls a function, so it can't change the game.");
+		if (add && m_NewWatch.find_first_not_of(" \t") != std::string::npos)
+		{
+			m_Watches.push_back({ m_NewWatch });
+			m_NewWatch.clear();
+			EvaluateWatches();
+			ImGui::SetKeyboardFocusHere(-1);
+		}
 	}
 
 	void DebuggerPanel::DrawBreakpoints()
@@ -232,24 +336,32 @@ namespace Bellows {
 			return;
 		}
 
-		// Copied, because removing one changes the map being drawn.
-		const std::map<std::string, std::vector<int>> breakpoints = debugger.GetAllBreakpoints();
+		// Copied, because removing or editing one changes the map being drawn.
+		const std::map<std::string, std::vector<ForgeScript::Breakpoint>> breakpoints = debugger.GetAllBreakpoints();
+		const float spacing = 2.0f * Theme::GetScale();
 		for (const auto& [script, lines] : breakpoints)
 		{
-			for (int line : lines)
+			for (const ForgeScript::Breakpoint& breakpoint : lines)
 			{
 				ImGui::PushID(script.c_str());
-				ImGui::PushID(line);
+				ImGui::PushID(breakpoint.Line);
 				if (UI::IconButton(ICON_X, "Remove this breakpoint"))
-					debugger.ToggleBreakpoint(script, line);
+					debugger.ToggleBreakpoint(script, breakpoint.Line);
+				ImGui::SameLine(0.0f, spacing);
+				if (UI::IconButton(ICON_PENCIL, "Edit: a condition, or a message to log instead of stopping"))
+					m_Editor.GetScriptEditor().EditBreakpoint(script, breakpoint.Line);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
 				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
-				ImGui::TextUnformatted(ICON_CIRCLE_DOT);
+				ImGui::TextUnformatted(breakpoint.LogMessage.empty() ? ICON_CIRCLE_DOT : ICON_DIAMOND);
 				ImGui::PopStyleColor();
 				ImGui::SameLine();
-				if (ImGui::Selectable(fmt::format("{} line {}", script, line).c_str()))
-					OpenInScriptEditor(m_Editor, script, line);
+				if (ImGui::Selectable(fmt::format("{} line {}", script, breakpoint.Line).c_str()))
+					OpenInScriptEditor(m_Editor, script, breakpoint.Line);
+				if (!breakpoint.Condition.empty())
+					UI::TextMuted(fmt::format("    when {}", breakpoint.Condition).c_str());
+				if (!breakpoint.LogMessage.empty())
+					UI::TextMuted(fmt::format("    logs \"{}\"", breakpoint.LogMessage).c_str());
 				ImGui::PopID();
 				ImGui::PopID();
 			}

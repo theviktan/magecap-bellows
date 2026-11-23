@@ -119,8 +119,14 @@ namespace Bellows {
 			m_ForgeScriptIcon = Texture2D::LoadFromFile(iconFolder / "ForgeScript.png", TextureColorSpace::Linear);
 		m_ProjectManager = CreateScope<ProjectManager>(*this);
 
-		// A script stops inside the game's update; the game pauses once that update has finished.
-		m_ScriptDebugger.SetStopCallback([this](const ForgeScript::DebugStop&) { m_DebugStopPending = true; });
+		// A script stops inside the game's update; the game pauses once that update has finished. A stop
+		// with a message (a condition or log message that couldn't be worked out) also goes to the Console.
+		m_ScriptDebugger.SetStopCallback([this](const ForgeScript::DebugStop& stop)
+		{
+			if (!stop.Message.empty())
+				BW_WARN("{} line {}: {}", stop.File, stop.Line, stop.Message);
+			m_DebugStopPending = true;
+		});
 		m_ScriptDebugger.Connect(ScriptEngine::GetForgeScriptRuntime());
 
 		Scripting::SetStartedFromEditor(true);

@@ -62,8 +62,10 @@ can drive end to end.
 * **ForgeScript debugger**: click left of a line (or press F9) to add a breakpoint, then play. When
   a script reaches it the game pauses, the Script Editor shows the line, and the **Debugger** panel
   shows the call stack and the variables of each call. Continue (F5), Step Over (F10), Step In
-  (F11), Step Out (Shift+F11), or stop at the next line that runs. Breakpoints last for the editor
-  session; saved scripts reload once the stopped script goes on.
+  (F11), Step Out (Shift+F11), or stop at the next line that runs. Right-click a breakpoint (or
+  Shift+F9) to give it a condition (`health < 10`) or a message to log instead of stopping, and add
+  lines to the Debugger's **Watch** list to see them worked out at every stop. Breakpoints last for
+  the editor session; saved scripts reload once the stopped script goes on.
 * **Automation**: everything in the editor is scriptable (`bellows.editor`), from the Console,
   from `--run-script`, or remotely through the local agent server - ask an AI agent to build a
   game and it can create, play-test, screenshot and export it.

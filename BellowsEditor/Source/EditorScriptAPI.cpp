@@ -136,6 +136,26 @@ namespace Bellows {
 				"Sets the breakpoint lines (1-based) of a ForgeScript asset, e.g. 'Scripts/Player.forge'; [] removes them");
 			m.def("breakpoints", [](const std::string& script) { return Editor().GetScriptDebugger().GetBreakpoints(script); },
 				py::arg("script"), "The breakpoint lines of a ForgeScript asset, sorted");
+			m.def("set_breakpoint", [](const std::string& script, int line, const std::string& condition, const std::string& logMessage)
+			{
+				if (!Editor().GetScriptDebugger().SetBreakpoint(script, line, condition, logMessage))
+					throw py::value_error("A breakpoint needs a ForgeScript asset path and a line of 1 or more");
+			}, py::arg("script"), py::arg("line"), py::arg("condition") = "", py::arg("log_message") = "",
+				"Adds a breakpoint at a line (1-based), or changes the one there. With a condition it stops only when that is "
+				"true ('hp < 10'); with a log message it prints that instead of stopping ('hp is {hp}'); with both it prints when the condition is true");
+			m.def("breakpoint_details", [](const std::string& script)
+			{
+				py::list result;
+				for (const ForgeScript::Breakpoint& breakpoint : Editor().GetScriptDebugger().GetDetailedBreakpoints(script))
+				{
+					py::dict entry;
+					entry["line"] = breakpoint.Line;
+					entry["condition"] = breakpoint.Condition;
+					entry["log_message"] = breakpoint.LogMessage;
+					result.append(entry);
+				}
+				return result;
+			}, py::arg("script"), "A ForgeScript asset's breakpoints, sorted by line: [{'line', 'condition', 'log_message'}] ('' when not set)");
 			m.def("clear_breakpoints", [] { Editor().GetScriptDebugger().ClearBreakpoints(); }, "Removes every breakpoint");
 			m.def("debug_state", []
 			{
@@ -164,6 +184,7 @@ namespace Bellows {
 					state["line"] = stop.Line;
 					state["reason"] = stop.Reason == ForgeScript::DebugStopReason::Breakpoint ? "breakpoint"
 						: (stop.Reason == ForgeScript::DebugStopReason::Step ? "step" : "pause");
+					state["message"] = stop.Message;
 					for (const ForgeScript::DebugFrame& frame : debugger.GetCallStack())
 					{
 						py::dict entry;
@@ -177,7 +198,21 @@ namespace Bellows {
 				state["variables"] = describe(debugger.GetVariables(0));
 				state["script_variables"] = describe(debugger.GetScriptVariables(0));
 				return state;
-			}, "Where a stopped ForgeScript is: {'stopped', 'file', 'line', 'reason', 'stack', 'variables', 'script_variables'}");
+			}, "Where a stopped ForgeScript is: {'stopped', 'file', 'line', 'reason', 'message', 'stack', 'variables', 'script_variables'}. "
+				"'message' says why a breakpoint's condition or log message couldn't be worked out ('' otherwise)");
+			m.def("debug_evaluate", [](const std::string& expression, size_t frame)
+			{
+				ForgeScript::DebugVariable value;
+				std::string error;
+				if (!Editor().GetScriptDebugger().Evaluate(frame, expression, value, error))
+					throw py::value_error(error);
+				py::dict result;
+				result["type"] = value.Type;
+				result["value"] = value.Text;
+				return result;
+			}, py::arg("expression"), py::arg("frame") = 0,
+				"Works out one line of ForgeScript in a call of the stopped script (0 = innermost): {'type', 'value'}. It reads variables and "
+				"engine values but never calls a function, so it can't change the game. ValueError when nothing is stopped or it can't be worked out");
 			m.def("debug_continue", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::Continue); },
 				"Lets the stopped script go on (the game runs again); False when nothing is stopped");
 			m.def("debug_step_over", [] { return Editor().ResumeScripts(EditorLayer::DebugAction::StepOver); },

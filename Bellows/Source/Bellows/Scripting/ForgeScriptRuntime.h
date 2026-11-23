@@ -75,6 +75,9 @@ namespace Bellows::Scripting {
 		// events, so nothing else runs until the editor continues or steps through GetMachine(). Stop()
 		// ends a stop without running the rest of the held code, and 'when destroyed' does not stop.
 		void SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines);
+		// The same with conditions and log messages (VM::SetDetailedBreakpoints); replaces the script's
+		// earlier breakpoints, and an empty list removes them.
+		void SetDetailedBreakpoints(const std::string& scriptPath, const std::vector<ForgeScript::Breakpoint>& breakpoints);
 		void ClearBreakpoints();
 		void SetDebugHandler(ForgeScript::DebugHandler handler);
 		// The play session's machine, for Continue, the steps, GetCallStack, GetVariables and GetGlobals.
@@ -120,7 +123,7 @@ namespace Bellows::Scripting {
 		// Checks scripts for the Inspector outside play mode; never runs them.
 		Scope<ForgeScript::VM> m_CheckVM;
 		std::unordered_map<UUID, Instance> m_Instances;
-		std::unordered_map<std::string, std::vector<int>> m_Breakpoints;
+		std::unordered_map<std::string, std::vector<ForgeScript::Breakpoint>> m_Breakpoints;
 		ForgeScript::DebugHandler m_DebugHandler;
 		ScriptEventListenerID m_EventListener = 0;
 		std::unordered_set<std::string> m_WarnedEvents;

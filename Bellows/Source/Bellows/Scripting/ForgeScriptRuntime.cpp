@@ -159,19 +159,28 @@ namespace Bellows::Scripting {
 		InstallModuleLoader(*vm);
 		RegisterForgeScriptApi(*vm);
 		vm->SetDebugHandler(m_DebugHandler);
-		for (const auto& [scriptPath, lines] : m_Breakpoints)
-			vm->SetBreakpoints(scriptPath, lines);
+		for (const auto& [scriptPath, breakpoints] : m_Breakpoints)
+			vm->SetDetailedBreakpoints(scriptPath, breakpoints);
 		return vm;
 	}
 
 	void ForgeScriptRuntime::SetBreakpoints(const std::string& scriptPath, const std::vector<int>& lines)
 	{
-		if (lines.empty())
+		std::vector<ForgeScript::Breakpoint> breakpoints;
+		breakpoints.reserve(lines.size());
+		for (int line : lines)
+			breakpoints.push_back({ line, {}, {} });
+		SetDetailedBreakpoints(scriptPath, breakpoints);
+	}
+
+	void ForgeScriptRuntime::SetDetailedBreakpoints(const std::string& scriptPath, const std::vector<ForgeScript::Breakpoint>& breakpoints)
+	{
+		if (breakpoints.empty())
 			m_Breakpoints.erase(scriptPath);
 		else
-			m_Breakpoints[scriptPath] = lines;
+			m_Breakpoints[scriptPath] = breakpoints;
 		if (m_VM)
-			m_VM->SetBreakpoints(scriptPath, lines);
+			m_VM->SetDetailedBreakpoints(scriptPath, breakpoints);
 	}
 
 	void ForgeScriptRuntime::ClearBreakpoints()

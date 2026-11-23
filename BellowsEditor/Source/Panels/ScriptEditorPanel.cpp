@@ -35,9 +35,6 @@ namespace Bellows {
 		constexpr const char* c_ScriptFolder = "Scripts";
 		constexpr size_t c_GutterGlyphs = 2;				// Width of the breakpoint column, in characters
 
-		// The line data that marks a breakpoint line in a code editor (only its address matters).
-		char s_BreakpointMark = 0;
-
 		// Words that control the flow of a ForgeScript program or start a statement.
 		constexpr const char* c_ForgeKeywords[] = {
 			"if", "then", "else", "otherwise", "end", "while", "until", "do", "repeat", "times", "forever", "for", "each",
@@ -470,6 +467,15 @@ namespace Bellows {
 					code.Paste();
 				ImGui::Separator();
 				DrawForgeScriptToolsMenuItems(*target, data.pos.line, data.pos.index);
+				if (CanHaveBreakpoints(*target))
+				{
+					ImGui::Separator();
+					const bool marked = GetBreakpointMark(*target, data.pos.line) != nullptr;
+					if (ImGui::MenuItem(marked ? "Remove Breakpoint" : "Add Breakpoint", "F9"))
+						ToggleBreakpoint(*target, data.pos.line);
+					if (ImGui::MenuItem(marked ? "Edit Breakpoint..." : "Add Conditional Breakpoint...", "Shift+F9"))
+						OpenBreakpointDialog(*target, data.pos.line);
+				}
 			});
 			if (CanHaveBreakpoints(document))
 			{
@@ -597,38 +603,188 @@ namespace Bellows {
 		return document.Language == ScriptLanguage::ForgeScript && !document.AssetPath.empty() && !document.ReadOnly;
 	}
 
+	ScriptEditorPanel::BreakpointMark* ScriptEditorPanel::GetBreakpointMark(const Document& document, size_t line) const
+	{
+		if (!CanHaveBreakpoints(document) || line >= document.Editor->GetLineCount())
+			return nullptr;
+		return static_cast<BreakpointMark*>(document.Editor->GetUserData(line));
+	}
+
 	void ScriptEditorPanel::ToggleBreakpoint(Document& document, size_t line)
 	{
 		if (!CanHaveBreakpoints(document) || line >= document.Editor->GetLineCount())
 			return;
 		TextEditor& editor = *document.Editor;
-		editor.SetUserData(line, editor.GetUserData(line) == &s_BreakpointMark ? nullptr : &s_BreakpointMark);
+		if (editor.GetUserData(line))
+		{
+			editor.SetUserData(line, nullptr);
+		}
+		else
+		{
+			document.BreakpointMarks.push_back(CreateScope<BreakpointMark>());
+			editor.SetUserData(line, document.BreakpointMarks.back().get());
+		}
 		SaveBreakpoints(document);
 	}
 
 	void ScriptEditorPanel::ShowBreakpoints(Document& document)
 	{
+		// Rebuilt from the debugger, which holds the breakpoints; every line is set before the old marks go.
 		TextEditor& editor = *document.Editor;
-		const std::vector<int>& lines = m_Editor.GetScriptDebugger().GetBreakpoints(document.AssetPath);
+		std::vector<Scope<BreakpointMark>> marks;
 		const size_t lineCount = editor.GetLineCount();
-		for (size_t line = 0; line < lineCount; line++)
+		std::vector<BreakpointMark*> lineMarks(lineCount, nullptr);
+		if (CanHaveBreakpoints(document))
 		{
-			const bool marked = CanHaveBreakpoints(document) && std::binary_search(lines.begin(), lines.end(), static_cast<int>(line + 1));
-			editor.SetUserData(line, marked ? &s_BreakpointMark : nullptr);
+			for (const ForgeScript::Breakpoint& breakpoint : m_Editor.GetScriptDebugger().GetDetailedBreakpoints(document.AssetPath))
+			{
+				const size_t line = static_cast<size_t>(breakpoint.Line - 1);
+				if (line >= lineCount)
+					continue;
+				marks.push_back(CreateScope<BreakpointMark>(BreakpointMark { breakpoint.Condition, breakpoint.LogMessage }));
+				lineMarks[line] = marks.back().get();
+			}
 		}
+		for (size_t line = 0; line < lineCount; line++)
+			editor.SetUserData(line, lineMarks[line]);
+		document.BreakpointMarks = std::move(marks);
 	}
 
 	void ScriptEditorPanel::SaveBreakpoints(Document& document)
 	{
 		if (!CanHaveBreakpoints(document))
 			return;
-		std::vector<int> lines;
-		document.Editor->IterateUserData([&lines](size_t line, void* data)
+		std::vector<ForgeScript::Breakpoint> breakpoints;
+		std::vector<const BreakpointMark*> used;
+		document.Editor->IterateUserData([&](size_t line, void* data)
 		{
-			if (data == &s_BreakpointMark)
-				lines.push_back(static_cast<int>(line + 1));
+			const BreakpointMark* mark = static_cast<const BreakpointMark*>(data);
+			if (!mark)
+				return;
+			breakpoints.push_back({ static_cast<int>(line + 1), mark->Condition, mark->LogMessage });
+			used.push_back(mark);
 		});
-		m_Editor.GetScriptDebugger().SetBreakpoints(document.AssetPath, std::move(lines));
+		// Marks of removed breakpoints and deleted lines are no longer pointed at.
+		std::erase_if(document.BreakpointMarks, [&used](const Scope<BreakpointMark>& mark)
+		{
+			return std::find(used.begin(), used.end(), mark.get()) == used.end();
+		});
+		m_Editor.GetScriptDebugger().SetDetailedBreakpoints(document.AssetPath, std::move(breakpoints));
+	}
+
+	void ScriptEditorPanel::OpenBreakpointDialog(Document& document, size_t line)
+	{
+		if (!CanHaveBreakpoints(document) || line >= document.Editor->GetLineCount())
+			return;
+		const BreakpointMark* mark = GetBreakpointMark(document, line);
+		m_BreakpointPath = document.Path;
+		m_BreakpointLine = line;
+		m_BreakpointCondition = mark ? mark->Condition : std::string();
+		m_BreakpointLogMessage = mark ? mark->LogMessage : std::string();
+		m_BreakpointLogs = !m_BreakpointLogMessage.empty();
+		m_OpenBreakpointDialog = true;
+	}
+
+	void ScriptEditorPanel::EditBreakpoint(const std::string& assetPath, int line)
+	{
+		if (line < 1 || !OpenScript(assetPath, static_cast<size_t>(line)))
+			return;
+		if (Document* document = FindDocument(AssetManager::GetAbsolutePath(assetPath)))
+			OpenBreakpointDialog(*document, static_cast<size_t>(line - 1));
+	}
+
+	void ScriptEditorPanel::DrawBreakpointDialog()
+	{
+		if (m_OpenBreakpointDialog)
+		{
+			ImGui::OpenPopup("Edit Breakpoint");
+			m_OpenBreakpointDialog = false;
+		}
+		const float scale = Theme::GetScale();
+		ImGui::SetNextWindowSize(ImVec2(460.0f * scale, 0.0f));
+		if (!ImGui::BeginPopupModal("Edit Breakpoint", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize))
+			return;
+
+		Document* document = FindDocument(m_BreakpointPath);
+		if (!document || m_BreakpointLine >= document->Editor->GetLineCount())
+		{
+			ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+		const bool exists = GetBreakpointMark(*document, m_BreakpointLine) != nullptr;
+		ImGui::TextWrapped("Breakpoint at %s line %zu", document->Name.c_str(), m_BreakpointLine + 1);
+		ImGui::Spacing();
+
+		ImGui::TextUnformatted("Stop only when");
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+		bool enter = ImGui::InputTextWithHint("##condition", "always (or a condition, like: health < 10)", &m_BreakpointCondition,
+			ImGuiInputTextFlags_EnterReturnsTrue);
+		ImGui::PopFont();
+		UI::TextMuted("One line of ForgeScript, worked out where the breakpoint is. It can read variables and "
+			"engine values (my position) but can't call functions.");
+
+		ImGui::Spacing();
+		ImGui::Checkbox("Log a message instead of stopping", &m_BreakpointLogs);
+		ImGui::BeginDisabled(!m_BreakpointLogs);
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+		enter |= ImGui::InputTextWithHint("##message", "health is {health}", &m_BreakpointLogMessage, ImGuiInputTextFlags_EnterReturnsTrue);
+		ImGui::PopFont();
+		UI::TextMuted("Shown in the Console each time the line runs (with a condition, only when it's true). "
+			"{...} is worked out, as in ForgeScript text.");
+		ImGui::EndDisabled();
+
+		const bool needsMessage = m_BreakpointLogs && m_BreakpointLogMessage.find_first_not_of(" \t") == std::string::npos;
+		if (needsMessage)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+			ImGui::TextWrapped("Type the message to log, or clear the check box to stop at the line.");
+			ImGui::PopStyleColor();
+		}
+
+		ImGui::Spacing();
+		ImGui::BeginDisabled(needsMessage);
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		const bool save = ImGui::Button(exists ? "Save" : "Add", ImVec2(110.0f * scale, 0.0f)) || (enter && !needsMessage);
+		ImGui::PopStyleColor();
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		bool remove = false;
+		if (exists)
+		{
+			remove = ImGui::Button("Remove", ImVec2(110.0f * scale, 0.0f));
+			ImGui::SameLine();
+		}
+		const bool cancel = ImGui::Button("Cancel", ImVec2(110.0f * scale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+		if (save && !needsMessage)
+		{
+			BreakpointMark* mark = GetBreakpointMark(*document, m_BreakpointLine);
+			if (!mark)
+			{
+				document->BreakpointMarks.push_back(CreateScope<BreakpointMark>());
+				mark = document->BreakpointMarks.back().get();
+				document->Editor->SetUserData(m_BreakpointLine, mark);
+			}
+			mark->Condition = m_BreakpointCondition;
+			mark->LogMessage = m_BreakpointLogs ? m_BreakpointLogMessage : std::string();
+			SaveBreakpoints(*document);
+		}
+		else if (remove)
+		{
+			document->Editor->SetUserData(m_BreakpointLine, nullptr);
+			SaveBreakpoints(*document);
+		}
+		if (save || remove || cancel)
+		{
+			ImGui::CloseCurrentPopup();
+			m_FocusEditor = true;
+		}
+		ImGui::EndPopup();
 	}
 
 	bool ScriptEditorPanel::IsStoppedAt(const Document& document, size_t line) const
@@ -641,19 +797,40 @@ namespace Bellows {
 	void ScriptEditorPanel::DrawBreakpointGutter(Document& document, size_t line, float width, float height)
 	{
 		const ImVec2 position = ImGui::GetCursorScreenPos();
-		ImGui::InvisibleButton("##Breakpoint", ImVec2(width, height));
+		ImGui::InvisibleButton("##Breakpoint", ImVec2(width, height), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
 		const bool hovered = ImGui::IsItemHovered();
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
 			ToggleBreakpoint(document, line);
+		else if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			OpenBreakpointDialog(document, line);
 
-		const bool marked = document.Editor->GetUserData(line) == &s_BreakpointMark;
+		const BreakpointMark* mark = GetBreakpointMark(document, line);
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 center(position.x + width * 0.5f, position.y + height * 0.5f);
 		const float radius = std::min(width, height) * 0.3f;
-		if (marked)
+		if (mark && !mark->LogMessage.empty())
+		{
+			// A log point is a diamond: it prints and never stops.
+			drawList->AddQuadFilled(ImVec2(center.x, center.y - radius * 1.15f), ImVec2(center.x + radius * 1.15f, center.y),
+				ImVec2(center.x, center.y + radius * 1.15f), ImVec2(center.x - radius * 1.15f, center.y), Theme::Error);
+		}
+		else if (mark)
+		{
 			drawList->AddCircleFilled(center, radius, Theme::Error);
+			if (!mark->Condition.empty())
+			{
+				// "=" on the dot: it stops only when its condition is true.
+				const float half = radius * 0.5f;
+				const float gap = radius * 0.28f;
+				const float thickness = std::max(1.0f, radius * 0.22f);
+				drawList->AddLine(ImVec2(center.x - half, center.y - gap), ImVec2(center.x + half, center.y - gap), IM_COL32_WHITE, thickness);
+				drawList->AddLine(ImVec2(center.x - half, center.y + gap), ImVec2(center.x + half, center.y + gap), IM_COL32_WHITE, thickness);
+			}
+		}
 		else if (hovered)
+		{
 			drawList->AddCircleFilled(center, radius, IM_COL32(236, 84, 84, 90));
+		}
 
 		if (IsStoppedAt(document, line))
 		{
@@ -663,9 +840,26 @@ namespace Bellows {
 				ImVec2(center.x + half, center.y), Theme::Warning);
 		}
 
-		if (hovered)
-			UI::Tooltip(marked ? "Breakpoint: the game stops before this line runs. Click to remove (F9)."
-				: "Click to add a breakpoint (F9). The game stops before this line runs.");
+		if (!hovered)
+			return;
+		if (!mark)
+		{
+			UI::Tooltip("Click to add a breakpoint (F9). The game stops before this line runs.\n"
+				"Right-click for a condition or a message to log (Shift+F9).");
+		}
+		else if (!mark->LogMessage.empty())
+		{
+			UI::Tooltip(fmt::format("Log point: logs \"{}\"{} and goes on.\nClick to remove, right-click to edit.", mark->LogMessage,
+				mark->Condition.empty() ? std::string() : fmt::format(" when {}", mark->Condition)).c_str());
+		}
+		else if (!mark->Condition.empty())
+		{
+			UI::Tooltip(fmt::format("Breakpoint: stops when {}.\nClick to remove, right-click to edit.", mark->Condition).c_str());
+		}
+		else
+		{
+			UI::Tooltip("Breakpoint: the game stops before this line runs.\nClick to remove (F9), right-click to add a condition.");
+		}
 	}
 
 	void ScriptEditorPanel::CheckDiskChanges()
@@ -1266,6 +1460,7 @@ namespace Bellows {
 		DrawCloseDialog();
 		DrawCreateDialog();
 		DrawRenameDialog();
+		DrawBreakpointDialog();
 		DrawQuickFixPopup();
 	}
 
@@ -1641,7 +1836,9 @@ namespace Bellows {
 			RequestClose(m_ActiveDocument);
 		else if (m_Documents.size() > 1 && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Tab))
 			m_ActiveDocument = (m_ActiveDocument + 1) % m_Documents.size();
-		else if (document && ImGui::IsKeyPressed(ImGuiKey_F9, false))
+		else if (document && ImGui::IsKeyChordPressed(ImGuiMod_Shift | ImGuiKey_F9))
+			OpenBreakpointDialog(*document, document->Editor->GetMainCursorPosition().line);
+		else if (document && ImGui::IsKeyPressed(ImGuiKey_F9, false) && !ImGui::GetIO().KeyMods)
 			ToggleBreakpoint(*document, document->Editor->GetMainCursorPosition().line);
 		else if (document && document->Language == ScriptLanguage::ForgeScript)
 		{

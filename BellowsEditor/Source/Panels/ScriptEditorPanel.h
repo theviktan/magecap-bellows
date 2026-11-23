@@ -43,6 +43,10 @@ namespace Bellows {
 		void ShowCreateDialog(ScriptLanguage language = ScriptLanguage::ForgeScript);
 		void ShowAttachDialog(Entity entity);
 
+		// Opens a ForgeScript asset at a line (1-based) and shows the Edit Breakpoint dialog for it: a
+		// condition, and a message to log instead of stopping. Used by the Debugger panel.
+		void EditBreakpoint(const std::string& assetPath, int line);
+
 		// The guides (ForgeScript, Python API, automation), opened read-only in the Script Editor.
 		void DrawHelpMenuItems();
 
@@ -55,6 +59,14 @@ namespace Bellows {
 		bool IsFocused() const { return m_Focused; }
 		void Focus() { m_FocusRequested = true; }
 	private:
+		// What a breakpoint line holds in its code editor (the line's user data), so the condition and
+		// log message move with the line while the script is edited.
+		struct BreakpointMark
+		{
+			std::string Condition;
+			std::string LogMessage;
+		};
+
 		struct Document
 		{
 			std::filesystem::path Path;
@@ -70,6 +82,8 @@ namespace Bellows {
 			bool NeedsAnalysis = true;
 			std::vector<ScriptOutlineItem> Outline;
 			std::vector<ScriptDiagnostic> Diagnostics;
+			// Every breakpoint line's user data points at one of these; the only user data the editor sets.
+			std::vector<Scope<BreakpointMark>> BreakpointMarks;
 
 			// The last hover help asked for (the hover popup draws every frame).
 			size_t HoverLine = SIZE_MAX;
@@ -108,6 +122,10 @@ namespace Bellows {
 		void ShowBreakpoints(Document& document);
 		void SaveBreakpoints(Document& document);
 		void DrawBreakpointGutter(Document& document, size_t line, float width, float height);
+		BreakpointMark* GetBreakpointMark(const Document& document, size_t line) const;
+		// Opens the Edit Breakpoint dialog for a zero-based line (a new breakpoint when it has none).
+		void OpenBreakpointDialog(Document& document, size_t line);
+		void DrawBreakpointDialog();
 		bool IsStoppedAt(const Document& document, size_t line) const;
 		// ForgeScript completion and hover help come from the language server (ForgeScriptAssist).
 		ForgeScriptAssist& GetForgeScriptAssist();
@@ -175,6 +193,14 @@ namespace Bellows {
 		std::filesystem::path m_ReferencesPath;
 		std::string m_ReferencesName;
 		std::vector<ReferenceItem> m_References;
+
+		// Edit Breakpoint dialog
+		bool m_OpenBreakpointDialog = false;
+		std::filesystem::path m_BreakpointPath;
+		size_t m_BreakpointLine = 0;		// Zero-based
+		std::string m_BreakpointCondition;
+		bool m_BreakpointLogs = false;
+		std::string m_BreakpointLogMessage;
 
 		// Quick fixes for the cursor's line
 		bool m_OpenQuickFixes = false;
