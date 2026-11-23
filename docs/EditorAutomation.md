@@ -30,9 +30,14 @@ with the engine's functions and phrases known, Python with the bundled interpret
 
 ```
 BellowsEditor --check-script Scripts/Player.forge          # on stderr: file:line:column: message (or: warning: message)
-BellowsEditor --check-script Scripts/Player.forge --json   # {"file", "diagnostics": [{line, column, endColumn, severity, message}]}
+BellowsEditor --check-script Scripts/Player.forge --json   # {"file", "diagnostics": [{line, column, endColumn, severity, message, fix?}]}
 BellowsEditor --check-script Scripts/Player.forge --stdin  # reads the (unsaved) text from standard input
 ```
+
+A ForgeScript mistake or warning whose message names exactly what to write has a `"fix"`, the same
+as `forgescript --check --json`'s: `{"title", "line", "column", "endLine", "endColumn", "newText"}`,
+which replaces `line:column` up to `endLine:endColumn` (1-based bytes, the end not included; equal
+ends insert) with `newText`. Python's diagnostics have none.
 
 `use "Scripts/Helpers"` lines are read from the project's `Assets` folder, as in the game: the
 project is the nearest folder above the script that contains a `.bproject` file (outside a project,

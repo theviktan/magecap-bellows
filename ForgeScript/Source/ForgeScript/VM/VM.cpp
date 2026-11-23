@@ -476,7 +476,32 @@ namespace ForgeScript {
 	void VM::SetGlobal(Module* module, const std::string& name, Value value)
 	{
 		GCPause pause(*this);
-		module->SetGlobal(Intern(name), value);
+		WriteScriptVariable(module, Intern(name), value);
+	}
+
+	void VM::WatchScriptVariables(Module* module, const std::vector<std::string>& names)
+	{
+		GCPause pause(*this);
+		module->WatchedGlobals.clear();
+		for (const std::string& name : names)
+			module->WatchedGlobals.insert(Intern(name));
+	}
+
+	void VM::WriteScriptVariable(Module* module, String* name, const Value& value)
+	{
+		if (module->WatchedGlobals.empty() || !m_ScriptVariableChangedHandler || module->WatchedGlobals.count(name) == 0)
+		{
+			module->SetGlobal(name, value);
+			return;
+		}
+		auto found = module->Globals.find(name);
+		const Value before = found != module->Globals.end() ? found->second : Value();
+		module->SetGlobal(name, value);
+		if (before == value)
+			return;
+		// Both values stay alive while the host looks at them (it may make text or lists).
+		GCPause pause(*this);
+		m_ScriptVariableChangedHandler(module, name->Text, value, before);
 	}
 
 	bool VM::HasHandler(Module* module, const std::string& event)
@@ -680,7 +705,7 @@ namespace ForgeScript {
 		return success;
 	}
 
-	void VM::EmitAll(const std::string& event, const std::vector<Value>& values)
+	void VM::EmitAll(const std::string& event, const std::vector<Value>& values, const std::string& source)
 	{
 		std::vector<Value> held = values;
 		std::vector<Module*> modules = m_Modules;
@@ -688,7 +713,7 @@ namespace ForgeScript {
 		{
 			// The module may have been unloaded by an earlier handler.
 			if (std::find(m_Modules.begin(), m_Modules.end(), module) != m_Modules.end())
-				Emit(module, event, held);
+				Emit(module, event, held, source);
 		}
 	}
 
@@ -2131,7 +2156,7 @@ namespace ForgeScript {
 				Module* module = As<Module>(object);
 				if (module->Constants.count(name))
 					return Fail("'" + key + "' is a constant and cannot be changed.");
-				module->SetGlobal(name, value);
+				WriteScriptVariable(module, name, value);
 				return true;
 			}
 			default:
@@ -2819,7 +2844,10 @@ namespace ForgeScript {
 					Module* module = frame->Function->Fn->Owner;
 					if (module->Constants.count(name))
 						FORGESCRIPT_FAIL("'" + name->Text + "' is a constant and cannot be changed.");
-					module->SetGlobal(name, stack.back());
+					if (module->WatchedGlobals.empty())
+						module->SetGlobal(name, stack.back());
+					else
+						WriteScriptVariable(module, name, stack.back());
 					break;
 				}
 				case OpCode::DefineConstant:
@@ -3853,6 +3881,8 @@ namespace ForgeScript {
 					MarkObject(name);
 					MarkValue(value);
 				}
+				for (String* name : module->WatchedGlobals)
+					MarkObject(name);
 				for (auto& [name, handlers] : module->Handlers)
 				{
 					MarkObject(name);

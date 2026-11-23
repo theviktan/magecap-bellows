@@ -51,11 +51,17 @@ namespace {
 
 		explicit Session(bool withApi = true) : Session(withApi ? c_TestApi : std::filesystem::path()) {}
 
-		explicit Session(const std::filesystem::path& api)
+		explicit Session(const std::filesystem::path& api, bool strict = false)
 			: Server(LanguageServer::Options { api })
 		{
 			Json init;
 			init.Set("rootUri", "file:///tmp");
+			if (strict)
+			{
+				Json options;
+				options.Set("strict", true);
+				init.Set("initializationOptions", std::move(options));
+			}
 			REQUIRE_FALSE(Request("initialize", init).Get("capabilities").IsNull());
 			Notify("initialized", Json(Json::Object()));
 		}
@@ -1390,6 +1396,18 @@ TEST_CASE("LanguageServerPublishesWarnings")
 	diagnostics = session.Change(uri, "set find_entity to 1\nsay find_entity(\"Menu\")\nset to 5\n", 2);
 	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
 	CHECK_EQ(diagnostics.AsArray()[0].Get("severity").AsNumber(), 1.0);
+}
+
+TEST_CASE("LanguageServerStrictSendsWarningsAsMistakes")
+{
+	// initializationOptions.strict, as 'forgescript --check --strict': the same warnings, shown as mistakes.
+	TempFolder folder("strict");
+	Session session(c_TestApi, true);
+	const std::string uri = LanguageServer::PathToUri(folder.Path / "menu.forge");
+	const Json diagnostics = session.Open(uri, "set find_entity to 1\nsay find_entity(\"Menu\")\n");
+	REQUIRE_EQ(diagnostics.AsArray().size(), static_cast<size_t>(1));
+	CHECK_EQ(diagnostics.AsArray()[0].Get("severity").AsNumber(), 1.0);
+	CHECK_CONTAINS(diagnostics.AsArray()[0].GetString("message"), "hides the built-in function 'find_entity'");
 }
 
 TEST_CASE("LanguageServerSurvivesDeepNesting")

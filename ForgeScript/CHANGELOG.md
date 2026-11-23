@@ -7,10 +7,24 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **`VM::EmitAll(event, values, source)`** takes the name of the entity a broadcast is about, so
+  `when "Hero" is destination reached` works for events every script hears. MageCap Bellows passes it
+  for broadcasts that name their entity (asked for by MCBellows for navigation and `field changed`).
+- **`forgescript --check --strict`** (expert features item 3), for teams that want no warnings: the
+  same output as `--check`, but the exit code is 1 when there is a warning (65 for mistakes, as before),
+  and the text ends "no mistakes found, but 1 warning, and --strict counts warnings." The language
+  server's `initializationOptions: {"strict": true}` sends warnings as errors. There's no switch inside
+  a script, so it never changes how a game runs.
+- **Hosts can watch script variables** (for MageCap Bellows 0.6.0's `field changed` event):
+  `VM::WatchScriptVariables(module, names)` and `VM::SetScriptVariableChangedHandler(...)` report each
+  write that changes a watched variable, after the new value is in, with the value before. Writes in
+  the script, from another script and from the host all report; the same value, hot reload and `use`
+  don't. Scripts that aren't watched pay one test per variable write (+0.4% CPU instructions on a loop
+  of 300,000 writes). See Embedding, Step 6.
 - **Return types** (expert features item 1, design on the Sync Board): `function health_left() as
-  number` says what a function gives back, for script functions and kinds' functions. Like parameter types, it is
-  for checkers only and never changes what runs; before, it was a mistake, so no script that ran
-  changes. `--check` and the language server warn:
+  number` says what a function gives back, for script functions and kinds' functions. Like parameter
+  types, it is for checkers only and never changes what runs; before, it was a mistake, so no script
+  that ran changes. `--check` and the language server warn:
   - for a `return` with a plain value of another type: "'status' says it gives back text (as text),
     but this gives back a number.";
   - for a function with no `return` with a value (and no `fail`): "'status' says it gives back text

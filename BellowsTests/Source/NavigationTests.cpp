@@ -735,11 +735,16 @@ TEST_CASE("An agent that arrives sends 'destination reached', saying whether it 
 	Entity walker = AddAgent(*scene, "Walker", { -8.0f, 0.0f, 0.0f });
 
 	std::vector<std::pair<Scripting::ScriptEntity, bool>> reached;
+	bool aboutTheAgent = true;
 	const Scripting::ScriptEventListenerID listener = Scripting::AddScriptEventListener(
-		[&](const std::string& name, const Scripting::ScriptValueList& values, const Scripting::ScriptEventDelivery&)
+		[&](const std::string& name, const Scripting::ScriptValueList& values, const Scripting::ScriptEventDelivery& delivery)
 		{
 			if (name == "destination reached" && values.size() == 2)
+			{
 				reached.emplace_back(std::get<Scripting::ScriptEntity>(values[0].Data), std::get<bool>(values[1].Data));
+				// Every script hears it (no Target), and it names the agent as its source.
+				aboutTheAgent &= !delivery.Target && delivery.Source && delivery.Source->ID == walker.GetUUID();
+			}
 		});
 	scene->OnRuntimeStart();
 
@@ -750,6 +755,7 @@ TEST_CASE("An agent that arrives sends 'destination reached', saying whether it 
 		REQUIRE(reached.size() == 1);
 		CHECK(reached[0].first.ID == walker.GetUUID());
 		CHECK(reached[0].second);
+		CHECK(aboutTheAgent);
 		for (int i = 0; i < 30; i++)
 			scene->OnUpdateRuntime(Timestep(c_Frame));
 		CHECK(reached.size() == 1);		// Once

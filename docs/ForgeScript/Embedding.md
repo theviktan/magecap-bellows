@@ -239,7 +239,7 @@ m_VM.EmitAll("key pressed", { m_VM.MakeText("space") });
 ```
 
 - `Emit` runs every matching `when` in one module. `EmitAll` sends the event to every module.
-- `Emit(module, event, values, source)` names the entity that raised the event. Handlers written `when "Start" is clicked` run only when `source` is `"Start"` (ignoring letter case); without a source (and with `EmitAll`) they never run. MageCap Bellows passes the widget's name for UI events.
+- `Emit(module, event, values, source)` names the entity that raised the event (`EmitAll(event, values, source)` too, for a broadcast about one entity). Handlers written `when "Start" is clicked` run only when `source` is `"Start"` (ignoring letter case); without a source (and with `EmitAll`) they never run. MageCap Bellows passes the widget's name for UI events.
 - `Emit` also wakes the module's tasks that `wait for` the event (after its `when` blocks), and `HasHandler(module, event)` is true while a task waits for it, so a host that sends an event only to modules with a handler reaches those scripts too.
 - Missing values arrive as `nothing`; extra values are ignored, so scripts can take only what they need.
 - Route the script-side `trigger` statement with `SetTriggerHandler`. The default sends the event back to the same script; many games want it to reach every script:
@@ -263,6 +263,23 @@ if (m_VM.Call(score, { Wrap(target) }, &result) && result.IsNumber())
 ```
 
 Functions called this way must finish right away; they cannot `wait`.
+
+To hear when a script's variables change (for example to send an "a field changed" event to a HUD), watch them after the script's first run, so its starting values aren't reported:
+
+```cpp
+m_VM.SetScriptVariableChangedHandler([this](ForgeScript::Module* module, const std::string& name,
+	const ForgeScript::Value& now, const ForgeScript::Value& before)
+{
+	m_Pending.push_back({ EntityOf(module), name, now, before }); // queue it; send it after the script's step
+});
+m_VM.WatchScriptVariables(module, { "health", "speed" });
+```
+
+- **What reports:** every write to a watched variable: `set`, `add ... to`, `take ... from`, `set a, b to ...`, writes from the script's functions and handlers, from another script (`set player.health to 5`) and from `SetGlobal`.
+- **What doesn't:** a write of the same value (`==`: numbers, text and vectors by their contents, lists and maps by identity, so `items.add(x)` reports nothing), hot reload (`CarryOverVariables`) and `use`.
+- **Queue, don't run:** the handler runs in the middle of the script's instruction. Keep the values (copy them into your queue) and run other scripts from the queue afterwards.
+- **Cost:** a module with no watched names pays one test per variable write; a watched module one lookup.
+- `WatchScriptVariables(module, {})` stops it; a new list replaces the old one.
 
 ---
 

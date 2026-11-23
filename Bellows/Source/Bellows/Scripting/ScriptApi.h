@@ -123,6 +123,9 @@ namespace Bellows::Scripting {
 	// the widget). The walk stops at an entity that no longer exists. The whole walk is one level of
 	// nesting, with the same limits as EmitScriptEvent.
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values);
+	// Delivers an event to every script, as EmitScriptEvent does, naming the entity it is about as its
+	// Source (with no Target), so ForgeScript's 'when "Hero" is destination reached' hears only Hero's.
+	void EmitScriptEventAbout(ScriptEntity source, const std::string& name, const ScriptValueList& values);
 
 	// A script error, as each language's runtime reports it to scripts that watch for errors (a crash
 	// reporter). File is the script's asset path with forward slashes ("Scripts/player.py"), or a file
