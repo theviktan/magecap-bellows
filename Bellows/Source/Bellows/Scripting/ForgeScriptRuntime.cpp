@@ -215,6 +215,8 @@ namespace Bellows::Scripting {
 	void ForgeScriptRuntime::Start()
 	{
 		m_Instances.clear();
+		m_InstanceByModule.clear();
+		m_WarnedFields.clear();
 		m_WarnedEvents.clear();
 		m_VM = CreateMachine();
 
@@ -256,15 +258,19 @@ namespace Bellows::Scripting {
 		m_VM->SetScriptVariableChangedHandler([this](ForgeScript::Module* module, const std::string& name, const ForgeScript::Value& now,
 			const ForgeScript::Value& before)
 		{
-			for (const auto& [uuid, instance] : m_Instances)
-			{
-				if (instance.Module != module)
-					continue;
-				std::vector<std::string> unsendable;
-				QueueScriptEventAbout(instance.Owner, "field changed", { instance.Owner, name, ToScriptValue(*m_VM, now, unsendable),
-					ToScriptValue(*m_VM, before, unsendable) });
+			auto owner = m_InstanceByModule.find(module);
+			if (owner == m_InstanceByModule.end())
 				return;
-			}
+			auto found = m_Instances.find(owner->second);
+			if (found == m_Instances.end())
+				return;
+			const Instance& instance = found->second;
+			std::vector<std::string> unsendable;
+			QueueScriptEventAbout(instance.Owner, "field changed", { instance.Owner, name, ToScriptValue(*m_VM, now, unsendable),
+				ToScriptValue(*m_VM, before, unsendable) });
+			if (!unsendable.empty() && m_WarnedFields.insert(instance.ScriptPath + "|" + name).second)
+				BW_WARN("Script '{}': field '{}' changed to {}, which 'field changed' can't carry to scripts; they receive nothing in its place",
+					instance.ScriptPath, name, unsendable.front());
 		});
 	}
 
@@ -308,6 +314,7 @@ namespace Bellows::Scripting {
 			Emit(uuid, "destroyed", {});
 
 		m_Instances.clear();
+		m_InstanceByModule.clear();
 		RemoveScriptEventListener(m_EventListener);
 		m_EventListener = 0;
 		m_VM.reset();
@@ -370,6 +377,7 @@ namespace Bellows::Scripting {
 		instance.ScriptPath = component.ScriptPath;
 		instance.Fields = FieldNames(source);
 		m_Instances[entity.GetUUID()] = instance;
+		m_InstanceByModule[module] = entity.GetUUID();
 		return true;
 	}
 
@@ -451,6 +459,8 @@ namespace Bellows::Scripting {
 				m_VM->UnloadModule(newModule);
 				continue;
 			}
+			m_InstanceByModule.erase(oldModule);
+			m_InstanceByModule[newModule] = uuid;
 			again->second.Module = newModule;
 			again->second.ErrorCount = 0;
 			again->second.Fields = FieldNames(sources[scriptPath]);
@@ -577,6 +587,7 @@ namespace Bellows::Scripting {
 			Emit(entity, "destroyed", {});
 		// Look the entity up again: the handler may have created entities, which changes the map.
 		m_Instances.erase(entity);
+		m_InstanceByModule.erase(module);
 		m_VM->UnloadModule(module);
 	}
 
