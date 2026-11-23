@@ -1003,3 +1003,16 @@ TEST_CASE("WatchedScriptVariablesReportTheirChanges")
 	h.Machine.SetGlobal(player, "health", Value::FromNumber(2));
 	CHECK_EQ(changes.size(), static_cast<size_t>(4));
 }
+
+TEST_CASE("EmitAllCanNameTheEntityItIsAbout")
+{
+	// A broadcast about one entity (Bellows' 'destination reached', 'field changed') reaches every
+	// script, and handlers written 'when "Hero" is ...' run only when it is about the Hero.
+	Harness h;
+	h.Machine.Load("when \"Hero\" is destination reached\n\tsay \"hero here\"\nend\nwhen destination reached\n\tsay \"someone\"\nend\n", "a.forge");
+	h.Machine.Load("when \"Guard\" is destination reached\n\tsay \"guard here\"\nend\n", "b.forge");
+	h.Machine.EmitAll("destination reached", {}, "hero");
+	h.Machine.EmitAll("destination reached");
+	CHECK_EQ(h.Output, std::string("hero here\nsomeone\nsomeone\n"));
+	CHECK(h.Errors.empty());
+}
