@@ -967,3 +967,39 @@ TEST_CASE("NavigationPhrasesAndEventWorkAsBellowsDefinesThem")
 	CHECK_EQ(own.Output, std::string("6\n"));
 	CHECK(own.Errors.empty());
 }
+
+TEST_CASE("WatchedScriptVariablesReportTheirChanges")
+{
+	// For Bellows' 'field changed' event (0.6.0): every way a script variable can change is reported
+	// once, after the new value is in, and only when the value really changed.
+	Harness h;
+	std::vector<std::string> changes;
+	h.Machine.SetScriptVariableChangedHandler([&](Module*, const std::string& name, const Value& now, const Value& before)
+	{
+		changes.push_back(name + ": " + h.Machine.ToText(before) + " -> " + h.Machine.ToText(now));
+	});
+	const LoadResult loaded = h.Machine.Load(
+		"set health to 100\nset speed to 2\nset items to []\n"
+		"function hurt(amount)\n\ttake amount from health\nend\n"
+		"when healed\n\tadd 5 to health\nend\n", "player.forge");
+	REQUIRE(loaded.LoadedModule != nullptr);
+	Module* player = loaded.LoadedModule;
+	CHECK(changes.empty()); // nothing was watched yet, so the starting values aren't reported
+
+	h.Machine.WatchScriptVariables(player, { "health", "items" });
+	CHECK(h.Machine.Call(h.Machine.GetGlobal(player, "hurt"), { Value::FromNumber(10) }));
+	h.Machine.Emit(player, "healed");
+	h.Machine.SetGlobal(player, "health", Value::FromNumber(95)); // the same value: nothing
+	h.Machine.SetGlobal(player, "health", Value::FromNumber(50)); // the host, like the Inspector
+	h.Machine.SetGlobal(player, "speed", Value::FromNumber(9));   // not watched
+	h.Machine.SetSharedGlobal("p", Value::FromObject(player)); // another script, as Bellows hands them over
+	h.Machine.Load("set p.health to 1\np.items.add(3)\n", "other.forge");
+	h.Machine.Load("set health to 7\n", "unrelated.forge");       // another script's own variable
+
+	CHECK_EQ(changes, std::vector<std::string>{ "health: 100 -> 90", "health: 90 -> 95", "health: 95 -> 50", "health: 50 -> 1" });
+	CHECK(h.Errors.empty());
+
+	h.Machine.WatchScriptVariables(player, {});
+	h.Machine.SetGlobal(player, "health", Value::FromNumber(2));
+	CHECK_EQ(changes.size(), static_cast<size_t>(4));
+}

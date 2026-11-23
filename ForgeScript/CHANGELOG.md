@@ -7,6 +7,12 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Hosts can watch script variables** (for MageCap Bellows 0.6.0's `field changed` event):
+  `VM::WatchScriptVariables(module, names)` and `VM::SetScriptVariableChangedHandler(...)` report each
+  write that changes a watched variable, after the new value is in, with the value before. Writes in
+  the script, from another script and from the host all report; the same value, hot reload and `use`
+  don't. Scripts that aren't watched pay one test per variable write (+0.4% CPU instructions on a loop
+  of 300,000 writes). See Embedding, Step 6.
 - **Return types** (expert features item 1, design on the Sync Board): `function health_left() as
   number` says what a function gives back, for script functions and kinds' functions. Like parameter types, it is
   for checkers only and never changes what runs; before, it was a mistake, so no script that ran

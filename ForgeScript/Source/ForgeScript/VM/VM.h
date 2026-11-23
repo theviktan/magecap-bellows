@@ -56,6 +56,10 @@ namespace ForgeScript {
 	// Called by "trigger name with values". The default sends the event to the same script. A handler
 	// may throw RuntimeError: it becomes an error on the 'trigger' line, which scripts can catch.
 	using TriggerHandler = std::function<void(Module* source, const std::string& event, const std::vector<Value>& values)>;
+	// Called after a watched script variable gets a different value (VM::WatchScriptVariables). It runs
+	// in the middle of the script's instruction: queue what it starts (an event) instead of running
+	// scripts from inside it.
+	using ScriptVariableChangedHandler = std::function<void(Module* module, const std::string& name, const Value& now, const Value& before)>;
 
 	// ---------------------------------------------------------------- Debugger
 
@@ -168,6 +172,14 @@ namespace ForgeScript {
 		void SetErrorHandler(ErrorHandler handler) { m_ErrorHandler = std::move(handler); }
 		void SetModuleLoader(ModuleLoader loader) { m_ModuleLoader = std::move(loader); }
 		void SetTriggerHandler(TriggerHandler handler) { m_TriggerHandler = std::move(handler); }
+		// Script variables to report when they change: every write to them in the script ('set', 'add ...
+		// to', 'take ... from', from its functions and handlers), from another script ('other.health = 5')
+		// and from the host (SetGlobal). A write of the same value (==: numbers, text and vectors by
+		// contents, lists and maps by identity) reports nothing, so changing what is inside a list doesn't
+		// either. Hot reload (CarryOverVariables) and 'use' never report. Call it after the script's first
+		// run, so its starting values aren't reported. Names replace the module's earlier ones; none stops.
+		void WatchScriptVariables(Module* module, const std::vector<std::string>& names);
+		void SetScriptVariableChangedHandler(ScriptVariableChangedHandler handler) { m_ScriptVariableChangedHandler = std::move(handler); }
 
 		// Makes a C++ function callable from every script:  random(1, 6)
 		void RegisterFunction(const std::string& name, int arity, NativeFn fn);
@@ -444,6 +456,9 @@ namespace ForgeScript {
 		ErrorHandler m_ErrorHandler;
 		ModuleLoader m_ModuleLoader;
 		TriggerHandler m_TriggerHandler;
+		ScriptVariableChangedHandler m_ScriptVariableChangedHandler;
+		// Sets a script variable, reporting it when it is watched and its value changed.
+		void WriteScriptVariable(Module* module, String* name, const Value& value);
 
 		PhraseTable m_Phrases;
 		std::unordered_map<String*, Value> m_SharedGlobals;
