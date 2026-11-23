@@ -7,6 +7,14 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Building text is more than twice as fast.** On the release build, adding a million `"w{i}"` texts
+  to a list went from 1.43 to 0.62 seconds, and the `text` and `numbers_to_text` benchmarks run 27% and
+  20% fewer CPU instructions. What changed:
+  - The table that keeps one copy of each text is now an open-addressing table: one hash per lookup
+    and no extra memory for each new text.
+  - Text and numbers filled into `{...}` are added directly.
+  - A call like `words.add(x)` no longer makes a list of the type's property names on every call.
+  Equal texts are still one value, unused texts are still freed, and every script prints the same.
 - **A warning for text that isn't UTF-8** (asked for by Ron; MFC agreed). Text in quotes saved in
   another encoding, like `say "café"` from a Windows-1252 file, ran without a word and showed up
   garbled in the game. `--check` and the language server now warn at the first bad byte of each piece

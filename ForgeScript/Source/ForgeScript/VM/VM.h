@@ -5,6 +5,7 @@
 #include "ForgeScript/Compiler/Phrase.h"
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/Core/Value.h"
+#include "ForgeScript/VM/StringTable.h"
 #include "ForgeScript/VM/Task.h"
 
 #include <functional>
@@ -446,7 +447,7 @@ namespace ForgeScript {
 
 		PhraseTable m_Phrases;
 		std::unordered_map<String*, Value> m_SharedGlobals;
-		std::unordered_map<std::string_view, String*> m_Strings;
+		StringTable m_Strings;
 		std::vector<Module*> m_Modules;
 		std::unordered_map<std::string, Module*> m_UsedModules;
 		struct CachedSource
