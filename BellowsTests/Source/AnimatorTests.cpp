@@ -9,6 +9,7 @@
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
+#include "Bellows/Scripting/ScriptApiDefinition.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -360,7 +361,39 @@ TEST_CASE("An Animator is saved with the scene and copied with its entity")
 	CHECK(defaults.Loop);
 	CHECK(defaults.Speed == doctest::Approx(1.0f));
 
+	// A speed past the limits (an edited file, say) is held to them on load.
+	Json fast = json;
+	for (Json& entityJson : fast["Entities"])
+	{
+		if (entityJson.contains("Animator"))
+			entityJson["Animator"]["Speed"] = 50.0;
+	}
+	Scene faster("Faster");
+	REQUIRE(SceneSerializer::DeserializeFromJson(faster, fast));
+	CHECK(faster.FindEntityByName("Hero").GetComponent<AnimatorComponent>().Speed == doctest::Approx(AnimationPlayer::MaxSpeed));
+	fast["Entities"][0]["Animator"]["Speed"] = -50.0;
+	Scene backward("Backward");
+	REQUIRE(SceneSerializer::DeserializeFromJson(backward, fast));
+	CHECK(backward.FindEntityByName("Hero").GetComponent<AnimatorComponent>().Speed == doctest::Approx(-AnimationPlayer::MaxSpeed));
+
 	Entity duplicate = scene.DuplicateEntity(entity);
 	REQUIRE(duplicate.HasComponent<AnimatorComponent>());
 	CHECK(duplicate.GetComponent<AnimatorComponent>().Clip == "Run");
+}
+
+TEST_CASE("A script asking about bones before an Animator's first update doesn't stop Play On Start")
+{
+	const Ref<Mesh> mesh = LoadColumn();
+	Scene scene("Animated");
+	scene.OnRuntimeStart();
+	// Added during play: the scene hasn't updated it yet.
+	Entity column = MakeAnimated(scene, mesh);
+	const Scripting::AnimatorRef animator { Scripting::ScriptEntity(column) };
+	CHECK(Scripting::Detail::BonePosition(animator, "Top") == glm::vec3(0.0f, 1.0f, 0.0f));
+	scene.OnUpdateRuntime(Timestep(0.5f));
+	const AnimatorComponent& component = column.GetComponent<AnimatorComponent>();
+	CHECK(component.RuntimePlayer.IsPlaying());
+	CHECK(component.RuntimePlayer.GetClip() == mesh->GetSkin()->FindClip("Bend"));
+	CHECK(BendDegrees(component.RuntimeSkinMatrices) == doctest::Approx(45.0f).epsilon(0.001));
+	scene.OnRuntimeStop();
 }

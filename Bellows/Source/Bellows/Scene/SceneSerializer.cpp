@@ -253,6 +253,7 @@ namespace Bellows {
 				JsonRead(*it, "PlayOnStart", component.PlayOnStart);
 				JsonRead(*it, "Loop", component.Loop);
 				JsonRead(*it, "Speed", component.Speed);
+				component.Speed = std::isfinite(component.Speed) ? std::clamp(component.Speed, -AnimationPlayer::MaxSpeed, AnimationPlayer::MaxSpeed) : 1.0f;
 			}
 
 			if (auto it = json.find("AudioSource"); it != json.end())
