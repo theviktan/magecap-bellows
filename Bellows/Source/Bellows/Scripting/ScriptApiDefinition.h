@@ -358,9 +358,12 @@ namespace Bellows::Scripting {
 
 		inline void ShakeCamera(double strength, double seconds)
 		{
-			if (!std::isfinite(strength) || strength < 0.0 || strength > CameraShake::MaxStrength)
+			// The same words as every other refused NaN or infinity (B-19).
+			if (!std::isfinite(strength) || !std::isfinite(seconds))
+				throw ScriptValueError("shake_camera needs ordinary numbers, not NaN or infinity");
+			if (strength < 0.0 || strength > CameraShake::MaxStrength)
 				throw ScriptValueError("A camera shake's strength is a number from 0 to 10");
-			if (!std::isfinite(seconds) || seconds < 0.0 || seconds > CameraShake::MaxSeconds)
+			if (seconds < 0.0 || seconds > CameraShake::MaxSeconds)
 				throw ScriptValueError("A camera shake lasts from 0 to 10 seconds");
 			Scene& scene = RequireContextScene();
 			if (!scene.IsRunning())
