@@ -295,6 +295,7 @@ namespace Bellows {
 		json["AlphaMode"] = AlphaModeToString(properties.Mode);
 		json["AlphaCutoff"] = properties.AlphaCutoff;
 		json["DoubleSided"] = properties.DoubleSided;
+		json["Unlit"] = properties.Unlit;
 		json["TextureFilter"] = TextureFilterToString(properties.Filter);
 		json["WrapU"] = TextureWrapToString(properties.WrapU);
 		json["WrapV"] = TextureWrapToString(properties.WrapV);
@@ -345,6 +346,7 @@ namespace Bellows {
 		JsonRead(json, "NormalStrength", properties.NormalStrength);
 		JsonRead(json, "AlphaCutoff", properties.AlphaCutoff);
 		JsonRead(json, "DoubleSided", properties.DoubleSided);
+		JsonRead(json, "Unlit", properties.Unlit);
 		JsonRead(json, "UVTiling", properties.UVTiling);
 		JsonRead(json, "UVOffset", properties.UVOffset);
 		std::string alphaMode = "Opaque";

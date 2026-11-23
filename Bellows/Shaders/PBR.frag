@@ -61,6 +61,19 @@ void main()
 		discard;
 
 	vec3 albedo = albedoSample.rgb;
+	float alpha = alphaMode == 2u ? albedoSample.a : 1.0;
+
+	// Unlit (KHR_materials_unlit): the base color as it is, plus emissive; no lights, shade, ambient
+	// occlusion or environment.
+	if (u_Material.Flags.z == 1u)
+	{
+		vec3 unlitEmissive = u_Material.EmissiveColor.rgb;
+		if ((u_Material.Flags.y & TEXTURE_EMISSIVE) != 0u)
+			unlitEmissive *= texture(sampler2D(u_EmissiveMap, s_Material), uv).rgb;
+		o_Color = vec4(albedo + unlitEmissive, alpha);
+		return;
+	}
+
 	float metallic = u_Material.Params.x;
 	float roughness = u_Material.Params.y;
 	if ((u_Material.Flags.y & TEXTURE_METAL_ROUGH) != 0u)
@@ -175,6 +188,5 @@ void main()
 		emissive *= texture(sampler2D(u_EmissiveMap, s_Material), uv).rgb;
 	color += emissive;
 
-	float alpha = alphaMode == 2u ? albedoSample.a : 1.0;
 	o_Color = vec4(color, alpha);
 }

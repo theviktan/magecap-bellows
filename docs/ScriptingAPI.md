@@ -677,7 +677,8 @@ gold.save("Materials/Gold.bmat")          # Optional: write it into the project
 `Material(name="Material", color=None, metallic=0.0, roughness=0.5)` creates a runtime material;
 `Material.load(path)` opens a `.bmat`. Properties: `name`, `path`, `color`, `metallic`,
 `roughness`, `emissive` (`Vec3`), `emissive_intensity`, `alpha_mode` (`"Opaque"`, `"Mask"`,
-`"Blend"`), `alpha_cutoff`, `double_sided`, `texture_filter` (`"Linear"`, smooth, or `"Nearest"`,
+`"Blend"`), `alpha_cutoff`, `double_sided`, `unlit` (shown as its color and emissive with no
+lights, shade or shadows on it, for flat-shaded art and sprites; it still casts shadows), `texture_filter` (`"Linear"`, smooth, or `"Nearest"`,
 pixelated for pixel art and palettes), `wrap_u` and `wrap_v` (`"Repeat"`, `"Clamp"`, `"Mirror"`),
 `normal_strength`, `uv_tiling`, `uv_offset`, and the
 texture slots `albedo_map`, `normal_map`, `metallic_roughness_map` (glTF layout: roughness in G,

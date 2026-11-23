@@ -638,6 +638,9 @@ namespace Bellows::Scripting {
 			[](const ScriptMaterial& m, const std::string& v) { m.Instance->EditProperties().Mode = AlphaModeFromString(v); }, "");
 		material.Property("double_sided", [](const ScriptMaterial& m) { return m.Instance->GetProperties().DoubleSided; },
 			[](const ScriptMaterial& m, bool v) { m.Instance->EditProperties().DoubleSided = v; }, "");
+		material.Property("unlit", [](const ScriptMaterial& m) { return m.Instance->GetProperties().Unlit; },
+			[](const ScriptMaterial& m, bool v) { m.Instance->EditProperties().Unlit = v; },
+			"Shown as its albedo (and emissive) with no lights, shade or shadows on it, for flat-shaded art and sprites. It still casts shadows");
 		material.Property("texture_filter", [](const ScriptMaterial& m) { return std::string(TextureFilterToString(m.Instance->GetProperties().Filter)); },
 			[](const ScriptMaterial& m, const std::string& v)
 			{
