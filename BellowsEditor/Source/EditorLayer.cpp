@@ -21,6 +21,7 @@
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/Platform.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
@@ -370,6 +371,9 @@ namespace Bellows {
 			m_DialogMessage = "Could not save the scene to '" + assetPath + "'.";
 			return false;
 		}
+		// Saved under a new name, the scene takes its navmesh along.
+		if (assetPath != m_ScenePath && m_EditorScene->GetNavMesh())
+			SaveSceneNavMesh(*m_EditorScene->GetNavMesh(), AssetManager::GetAbsolutePath(assetPath));
 		m_ScenePath = assetPath;
 		m_CurrentSnapshot = SerializeEditorScene();
 		m_SavedSnapshot = m_CurrentSnapshot;
@@ -422,6 +426,30 @@ namespace Bellows {
 		UpdateWindowTitle();
 	}
 
+	bool EditorLayer::BakeNavigation(std::string& error)
+	{
+		if (m_SceneState != SceneState::Edit || !m_EditorScene)
+		{
+			error = "Stop the game to bake navigation.";
+			return false;
+		}
+		if (m_ScenePath.empty())
+		{
+			error = "Save the scene first: its navmesh is saved beside it.";
+			return false;
+		}
+		if (!m_EditorScene->BakeNavigation(error))
+			return false;
+		if (!SaveSceneNavMesh(*m_EditorScene->GetNavMesh(), AssetManager::GetAbsolutePath(m_ScenePath)))
+		{
+			error = "The navmesh was baked but couldn't be saved beside the scene.";
+			return false;
+		}
+		const NavMesh& navMesh = *m_EditorScene->GetNavMesh();
+		BW_INFO("Baked navigation for '{}': {} tiles, {} polygons", m_ScenePath, navMesh.GetTileCount(), navMesh.GetPolygonCount());
+		return true;
+	}
+
 	void EditorLayer::LoadSnapshot(const UndoHistory::Snapshot& snapshot)
 	{
 		Ref<Scene> scene = CreateRef<Scene>();
@@ -431,6 +459,8 @@ namespace Bellows {
 			BW_CORE_ERROR("Undo: the stored scene state could not be restored");
 			return;
 		}
+		// The navmesh isn't part of the scene's JSON; undo leaves the baked one in place.
+		scene->SetNavMesh(m_EditorScene ? m_EditorScene->GetNavMesh() : nullptr);
 		m_EditorScene = scene;
 		m_CurrentSnapshot = snapshot.SceneJson;
 		m_Selection.clear();

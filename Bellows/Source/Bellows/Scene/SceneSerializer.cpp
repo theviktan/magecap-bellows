@@ -3,6 +3,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/EntityTags.h"
 
 namespace Bellows {
@@ -819,6 +820,12 @@ namespace Bellows {
 		rendering["Tonemapper"] = TonemapperToString(r.ToneMapper);
 		rendering["Vignette"] = r.Vignette;
 		rendering["FXAAEnabled"] = r.FXAAEnabled;
+
+		Json& navigation = json["Navigation"];
+		navigation["AgentRadius"] = settings.Navigation.AgentRadius;
+		navigation["AgentHeight"] = settings.Navigation.AgentHeight;
+		navigation["MaxClimb"] = settings.Navigation.MaxClimb;
+		navigation["MaxSlope"] = settings.Navigation.MaxSlope;
 		return json;
 	}
 
@@ -848,6 +855,15 @@ namespace Bellows {
 			r.ToneMapper = TonemapperFromString(tonemapper);
 			JsonRead(*it, "Vignette", r.Vignette);
 			JsonRead(*it, "FXAAEnabled", r.FXAAEnabled);
+		}
+		if (auto it = json.find("Navigation"); it != json.end())
+		{
+			NavMeshSettings& navigation = settings.Navigation;
+			JsonRead(*it, "AgentRadius", navigation.AgentRadius);
+			JsonRead(*it, "AgentHeight", navigation.AgentHeight);
+			JsonRead(*it, "MaxClimb", navigation.MaxClimb);
+			JsonRead(*it, "MaxSlope", navigation.MaxSlope);
+			navigation = navigation.Clamped();
 		}
 	}
 
@@ -962,7 +978,10 @@ namespace Bellows {
 	bool SceneSerializer::Deserialize(Scene& scene, const std::filesystem::path& path)
 	{
 		const std::optional<Json> json = ReadSceneFile(path);
-		return json && DeserializeFromJson(scene, *json);
+		if (!json || !DeserializeFromJson(scene, *json))
+			return false;
+		scene.SetNavMesh(LoadSceneNavMesh(path));
+		return true;
 	}
 
 	bool SceneSerializer::SavePrefab(Entity root, const std::filesystem::path& path)

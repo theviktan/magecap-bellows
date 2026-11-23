@@ -64,6 +64,12 @@ check(editor.scene_path() == "Scenes/Copy.bscene", "save as switches the open sc
 check(editor.open_scene("Scenes/Main.bscene"), "reopen scene")
 check(bellows.find_entity("Player") is not None, "saved entity loads back")
 
+# Navigation ---------------------------------------------------------------------------
+# The new project's ground is a static collider, so there's something to walk on.
+baked = editor.bake_navigation()
+check(baked["tiles"] >= 1 and baked["polygons"] > 0, f"bake_navigation ({baked})")
+check((pathlib.Path(editor.asset_directory()) / "Scenes" / "Main.bnav").is_file(), "the navmesh is saved beside the scene")
+
 # Prefabs ------------------------------------------------------------------------------
 player = bellows.find_entity("Player")
 child = bellows.create_entity("Hat")

@@ -175,3 +175,29 @@ TEST_CASE("Damaged glTF sizes and offsets are refused before anything is read or
 	CHECK_FALSE(import("Misaligned.gltf", R"([ { "uri": "Front.bin", "byteLength": 36 } ])",
 		R"([ { "bufferView": 0, "byteOffset": 2, "componentType": 5126, "count": 2, "type": "VEC3", "min": [ 0, 0, 0 ], "max": [ 1, 1, 1 ] } ])"));
 }
+
+TEST_CASE("A glTF file that requires an extension Bellows can't read is refused")
+{
+	const std::filesystem::path folder = MakeModelFolder("ModelExtensions");
+	const std::optional<std::string> text = FileSystem::ReadTextFile(folder / "Front.gltf");
+	REQUIRE(text);
+	const Json front = Json::parse(*text);
+	const auto withRequired = [&](const char* name, const std::vector<std::string>& required)
+	{
+		Json document = front;
+		document["extensionsUsed"] = required;
+		document["extensionsRequired"] = required;
+		const std::filesystem::path path = folder / name;
+		REQUIRE(FileSystem::WriteTextFile(path, document.dump()));
+		return MeshImporter::ImportGLTF(path);
+	};
+	CHECK_FALSE(withRequired("Draco.gltf", { "KHR_draco_mesh_compression" }));
+	CHECK_FALSE(withRequired("Mixed.gltf", { "KHR_materials_emissive_strength", "EXT_meshopt_compression" }));
+	CHECK(withRequired("Supported.gltf", { "KHR_materials_emissive_strength", "KHR_mesh_quantization" }));
+
+	// Extensions a file only uses (not requires) don't stop it.
+	Json document = front;
+	document["extensionsUsed"] = { "KHR_materials_variants" };
+	REQUIRE(FileSystem::WriteTextFile(folder / "Used.gltf", document.dump()));
+	CHECK(MeshImporter::ImportGLTF(folder / "Used.gltf"));
+}

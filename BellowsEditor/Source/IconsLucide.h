@@ -128,3 +128,4 @@
 #define ICON_TEXT_CURSOR_INPUT           "\xee\x89\xa5"	// U+E265
 #define ICON_LAYOUT_TEMPLATE             "\xee\x88\x87"	// U+E207
 #define ICON_PERSON_STANDING             "\xee\x88\x9e"	// U+E21E
+#define ICON_ROUTE                       "\xee\x94\xbe"	// U+E53E

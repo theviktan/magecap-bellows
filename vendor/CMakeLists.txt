@@ -118,6 +118,20 @@ add_library(BellowsMsdfgen STATIC ${BELLOWS_MSDFGEN_SOURCES})
 target_include_directories(BellowsMsdfgen SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/msdfgen")
 target_compile_features(BellowsMsdfgen PUBLIC cxx_std_11)
 
+# --- Navigation meshes and pathfinding (Recast & Detour, zlib) ----------------
+# Recast builds navmeshes, Detour finds paths on them, DetourCrowd moves agents along them.
+file(GLOB BELLOWS_RECAST_SOURCES CONFIGURE_DEPENDS
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/Recast/Source/*.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/Detour/Source/*.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/DetourCrowd/Source/*.cpp")
+add_library(BellowsRecast STATIC ${BELLOWS_RECAST_SOURCES})
+target_include_directories(BellowsRecast SYSTEM PUBLIC
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/Recast/Include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/Detour/Include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/recastnavigation/DetourCrowd/Include")
+target_compile_features(BellowsRecast PUBLIC cxx_std_11)
+set_target_properties(BellowsRecast PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # --- Single-header libraries --------------------------------------------------
 add_library(BellowsHeaderLibs INTERFACE)
 target_include_directories(BellowsHeaderLibs SYSTEM INTERFACE

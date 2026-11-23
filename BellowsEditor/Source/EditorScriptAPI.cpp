@@ -77,6 +77,19 @@ namespace Bellows {
 				py::arg("name") = "Untitled", "Replaces the open scene with a new one (camera, sun and sky)");
 			m.def("open_scene", [](const std::string& path) { return Editor().OpenScene(path); },
 				py::arg("path"), "Opens a scene by asset path, e.g. 'Scenes/Main.bscene'");
+			m.def("bake_navigation", []()
+			{
+				EditorLayer& editor = Editor();
+				std::string error;
+				if (!editor.BakeNavigation(error))
+					throw std::runtime_error(error);
+				const NavMesh& navMesh = *editor.GetEditorScene()->GetNavMesh();
+				py::dict result;
+				result["tiles"] = navMesh.GetTileCount();
+				result["polygons"] = navMesh.GetPolygonCount();
+				return result;
+			}, "Bakes the edited scene's navmesh from its static colliders and saves it beside the scene; returns "
+				"{'tiles': n, 'polygons': n}. Raises RuntimeError with the reason when nothing can be baked or the scene isn't saved");
 			m.def("save_scene", [](const std::optional<std::string>& path)
 			{
 				EditorLayer& editor = Editor();
