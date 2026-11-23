@@ -77,6 +77,19 @@ namespace ForgeScript {
 		DebugStopReason Reason = DebugStopReason::Breakpoint;
 		std::string File; // The name the script was loaded with, as in error messages.
 		int Line = 0;
+		// Set when a breakpoint's condition couldn't be worked out ("'nothing' has no 'hp'"): the task
+		// stops there instead of going on, so a typo in a condition is never skipped silently.
+		std::string Message;
+	};
+
+	// A breakpoint with more to it (VM::SetDetailedBreakpoints). With a Condition, the task stops only when it
+	// is true there ("hp < 10"). With a LogMessage, the task never stops: the message is printed, with
+	// {...} worked out as in text ("hp is {hp}"). Both are worked out like Evaluate: no calls.
+	struct Breakpoint
+	{
+		int Line = 0;
+		std::string Condition;
+		std::string LogMessage;
 	};
 
 	// One function call on the stopped task's stack.
@@ -328,6 +341,8 @@ namespace ForgeScript {
 		// The lines (1-based) to stop at in one script, by the name it was loaded with. Replaces that
 		// script's earlier breakpoints; an empty list removes them.
 		void SetBreakpoints(const std::string& file, const std::vector<int>& lines);
+		// The same, with conditions and log messages (a Breakpoint with neither is a plain one).
+		void SetDetailedBreakpoints(const std::string& file, const std::vector<Breakpoint>& breakpoints);
 		void ClearBreakpoints();
 		// Stops the next task that runs a line.
 		void Pause();
@@ -351,6 +366,11 @@ namespace ForgeScript {
 		std::vector<DebugVariable> GetVariables(size_t frame);
 		// A script's variables. Functions, phrases, kinds and used scripts are left out.
 		std::vector<DebugVariable> GetGlobals(Module* module);
+		// Works out one line of ForgeScript ("enemy.health * 2", "hp < 10") in a frame of the stopped
+		// task (0 = innermost), with its variables, the script's variables and engine values. It can read
+		// anything, engine properties included (me.position), but never calls a function or method, so it
+		// can't change the game. False, with the reason in outError, when it can't.
+		bool Evaluate(size_t frame, const std::string& expression, DebugVariable& outValue, std::string& outError);
 
 		void CollectGarbage();
 		size_t GetBytesAllocated() const { return m_BytesAllocated; }
@@ -508,6 +528,12 @@ namespace ForgeScript {
 		// Debugger state
 		DebugHandler m_DebugHandler;
 		std::unordered_map<std::string, std::vector<int>> m_Breakpoints; // Sorted lines per script.
+		// Lines with a condition or a log message, per script.
+		std::unordered_map<std::string, std::unordered_map<int, Breakpoint>> m_BreakpointDetails;
+		// Evaluate's work, for one task's frame: false with outError when the code can't be worked out.
+		bool EvaluateIn(Task* task, const CallFrame& frame, const std::string& expression, Value& outValue, std::string& outError);
+		// The variables a frame can see now, by name: what GetVariables shows.
+		std::vector<std::pair<std::string, Value>> VisibleValues(Task* task, const CallFrame& frame) const;
 		bool m_DebugActive = false;
 		uint64_t m_InstructionsRun = 0;
 		bool m_Profiling = false;
@@ -539,6 +565,7 @@ namespace ForgeScript {
 		bool m_RunningStops = false;
 		bool m_ResumeRequested = false;
 		StepMode m_ResumeStep = StepMode::None;
+		bool m_Evaluating = false; // Evaluate is running: calls from its NoCalls code fail (one test per call otherwise)
 		bool m_PlainText = false; // Describe without calling kinds' to_text (the debugger runs no script code).
 
 		double m_Time = 0.0;

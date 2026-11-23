@@ -7,6 +7,14 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Debugger: conditions, log points and Evaluate** (expert features item 5, with MCBellows' rules):
+  `VM::SetDetailedBreakpoints` takes breakpoints with a condition (stop only when `hp < 10`) or a log
+  message (print `"hp is {hp}"` and go on), and `VM::Evaluate(frame, code, ...)` works out one line in
+  a frame of the stopped task. All three read the frame's variables, the script's and the engine's,
+  engine properties included, but never call a function or method, so they can't change the game. A
+  condition or log message that can't be worked out stops there, with the reason in
+  `DebugStop::Message`. `SetBreakpoints(file, lines)` and the stop reasons are unchanged, so hosts
+  keep working as they are.
 - **Types that follow values** (expert features item 2): the call check now also looks at a
   function's own variable given as a value, when its type is certain. That's a variable that every
   line sets to the same type of plain value, or a parameter with `as` that the function never sets.
