@@ -748,6 +748,24 @@ heal("ten")      # the editor warns: 'heal' takes a number for 'amount' (amount 
 - Types work in kinds' functions and function values too, as notes; calls are checked for the script's
   own functions.
 
+**What a function gives back** (1.7.0): write `as` and a type after the `)`.
+
+```forge
+function health_left(hp as number, damage as number) as number
+	return max(hp - damage, 0)
+end
+
+function status() as text
+	return 5         # the editor warns: 'status' says it gives back text (as text), but this gives back a number.
+end
+```
+
+- Like the types of values, it never changes what runs.
+- The editor warns when a `return` gives a plain value of another type, and when the function has no
+  `return` with a value at all ("...it never returns a value, so it always gives back nothing").
+- `return nothing` (or a bare `return`) is never warned about: it's how a function says "none found",
+  like `function nearest_enemy() as Enemy`.
+
 ### Default values
 
 Give a value a default with `is`, and calls may leave it out:

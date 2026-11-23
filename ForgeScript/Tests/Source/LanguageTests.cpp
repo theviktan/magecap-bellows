@@ -1317,3 +1317,51 @@ TEST_CASE("Utf8FirstInvalidFindsTheFirstBadByte")
 	CHECK_EQ(Utf8::FirstInvalid("\xF4\x90\x80\x80"), static_cast<size_t>(0)); // past U+10FFFF
 	CHECK_EQ(Utf8::FirstInvalid("\x80"), static_cast<size_t>(0));            // lone continuation
 }
+
+TEST_CASE("ReturnTypesAreForCheckersOnly")
+{
+	// 'as number' after a function's ')' (1.7.0) says what it gives back. It never changes what runs.
+	CHECK_EQ(Output("function heal(amount as number) as number\n\treturn amount + 1\nend\nsay heal(2)\n"), std::string("3\n"));
+	CHECK_EQ(Output("function label() as number\n\treturn \"x\"\nend\nsay label()\n"), std::string("x\n"));
+	CHECK_EQ(Output("kind Enemy\n\tfunction hp() as number\n\t\treturn 7\n\tend\nend\nsay Enemy().hp()\n"), std::string("7\n"));
+
+	VM vm;
+	auto returns = [&vm](const std::string& source)
+	{
+		std::vector<CompileError> found;
+		for (CompileError& warning : vm.FindWarnings(source, "t.forge", {}))
+		{
+			if (warning.Message.find("says it gives back") != std::string::npos)
+				found.push_back(std::move(warning));
+		}
+		return found;
+	};
+	std::vector<CompileError> found = returns("function status() as text\n\treturn 5\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("'status' says it gives back text (as text), but this gives back a number."));
+	CHECK_EQ(found[0].Line, 2);
+	CHECK_EQ(found[0].Column, 9);
+
+	found = returns("function status() as text\n\tsay \"hi\"\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("'status' says it gives back text (as text), but it never returns a value, so it always "
+		"gives back nothing. Add 'return' with the text it should give back."));
+	CHECK_EQ(found[0].Line, 1);
+	CHECK_EQ(found[0].Column, 22);
+	CHECK_FALSE(found[0].FixTitle.size() > 0); // no quick fix: 'return nothing' would hide the mistake
+
+	// Methods too; plain values only, so a value worked out is never warned about.
+	CHECK_EQ(returns("kind Enemy\n\tfunction hp() as number\n\t\treturn [1]\n\tend\nend\n").size(), static_cast<size_t>(1));
+	CHECK(returns("function f(x) as number\n\treturn x * 2\nend\n").empty());
+	// 'nothing' is how a function says "none found", and a function that only fails never ends.
+	CHECK(returns("function nearest() as Enemy\n\treturn nothing\nend\n").empty());
+	CHECK(returns("function nearest() as number\n\tif 1 > 2 then\n\t\treturn 3\n\tend\n\treturn\nend\n").empty());
+	CHECK(returns("function broken() as number\n\tfail \"not yet\"\nend\n").empty());
+	// An inner function's returns are its own.
+	CHECK_EQ(returns("function outer() as number\n\tfunction inner()\n\t\treturn \"x\"\n\tend\n\tsay inner()\nend\n").size(), static_cast<size_t>(1));
+	CHECK(returns("function f()\n\treturn 5\nend\n").empty());
+
+	// A misspelled type word is a mistake, as for parameters.
+	ForgeTest::ScriptRun run = ForgeTest::RunScript("function f() as nmber\n\treturn 1\nend\n");
+	CHECK_CONTAINS(run.AllErrors(), "'nmber' isn't a type. Did you mean 'number'?");
+}
