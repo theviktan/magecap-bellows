@@ -347,6 +347,15 @@ function test_tweens()
 	box.destroy()
 end
 
+# The scene's navmesh: a pedestal stands between (0, 0, -5) and (0, 0, -1).
+function test_navigation()
+	set path to find_path(vector(0, 0, -5), vector(0, 0, -1))
+	check(length(path) is at least 3 and near(path[length(path)], vector(0, 0, -1), 0.2), "find_path around a pedestal")
+	check(is_navigable(vector(3, 0, 3)) and not is_navigable(vector(0, 0, -3)), "is_navigable")
+	check(nearest_navigable_point(vector(0, 0, 500)) is nothing, "nearest_navigable_point gives nothing far away")
+	check(fails(function() nearest_navigable_point(vector(0, 0, 0), -1) end), "nearest_navigable_point refuses a negative search")
+end
+
 # The Dancer plays SkinnedColumn.glb's clips, "Bend" and "Wave".
 function test_animation()
 	set dancer to find_entity("Dancer")
@@ -403,6 +412,7 @@ function run_tests()
 		test_events()
 		test_tweens()
 		test_animation()
+		test_navigation()
 	catch problem
 		add "unexpected error: {problem}" to failures
 	end

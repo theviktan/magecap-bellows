@@ -1493,6 +1493,9 @@ class Vec4:
 def action_names() -> list[str]:
     """The project's input actions, sorted by name"""
 
+def bake_navigation() -> None:
+    """Bakes the scene's navmesh again from its static colliders, for worlds built while the game runs. A big world takes a moment; raises an error saying why when there's nothing to walk on"""
+
 def bus_names() -> list[str]:
     """The audio buses: Master, Music, Effects"""
 
@@ -1513,6 +1516,9 @@ def emit(name: str, *args: typing.Any) -> None:
     """Sends an event to every script: Python's on_event(self, name, *values) and ForgeScript's 'when <name>' handlers"""
 
 def find_entity(name: str) -> Entity | None: ...
+
+def find_path(start: Vec3 | typing.Sequence[float], end: Vec3 | typing.Sequence[float]) -> list[Vec3]:
+    """The corners of the shortest walkable path from start to end on the scene's navmesh, both ends included; an empty list when either end is off the navmesh or nothing connects them. When the end can't be reached, the path goes as close as it can"""
 
 def find_tagged(tag: str) -> list[Entity]:
     """Every entity of the scene with the tag, parents before their children; an empty list when there are none"""
@@ -1575,6 +1581,9 @@ def is_mouse_pressed(button: MouseButton | str = ...) -> bool: ...
 
 def is_mouse_released(button: MouseButton | str = ...) -> bool: ...
 
+def is_navigable(point: Vec3 | typing.Sequence[float]) -> bool:
+    """True when an agent can stand at the point: over the navmesh, within a step of its surface"""
+
 def is_paused() -> bool:
     """True while the game is paused (set_paused)"""
 
@@ -1609,6 +1618,9 @@ def mouse_delta() -> Vec2:
 
 def mouse_position() -> Vec2:
     """Mouse position in viewport pixels (top-left origin)"""
+
+def nearest_navigable_point(point: Vec3 | typing.Sequence[float], search: float = 2.0) -> Vec3 | None:
+    """The nearest point agents can stand on, within 'search' meters to the side, or None"""
 
 def play_sound(path: str, volume: float = 1.0, bus: str = 'Effects') -> bool:
     """Plays a one-shot 2D sound"""
