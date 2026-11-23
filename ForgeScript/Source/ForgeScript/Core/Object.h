@@ -240,6 +240,9 @@ namespace ForgeScript {
 		std::string Name;
 		std::unordered_map<String*, Value> Globals;
 		std::vector<String*> GlobalOrder;
+		// Script variables the host asked to hear about (VM::WatchScriptVariables), like an entity
+		// script's Inspector fields. Empty for nearly every module, which keeps writes to one test.
+		std::unordered_set<String*> WatchedGlobals;
 		std::unordered_set<String*> Constants;
 		std::unordered_map<String*, std::vector<Closure*>> Handlers;
 		// How many of the module's tasks wait for each event ('wait for hit'), so a host can tell that the
