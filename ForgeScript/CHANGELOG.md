@@ -21,6 +21,19 @@ with new language or tool features, the patch number with fixes.
   5". A byte that isn't UTF-8 at all says "This byte isn't readable text. Save the script as UTF-8."
 - **Fixed: the missing-`end` quick fix kept Windows line ends** (audit S-13). In a file saved with
   CRLF line ends it inserted a bare LF; it now inserts CRLF there.
+- **A warning when your function takes a built-in's name** (audit S-15). `function tween(a, b)` or
+  `kind Material` in a script used to replace the built-in or engine one with no word, while a value
+  of that name already warned. Now: "Your function 'tween' takes the name of the built-in 'tween', so
+  'tween' in this script now means yours. To keep using the built-in too, rename yours, like
+  'my_tween'." Your own name still wins, as always, so nothing changes in what a script does. Each
+  Bellows release adds engine names (0.6.0 adds `tween`, `find_path` and more), and this is how a
+  game hears that one of them now matches its own helper.
+- **A guard for the repository against new engine names:** a new test, `ForgeScriptEngineNames`,
+  checks every script in the repository (sample projects, tests, benchmarks) against the current
+  `forgescript-api.json`, and the docs test now does the same for every example. Either fails when a
+  script or example uses a built-in or engine name for its own, so a Bellows change that adds a name
+  hears about a clash in that same change. A test that does it on purpose says
+  `# Takes built-in names on purpose.`
 - **A warning for names that are never set** (asked for by MFC and MCBellows). `say helth`, in a
   script that sets `health`, passed `--check` and failed only when the line ran. It now warns:
   "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean
