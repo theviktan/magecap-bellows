@@ -151,6 +151,7 @@ say "émile".capitalize()                                    # expect: émile
 say "été à paris".title()                                   # expect: été à Paris
 
 # A script's own names still win over the new built-ins.
+# Takes built-in names on purpose.
 function own_ease()
 	set ease to function(t) return "mine" end
 	return ease(0.5)

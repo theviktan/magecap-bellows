@@ -1782,6 +1782,7 @@ namespace ForgeScript {
 			if (m_State->Kind != ScopeKind::Script || m_State->ScopeDepth != 0)
 				ErrorAt(keyword, "Write choices at the top level of the script, not inside a function, kind or block.");
 			const std::string name(Current().Lexeme);
+			WarnIfTakesBuiltinName(m_Pos, name, "choices");
 			Advance(); // the name
 			Advance(); // are
 			std::unordered_set<std::string> names;
@@ -2446,6 +2447,21 @@ namespace ForgeScript {
 			return before ? before : after;
 		}
 
+		// "function tween(a, b)" in a script: its own function wins over the built-in or engine function of
+		// that name, as always, but a new Bellows release can add a name a game already uses for its own
+		// helper, so the take-over is said out loud (audit S-15). 'what' is "function", "kind" or "choices".
+		void WarnIfTakesBuiltinName(size_t nameAt, const std::string& name, const char* what)
+		{
+			if (!m_Options.Warnings || name.empty() || nameAt >= m_Tokens.size() || !IsBuiltinFunction(name))
+				return;
+			// A kind or choices is named like a type (MyMaterial); a function like a function (my_tween).
+			const bool typeName = std::string_view(what) != "function";
+			const std::string suggestion = typeName ? "My" + name : "my_" + name;
+			Warn(m_Tokens[nameAt], std::string("Your ") + what + " '" + name + "' takes the name of the built-in '" + name +
+				"', so '" + name + "' in this script now means yours. To keep using the built-in too, rename yours, like '" +
+				suggestion + "'.");
+		}
+
 		void WarnHidesBuiltin(const Token& at, const std::string& name, int callLine)
 		{
 			Warn(at, "Naming a value '" + name + "' hides the built-in function '" + name + "', so " + name +
@@ -3013,6 +3029,7 @@ namespace ForgeScript {
 			Advance();
 			const size_t nameAt = m_Pos;
 			std::string name = ConsumeName("Expected a function name.");
+			WarnIfTakesBuiltinName(nameAt, name, "function");
 
 			bool isLocal = !(m_State->Kind == ScopeKind::Script);
 			if (!isLocal)
@@ -3106,6 +3123,7 @@ namespace ForgeScript {
 			Advance();
 			const size_t nameAt = m_Pos;
 			std::string name = ConsumeName("Expected a name for the kind, like: kind Enemy");
+			WarnIfTakesBuiltinName(nameAt, name, "kind");
 
 			EmitWithName(OpCode::Kind, name);
 			bool isGlobal = m_State->Kind == ScopeKind::Script;
