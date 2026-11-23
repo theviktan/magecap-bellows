@@ -898,3 +898,72 @@ TEST_CASE("TextIsStillInternedAndCollected")
 	CHECK_EQ(run.Output, std::string("true\ntrue\n"));
 	CHECK(run.Errors.empty());
 }
+
+TEST_CASE("NavigationPhrasesAndEventWorkAsBellowsDefinesThem")
+{
+	// Bellows' navigation (0.6.0) registers these three phrases, giving way to calls, and sends
+	// 'destination reached' with the agent's entity and its name as the source. This pins down the
+	// ForgeScript side: the words are free, the values arrive in order, and every handler form works.
+	NativeType entityType = MakeEntityType();
+	FakeEntity hero{ "Hero" };
+	FakeEntity goal{ "Goal", 10, 0, 0 };
+	std::vector<std::string> calls;
+
+	Harness h;
+	REQUIRE(h.Machine.RegisterPhrase("walk (entity) to (position)", [&](CallContext& c)
+	{
+		calls.push_back("walk " + c.NativeArg<FakeEntity>(0, entityType)->Name + " to " + c.GetVM().ToText(c.Arg(1)));
+		return Value();
+	}, nullptr, true));
+	REQUIRE(h.Machine.RegisterPhrase("the path from (start) to (end)", [&](CallContext& c)
+	{
+		calls.push_back("path " + c.GetVM().ToText(c.Arg(0)) + " to " + c.GetVM().ToText(c.Arg(1)));
+		return c.GetVM().MakeList({ c.Arg(0), c.Arg(1) });
+	}, nullptr, true));
+	REQUIRE(h.Machine.RegisterPhrase("halt (entity)", [&](CallContext& c)
+	{
+		calls.push_back("halt " + c.NativeArg<FakeEntity>(0, entityType)->Name);
+		return Value();
+	}, nullptr, true));
+	h.Machine.SetSharedGlobal("hero", h.Machine.MakeNative(entityType, &hero));
+	h.Machine.SetSharedGlobal("goal", h.Machine.MakeNative(entityType, &goal));
+
+	const LoadResult loaded = h.Machine.Load(
+		"walk hero to goal.position + vector(0, 0, 2)\n"
+		"for each corner in the path from hero.position to goal.position do\n"
+		"\tsay corner\n"
+		"end\n"
+		"say (the path from 1 to 2).length\n"
+		"halt hero\n"
+		"when destination reached with who\n"
+		"\tsay \"arrived: {who.name}\"\n"
+		"end\n"
+		"when \"Hero\" is destination reached\n"
+		"\tsay \"the hero arrived\"\n"
+		"end\n"
+		"function patrol()\n"
+		"\twait for destination reached with who\n"
+		"\tsay \"patrol saw {who.name}\"\n"
+		"end\n"
+		"start patrol()\n", "nav.forge");
+	REQUIRE(loaded.LoadedModule != nullptr);
+	CHECK(h.Errors.empty());
+	CHECK(h.Machine.HasHandler(loaded.LoadedModule, "destination reached"));
+	CHECK(h.Machine.Emit(loaded.LoadedModule, "destination reached", { h.Machine.MakeNative(entityType, &hero) }, "Hero"));
+	h.Machine.Update(0);
+
+	REQUIRE_EQ(calls.size(), static_cast<size_t>(4));
+	CHECK_EQ(calls[0], std::string("walk Hero to (10, 0, 2)"));
+	CHECK_EQ(calls[1], std::string("path (0, 0, 0) to (10, 0, 0)"));
+	CHECK_EQ(calls[2], std::string("path 1 to 2"));
+	CHECK_EQ(calls[3], std::string("halt Hero"));
+	CHECK_EQ(h.Output, std::string("(0, 0, 0)\n(10, 0, 0)\n2\narrived: Hero\nthe hero arrived\npatrol saw Hero\n"));
+	CHECK(h.Errors.empty());
+
+	// A script's own 'walk' or 'path' still means the script's own, as before.
+	Harness own;
+	REQUIRE(own.Machine.RegisterPhrase("walk (entity) to (position)", [](CallContext&) { return Value(); }, nullptr, true));
+	own.Machine.Load("function walk(x)\n\treturn x * 2\nend\nset path to 3\nsay walk(path)\n", "own.forge");
+	CHECK_EQ(own.Output, std::string("6\n"));
+	CHECK(own.Errors.empty());
+}
