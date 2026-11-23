@@ -1365,3 +1365,43 @@ TEST_CASE("ReturnTypesAreForCheckersOnly")
 	ForgeTest::ScriptRun run = ForgeTest::RunScript("function f() as nmber\n\treturn 1\nend\n");
 	CHECK_CONTAINS(run.AllErrors(), "'nmber' isn't a type. Did you mean 'number'?");
 }
+
+TEST_CASE("TypesFollowAFunctionsOwnVariables")
+{
+	// A variable of a function that is only ever set to one type of plain value, or a typed parameter it
+	// never sets, keeps that type for the call check. Anything less certain stays quiet.
+	VM vm;
+	auto takes = [&vm](const std::string& source)
+	{
+		std::vector<CompileError> found;
+		for (CompileError& warning : vm.FindWarnings("function heal(amount as number)\n\tsay amount\nend\n" + source, "t.forge", {}))
+		{
+			if (warning.Message.find("takes a number for 'amount'") != std::string::npos)
+				found.push_back(std::move(warning));
+		}
+		return found;
+	};
+	std::vector<CompileError> found = takes("function f()\n\tset name to \"Ana\"\n\theal(name)\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("'heal' takes a number for 'amount' (amount as number), but 'name' is text (it is only ever set to text)."));
+	CHECK_EQ(found[0].Line, 6);
+	CHECK_EQ(found[0].Column, 7);
+	found = takes("function f(who as text)\n\theal(amount: who)\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("'heal' takes a number for 'amount' (amount as number), but 'who' is text (who as text)."));
+
+	// Quiet: the right type, mixed types, a worked-out value, loops, name lists, a re-set parameter,
+	// handlers' values, script variables (other scripts may set them), and variables of an outer function.
+	CHECK(takes("function f()\n\tset n to 5\n\theal(n)\nend\n").empty());
+	CHECK(takes("function f()\n\tset n to \"a\"\n\tset n to 5\n\theal(n)\nend\n").empty());
+	CHECK(takes("function f(x)\n\tset n to x\n\theal(n)\nend\n").empty());
+	CHECK(takes("function f()\n\tset n to \"a\"\n\tfor each n in [1, 2] do\n\t\theal(n)\n\tend\nend\n").empty());
+	CHECK(takes("function f()\n\tset a, n to [1, \"x\"]\n\theal(n)\nend\n").empty());
+	CHECK(takes("function f(who as text)\n\tset who to 4\n\theal(who)\nend\n").empty());
+	CHECK(takes("function f(who)\n\theal(who)\nend\n").empty());
+	CHECK(takes("when hit with who\n\theal(who)\nend\n").empty());
+	CHECK(takes("set name to \"x\"\nheal(name)\n").empty());
+	CHECK(takes("function f()\n\tset n to \"a\"\n\tfunction g()\n\t\tset n to 5\n\tend\n\theal(n)\nend\n").empty());
+	// A parameter of a kind's type is never compared: 'object' or a kind may hold many things.
+	CHECK(vm.FindWarnings("function g(e as Enemy)\nend\nfunction f()\n\tset n to \"x\"\n\tg(n)\nend\n", "t.forge", {}).empty());
+}

@@ -741,7 +741,11 @@ heal("ten")      # the editor warns: 'heal' takes a number for 'amount' (amount 
   `object`, `kind`, or a kind's name (`target as Enemy`).
 - **It never changes what runs.** It's a note for you and for the editor (and `forgescript --check`),
   which warns when a call to the function by name gives a plain value (like `"ten"`, `5`, `[1, 2]` or
-  `nothing`) of another type. A value from a variable isn't checked, so a warning is never a guess.
+  `nothing`) of another type.
+- A function's own variable is checked too, when its type is certain: a variable that every line
+  sets to the same type of plain value (`set name to "Ana"`, then `heal(name)`), or a parameter with
+  `as` that the function never sets. Anything less certain (a value worked out, a loop's variable, a
+  script variable) isn't checked, so a warning is never a guess.
 - A misspelled type word, like `amount as nmber`, is a mistake: "'nmber' isn't a type. Did you mean
   'number'?"
 - `as` goes before a default: `who as text is "you"`. A `...` value is always a list, so it has no type.

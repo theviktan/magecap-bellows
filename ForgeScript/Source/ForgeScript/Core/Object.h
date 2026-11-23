@@ -124,6 +124,8 @@ namespace ForgeScript {
 		String* Name = nullptr;
 		Module* Owner = nullptr;
 		bool IsMethod = false;
+		// The debugger's Evaluate code: a call from it fails, so evaluating can't change the game.
+		bool NoCalls = false;
 		size_t BodyIp = 0; // Where the code written in the body starts, after the set-up of its variables.
 		std::vector<LocalName> LocalNames;
 		std::vector<std::string> UpvalueNames; // One per upvalue, in order.

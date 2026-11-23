@@ -534,3 +534,107 @@ TEST_CASE("DebuggerTurnedOffForgetsAStepAcrossAWait")
 	CHECK_EQ(debug.Printed, std::vector<std::string> { "after" });
 	CHECK_EQ(debug.Stops.size(), static_cast<size_t>(1));
 }
+
+TEST_CASE("DebuggerConditionsLogPointsAndEvaluate")
+{
+	const std::string source =
+		"set lives to 3\n"                 // 1
+		"function hurt(hp)\n"              // 2
+		"\tset left to hp - 10\n"          // 3 a condition: stop only when left will be low
+		"\treturn left\n"                  // 4 a log point
+		"end\n"                            // 5
+		"for each hp in [50, 15, 30] do\n" // 6
+		"\tsay hurt(hp)\n"                 // 7
+		"end\n";                           // 8
+
+	SUBCASE("a condition stops only when it is true, and Evaluate reads the frame")
+	{
+		Debugged debug;
+		debug.Machine.SetDetailedBreakpoints("game.forge", { { 3, "hp < 20", "" } });
+		debug.Load(source);
+		REQUIRE_EQ(debug.StoppedLine(), 3);
+		CHECK_EQ(debug.Printed, std::vector<std::string> { "40" }); // hp 50 went past
+		CHECK(debug.Machine.GetStop().Message.empty());
+
+		DebugVariable value;
+		std::string error;
+		REQUIRE(debug.Machine.Evaluate(0, "hp * 2 + lives", value, error));
+		CHECK_EQ(value.Text, std::string("33"));
+		CHECK_EQ(value.Type, std::string("number"));
+		REQUIRE(debug.Machine.Evaluate(0, "\"hp is {hp}\"", value, error));
+		CHECK_EQ(value.Text, std::string("\"hp is 15\""));
+		// The caller's frame has its own variables.
+		REQUIRE(debug.Machine.Evaluate(1, "hp is 15 and lives is 3", value, error));
+		CHECK_EQ(value.Text, std::string("true"));
+
+		// No calls, so the game can't change; mistakes and missing names say why.
+		CHECK_FALSE(debug.Machine.Evaluate(0, "hurt(5)", value, error));
+		CHECK_CONTAINS(error, "without calling functions");
+		CHECK_FALSE(debug.Machine.Evaluate(0, "[1, 2].length()", value, error));
+		CHECK_CONTAINS(error, "without calling functions");
+		CHECK_FALSE(debug.Machine.Evaluate(0, "hp +", value, error));
+		CHECK_FALSE(error.empty());
+		CHECK_FALSE(debug.Machine.Evaluate(0, "1\nset lives to 0", value, error));
+		CHECK_EQ(error, std::string("Write it on one line."));
+		REQUIRE(debug.Machine.Evaluate(0, "lives", value, error));
+		CHECK_EQ(value.Text, std::string("3"));
+
+		debug.Machine.Continue();
+		CHECK_FALSE(debug.Machine.IsStopped());
+		CHECK_EQ(debug.Printed, (std::vector<std::string> { "40", "5", "20" }));
+		CHECK_EQ(debug.Stops.size(), static_cast<size_t>(1));
+	}
+
+	SUBCASE("a log point prints and goes on")
+	{
+		Debugged debug;
+		debug.Machine.SetDetailedBreakpoints("game.forge", { { 4, "", "left is {left} (from \"{hp}\")" } });
+		debug.Load(source);
+		CHECK_FALSE(debug.Machine.IsStopped());
+		CHECK(debug.Stops.empty());
+		CHECK_EQ(debug.Printed, (std::vector<std::string> { "left is 40 (from \"50\")", "40", "left is 5 (from \"15\")", "5",
+			"left is 20 (from \"30\")", "20" }));
+	}
+
+	SUBCASE("a condition that can't be worked out stops and says why")
+	{
+		Debugged debug;
+		debug.Machine.SetDetailedBreakpoints("game.forge", { { 3, "hp.health < 5", "" } });
+		debug.Load(source);
+		REQUIRE_EQ(debug.StoppedLine(), 3);
+		CHECK_CONTAINS(debug.Machine.GetStop().Message, "The condition 'hp.health < 5' couldn't be worked out:");
+		debug.Machine.StopDebugging();
+	}
+
+	SUBCASE("engine properties can be read, engine functions can't be called")
+	{
+		Debugged debug;
+		static double health = 75;
+		static NativeType type;
+		type.Name = "Entity";
+		type.Getters["health"] = [](VM&, void* data) { return Value::FromNumber(*static_cast<double*>(data)); };
+		debug.Machine.SetSharedGlobal("enemy", debug.Machine.MakeNative(type, &health));
+		debug.Machine.RegisterFunction("heal_all", 0, [](CallContext&) { health = 100; return Value(); });
+		debug.Machine.SetBreakpoints("game.forge", { 3 });
+		debug.Load(source);
+		REQUIRE_EQ(debug.StoppedLine(), 3);
+		DebugVariable value;
+		std::string error;
+		REQUIRE(debug.Machine.Evaluate(0, "enemy.health - hp", value, error));
+		CHECK_EQ(value.Text, std::string("25"));
+		CHECK_FALSE(debug.Machine.Evaluate(0, "heal_all()", value, error));
+		CHECK_EQ(health, 75.0);
+		debug.Machine.StopDebugging();
+	}
+
+	SUBCASE("the plain form still clears conditions")
+	{
+		Debugged debug;
+		debug.Machine.SetDetailedBreakpoints("game.forge", { { 3, "hp > 1000", "" } });
+		debug.Machine.SetBreakpoints("game.forge", { 3 });
+		debug.Load(source);
+		CHECK_EQ(debug.StoppedLine(), 3);
+		CHECK_EQ(debug.Printed.size(), static_cast<size_t>(0));
+		debug.Machine.StopDebugging();
+	}
+}
