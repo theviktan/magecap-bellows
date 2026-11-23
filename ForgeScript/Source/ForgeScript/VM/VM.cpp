@@ -278,6 +278,7 @@ namespace ForgeScript {
 		: m_Config(config)
 	{
 		m_NextGC = m_Config.InitialGCThreshold;
+		m_WatchEachInstruction = m_Config.InstructionLimit || m_Config.CountInstructions;
 		m_PrintHandler = [](const std::string& text) { std::cout << text << std::endl; };
 		m_ErrorHandler = [](const ScriptError& error) { std::cerr << error.ToString() << std::endl; };
 
@@ -822,11 +823,13 @@ namespace ForgeScript {
 		m_ProfiledFunction = nullptr;
 		m_ProfiledEntry = nullptr;
 		m_Profiling = true;
+		m_WatchEachInstruction = true;
 	}
 
 	std::vector<ProfileEntry> VM::TakeProfile()
 	{
 		m_Profiling = false;
+		m_WatchEachInstruction = m_Config.InstructionLimit || m_Config.CountInstructions;
 		std::vector<ProfileEntry> entries;
 		for (auto& [fn, entry] : m_Profile)
 			entries.push_back(std::move(entry));
@@ -1225,7 +1228,7 @@ namespace ForgeScript {
 			return variables;
 		GCPause pause(*this);
 		const CallFrame& frame = m_StoppedTask->Frames[m_StoppedTask->Frames.size() - 1 - frameIndex];
-		const std::vector<Value>& stack = m_StoppedTask->Stack;
+		const ValueStack& stack = m_StoppedTask->Stack;
 		Function* fn = frame.Function->Fn;
 
 		// The names in use at this point; an inner variable with the same name as an outer one wins.
@@ -2690,7 +2693,7 @@ namespace ForgeScript {
 
 	void VM::Execute(Task* task)
 	{
-		std::vector<Value>& stack = task->Stack;
+		ValueStack& stack = task->Stack;
 		CallFrame* frame = &task->Frames.back();
 		const uint8_t* code = frame->Function->Fn->Chunk.GetCode().data();
 		const Value* constants = frame->Function->Fn->Chunk.GetConstants().data();
@@ -2732,8 +2735,8 @@ namespace ForgeScript {
 		dispatch:
 			if (m_BytesAllocated > m_NextGC && m_GCPaused == 0)
 				CollectGarbage();
-			// One test for both, and none of their work in the usual run, which keeps the loop fast.
-			if (m_Config.InstructionLimit || m_Config.CountInstructions || m_Profiling)
+			// One test for the limit, counting and the profiler, and none of their work in the usual run.
+			if (m_WatchEachInstruction)
 			{
 				executed.Executed++;
 				if (m_Profiling)
@@ -2902,6 +2905,16 @@ namespace ForgeScript {
 					// "1 < x < 10" compares the first answer (true or false) with 10.
 					if (stack[stack.size() - 2].IsBool() && stack.back().IsNumber())
 						FORGESCRIPT_FAIL(std::string("Cannot compare boolean with number. Only numbers with numbers, or text with text. To check that a value is between two others, write: if x is between 1 and 10"));
+					// Two numbers, compared right here, as Compare does (NaN is never greater, less or equal).
+					if (stack[stack.size() - 2].IsNumber() && stack.back().IsNumber())
+					{
+						const double x = stack[stack.size() - 2].AsNumber();
+						const double y = stack.back().AsNumber();
+						const bool answer = op == OpCode::Less ? x < y : op == OpCode::LessEqual ? x <= y : op == OpCode::Greater ? x > y : x >= y;
+						stack.pop_back();
+						stack.back() = Value::FromBool(answer);
+						break;
+					}
 					bool result = false;
 					FORGESCRIPT_CHECK(Compare(task, op, stack[stack.size() - 2], stack.back(), result));
 					stack.pop_back();
@@ -2911,6 +2924,18 @@ namespace ForgeScript {
 				case OpCode::Add: case OpCode::Subtract: case OpCode::Multiply:
 				case OpCode::Divide: case OpCode::Modulo: case OpCode::Power:
 				{
+					// Numbers are most of a game's math: add, subtract and multiply them right here, with the
+					// same result Arithmetic gives, and leave everything else to it.
+					Value& left = stack[stack.size() - 2];
+					const Value& right = stack.back();
+					if (left.IsNumber() && right.IsNumber() && (op == OpCode::Add || op == OpCode::Subtract || op == OpCode::Multiply))
+					{
+						const double x = left.AsNumber();
+						const double y = right.AsNumber();
+						left = Value::FromNumber(op == OpCode::Add ? x + y : (op == OpCode::Subtract ? x - y : x * y));
+						stack.pop_back();
+						break;
+					}
 					Value result;
 					FORGESCRIPT_CHECK(Arithmetic(task, op, stack[stack.size() - 2], stack.back(), result));
 					stack.pop_back();
@@ -3071,6 +3096,10 @@ namespace ForgeScript {
 							FORGESCRIPT_FAIL("Use 'set my_map[key] to value' to put things in a map.");
 						As<Map>(current)->Remove(amount);
 						result = current;
+					}
+					else if (current.IsNumber() && amount.IsNumber())
+					{
+						result = Value::FromNumber(op == OpCode::AddTo ? current.AsNumber() + amount.AsNumber() : current.AsNumber() - amount.AsNumber());
 					}
 					else
 					{

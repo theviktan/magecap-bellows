@@ -1,0 +1,16 @@
+# Math: number arithmetic and comparisons in a loop and in a recursive function.
+function fib(n)
+	if n < 2 then
+		return n
+	end
+	return fib(n - 1) + fib(n - 2)
+end
+set total to 0
+for i from 1 to 100000 do
+	add i * 2 - 1 to total
+	if total > 1000000000 then
+		set total to total - 1000000000
+	end
+end
+say total
+say fib(20)

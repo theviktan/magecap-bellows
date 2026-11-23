@@ -5,6 +5,8 @@ calls.forge 1800594
 closures.forge 1000136
 events.forge 580027
 lists.forge 830044
+math.forge 2362767
 methods.forge 1800029
+numbers_to_text.forge 440017
 tasks.forge 62257
 text.forge 572035

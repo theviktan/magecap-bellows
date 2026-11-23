@@ -1,0 +1,7 @@
+# Numbers to text: whole numbers and fractions filled into text, as scores and labels do.
+set count to 0
+for i from 1 to 20000 do
+	set label to "score {i} of {i / 4}"
+	add label.length to count
+end
+say count
