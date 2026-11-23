@@ -171,6 +171,7 @@ namespace ForgeScript {
 		std::vector<ApiPhrase> m_ApiPhrases;
 		std::string m_ApiError;
 		bool m_Initialized = false;
+		bool m_Strict = false; // initializationOptions.strict: warnings are sent as mistakes
 		bool m_ShutdownRequested = false;
 		bool m_ExitRequested = false;
 	};

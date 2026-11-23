@@ -604,6 +604,8 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 - In 1.7.0: a name read as a value that nothing sets: not this script (anywhere in it), not a script it uses, not the language and not the engine. "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean 'health'?" A name is suggested only when it is the one close name. Calls (`helth()`) are left alone.
 - In 1.7.0: a `return` with a plain value of another type than the function's return type: "'status' says it gives back text (as text), but this gives back a number." And a function with a return type but no `return` with a value: "'status' says it gives back text (as text), but it never returns a value, so it always gives back nothing. Add 'return' with the text it should give back." (No quick fix: `return nothing` would hide the mistake.)
 
+`forgescript --check --strict` (1.7.0) counts warnings too: the output is the same, and the exit code is 1 when there is a warning (65 when there is a mistake). The language server's `strict` initialization option sends warnings as errors. Neither changes what runs.
+
 A mistake or warning whose message says exactly what to write instead also carries that change, so an editor can offer it as a one-click fix (1.7.0; see the language server's quick fixes).
 
 ---
