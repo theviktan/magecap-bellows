@@ -66,5 +66,15 @@ if(BELLOWS_BUILD_TESTS)
 			COMMAND ${CMAKE_COMMAND} -DFORGESCRIPT=$<TARGET_FILE:ForgeScriptCLI> -DAPI=${FORGESCRIPT_DOC_API}
 				-DOUT=${CMAKE_CURRENT_BINARY_DIR}/DocExamples "-DDOCS=${FORGESCRIPT_DOC_LIST}"
 				-P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/Docs/DocExamples.cmake)
+
+		# Every script in the repository, against the same engine API: none may use a built-in or engine
+		# name for its own (so a new engine name shows up in the change that adds it).
+		file(GLOB_RECURSE FORGESCRIPT_REPO_SCRIPTS CONFIGURE_DEPENDS
+			"${CMAKE_SOURCE_DIR}/Projects/*.forge" "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Scripts/*.forge"
+			"${CMAKE_CURRENT_SOURCE_DIR}/Benchmarks/*.forge")
+		list(JOIN FORGESCRIPT_REPO_SCRIPTS "|" FORGESCRIPT_REPO_SCRIPT_LIST)
+		add_test(NAME ForgeScriptEngineNames
+			COMMAND ${CMAKE_COMMAND} -DFORGESCRIPT=$<TARGET_FILE:ForgeScriptCLI> -DAPI=${FORGESCRIPT_DOC_API}
+				"-DSCRIPTS=${FORGESCRIPT_REPO_SCRIPT_LIST}" -P ${CMAKE_CURRENT_SOURCE_DIR}/Tests/Docs/ScriptNames.cmake)
 	endif()
 endif()

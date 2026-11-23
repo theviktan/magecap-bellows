@@ -267,7 +267,7 @@ with a skeleton), one at a time. Clips run in game time, so `set_paused(True)` h
 | `time` | Seconds into the clip, held to its length. Set it to 0 to start the clip over. |
 | `clip`, `playing`, `length` | Read-only: the clip playing or held (`""` for none, the rest pose), whether it moves, its length in seconds. |
 | `clips`, `bones` | Read-only: the model's clip names in file order, and its bone names, parents first. |
-| `play(clip, fade=0.2)` | Plays a clip, fading from the current pose over `fade` seconds (0 cuts, at most 10). Playing the clip that's already playing changes nothing, so it's safe every frame. An unknown clip raises `ValueError` listing the clips. Only while the game is playing. |
+| `play(clip, fade=0.2)` | Plays a clip, fading from the current pose over `fade` seconds (0 cuts, at most 10). Asking for the clip that's already playing changes nothing (a paused one resumes), so it's safe every frame for a looping clip. A clip that doesn't loop and has ended starts over, and sends `animation finished` again at its end. An unknown clip raises `ValueError` listing the clips. Only while the game is playing. |
 | `stop()`, `pause()`, `resume()` | `stop` holds the current pose; `pause` and `resume` hold it and let it go on. |
 | `bone_position(bone)`, `bone_rotation(bone)` | A bone's world position and rotation (degrees, like `rotation`) this frame, to put something in a hand. |
 

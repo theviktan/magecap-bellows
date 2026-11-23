@@ -125,6 +125,30 @@ TEST_CASE("Values read from JSON count toward the data file cache's size")
 	CHECK(GetDataFileCacheBytes() == 0);
 }
 
+TEST_CASE("A data file too big to keep doesn't push the others out of memory")
+{
+	DataFolder folder;
+	folder.Write("Data/small.json", "[1, 2, 3]");
+	// About 4 MB of text that reads as 2,000,000 values: more than the cache holds on its own.
+	std::string text = "[";
+	text.reserve(4'000'010);
+	for (int i = 0; i < 2'000'000; i++)
+		text += i == 0 ? "1" : ",1";
+	text += "]";
+	folder.Write("Data/huge.json", text);
+
+	CHECK(LoadDataJson("Data/small.json") == ScriptValue(ScriptValueList { 1.0, 2.0, 3.0 }));
+	const uintmax_t withSmall = GetDataFileCacheBytes();
+	for (int read = 0; read < 2; read++)
+	{
+		const ScriptValue huge = LoadDataJson("Data/huge.json");
+		CHECK(std::get<ScriptValueList>(huge.Data).size() == 2'000'000);
+		// The small file is still kept (with the huge file's text, which fits), and the cap holds.
+		CHECK(GetDataFileCacheBytes() == withSmall + text.size());
+		CHECK(GetDataFileCacheBytes() <= MaxDataFileCacheBytes);
+	}
+}
+
 TEST_CASE("Data files outside the Assets folder, too big or broken are refused with the reason")
 {
 	DataFolder folder;

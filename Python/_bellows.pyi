@@ -163,7 +163,7 @@ class Animator:
     def bones(self) -> list[str]:
         """The model's bone (joint) names, parents first"""
     def play(self, clip: str, fade: float = 0.2) -> None:
-        """Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Playing the clip that's already playing changes nothing, so it's safe to call every frame; set time to 0 to restart it"""
+        """Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Asking for the clip that's already playing changes nothing (and resumes it if paused), so it's safe every frame for a looping clip; set time to 0 to restart it. A clip that doesn't loop and has ended starts over, sending 'animation finished' again at its end"""
     def stop(self) -> None:
         """Stops the clip and holds the current pose"""
     def pause(self) -> None: ...

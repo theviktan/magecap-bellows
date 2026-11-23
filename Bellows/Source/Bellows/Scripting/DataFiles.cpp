@@ -6,6 +6,7 @@
 
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Bellows::Scripting {
 
@@ -25,6 +26,7 @@ namespace Bellows::Scripting {
 		// when it grows past MaxDataFileCacheBytes, which only a game reading many large files at once reaches.
 		std::unordered_map<std::string, CachedFile> s_Cache;
 		uintmax_t s_CachedBytes = 0;
+		std::unordered_set<std::string> s_UncachedWarned;	// Files too big to keep, warned about once
 
 		const char* c_Example = "like \"Data/items.json\"";
 
@@ -204,13 +206,18 @@ namespace Bellows::Scripting {
 			}
 			ScriptValue value = ToScriptValue(json, path, 0);
 			const uintmax_t bytes = EstimateBytes(value);
+			// A file whose values can't be kept even alone is read each time, and leaves the others be.
+			if (file.GetBytes() + bytes > MaxDataFileCacheBytes)
+			{
+				if (s_UncachedWarned.insert(path).second)
+					BW_CORE_WARN("The data file '{}' is too big to keep in memory once read, so it is read again each time", path);
+				return value;
+			}
 			if (s_CachedBytes + bytes > MaxDataFileCacheBytes)
 			{
-				// Make room by dropping every other file; a file too big to keep even then is read each time.
+				// Make room by dropping every other file.
 				std::erase_if(s_Cache, [&file](const auto& entry) { return &entry.second != &file; });
 				s_CachedBytes = file.GetBytes();
-				if (s_CachedBytes + bytes > MaxDataFileCacheBytes)
-					return value;
 			}
 			file.JsonBytes = bytes;
 			s_CachedBytes += bytes;

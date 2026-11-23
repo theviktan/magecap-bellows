@@ -532,6 +532,43 @@ TEST_CASE("ALetterOutsideTextIsReportedOnce")
 	CHECK(vm.FindMistakes("say \"caf\xC3\xA9\"\n", "t.forge").empty());
 }
 
+TEST_CASE("AFunctionOrKindThatTakesABuiltinNameWarns")
+{
+	// The script's own name still wins (it always has), but a new Bellows name can take over a game's
+	// helper, so it is said (audit S-15).
+	VM vm;
+	auto taking = [&vm](const std::string& source, std::vector<std::string> engine = {})
+	{
+		std::vector<CompileError> found;
+		for (CompileError& warning : vm.FindWarnings(source, "t.forge", engine))
+		{
+			if (warning.Message.find("takes the name of the built-in") != std::string::npos)
+				found.push_back(std::move(warning));
+		}
+		return found;
+	};
+	std::vector<CompileError> found = taking("function ease(t)\n\treturn t\nend\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("Your function 'ease' takes the name of the built-in 'ease', so 'ease' in this script now "
+		"means yours. To keep using the built-in too, rename yours, like 'my_ease'."));
+	CHECK_EQ(found[0].Line, 1);
+	CHECK_EQ(found[0].Column, 10);
+	// An engine's names, as the checker is told them; a kind gets a type-like suggestion.
+	found = taking("function tween(a, b)\n\treturn a\nend\nkind Material\nend\n", { "tween", "Material" });
+	REQUIRE_EQ(found.size(), static_cast<size_t>(2));
+	CHECK_NE(found[0].Message.find("'my_tween'"), std::string::npos);
+	CHECK_NE(found[1].Message.find("Your kind 'Material'"), std::string::npos);
+	CHECK_NE(found[1].Message.find("'MyMaterial'"), std::string::npos);
+	CHECK_EQ(taking("choices color are red, green\n").size(), static_cast<size_t>(1));
+	// A function inside a function too; names that aren't built in stay quiet.
+	CHECK_EQ(taking("function outer()\n\tfunction ease(t)\n\t\treturn t\n\tend\n\treturn ease(1)\nend\n").size(), static_cast<size_t>(1));
+	CHECK(taking("function my_ease(t)\n\treturn t\nend\nkind Enemy\nend\n").empty());
+	CHECK(taking("function tween(a, b)\n\treturn a\nend\n").empty());   // no engine told: not a built-in here
+
+	// It still works as before: the script's own function is the one called.
+	CHECK_EQ(Output("function ease(t)\n\treturn \"mine\"\nend\nsay ease(0.5)\n"), std::string("mine\n"));
+}
+
 TEST_CASE("ANameThatIsNeverSetWarns")
 {
 	VM vm;

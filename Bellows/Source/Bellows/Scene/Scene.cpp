@@ -707,6 +707,21 @@ namespace Bellows {
 
 	}
 
+	void Scene::StartAnimator(Entity entity, AnimatorComponent& animator, const Ref<Mesh>& mesh, bool warnUnknownClip)
+	{
+		animator.RuntimeMesh = mesh;
+		animator.RuntimePlayer.Reset();
+		animator.RuntimeSkinMatrices.clear();
+		const MeshSkin* skin = mesh ? mesh->GetSkin() : nullptr;
+		if (!skin)
+			return;
+		const Ref<AnimationClip> startClip = FindStartClip(animator, *skin);
+		if (!startClip && !animator.Clip.empty() && warnUnknownClip)
+			BW_CORE_WARN("Animator on '{}': the mesh has no clip '{}'", entity.GetName(), animator.Clip);
+		if (startClip && (animator.PlayOnStart || !m_IsRunning))
+			animator.RuntimePlayer.Play(startClip, 0.0f, animator.Speed);
+	}
+
 	void Scene::UpdateAnimators(float seconds)
 	{
 		// Clips that reached their end, told to scripts once every Animator has moved (a handler may
@@ -736,14 +751,7 @@ namespace Bellows {
 			const bool newMesh = animator.RuntimeMesh != mesh;
 			const bool clipChanged = !m_IsRunning && animator.RuntimePlayer.GetClip() != startClip;
 			if (newMesh || clipChanged)
-			{
-				animator.RuntimeMesh = mesh;
-				animator.RuntimePlayer.Reset();
-				if (!startClip && !animator.Clip.empty() && newMesh)
-					BW_CORE_WARN("Animator on '{}': the mesh has no clip '{}'", Entity(handle, this).GetName(), animator.Clip);
-				if (startClip && (animator.PlayOnStart || !m_IsRunning))
-					animator.RuntimePlayer.Play(startClip, 0.0f, animator.Speed);
-			}
+				StartAnimator(Entity(handle, this), animator, mesh, newMesh);
 
 			if (animator.RuntimePlayer.Update(seconds, animator.Speed, animator.Loop) && m_IsRunning)
 				finished.emplace_back(m_Registry.get<IDComponent>(handle).ID, animator.RuntimePlayer.GetClip()->GetName());

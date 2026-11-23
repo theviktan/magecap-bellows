@@ -1,5 +1,5 @@
 # Checks every ForgeScript example in the docs with 'forgescript --check' and the engine API, so a
-# guide never teaches code the checker refuses. Run by ctest:
+# guide never teaches code the checker refuses, nor gives its own function a built-in's name. Run by ctest:
 #   cmake -DFORGESCRIPT=<forgescript> -DAPI=<forgescript-api.json> -DOUT=<scratch folder>
 #         -DDOCS=<file|file|...> -P DocExamples.cmake
 #
@@ -62,6 +62,13 @@ foreach(doc IN LISTS DOCS)
 		if(NOT exitCode EQUAL 0)
 			string(STRIP "${out}${err}" said)
 			list(APPEND failures "${docName}:${line}: ${said}")
+			continue()
+		endif()
+		# An example must not take or hide a built-in or engine name: when Bellows adds a name an example
+		# already uses, this fails in that change, not later in a reader's game (audit S-15).
+		if("${out}${err}" MATCHES "takes the name of the built-in|hides the built-in")
+			string(STRIP "${out}${err}" said)
+			list(APPEND failures "${docName}:${line}: uses a built-in or engine name for its own:\n${said}")
 			continue()
 		endif()
 		# Each example is laid out the way 'forgescript --format' lays it out, so the docs teach one style.

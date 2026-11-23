@@ -384,12 +384,10 @@ namespace Bellows::Scripting {
 			if (!mesh || !mesh->GetSkin())
 				throw ScriptValueError("'" + entity.GetName() + "' has an Animator, but " +
 					(meshRenderer ? std::string("its mesh has no skeleton to animate") : std::string("no MeshRenderer with a skinned model")));
+			// Before the scene's first update of this Animator (just added, or a new mesh): start it as that
+			// update would, so Play On Start still plays.
 			if (animator.RuntimeMesh != mesh)
-			{
-				animator.RuntimeMesh = mesh;
-				animator.RuntimePlayer.Reset();
-				animator.RuntimeSkinMatrices.clear();
-			}
+				entity.GetScene()->StartAnimator(entity, animator, mesh);
 			return *mesh->GetSkin();
 		}
 
@@ -840,8 +838,9 @@ namespace Bellows::Scripting {
 		animator.ReadOnly("clips", [](const AnimatorRef& r) { return Detail::AnimatorClips(r); }, "The model's clip names, in file order");
 		animator.ReadOnly("bones", [](const AnimatorRef& r) { return Detail::AnimatorBones(r); }, "The model's bone (joint) names, parents first");
 		animator.Method("play", [](const AnimatorRef& r, const std::string& clip, double fade) { Detail::AnimatorPlay(r, clip, fade); },
-			"Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Playing the clip that's already playing changes nothing, "
-			"so it's safe to call every frame; set time to 0 to restart it", Arg("clip"), Arg("fade", 0.2));
+			"Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Asking for the clip that's already playing changes "
+			"nothing (and resumes it if paused), so it's safe every frame for a looping clip; set time to 0 to restart it. A clip that "
+			"doesn't loop and has ended starts over, sending 'animation finished' again at its end", Arg("clip"), Arg("fade", 0.2));
 		animator.Method("stop", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Stop(); }, "Stops the clip and holds the current pose");
 		animator.Method("pause", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Pause(); }, "");
 		animator.Method("resume", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Resume(); }, "");

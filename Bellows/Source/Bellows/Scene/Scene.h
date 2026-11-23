@@ -25,6 +25,8 @@
 namespace Bellows {
 
 	class Entity;
+	class Mesh;
+	struct AnimatorComponent;
 	class PhysicsWorld;
 	class SceneAudio;
 	class SceneTweens;
@@ -181,6 +183,10 @@ namespace Bellows {
 		CameraShake& GetCameraShake() { return m_CameraShake; }
 		const CameraShake& GetCameraShake() const { return m_CameraShake; }
 
+		// Readies an Animator for 'mesh' (a new mesh, or the game's start): its clip starts when Play On
+		// Start is on (always in the editor's preview), otherwise it holds the rest pose. The scene's update
+		// calls it, and so do scripts that reach an Animator before that, so both start it the same way.
+		void StartAnimator(Entity entity, AnimatorComponent& animator, const Ref<Mesh>& mesh, bool warnUnknownClip = true);
 		// What agents walk on, or null before a bake. Loaded with the scene from its .bnav file, shared
 		// with copies (Play), and replaced by BakeNavigation.
 		const Ref<NavMesh>& GetNavMesh() const { return m_NavMesh; }
