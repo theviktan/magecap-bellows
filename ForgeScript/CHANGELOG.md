@@ -7,6 +7,13 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **Types that follow values** (expert features item 2): the call check now also looks at a
+  function's own variable given as a value, when its type is certain. That's a variable that every
+  line sets to the same type of plain value, or a parameter with `as` that the function never sets.
+  `set name to "Ana"` then `heal(name)` warns: "'heal' takes a number for 'amount' (amount as number),
+  but 'name' is text (it is only ever set to text)." Mixed types, worked-out values, loop and
+  handler variables, `set a, b to`, script variables and kinds' types stay quiet, so a warning is
+  never a guess. No script in the repository gets a new warning.
 - **The profiler by line and by time** (expert features item 4): `forgescript --profile --lines`
   adds the 20 busiest lines, with about how many milliseconds each took (the real clock, sampled
   every 256 instructions, so engine calls count). `--profile --json` writes the whole profile with
