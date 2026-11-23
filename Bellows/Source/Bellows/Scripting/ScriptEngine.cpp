@@ -545,7 +545,19 @@ namespace Bellows {
 				ScriptInstance instance = it->second;
 				Invoke(uuid, instance, "on_create");
 				if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
+				{
 					again->second.ErrorCount = instance.ErrorCount;
+					// From now on its fields report their changes ('field changed').
+					try
+					{
+						if (py::hasattr(instance.Object, "_bellows_watch_fields"))
+							instance.Object.attr("_bellows_watch_fields")();
+					}
+					catch (const std::exception& exception)
+					{
+						ReportScriptException("Script '" + instance.ScriptPath + "'", exception, instance.ScriptPath);
+					}
+				}
 			}
 		}
 

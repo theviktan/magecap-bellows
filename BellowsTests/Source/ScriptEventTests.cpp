@@ -300,3 +300,135 @@ TEST_CASE("Events going up the hierarchy that keep raising events stop with an e
 	CHECK_THROWS_WITH_AS(EmitScriptEventFrom(ScriptEntity(button), "changed", {}), doctest::Contains("sent from inside 64 other events"), ScriptValueError);
 	CHECK_EQ(depth, 64);
 }
+
+TEST_CASE("Queued script events wait for the flush, go in order, and stop when they multiply")
+{
+	ClearQueuedScriptEvents();
+	Scene scene("Queued");
+	const ScriptEntity hero(scene.CreateEntity("Hero"));
+	std::vector<std::string> received;
+	bool aboutHero = true;
+	ListenerScope listener([&](const std::string& name, const ScriptValueList& values, const ScriptEventDelivery& delivery)
+	{
+		received.push_back(name + " " + std::get<std::string>(values.at(1).Data));
+		aboutHero &= !delivery.Target && delivery.Source && delivery.Source->ID == hero.ID;
+		// A handler's change, queued while flushing, goes out in the same flush.
+		if (std::get<std::string>(values.at(1).Data) == "health")
+			QueueScriptEventAbout(hero, "field changed", { hero, std::string("mood") });
+	});
+
+	QueueScriptEventAbout(hero, "field changed", { hero, std::string("health") });
+	QueueScriptEventAbout(hero, "field changed", { hero, std::string("speed") });
+	CHECK(received.empty());
+	FlushQueuedScriptEvents();
+	CHECK_EQ(received, std::vector<std::string>{ "field changed health", "field changed speed", "field changed mood" });
+	CHECK(aboutHero);
+
+	// An event about an entity that's gone is dropped.
+	{
+		Scene closed("Closed");
+		QueueScriptEventAbout(ScriptEntity(closed.CreateEntity("Gone")), "field changed", { hero, std::string("gone") });
+	}
+	received.clear();
+	FlushQueuedScriptEvents();
+	CHECK(received.empty());
+
+	// Stopping play drops what's waiting.
+	QueueScriptEventAbout(hero, "field changed", { hero, std::string("speed") });
+	ClearQueuedScriptEvents();
+	received.clear();
+	FlushQueuedScriptEvents();
+	CHECK(received.empty());
+}
+
+TEST_CASE("Queued script events that keep causing more stop after the limit")
+{
+	ClearQueuedScriptEvents();
+	Scene scene("Looping");
+	const ScriptEntity hero(scene.CreateEntity("Hero"));
+	size_t received = 0;
+	// Two fields that keep changing each other.
+	ListenerScope listener([&](const std::string&, const ScriptValueList&, const ScriptEventDelivery&)
+	{
+		received++;
+		QueueScriptEventAbout(hero, "field changed", { hero, std::string("ping") });
+	});
+	QueueScriptEventAbout(hero, "field changed", { hero, std::string("ping") });
+	FlushQueuedScriptEvents();
+	CHECK(received == c_MaxQueuedEventsPerFlush);
+	received = 0;
+	FlushQueuedScriptEvents();
+	CHECK(received == 0);		// Nothing was left behind
+}
+
+TEST_CASE("A running scene sends queued script events each frame")
+{
+	Scene scene("Running");
+	const ScriptEntity hero(scene.CreateEntity("Hero"));
+	size_t received = 0;
+	ListenerScope listener([&](const std::string& name, const ScriptValueList&, const ScriptEventDelivery&) { received += name == "field changed"; });
+	scene.OnRuntimeStart();
+	QueueScriptEventAbout(hero, "field changed", { hero, std::string("health") });
+	scene.OnUpdateRuntime(Timestep(1.0f / 60.0f));
+	CHECK(received == 1);
+	scene.OnRuntimeStop();
+}
+
+TEST_CASE("A ForgeScript entity script's fields send 'field changed' once it's created")
+{
+	Ref<Scene> scene = CreateRef<Scene>();
+	SetContextScene(scene.get());
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "FieldChanged";
+	REQUIRE(FileSystem::WriteTextFile(assets / "Scripts/Hero.forge",
+		"set health to 100\n"
+		"set mood to \"calm\"\n"
+		"set _secret to 1\n"
+		"when created\n"
+		"\tset health to 90\n"
+		"end\n"
+		"when hurt\n"
+		"\tset health to health - 10\n"
+		"\tset health to health\n"
+		"\tset _secret to 2\n"
+		"\thurt_more()\n"
+		"end\n"
+		"function hurt_more()\n"
+		"\tset mood to \"angry\"\n"
+		"end\n"));
+	AssetManager::SetAssetDirectory(assets);
+
+	std::vector<std::string> errors;
+	ForgeScriptRuntime runtime([&errors](const std::string&, const std::string& message) { errors.push_back(message); });
+	std::vector<std::string> changes;
+	ListenerScope listener([&changes](const std::string& name, const ScriptValueList& values, const ScriptEventDelivery&)
+	{
+		if (name != "field changed" || values.size() != 4)
+			return;
+		auto text = [](const ScriptValue& value)
+		{
+			if (const double* number = std::get_if<double>(&value.Data))
+				return std::to_string(static_cast<int>(*number));
+			const std::string* string = std::get_if<std::string>(&value.Data);
+			return string ? *string : std::string("?");
+		};
+		changes.push_back(std::get<std::string>(values[1].Data) + " " + text(values[3]) + " to " + text(values[2]));
+	});
+
+	Entity hero = scene->CreateEntity("Hero");
+	hero.AddComponent<ScriptComponent>().ScriptPath = "Scripts/Hero.forge";
+	runtime.Start();
+	REQUIRE(runtime.CreateInstance(hero));
+	runtime.CallCreated(hero.GetUUID());
+	FlushQueuedScriptEvents();
+	CHECK(changes.empty());		// What 'when created' sets is a starting value
+
+	EmitScriptEvent("hurt", {});
+	CHECK(changes.empty());		// Queued until the flush
+	FlushQueuedScriptEvents();
+	CHECK_EQ(changes, std::vector<std::string>{ "health 90 to 80", "mood calm to angry" });
+	INFO(errors.size());
+	CHECK(errors.empty());
+	runtime.Stop();
+	AssetManager::SetAssetDirectory({});
+	SetContextScene(nullptr);
+}

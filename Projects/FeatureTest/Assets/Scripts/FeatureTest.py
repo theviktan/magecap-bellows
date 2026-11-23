@@ -112,6 +112,7 @@ class FeatureTest(bellows.Script):
         self.test_ui_focus()
         self.test_navigation()
         yield from self.test_nav_agents()
+        yield from self.test_field_changed()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -982,6 +983,21 @@ class FeatureTest(bellows.Script):
                    "'animation finished' reaches on_event once, with the entity and the clip")
         animator.loop = True
         animator.play("Wave", 0.5)
+
+    def test_field_changed(self):
+        """The Water Bottle's Spinner has the Inspector field speed (60 in the scene)."""
+        bottle = bellows.find_entity("Water Bottle")
+        spinner = bottle.get_component(bellows.ScriptComponent).instance
+        self.events.clear()
+        spinner.speed = 75.0
+        spinner.speed = 75.0
+        spinner.axis = bellows.Vec3(0.0, 1.0, 0.0)
+        spinner.not_a_field = 1
+        yield from self.wait_frames(1)
+        changes = [values for name, values in self.events if name == "field changed" and values[0] == bottle]
+        self.check(changes == [(bottle, "speed", 75.0, 60.0)],
+                   f"'field changed' once, with the entity, field, new and old values; not for the same value or other attributes ({changes})")
+        spinner.speed = 60.0
 
     def test_nav_agents(self):
         """The Guard, a NavAgent carrying a kinematic capsule, walks the open ground in front of the camera (z = 7)."""

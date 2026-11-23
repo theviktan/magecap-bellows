@@ -577,6 +577,13 @@ namespace Bellows::Scripting {
 			EmitScriptEvent(name, converted);
 		}, py::arg("name"), "Sends an event to every script: Python's on_event(self, name, *values) and ForgeScript's 'when <name>' handlers");
 
+		// Python-only: bellows.Script reports its fields' changes here (ForgeScript's runtime watches its
+		// own). Queued, since the assignment that changed it is still running.
+		m.def("_field_changed", [](const ScriptEntity& entity, const std::string& field, const py::handle& now, const py::handle& before)
+		{
+			QueueScriptEventAbout(entity, "field changed", { entity, field, ScriptValueFromPython(now), ScriptValueFromPython(before) });
+		}, py::arg("entity"), py::arg("field"), py::arg("now"), py::arg("before"), "Internal: reports a script field's change");
+
 		api.Get<RaycastHit>()
 			.def("__repr__", [](const RaycastHit& hit) { return fmt::format("RaycastHit(distance={:.3f})", hit.Distance); });
 

@@ -455,6 +455,7 @@ namespace Bellows {
 			ScriptEngine::OnRuntimeStop(*this);
 
 		m_PendingDestroy.clear();
+		Scripting::ClearQueuedScriptEvents();
 		// After the scripts stopped, so a tween started in on_destroy goes too.
 		m_Tweens.reset();
 		m_CameraShake.Clear();
@@ -593,6 +594,8 @@ namespace Bellows {
 			ScriptEngine::InstantiatePendingScripts(*this);
 			ScriptEngine::OnUpdate(*this, deltaTime);
 		}
+		// Events queued while scripts ran ('field changed'), now that none is in the middle of a line.
+		Scripting::FlushQueuedScriptEvents();
 
 		// Agents walk after scripts, so a destination set this frame is used, and before physics, so
 		// a kinematic body goes where its agent went.
@@ -624,12 +627,14 @@ namespace Bellows {
 				for (const ContactEvent& event : m_PhysicsWorld->GetContactEvents())
 					ScriptEngine::OnContactEvent(*this, event);
 			}
+			Scripting::FlushQueuedScriptEvents();
 			m_PhysicsAccumulator -= fixedTimestep;
 		}
 
 		if (m_Audio)
 			m_Audio->OnUpdate();
 
+		Scripting::FlushQueuedScriptEvents();
 		FlushPendingDestroys();
 
 		// time() is game time, so it stops while the game is paused; real_time() keeps going.
