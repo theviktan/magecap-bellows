@@ -232,17 +232,19 @@ namespace Bellows {
 			uint32_t EntityID = 0;
 			uint32_t JointOffset = 0;		// Skinned: the first of its joint matrices in m_JointMatrices
 			bool Skinned = false;
+			bool Mirrored = false;			// Its transform turns space inside out (a negative scale), so its triangles wind clockwise
 			bool CastShadows = true;
 			float SortKey = 0.0f;
 		};
 
-		// The pipelines of one mesh pass, for one- and two-sided materials, static and skinned.
+		// The pipelines of one mesh pass: static or skinned, for one- or two-sided materials, drawn
+		// as made or mirrored.
 		struct MeshPassPipelines
 		{
-			nvrhi::IGraphicsPipeline* SingleSided = nullptr;
-			nvrhi::IGraphicsPipeline* DoubleSided = nullptr;
-			nvrhi::IGraphicsPipeline* SkinnedSingleSided = nullptr;
-			nvrhi::IGraphicsPipeline* SkinnedDoubleSided = nullptr;
+			nvrhi::GraphicsPipelineHandle Pipelines[2][2][2];	// [skinned][double-sided][mirrored]
+
+			nvrhi::IGraphicsPipeline* Get(bool skinned, bool doubleSided, bool mirrored) const { return Pipelines[skinned][doubleSided][mirrored]; }
+			bool IsComplete() const;
 		};
 
 		struct LineVertex
@@ -396,13 +398,8 @@ namespace Bellows {
 
 		// Pipelines
 		nvrhi::GraphicsPipelineHandle m_ShadowPipeline;
-		nvrhi::GraphicsPipelineHandle m_PrepassPipeline, m_PrepassPipelineDoubleSided;
-		nvrhi::GraphicsPipelineHandle m_OpaquePipeline, m_OpaquePipelineDoubleSided;
-		nvrhi::GraphicsPipelineHandle m_TransparentPipeline, m_TransparentPipelineDoubleSided;
 		nvrhi::GraphicsPipelineHandle m_ShadowSkinnedPipeline;
-		nvrhi::GraphicsPipelineHandle m_PrepassSkinnedPipeline, m_PrepassSkinnedPipelineDoubleSided;
-		nvrhi::GraphicsPipelineHandle m_OpaqueSkinnedPipeline, m_OpaqueSkinnedPipelineDoubleSided;
-		nvrhi::GraphicsPipelineHandle m_TransparentSkinnedPipeline, m_TransparentSkinnedPipelineDoubleSided;
+		MeshPassPipelines m_PrepassPipelines, m_OpaquePipelines, m_TransparentPipelines;
 		nvrhi::GraphicsPipelineHandle m_SkyboxPipeline;
 		nvrhi::GraphicsPipelineHandle m_SSAOPipeline, m_SSAOBlurPipeline;
 		nvrhi::GraphicsPipelineHandle m_BloomDownsamplePipeline, m_BloomUpsamplePipeline;
