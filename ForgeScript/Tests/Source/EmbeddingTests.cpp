@@ -780,6 +780,19 @@ TEST_CASE("VMProfilesWhereInstructionsGo")
 	CHECK_EQ(profile[0].Calls, static_cast<uint64_t>(177));
 	CHECK(profile[0].Instructions > profile[1].Instructions);
 	CHECK_EQ(profile[1].Function, std::string());
+	// Each function's lines add up to its instructions, busiest first: fib's two lines, 2 and 3.
+	for (const ProfileEntry& entry : profile)
+	{
+		uint64_t sum = 0;
+		for (const ProfileLine& line : entry.Lines)
+			sum += line.Instructions;
+		CHECK_EQ(sum, entry.Instructions);
+		for (size_t i = 1; i < entry.Lines.size(); i++)
+			CHECK(entry.Lines[i - 1].Instructions >= entry.Lines[i].Instructions);
+		CHECK(entry.Seconds >= 0.0);
+	}
+	REQUIRE_EQ(profile[0].Lines.size(), static_cast<size_t>(2));
+	CHECK((profile[0].Lines[0].Line == 2 || profile[0].Lines[0].Line == 3));
 	// TakeProfile stops profiling: what runs afterwards isn't counted.
 	REQUIRE(vm.Load("set x to 1 + 2\n", "after.forge").Success);
 	CHECK(vm.TakeProfile().empty());
