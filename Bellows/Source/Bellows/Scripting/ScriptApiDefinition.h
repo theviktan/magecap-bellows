@@ -638,6 +638,27 @@ namespace Bellows::Scripting {
 			[](const ScriptMaterial& m, const std::string& v) { m.Instance->EditProperties().Mode = AlphaModeFromString(v); }, "");
 		material.Property("double_sided", [](const ScriptMaterial& m) { return m.Instance->GetProperties().DoubleSided; },
 			[](const ScriptMaterial& m, bool v) { m.Instance->EditProperties().DoubleSided = v; }, "");
+		material.Property("texture_filter", [](const ScriptMaterial& m) { return std::string(TextureFilterToString(m.Instance->GetProperties().Filter)); },
+			[](const ScriptMaterial& m, const std::string& v)
+			{
+				const std::optional<TextureFilter> filter = TextureFilterFromString(v);
+				if (!filter)
+					throw ScriptValueError("A material's texture_filter is \"Linear\" (smooth) or \"Nearest\" (pixelated), not '" + v + "'");
+				m.Instance->EditProperties().Filter = *filter;
+			}, "How its textures are read between pixels: \"Linear\" (smooth) or \"Nearest\" (pixelated, for pixel art and palettes)");
+		auto wrapProperty = [&](const char* name, TextureWrap MaterialProperties::* field, const char* doc)
+		{
+			material.Property(name, [field](const ScriptMaterial& m) { return std::string(TextureWrapToString(m.Instance->GetProperties().*field)); },
+				[name, field](const ScriptMaterial& m, const std::string& v)
+				{
+					const std::optional<TextureWrap> wrap = TextureWrapFromString(v);
+					if (!wrap)
+						throw ScriptValueError(std::string("A material's ") + name + " is \"Repeat\", \"Clamp\" or \"Mirror\", not '" + v + "'");
+					m.Instance->EditProperties().*field = *wrap;
+				}, doc);
+		};
+		wrapProperty("wrap_u", &MaterialProperties::WrapU, "What its textures do past their left and right edges: \"Repeat\", \"Clamp\" or \"Mirror\"");
+		wrapProperty("wrap_v", &MaterialProperties::WrapV, "What its textures do past their top and bottom edges: \"Repeat\", \"Clamp\" or \"Mirror\"");
 		material.Property("normal_strength", [](const ScriptMaterial& m) { return m.Instance->GetProperties().NormalStrength; },
 			[](const ScriptMaterial& m, float v) { m.Instance->EditProperties().NormalStrength = std::max(v, 0.0f); }, "");
 		material.Property("alpha_cutoff", [](const ScriptMaterial& m) { return m.Instance->GetProperties().AlphaCutoff; },

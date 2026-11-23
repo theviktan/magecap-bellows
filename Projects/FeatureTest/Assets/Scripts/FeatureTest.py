@@ -559,6 +559,11 @@ class FeatureTest(bellows.Script):
         self.check(close(material.metallic, 1.0) and close(material.roughness, 0.6), "Material metallic and roughness")
         self.check(close(material.emissive, (1.0, 0.2, 0.0)) and close(material.emissive_intensity, 3.0), "Material emission")
         self.check(material.alpha_mode == "Mask" and material.double_sided and "Renamed" in repr(material), "Material alpha mode and sidedness")
+        self.check(material.texture_filter == "Linear" and material.wrap_u == "Repeat" and material.wrap_v == "Repeat", "Material sampling defaults")
+        material.texture_filter, material.wrap_u, material.wrap_v = "Nearest", "Clamp", "Mirror"
+        self.check(material.texture_filter == "Nearest" and material.wrap_u == "Clamp" and material.wrap_v == "Mirror", "Material texture filter and wraps")
+        self.check(raises(lambda: setattr(material, "texture_filter", "Bicubic"), ValueError)
+                   and raises(lambda: setattr(material, "wrap_u", "Tile"), ValueError), "unknown texture filters and wraps are refused")
         material.alpha_cutoff = 0.3
         material.normal_strength = 0.5
         material.uv_tiling = Vec2(4.0, 2.0)

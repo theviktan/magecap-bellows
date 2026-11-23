@@ -2,6 +2,7 @@
 
 #include "Bellows/Core/Base.h"
 #include "Bellows/Renderer/Image.h"
+#include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/Texture.h"
 
@@ -46,7 +47,10 @@ namespace Bellows {
 		static nvrhi::ISampler* GetLinearWrapSampler();
 		static nvrhi::ISampler* GetPointClampSampler();
 		static nvrhi::ISampler* GetShadowCompareSampler();
-		static nvrhi::ISampler* GetMaterialSampler();		// Trilinear, anisotropic, wrap
+		// A material's sampler: smooth (trilinear, anisotropic) or pixelated, with its wrap modes. One of
+		// each kind is made up front, so materials share them.
+		static nvrhi::ISampler* GetMaterialSampler(TextureFilter filter = TextureFilter::Linear, TextureWrap wrapU = TextureWrap::Repeat,
+			TextureWrap wrapV = TextureWrap::Repeat);
 
 		static const Ref<Texture2D>& GetWhiteTexture();
 		static const Ref<Texture2D>& GetBlackTexture();

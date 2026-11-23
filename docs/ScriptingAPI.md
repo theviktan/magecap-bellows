@@ -674,7 +674,9 @@ gold.save("Materials/Gold.bmat")          # Optional: write it into the project
 `Material(name="Material", color=None, metallic=0.0, roughness=0.5)` creates a runtime material;
 `Material.load(path)` opens a `.bmat`. Properties: `name`, `path`, `color`, `metallic`,
 `roughness`, `emissive` (`Vec3`), `emissive_intensity`, `alpha_mode` (`"Opaque"`, `"Mask"`,
-`"Blend"`), `alpha_cutoff`, `double_sided`, `normal_strength`, `uv_tiling`, `uv_offset`, and the
+`"Blend"`), `alpha_cutoff`, `double_sided`, `texture_filter` (`"Linear"`, smooth, or `"Nearest"`,
+pixelated for pixel art and palettes), `wrap_u` and `wrap_v` (`"Repeat"`, `"Clamp"`, `"Mirror"`),
+`normal_strength`, `uv_tiling`, `uv_offset`, and the
 texture slots `albedo_map`, `normal_map`, `metallic_roughness_map` (glTF layout: roughness in G,
 metallic in B), `roughness_map` and `metallic_map` (grayscale, as downloaded texture sets have them),
 `occlusion_map`, `emissive_map` (asset paths; `None` clears). Texture files can be PNG, JPG, TGA,

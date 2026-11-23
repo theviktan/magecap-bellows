@@ -295,6 +295,9 @@ namespace Bellows {
 		json["AlphaMode"] = AlphaModeToString(properties.Mode);
 		json["AlphaCutoff"] = properties.AlphaCutoff;
 		json["DoubleSided"] = properties.DoubleSided;
+		json["TextureFilter"] = TextureFilterToString(properties.Filter);
+		json["WrapU"] = TextureWrapToString(properties.WrapU);
+		json["WrapV"] = TextureWrapToString(properties.WrapV);
 		json["UVTiling"] = properties.UVTiling;
 		json["UVOffset"] = properties.UVOffset;
 		json["AlbedoMap"] = material->AlbedoMapPath;
@@ -347,6 +350,21 @@ namespace Bellows {
 		std::string alphaMode = "Opaque";
 		JsonRead(json, "AlphaMode", alphaMode);
 		properties.Mode = AlphaModeFromString(alphaMode);
+		// A value this version doesn't know keeps the default, with a word in the log.
+		auto readName = [&](const char* key, auto parse, auto& value)
+		{
+			const auto it = json.find(key);
+			if (it == json.end() || !it->is_string())
+				return;
+			const std::string text = it->template get<std::string>();
+			if (const auto parsed = parse(text))
+				value = *parsed;
+			else
+				BW_CORE_WARN("Material '{}': unknown {} '{}', using the default", material->GetName(), key, text);
+		};
+		readName("TextureFilter", TextureFilterFromString, properties.Filter);
+		readName("WrapU", TextureWrapFromString, properties.WrapU);
+		readName("WrapV", TextureWrapFromString, properties.WrapV);
 		material->SetProperties(properties);
 
 		JsonRead(json, "AlbedoMap", material->AlbedoMapPath);

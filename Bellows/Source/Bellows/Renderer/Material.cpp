@@ -26,6 +26,42 @@ namespace Bellows {
 		return AlphaMode::Opaque;
 	}
 
+	const char* TextureFilterToString(TextureFilter filter)
+	{
+		return filter == TextureFilter::Nearest ? "Nearest" : "Linear";
+	}
+
+	std::optional<TextureFilter> TextureFilterFromString(std::string_view text)
+	{
+		if (text == "Linear")
+			return TextureFilter::Linear;
+		if (text == "Nearest")
+			return TextureFilter::Nearest;
+		return std::nullopt;
+	}
+
+	const char* TextureWrapToString(TextureWrap wrap)
+	{
+		switch (wrap)
+		{
+			case TextureWrap::Repeat:	return "Repeat";
+			case TextureWrap::Clamp:	return "Clamp";
+			case TextureWrap::Mirror:	return "Mirror";
+		}
+		return "Repeat";
+	}
+
+	std::optional<TextureWrap> TextureWrapFromString(std::string_view text)
+	{
+		if (text == "Repeat")
+			return TextureWrap::Repeat;
+		if (text == "Clamp")
+			return TextureWrap::Clamp;
+		if (text == "Mirror")
+			return TextureWrap::Mirror;
+		return std::nullopt;
+	}
+
 	Material::Material(std::string name)
 		: m_Name(std::move(name))
 	{
@@ -69,7 +105,8 @@ namespace Bellows {
 			m_Dirty = false;
 		}
 
-		if (m_BindingSetDirty || !m_BindingSet)
+		nvrhi::ISampler* sampler = Renderer::GetMaterialSampler(m_Properties.Filter, m_Properties.WrapU, m_Properties.WrapV);
+		if (m_BindingSetDirty || !m_BindingSet || sampler != m_BoundSampler)
 		{
 			auto textureOr = [](const Ref<Texture2D>& texture, nvrhi::ITexture* fallback)
 			{
@@ -86,12 +123,13 @@ namespace Bellows {
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textureOr(m_MetallicRoughnessMap, white)));
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textureOr(m_OcclusionMap, white)));
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(5, textureOr(m_EmissiveMap, white)));
-			desc.addItem(nvrhi::BindingSetItem::Sampler(6, Renderer::GetMaterialSampler()));
+			desc.addItem(nvrhi::BindingSetItem::Sampler(6, sampler));
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, textureOr(m_RoughnessMap, white)));
 			desc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, textureOr(m_MetallicMap, white)));
 
 			m_BindingSet = device->createBindingSet(desc, Renderer::GetMaterialBindingLayout());
 			m_BindingSetDirty = false;
+			m_BoundSampler = sampler;
 		}
 
 		return m_BindingSet;

@@ -7,6 +7,7 @@
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Renderer/SceneRenderer.h"
+#include "Bellows/Renderer/Texture.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -141,6 +142,71 @@ TEST_CASE("[gpu] A mirrored mesh (a negative scale) shows its outside, lit as th
 		INFO("at ", at.x, ", ", at.y, ": ", a.r, " ", a.g, " ", a.b, " against ", b.r, " ", b.g, " ", b.b);
 		CHECK(glm::length(glm::vec3(a) - glm::vec3(b)) < 0.03f);
 	}
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] A pixelated material keeps each texture pixel sharp; a smooth one blends them")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	// A 2x2 palette (red, green / blue, white) as the glow of a black floor, so lighting can't color it.
+	const uint8_t pixels[] = { 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255 };
+	const Ref<Texture2D> palette = Texture2D::CreateFromRGBA8(2, 2, pixels, TextureColorSpace::Linear, "Palette");
+	REQUIRE(palette);
+
+	auto render = [&](TextureFilter filter)
+	{
+		Ref<Material> material = CreateRef<Material>("Palette");
+		material->EditProperties().AlbedoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		material->EditProperties().EmissiveColor = glm::vec3(1.0f);
+		material->EditProperties().Filter = filter;
+		material->SetEmissiveMap(palette);
+
+		SceneRenderer renderer;
+		renderer.SetViewportSize(320, 320);
+		SceneRendererSettings& settings = renderer.GetSettings();
+		settings.BloomEnabled = false;
+		settings.SSAOEnabled = false;
+		settings.FXAAEnabled = false;
+		settings.Vignette = 0.0f;
+		for (int frame = 0; frame < 2; frame++)
+		{
+			// Straight down at a 2 m floor that fills the view.
+			RenderCamera camera;
+			camera.Position = glm::vec3(0.0f, 5.0f, 0.0f);
+			camera.View = glm::lookAt(camera.Position, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+			camera.NearClip = 0.1f;
+			camera.FarClip = 20.0f;
+			camera.Projection = Math::OrthographicProjection(-1.0f, 1.0f, -1.0f, 1.0f, camera.NearClip, camera.FarClip);
+			renderer.BeginScene(camera);
+			renderer.SubmitMesh(Renderer::GetPrimitiveMesh(PrimitiveMesh::Plane), glm::scale(glm::mat4(1.0f), glm::vec3(2.0f)), 1, material);
+			renderer.EndScene();
+		}
+		return Renderer::ReadbackTexture(renderer.GetFinalImage());
+	};
+
+	const Image pixelated = render(TextureFilter::Nearest);
+	const Image smooth = render(TextureFilter::Linear);
+	REQUIRE(pixelated.IsValid());
+	REQUIRE(smooth.IsValid());
+	pixelated.SavePNG(BellowsTests::GetTestOutputDirectory() / "SceneRenderer_Pixelated.png");
+	smooth.SavePNG(BellowsTests::GetTestOutputDirectory() / "SceneRenderer_Smooth.png");
+
+	// Pixelated: a spot just beside the middle is the same color as its cell's middle.
+	const glm::vec4 cellMiddle = pixelated.GetAverageColor(70, 70, 20, 20);
+	const glm::vec4 nearEdge = pixelated.GetAverageColor(150, 70, 6, 20);
+	INFO("pixelated: middle ", cellMiddle.r, " ", cellMiddle.g, " ", cellMiddle.b, ", by the edge ", nearEdge.r, " ", nearEdge.g, " ", nearEdge.b);
+	CHECK(glm::length(glm::vec3(cellMiddle) - glm::vec3(nearEdge)) < 0.02f);
+	CHECK(glm::length(glm::vec3(cellMiddle)) > 0.3f);
+	// Across the edge, the next cell starts at once.
+	CHECK(glm::length(glm::vec3(pixelated.GetAverageColor(164, 70, 6, 20)) - glm::vec3(nearEdge)) > 0.3f);
+
+	// Smooth: the same spot is already blending toward the next cell.
+	const glm::vec4 smoothEdge = smooth.GetAverageColor(150, 70, 6, 20);
+	INFO("smooth by the edge ", smoothEdge.r, " ", smoothEdge.g, " ", smoothEdge.b);
+	CHECK(glm::length(glm::vec3(smooth.GetAverageColor(70, 70, 20, 20)) - glm::vec3(smoothEdge)) > 0.05f);
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }
 

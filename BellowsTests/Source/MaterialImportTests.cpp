@@ -82,6 +82,37 @@ TEST_CASE("Materials save and load separate roughness and metallic maps")
 	AssetManager::SetAssetDirectory({});
 }
 
+TEST_CASE("Materials save and load their texture filter and wrap modes")
+{
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "MaterialSampling";
+	AssetManager::SetAssetDirectory(assets);
+	Ref<Material> material = CreateRef<Material>("Palette");
+	material->EditProperties().Filter = TextureFilter::Nearest;
+	material->EditProperties().WrapU = TextureWrap::Clamp;
+	material->EditProperties().WrapV = TextureWrap::Mirror;
+	REQUIRE(AssetManager::SaveMaterial(material, "Materials/Palette.bmat"));
+	Ref<Material> loaded = AssetManager::LoadMaterialFile(assets / "Materials" / "Palette.bmat");
+	REQUIRE(loaded);
+	CHECK(loaded->GetProperties().Filter == TextureFilter::Nearest);
+	CHECK(loaded->GetProperties().WrapU == TextureWrap::Clamp);
+	CHECK(loaded->GetProperties().WrapV == TextureWrap::Mirror);
+
+	// Older files, and values this version doesn't know, keep smooth and repeating.
+	REQUIRE(FileSystem::WriteTextFile(assets / "Materials" / "Odd.bmat", R"({ "Name": "Odd", "TextureFilter": "Bicubic", "WrapU": 3, "WrapV": "Mirror" })"));
+	Ref<Material> odd = AssetManager::LoadMaterialFile(assets / "Materials" / "Odd.bmat");
+	REQUIRE(odd);
+	CHECK(odd->GetProperties().Filter == TextureFilter::Linear);
+	CHECK(odd->GetProperties().WrapU == TextureWrap::Repeat);
+	CHECK(odd->GetProperties().WrapV == TextureWrap::Mirror);
+
+	for (TextureFilter filter : { TextureFilter::Linear, TextureFilter::Nearest })
+		CHECK(TextureFilterFromString(TextureFilterToString(filter)) == filter);
+	for (TextureWrap wrap : { TextureWrap::Repeat, TextureWrap::Clamp, TextureWrap::Mirror })
+		CHECK(TextureWrapFromString(TextureWrapToString(wrap)) == wrap);
+	CHECK_FALSE(TextureFilterFromString("nearest"));
+	AssetManager::SetAssetDirectory({});
+}
+
 TEST_CASE("[gpu] OpenEXR images load as 8-bit material maps or as float skies")
 {
 	Application& application = BellowsTests::GetTestApplication();
