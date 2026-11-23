@@ -7,6 +7,9 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **`VM::EmitAll(event, values, source)`** takes the name of the entity a broadcast is about, so
+  `when "Hero" is destination reached` works for events every script hears. MageCap Bellows passes it
+  for broadcasts that name their entity (asked for by MCBellows for navigation and `field changed`).
 - **`forgescript --check --strict`** (expert features item 3), for teams that want no warnings: the
   same output as `--check`, but the exit code is 1 when there is a warning (65 for mistakes, as before),
   and the text ends "no mistakes found, but 1 warning, and --strict counts warnings." The language

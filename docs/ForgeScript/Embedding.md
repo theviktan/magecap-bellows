@@ -239,7 +239,7 @@ m_VM.EmitAll("key pressed", { m_VM.MakeText("space") });
 ```
 
 - `Emit` runs every matching `when` in one module. `EmitAll` sends the event to every module.
-- `Emit(module, event, values, source)` names the entity that raised the event. Handlers written `when "Start" is clicked` run only when `source` is `"Start"` (ignoring letter case); without a source (and with `EmitAll`) they never run. MageCap Bellows passes the widget's name for UI events.
+- `Emit(module, event, values, source)` names the entity that raised the event (`EmitAll(event, values, source)` too, for a broadcast about one entity). Handlers written `when "Start" is clicked` run only when `source` is `"Start"` (ignoring letter case); without a source (and with `EmitAll`) they never run. MageCap Bellows passes the widget's name for UI events.
 - `Emit` also wakes the module's tasks that `wait for` the event (after its `when` blocks), and `HasHandler(module, event)` is true while a task waits for it, so a host that sends an event only to modules with a handler reaches those scripts too.
 - Missing values arrive as `nothing`; extra values are ignored, so scripts can take only what they need.
 - Route the script-side `trigger` statement with `SetTriggerHandler`. The default sends the event back to the same script; many games want it to reach every script:
