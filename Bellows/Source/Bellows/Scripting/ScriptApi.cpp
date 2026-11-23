@@ -528,6 +528,14 @@ namespace Bellows::Scripting {
 		}
 	}
 
+	void EmitScriptEventAbout(ScriptEntity source, const std::string& name, const ScriptValueList& values)
+	{
+		EventNesting nesting(name);
+		ScriptEventDelivery delivery;
+		delivery.Source = source;
+		DeliverToListeners(name, values, delivery, 0);
+	}
+
 	void EmitScriptEventFrom(ScriptEntity source, const std::string& name, const ScriptValueList& values)
 	{
 		EventNesting nesting(name);
