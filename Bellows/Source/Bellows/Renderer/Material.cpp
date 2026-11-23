@@ -99,7 +99,7 @@ namespace Bellows {
 			if (m_EmissiveMap) textureBits |= ShaderInterop::TextureEmissive;
 			if (m_RoughnessMap) textureBits |= ShaderInterop::TextureRoughness;
 			if (m_MetallicMap) textureBits |= ShaderInterop::TextureMetallic;
-			data.Flags = glm::uvec4(static_cast<uint32_t>(m_Properties.Mode), textureBits, 0u, 0u);
+			data.Flags = glm::uvec4(static_cast<uint32_t>(m_Properties.Mode), textureBits, m_Properties.Unlit ? 1u : 0u, 0u);
 
 			commandList->writeBuffer(m_ConstantBuffer, &data, sizeof(data));
 			m_Dirty = false;

@@ -145,6 +145,89 @@ TEST_CASE("[gpu] A mirrored mesh (a negative scale) shows its outside, lit as th
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }
 
+TEST_CASE("[gpu] An unlit material shows its color whatever the light; a lit one changes with it")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	Ref<Material> lit = CreateRef<Material>("Lit");
+	lit->EditProperties().AlbedoColor = glm::vec4(0.1f, 0.5f, 0.1f, 1.0f);
+	Ref<Material> unlit = CreateRef<Material>("Unlit");
+	unlit->EditProperties().AlbedoColor = glm::vec4(0.1f, 0.5f, 0.1f, 1.0f);
+	unlit->EditProperties().Unlit = true;
+
+	// The unlit cube (left) and the lit one (right), seen from the front so both show a top and a side.
+	auto render = [&](float sunIntensity, SceneRenderer& renderer)
+	{
+		renderer.SetViewportSize(320, 180);
+		// Vignette and bloom change a color by where it is on screen; off, so one flat color reads the same everywhere.
+		renderer.GetSettings().Vignette = 0.0f;
+		renderer.GetSettings().BloomEnabled = false;
+		for (int frame = 0; frame < 2; frame++)
+		{
+			renderer.BeginScene(MakeCamera(glm::vec3(0.0f, 2.2f, 4.0f), glm::vec3(0.0f, 0.4f, 0.0f), 320.0f / 180.0f));
+			DirectionalLightData sun;
+			sun.Direction = glm::normalize(glm::vec3(-0.3f, -1.0f, -0.4f));
+			sun.Intensity = sunIntensity;
+			renderer.SubmitDirectionalLight(sun);
+			renderer.SubmitMesh(Renderer::GetPrimitiveMesh(PrimitiveMesh::Cube), glm::translate(glm::mat4(1.0f), glm::vec3(-0.9f, 0.5f, 0.0f)), 1, unlit);
+			renderer.SubmitMesh(Renderer::GetPrimitiveMesh(PrimitiveMesh::Cube), glm::translate(glm::mat4(1.0f), glm::vec3(0.9f, 0.5f, 0.0f)), 2, lit);
+			renderer.EndScene();
+		}
+		return Renderer::ReadbackTexture(renderer.GetFinalImage());
+	};
+
+	SceneRenderer dimRenderer, brightRenderer;
+	const Image dim = render(0.5f, dimRenderer);
+	const Image bright = render(6.0f, brightRenderer);
+	REQUIRE(dim.IsValid());
+	REQUIRE(bright.IsValid());
+	bright.SavePNG(BellowsTests::GetTestOutputDirectory() / "SceneRenderer_Unlit.png");
+
+	// Find each cube's top and front by entity ID: 6 rows in from its highest or lowest row on screen,
+	// in the middle of that row (an edge pixel blends with the background).
+	auto find = [&](SceneRenderer& renderer, uint32_t id, bool top)
+	{
+		for (int y = top ? 0 : 179; top ? y < 180 : y >= 0; y += top ? 1 : -1)
+		{
+			const int row = y + (top ? 6 : -6);
+			int first = -1, last = -1;
+			for (int x = 0; x < 320; x++)
+			{
+				if (renderer.ReadEntityID(x, row) == id)
+				{
+					first = first < 0 ? x : first;
+					last = x;
+				}
+			}
+			if (renderer.ReadEntityID((first + last) / 2, y) == id && first >= 0)
+				return glm::ivec2((first + last) / 2, row);
+		}
+		return glm::ivec2(-1);
+	};
+	const glm::ivec2 unlitTop = find(brightRenderer, 1, true);
+	const glm::ivec2 unlitFront = find(brightRenderer, 1, false);
+	const glm::ivec2 litTop = find(brightRenderer, 2, true);
+	REQUIRE(unlitTop.x >= 0);
+	REQUIRE(unlitFront.x >= 0);
+	REQUIRE(litTop.x >= 0);
+	CHECK(brightRenderer.ReadEntityID(unlitTop.x, unlitTop.y) == 1u);
+	CHECK(brightRenderer.ReadEntityID(unlitFront.x, unlitFront.y) == 1u);
+	CHECK(brightRenderer.ReadEntityID(litTop.x, litTop.y) == 2u);
+
+	auto color = [](const Image& image, glm::ivec2 at) { return glm::vec3(image.GetAverageColor(at.x - 2, at.y - 2, 4, 4)); };
+	// Unlit: the same under both suns, and its top and front are one flat color.
+	INFO("unlit top ", color(dim, unlitTop).g, " / ", color(bright, unlitTop).g, ", front ", color(bright, unlitFront).g);
+	CHECK(glm::length(color(dim, unlitTop) - color(bright, unlitTop)) < 0.01f);
+	CHECK(glm::length(color(bright, unlitTop) - color(bright, unlitFront)) < 0.01f);
+	CHECK(color(bright, unlitTop).g > color(bright, unlitTop).r + 0.1f);	// Green, as its albedo
+	// Lit: the bright sun makes its top much brighter.
+	INFO("lit top ", color(dim, litTop).g, " / ", color(bright, litTop).g);
+	CHECK(color(bright, litTop).g > color(dim, litTop).g + 0.1f);
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
 TEST_CASE("[gpu] A pixelated material keeps each texture pixel sharp; a smooth one blends them")
 {
 	Application& application = BellowsTests::GetTestApplication();

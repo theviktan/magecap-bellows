@@ -565,6 +565,10 @@ class FeatureTest(bellows.Script):
         self.check(material.texture_filter == "Nearest" and material.wrap_u == "Clamp" and material.wrap_v == "Mirror", "Material texture filter and wraps")
         self.check(raises(lambda: setattr(material, "texture_filter", "Bicubic"), ValueError)
                    and raises(lambda: setattr(material, "wrap_u", "Tile"), ValueError), "unknown texture filters and wraps are refused")
+        self.check(not material.unlit, "Material is lit by default")
+        material.unlit = True
+        self.check(material.unlit, "Material unlit")
+        material.unlit = False
         material.alpha_cutoff = 0.3
         material.normal_strength = 0.5
         material.uv_tiling = Vec2(4.0, 2.0)

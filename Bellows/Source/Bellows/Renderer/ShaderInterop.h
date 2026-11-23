@@ -89,7 +89,7 @@ namespace Bellows::ShaderInterop {
 		glm::vec4 EmissiveColor;
 		glm::vec4 Params;		// metallic, roughness, normal strength, alpha cutoff
 		glm::vec4 UVTransform;	// tiling xy, offset zw
-		glm::uvec4 Flags;		// alpha mode, texture bits
+		glm::uvec4 Flags;		// alpha mode, texture bits, unlit (1) or lit (0), unused
 	};
 
 	// Push constants of the text passes (Text.vert, Text.frag, TextID.frag).

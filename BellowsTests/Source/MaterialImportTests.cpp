@@ -82,6 +82,25 @@ TEST_CASE("Materials save and load separate roughness and metallic maps")
 	AssetManager::SetAssetDirectory({});
 }
 
+TEST_CASE("Materials save and load Unlit; older files are lit")
+{
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "MaterialUnlit";
+	AssetManager::SetAssetDirectory(assets);
+	Ref<Material> material = CreateRef<Material>("Flat");
+	CHECK_FALSE(material->GetProperties().Unlit);
+	material->EditProperties().Unlit = true;
+	REQUIRE(AssetManager::SaveMaterial(material, "Materials/Flat.bmat"));
+	Ref<Material> loaded = AssetManager::LoadMaterialFile(assets / "Materials" / "Flat.bmat");
+	REQUIRE(loaded);
+	CHECK(loaded->GetProperties().Unlit);
+
+	REQUIRE(FileSystem::WriteTextFile(assets / "Materials" / "Old.bmat", R"({ "Name": "Old", "Metallic": 0.5 })"));
+	Ref<Material> old = AssetManager::LoadMaterialFile(assets / "Materials" / "Old.bmat");
+	REQUIRE(old);
+	CHECK_FALSE(old->GetProperties().Unlit);
+	AssetManager::SetAssetDirectory({});
+}
+
 TEST_CASE("Materials save and load their texture filter and wrap modes")
 {
 	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "MaterialSampling";

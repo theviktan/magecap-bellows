@@ -892,11 +892,17 @@ namespace Bellows {
 		if (UI::BeginPropertyGrid("Material"))
 		{
 			changed |= UI::PropertyColor("Albedo", properties.AlbedoColor);
+			changed |= UI::Property("Unlit", properties.Unlit, "Shows the albedo (and emissive) as they are, with no lights, shade or shadows on it: "
+				"for flat-shaded art and sprites. Metallic, Roughness and the normal map then do nothing. It still casts shadows.");
+			ImGui::BeginDisabled(properties.Unlit);
 			changed |= UI::PropertySlider("Metallic", properties.Metallic, 0.0f, 1.0f);
 			changed |= UI::PropertySlider("Roughness", properties.Roughness, 0.0f, 1.0f);
+			ImGui::EndDisabled();
 			changed |= UI::PropertyColor("Emissive", properties.EmissiveColor);
 			changed |= UI::Property("Emissive Intensity", properties.EmissiveIntensity, 0.05f, 0.0f, 1000.0f, "%.2f");
+			ImGui::BeginDisabled(properties.Unlit);
 			changed |= UI::PropertySlider("Normal Strength", properties.NormalStrength, 0.0f, 2.0f);
+			ImGui::EndDisabled();
 			const char* modes[] = { "Opaque", "Mask", "Blend" };
 			int mode = static_cast<int>(properties.Mode);
 			if (UI::PropertyCombo("Alpha Mode", mode, modes, 3))

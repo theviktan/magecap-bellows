@@ -58,6 +58,9 @@ namespace Bellows {
 		TextureFilter Filter = TextureFilter::Linear;	// For all of its textures
 		TextureWrap WrapU = TextureWrap::Repeat;
 		TextureWrap WrapV = TextureWrap::Repeat;
+		// Shown as its base color (and emissive) with no lights, shade or shadows on it: flat-shaded
+		// art, sprites on cards, UI in the world. glTF's KHR_materials_unlit. It still casts shadows.
+		bool Unlit = false;
 
 		bool operator==(const MaterialProperties&) const = default;
 	};

@@ -328,6 +328,57 @@ TEST_CASE("A MageCap Foundry model imports: shared accessors, both index sizes, 
 	CHECK(glass.Mode == AlphaMode::Blend);
 }
 
+TEST_CASE("A glTF material with KHR_materials_unlit imports Unlit, even when the file requires it")
+{
+	// Foundry's Unlit look (MFC, Nov 23) writes KHR_materials_unlit as used, not required; other
+	// programs may require it, which Bellows now reads.
+	const std::filesystem::path folder = BellowsTests::GetTestOutputDirectory() / "UnlitImport";
+	REQUIRE(FileSystem::CreateDirectories(folder));
+	std::vector<uint8_t> bin;
+	Append(bin, std::vector<float> { -0.5f, 0.0f, -0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f, 0.5f });
+	Append(bin, std::vector<uint16_t> { 0, 2, 1, 0 });		// The last index pads to 4 bytes
+	REQUIRE(bin.size() == 44);
+
+	for (const bool required : { false, true })
+	{
+		Json document = {
+			{ "asset", { { "version", "2.0" }, { "generator", "MageCap Foundry" } } },
+			{ "extensionsUsed", { "KHR_materials_unlit" } },
+			{ "scene", 0 },
+			{ "scenes", { { { "nodes", { 0, 1 } } } } },
+			{ "nodes", { { { "name", "flat" }, { "mesh", 0 } }, { { "name", "lit" }, { "mesh", 1 } } } },
+			{ "meshes", {
+				{ { "primitives", { { { "attributes", { { "POSITION", 0 } } }, { "indices", 1 }, { "material", 0 } } } } },
+				{ { "primitives", { { { "attributes", { { "POSITION", 0 } } }, { "indices", 1 }, { "material", 1 } } } } } } },
+			{ "materials", {
+				{ { "name", "flat" }, { "extensions", { { "KHR_materials_unlit", Json::object() } } },
+					{ "pbrMetallicRoughness", { { "baseColorFactor", { 0.2, 0.6, 0.1, 1.0 } }, { "metallicFactor", 0.0 }, { "roughnessFactor", 1.0 } } } },
+				{ { "name", "lit" }, { "pbrMetallicRoughness", { { "baseColorFactor", { 0.2, 0.6, 0.1, 1.0 } } } } } } },
+			{ "buffers", { { { "byteLength", 44 } } } },
+			{ "bufferViews", {
+				{ { "buffer", 0 }, { "byteOffset", 0 }, { "byteLength", 36 }, { "target", 34962 } },
+				{ { "buffer", 0 }, { "byteOffset", 36 }, { "byteLength", 6 }, { "target", 34963 } } } },
+			{ "accessors", {
+				{ { "bufferView", 0 }, { "componentType", 5126 }, { "count", 3 }, { "type", "VEC3" }, { "min", { -0.5, 0.0, -0.5 } }, { "max", { 0.5, 0.0, 0.5 } } },
+				{ { "bufferView", 1 }, { "componentType", 5123 }, { "count", 3 }, { "type", "SCALAR" } } } } };
+		if (required)
+			document["extensionsRequired"] = { "KHR_materials_unlit" };
+		const std::vector<uint8_t> glb = MakeGLB(document, bin);
+		const std::filesystem::path path = folder / (required ? "Required.glb" : "Used.glb");
+		REQUIRE(FileSystem::WriteBinaryFile(path, glb.data(), glb.size()));
+
+		INFO("required: ", required);
+		const Ref<Mesh> mesh = MeshImporter::ImportGLTF(path);
+		REQUIRE(mesh);
+		const std::vector<Submesh>& submeshes = mesh->GetSubmeshes();
+		REQUIRE(submeshes.size() == 2);
+		const MaterialProperties& flat = mesh->GetMaterials()[submeshes[0].MaterialIndex]->GetProperties();
+		CHECK(flat.Unlit);
+		CHECK(flat.AlbedoColor == glm::vec4(0.2f, 0.6f, 0.1f, 1.0f));
+		CHECK_FALSE(mesh->GetMaterials()[submeshes[1].MaterialIndex]->GetProperties().Unlit);
+	}
+}
+
 TEST_CASE("[gpu] A textured MageCap Foundry model imports: palette sampled pixelated, glass, glow and both sides")
 {
 	// What Foundry 2.60.0 writes besides seq 1694's list (MFC, board seq 1743): TEXCOORD_0, an embedded PNG

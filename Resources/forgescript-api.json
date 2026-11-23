@@ -866,6 +866,12 @@
 					"doc": ""
 				},
 				{
+					"name": "unlit",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Shown as its albedo (and emissive) with no lights, shade or shadows on it, for flat-shaded art and sprites. It still casts shadows"
+				},
+				{
 					"name": "texture_filter",
 					"kind": "property",
 					"type": "str",

@@ -227,12 +227,13 @@ namespace Bellows {
 			}
 			properties.AlphaCutoff = source.alpha_cutoff;
 			properties.DoubleSided = source.double_sided;
+			properties.Unlit = source.unlit;
 			return material;
 		}
 
-		// Extensions a file may require: the ones the importer reads (emissive strength) or that cgltf's
-		// accessor reads already handle (quantized vertex data).
-		constexpr std::string_view c_SupportedRequiredExtensions[] = { "KHR_materials_emissive_strength", "KHR_mesh_quantization" };
+		// Extensions a file may require: the ones the importer reads (emissive strength, unlit) or that
+		// cgltf's accessor reads already handle (quantized vertex data).
+		constexpr std::string_view c_SupportedRequiredExtensions[] = { "KHR_materials_emissive_strength", "KHR_materials_unlit", "KHR_mesh_quantization" };
 
 		// The skeleton of one glTF skin: its joints in parents-first order, and where each node went.
 		struct ImportedSkin

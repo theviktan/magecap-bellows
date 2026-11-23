@@ -563,6 +563,11 @@ class Material:
     @double_sided.setter
     def double_sided(self, value: bool) -> None: ...
     @property
+    def unlit(self) -> bool:
+        """Shown as its albedo (and emissive) with no lights, shade or shadows on it, for flat-shaded art and sprites. It still casts shadows"""
+    @unlit.setter
+    def unlit(self, value: bool) -> None: ...
+    @property
     def texture_filter(self) -> str:
         """How its textures are read between pixels: "Linear" (smooth) or "Nearest" (pixelated, for pixel art and palettes)"""
     @texture_filter.setter
