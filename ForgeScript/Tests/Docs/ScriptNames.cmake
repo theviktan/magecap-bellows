@@ -3,7 +3,9 @@
 # A script's own name always wins, so such a script keeps working, but it no longer reaches the
 # built-in. This keeps a Bellows change that adds an engine name from silently taking over a name a
 # test or sample game already uses (audit S-15). A test that checks own names winning on purpose says
-# so with a line "# Takes built-in names on purpose." and is left out. Run by ctest:
+# so with a line "# Takes built-in names on purpose." and is left out. The sample projects' scripts and
+# the benchmarks must have no warning at all (--check --strict): they are what game makers copy, so a
+# checker change that starts warning on working code is caught in that change. Run by ctest:
 #   cmake -DFORGESCRIPT=<forgescript> -DAPI=<forgescript-api.json> "-DSCRIPTS=<file|file|...>" -P ScriptNames.cmake
 
 cmake_minimum_required(VERSION 3.24)
@@ -23,6 +25,13 @@ foreach(script IN LISTS SCRIPTS)
 	if("${out}${err}" MATCHES "takes the name of the built-in|hides the built-in")
 		string(STRIP "${out}${err}" said)
 		list(APPEND failures "${script}:\n${said}")
+	elseif(script MATCHES "/Projects/|/Benchmarks/")
+		execute_process(COMMAND "${FORGESCRIPT}" --check --strict --api "${API}" "${script}"
+			WORKING_DIRECTORY "${folder}" RESULT_VARIABLE strictCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
+		if(NOT strictCode EQUAL 0)
+			string(STRIP "${out}${err}" said)
+			list(APPEND failures "${script} (a sample or benchmark must have no warnings):\n${said}")
+		endif()
 	endif()
 endforeach()
 
@@ -31,6 +40,6 @@ if(checked EQUAL 0)
 endif()
 if(failures)
 	list(JOIN failures "\n\n" report)
-	message(FATAL_ERROR "These scripts use a built-in or engine name for their own:\n\n${report}")
+	message(FATAL_ERROR "These scripts use a built-in or engine name for their own, or are samples with warnings:\n\n${report}")
 endif()
-message(STATUS "${checked} scripts checked: none takes a built-in or engine name.")
+message(STATUS "${checked} scripts checked: none takes a built-in or engine name, and the samples have no warnings.")
