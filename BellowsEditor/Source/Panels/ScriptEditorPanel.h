@@ -19,7 +19,9 @@ namespace Bellows {
 	class Entity;
 
 	// The built-in code editor (the "Script" workspace): open ForgeScript and Python files in tabs,
-	// with highlighting, an outline, find and replace, live error checking and saving.
+	// with highlighting, an outline, find and replace, live error checking and saving. ForgeScript also
+	// gets rename, find-all-references, format and quick fixes (Edit menu, right-click, F2, Shift+F12,
+	// Shift+Alt+F, Ctrl+.).
 	// It also owns the New Script / Attach Script dialog.
 	class ScriptEditorPanel
 	{
@@ -110,6 +112,20 @@ namespace Bellows {
 		// ForgeScript completion and hover help come from the language server (ForgeScriptAssist).
 		ForgeScriptAssist& GetForgeScriptAssist();
 		void DrawForgeScriptHover(Document& document, size_t line, size_t column);
+
+		// The ForgeScript tools, at a zero-based line and column (code points). Each says in the status
+		// bar what it did, or why it couldn't.
+		void StartRename(Document& document, size_t line, size_t column);
+		void FindReferences(Document& document, size_t line, size_t column);
+		void FormatDocument(Document& document);
+		void ShowQuickFixes(Document& document, size_t line);
+		// Replaces a document's text as one undoable step, keeping the cursor at the same line and column.
+		void ReplaceText(Document& document, const std::string& text);
+		void DrawForgeScriptToolsMenuItems(Document& document, size_t line, size_t column);
+		void DrawRenameDialog();
+		void DrawQuickFixPopup();
+		void DrawReferences(Document& document);
+		void SetNotice(std::string text);
 		std::filesystem::path FindDocumentation(const std::string& relativePath) const;
 	private:
 		EditorLayer& m_Editor;
@@ -138,6 +154,36 @@ namespace Bellows {
 		ScriptLanguage m_CreateLanguage = ScriptLanguage::ForgeScript;
 		int m_CreateTemplate = 0;
 		std::string m_CreatePath;
+
+		// Rename dialog
+		bool m_OpenRenameDialog = false;
+		std::filesystem::path m_RenamePath;
+		size_t m_RenameLine = 0;
+		size_t m_RenameColumn = 0;
+		std::string m_RenameOldName;
+		std::string m_RenameNewName;
+		std::string m_RenameError;
+
+		// Find All References: the uses of one name, listed under its document's code.
+		struct ReferenceItem
+		{
+			size_t Line = 0;			// Zero-based
+			size_t Column = 0;
+			size_t EndColumn = 0;
+			std::string LineText;
+		};
+		std::filesystem::path m_ReferencesPath;
+		std::string m_ReferencesName;
+		std::vector<ReferenceItem> m_References;
+
+		// Quick fixes for the cursor's line
+		bool m_OpenQuickFixes = false;
+		std::filesystem::path m_QuickFixPath;
+		std::vector<ScriptFix> m_QuickFixes;
+
+		// What the last tool did, shown in the status bar for a few seconds.
+		std::string m_Notice;
+		double m_NoticeTime = 0.0;
 	};
 
 }

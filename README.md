@@ -55,8 +55,9 @@ can drive end to end.
   open scripts, ForgeScript and Python highlighting, an outline of functions and events, find and
   replace, completion, live error checking (the line turns red as you type), ForgeScript
   completion and hover help from the ForgeScript language server (engine functions, phrases and
-  your own names, with signatures and docs; Ctrl+Space or "." to ask), and the ForgeScript
-  guides one click away in **Help**. Attach scripts with right-click → **Attach Script...** in the
+  your own names, with signatures and docs; Ctrl+Space or "." to ask), ForgeScript **Rename**
+  (F2), **Find All References** (Shift+F12), **Format Document** (Shift+Alt+F) and **Quick Fix**
+  (Ctrl+.) in the Edit menu and on right-click, and the ForgeScript guides one click away in **Help**. Attach scripts with right-click → **Attach Script...** in the
   Hierarchy or by dragging a script onto an entity.
 * **ForgeScript debugger**: click left of a line (or press F9) to add a breakpoint, then play. When
   a script reaches it the game pauses, the Script Editor shows the line, and the **Debugger** panel

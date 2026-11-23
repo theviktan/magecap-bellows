@@ -30,6 +30,7 @@ namespace Bellows {
 
 		constexpr double c_DiskCheckInterval = 1.0;		// Seconds between checks for files changed outside the editor
 		constexpr int c_AnalysisDelay = 300;			// Milliseconds after the last keystroke before checking for mistakes
+		constexpr double c_NoticeSeconds = 6.0;			// How long the status bar shows what a tool did
 		constexpr size_t c_MaxSuggestions = 40;
 		constexpr const char* c_ScriptFolder = "Scripts";
 		constexpr size_t c_GutterGlyphs = 2;				// Width of the breakpoint column, in characters
@@ -458,6 +459,18 @@ namespace Bellows {
 			};
 			editor.SetAutoCompleteConfig(&autoComplete);
 			editor.SetTextHoverCallback([this, target](TextEditor::PopupData& data) { DrawForgeScriptHover(*target, data.pos.line, data.pos.index); });
+			editor.SetTextContextMenuCallback([this, target](TextEditor::PopupData& data)
+			{
+				TextEditor& code = *target->Editor;
+				if (ImGui::MenuItem("Cut", "Ctrl+X", false, !target->ReadOnly && code.AnyCursorHasSelection()))
+					code.Cut();
+				if (ImGui::MenuItem(ICON_COPY "  Copy", "Ctrl+C", false, code.AnyCursorHasSelection()))
+					code.Copy();
+				if (ImGui::MenuItem("Paste", "Ctrl+V", false, !target->ReadOnly))
+					code.Paste();
+				ImGui::Separator();
+				DrawForgeScriptToolsMenuItems(*target, data.pos.line, data.pos.index);
+			});
 			if (CanHaveBreakpoints(document))
 			{
 				editor.SetLineDecorator(c_GutterGlyphs, [this, target](TextEditor::Decorator& decorator)
@@ -682,6 +695,255 @@ namespace Bellows {
 				BW_INFO("Reloaded {} (changed outside the editor)", document->Name);
 			}
 		}
+	}
+
+	void ScriptEditorPanel::SetNotice(std::string text)
+	{
+		m_Notice = std::move(text);
+		m_NoticeTime = ImGui::GetTime();
+	}
+
+	void ScriptEditorPanel::ReplaceText(Document& document, const std::string& text)
+	{
+		TextEditor& editor = *document.Editor;
+		const TextEditor::DocPos cursor = editor.GetMainCursorPosition();
+		// Selecting everything and typing over it is one step for Undo, unlike SetText (which clears the history).
+		editor.SelectAll();
+		editor.ReplaceTextInCurrentCursor(text);
+		editor.SetCursor(cursor);
+		document.NeedsAnalysis = true;
+	}
+
+	void ScriptEditorPanel::StartRename(Document& document, size_t line, size_t column)
+	{
+		std::string name, error;
+		if (!GetForgeScriptAssist().PrepareRename(document.Path, document.Editor->GetText(), line, column, name, error))
+		{
+			SetNotice(error.empty() ? "There's no name here to rename." : error);
+			return;
+		}
+		m_RenamePath = document.Path;
+		m_RenameLine = line;
+		m_RenameColumn = column;
+		m_RenameOldName = name;
+		m_RenameNewName = name;
+		m_RenameError.clear();
+		m_OpenRenameDialog = true;
+	}
+
+	void ScriptEditorPanel::FindReferences(Document& document, size_t line, size_t column)
+	{
+		const std::vector<ForgeScriptAssist::Reference> references = GetForgeScriptAssist().FindReferences(document.Path, document.Editor->GetText(), line, column);
+		if (references.empty())
+		{
+			SetNotice("There's no name here to find.");
+			return;
+		}
+		m_ReferencesPath = document.Path;
+		m_References.clear();
+		for (const ForgeScriptAssist::Reference& reference : references)
+			m_References.push_back({ reference.Range.StartLine, reference.Range.StartColumn, reference.Range.EndColumn, reference.LineText });
+		const ForgeScriptAssist::Reference& first = references.front();
+		const std::string& firstLine = first.LineText;
+		// The name as written at its first use, for the list's title.
+		m_ReferencesName.clear();
+		size_t byte = 0;
+		for (size_t codePoint = 0; byte < firstLine.size(); codePoint++)
+		{
+			const auto lead = static_cast<unsigned char>(firstLine[byte]);
+			const size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+			if (codePoint >= first.Range.StartColumn && (first.Range.EndLine > first.Range.StartLine || codePoint < first.Range.EndColumn))
+				m_ReferencesName.append(firstLine, byte, length);
+			byte += length;
+		}
+		SetNotice(fmt::format("'{}' is used {} {}.", m_ReferencesName, references.size(), references.size() == 1 ? "time" : "times"));
+	}
+
+	void ScriptEditorPanel::FormatDocument(Document& document)
+	{
+		const std::string text = document.Editor->GetText();
+		std::string error;
+		const std::optional<std::string> formatted = GetForgeScriptAssist().Format(document.Path, text, error);
+		if (!formatted)
+			SetNotice(error.empty() ? "This script can't be formatted." : error);
+		else if (*formatted == text)
+			SetNotice("The script is already laid out the standard way.");
+		else
+		{
+			ReplaceText(document, *formatted);
+			SetNotice("Formatted. Ctrl+Z undoes it.");
+		}
+	}
+
+	void ScriptEditorPanel::ShowQuickFixes(Document& document, size_t line)
+	{
+		// The fixes of the mistakes and warnings shown on this line (the checker's own, as the status bar shows them).
+		m_QuickFixes.clear();
+		for (const ScriptDiagnostic& diagnostic : document.Diagnostics)
+		{
+			if (diagnostic.Fix && diagnostic.Line == line + 1)
+				m_QuickFixes.push_back(*diagnostic.Fix);
+		}
+		if (m_QuickFixes.empty())
+		{
+			SetNotice("There's no quick fix on this line.");
+			return;
+		}
+		m_QuickFixPath = document.Path;
+		m_OpenQuickFixes = true;
+	}
+
+	void ScriptEditorPanel::DrawForgeScriptToolsMenuItems(Document& document, size_t line, size_t column)
+	{
+		const bool canEdit = !document.ReadOnly;
+		if (ImGui::MenuItem(ICON_PENCIL "  Rename...", "F2", false, canEdit))
+			StartRename(document, line, column);
+		if (ImGui::MenuItem(ICON_SEARCH "  Find All References", "Shift+F12"))
+			FindReferences(document, line, column);
+		if (ImGui::MenuItem(ICON_SPARKLES "  Quick Fix...", "Ctrl+.", false, canEdit))
+			ShowQuickFixes(document, line);
+		if (ImGui::MenuItem("Format Document", "Shift+Alt+F", false, canEdit))
+			FormatDocument(document);
+	}
+
+	void ScriptEditorPanel::DrawRenameDialog()
+	{
+		if (m_OpenRenameDialog)
+		{
+			ImGui::OpenPopup("Rename");
+			m_OpenRenameDialog = false;
+		}
+		const float scale = Theme::GetScale();
+		ImGui::SetNextWindowSize(ImVec2(420.0f * scale, 0.0f));
+		if (!ImGui::BeginPopupModal("Rename", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize))
+			return;
+
+		Document* document = FindDocument(m_RenamePath);
+		if (!document)
+		{
+			ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+		ImGui::TextWrapped("Rename '%s' everywhere it means the same thing in %s to:", m_RenameOldName.c_str(), document->Name.c_str());
+		if (ImGui::IsWindowAppearing())
+			ImGui::SetKeyboardFocusHere();
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		const bool enter = ImGui::InputText("##newName", &m_RenameNewName, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+		if (!m_RenameError.empty())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+			ImGui::TextWrapped("%s", m_RenameError.c_str());
+			ImGui::PopStyleColor();
+		}
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		const bool rename = ImGui::Button("Rename", ImVec2(110.0f * scale, 0.0f)) || enter;
+		ImGui::PopStyleColor();
+		ImGui::SameLine();
+		const bool cancel = ImGui::Button("Cancel", ImVec2(110.0f * scale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+		if (rename && m_RenameNewName == m_RenameOldName)
+		{
+			ImGui::CloseCurrentPopup();
+		}
+		else if (rename)
+		{
+			const std::string text = document->Editor->GetText();
+			const ForgeScriptAssist::RenameResult result = GetForgeScriptAssist().Rename(document->Path, text, m_RenameLine, m_RenameColumn, m_RenameNewName);
+			if (!result.Error.empty())
+			{
+				m_RenameError = result.Error;
+			}
+			else
+			{
+				size_t places = 0;
+				if (auto it = result.Edits.find(document->Path); it != result.Edits.end())
+				{
+					places = it->second.size();
+					ReplaceText(*document, ForgeScriptAssist::ApplyEdits(text, it->second));
+				}
+				SetNotice(fmt::format("Renamed '{}' to '{}' in {} {}. Ctrl+Z undoes it.", m_RenameOldName, m_RenameNewName, places, places == 1 ? "place" : "places"));
+				if (m_ReferencesPath == document->Path)
+					m_References.clear();
+				ImGui::CloseCurrentPopup();
+				m_FocusEditor = true;
+			}
+		}
+		else if (cancel)
+		{
+			ImGui::CloseCurrentPopup();
+			m_FocusEditor = true;
+		}
+		ImGui::EndPopup();
+	}
+
+	void ScriptEditorPanel::DrawQuickFixPopup()
+	{
+		if (m_OpenQuickFixes)
+		{
+			ImGui::OpenPopup("##QuickFixes");
+			m_OpenQuickFixes = false;
+		}
+		if (!ImGui::BeginPopup("##QuickFixes"))
+			return;
+		Document* document = FindDocument(m_QuickFixPath);
+		if (!document)
+		{
+			ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+		UI::TextMuted("Quick fix");
+		for (size_t i = 0; i < m_QuickFixes.size(); i++)
+		{
+			const ScriptFix& fix = m_QuickFixes[i];
+			ImGui::PushID(static_cast<int>(i));
+			if (ImGui::Selectable((std::string(ICON_SPARKLES "  ") + fix.Title).c_str()))
+			{
+				ReplaceText(*document, ApplyScriptFix(document->Editor->GetText(), fix));
+				SetNotice(fix.Title + ". Ctrl+Z undoes it.");
+				m_FocusEditor = true;
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndPopup();
+	}
+
+	void ScriptEditorPanel::DrawReferences(Document& document)
+	{
+		const float scale = Theme::GetScale();
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::ToVec4(Theme::Background));
+		const float rows = static_cast<float>(std::min<size_t>(m_References.size(), 6));
+		ImGui::BeginChild("##References", ImVec2(0.0f, ImGui::GetFrameHeight() + rows * ImGui::GetTextLineHeightWithSpacing() + 10.0f * scale),
+			ImGuiChildFlags_AlwaysUseWindowPadding);
+		ImGui::PopStyleColor();
+		ImGui::AlignTextToFramePadding();
+		ImGui::Text(ICON_SEARCH "  '%s': %zu %s", m_ReferencesName.c_str(), m_References.size(), m_References.size() == 1 ? "use" : "uses");
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::GetFrameHeight());
+		if (ImGui::SmallButton(ICON_X "##CloseReferences"))
+		{
+			m_References.clear();
+			ImGui::EndChild();
+			return;
+		}
+		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
+		for (size_t i = 0; i < m_References.size(); i++)
+		{
+			const ReferenceItem& item = m_References[i];
+			std::string trimmed = item.LineText;
+			trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+			ImGui::PushID(static_cast<int>(i));
+			if (ImGui::Selectable(fmt::format("{:>5}  {}", item.Line + 1, trimmed).c_str()))
+			{
+				document.Editor->SelectRegion(TextEditor::DocPos(item.Line, item.Column), TextEditor::DocPos(item.Line, item.EndColumn));
+				document.Editor->ScrollToLine(item.Line);
+				m_FocusEditor = true;
+			}
+			ImGui::PopID();
+		}
+		ImGui::PopFont();
+		ImGui::EndChild();
 	}
 
 	void ScriptEditorPanel::GoToLine(Document& document, size_t line, size_t column)
@@ -1003,6 +1265,8 @@ namespace Bellows {
 
 		DrawCloseDialog();
 		DrawCreateDialog();
+		DrawRenameDialog();
+		DrawQuickFixPopup();
 	}
 
 	void ScriptEditorPanel::DrawMenuBar()
@@ -1064,6 +1328,12 @@ namespace Bellows {
 				editor->IndentLines();
 			if (ImGui::MenuItem("Unindent", "Ctrl+[", false, canEdit))
 				editor->DeindentLines();
+			if (document && document->Language == ScriptLanguage::ForgeScript)
+			{
+				ImGui::Separator();
+				const TextEditor::DocPos cursor = editor->GetMainCursorPosition();
+				DrawForgeScriptToolsMenuItems(*document, cursor.line, cursor.index);
+			}
 			ImGui::EndMenu();
 		}
 
@@ -1236,10 +1506,16 @@ namespace Bellows {
 			document.Editor->SetFocus();
 			m_FocusEditor = false;
 		}
+		const bool showReferences = !m_References.empty() && m_ReferencesPath == document.Path;
+		const float referencesHeight = showReferences
+			? ImGui::GetFrameHeight() + static_cast<float>(std::min<size_t>(m_References.size(), 6)) * ImGui::GetTextLineHeightWithSpacing() + 10.0f * scale
+			: 0.0f;
 		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
-		document.Editor->Render("##code", ImVec2(0.0f, -statusHeight));
+		document.Editor->Render("##code", ImVec2(0.0f, -statusHeight - referencesHeight));
 		ImGui::PopFont();
 
+		if (showReferences)
+			DrawReferences(document);
 		DrawStatusBar(document);
 	}
 
@@ -1254,8 +1530,15 @@ namespace Bellows {
 		ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
 		ImGui::AlignTextToFramePadding();
 
-		// Problems first: clicking one jumps to it.
-		if (document.Language == ScriptLanguage::None)
+		// What a tool just did, for a few seconds; then the problems, where clicking one jumps to it.
+		if (!m_Notice.empty() && ImGui::GetTime() - m_NoticeTime < c_NoticeSeconds)
+		{
+			const float maxWidth = ImGui::GetContentRegionAvail().x - 300.0f * scale;
+			ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + std::max(maxWidth, 80.0f * scale));
+			ImGui::TextUnformatted((std::string(ICON_INFO "  ") + m_Notice).c_str());
+			ImGui::PopTextWrapPos();
+		}
+		else if (document.Language == ScriptLanguage::None)
 		{
 			UI::TextMuted(document.ReadOnly ? ICON_LOCK "  Read only" : ICON_FILE_TEXT "  Text");
 		}
@@ -1360,6 +1643,18 @@ namespace Bellows {
 			m_ActiveDocument = (m_ActiveDocument + 1) % m_Documents.size();
 		else if (document && ImGui::IsKeyPressed(ImGuiKey_F9, false))
 			ToggleBreakpoint(*document, document->Editor->GetMainCursorPosition().line);
+		else if (document && document->Language == ScriptLanguage::ForgeScript)
+		{
+			const TextEditor::DocPos cursor = document->Editor->GetMainCursorPosition();
+			if (ImGui::IsKeyChordPressed(ImGuiMod_Shift | ImGuiKey_F12))
+				FindReferences(*document, cursor.line, cursor.index);
+			else if (!document->ReadOnly && ImGui::IsKeyPressed(ImGuiKey_F2, false) && !ImGui::GetIO().KeyMods)
+				StartRename(*document, cursor.line, cursor.index);
+			else if (!document->ReadOnly && ImGui::IsKeyChordPressed(ImGuiMod_Shift | ImGuiMod_Alt | ImGuiKey_F))
+				FormatDocument(*document);
+			else if (!document->ReadOnly && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Period))
+				ShowQuickFixes(*document, cursor.line);
+		}
 	}
 
 }
