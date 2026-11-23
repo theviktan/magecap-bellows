@@ -110,6 +110,7 @@ class FeatureTest(bellows.Script):
         self.test_saved_data()
         self.test_events()
         self.test_ui_focus()
+        self.test_navigation()
         yield from self.test_destruction()
         yield from self.test_prefabs()
         yield from self.test_physics()
@@ -967,3 +968,23 @@ class FeatureTest(bellows.Script):
                    "'animation finished' reaches on_event once, with the entity and the clip")
         animator.loop = True
         animator.play("Wave", 0.5)
+
+    def test_navigation(self):
+        """The scene's navmesh is baked from its static colliders; the pedestals (0.6 m, above a 0.4 m step) block the
+        straight line from (0, 0, -5) to (0, 0, -1)."""
+        start, end = bellows.Vec3(0.0, 0.0, -5.0), bellows.Vec3(0.0, 0.0, -1.0)
+        path = bellows.find_path(start, end)
+        self.check(len(path) >= 3 and close(path[0], start, 0.2) and close(path[-1], end, 0.2), f"find_path around a pedestal ({path})")
+        length = sum((path[i] - path[i - 1]).length() for i in range(1, len(path)))
+        self.check(length > 4.1, f"the path bends around the pedestal ({length:.2f} m)")
+        self.check(all(bellows.is_navigable(corner) for corner in path), "every corner of the path is navigable")
+        self.check(bellows.is_navigable(bellows.Vec3(3.0, 0.0, 3.0)) and not bellows.is_navigable(bellows.Vec3(0.0, 0.0, -3.0)),
+                   "is_navigable: open ground, and not inside a pedestal")
+        nearest = bellows.nearest_navigable_point(bellows.Vec3(0.0, 0.0, -3.0))
+        self.check(nearest is not None and (nearest - bellows.Vec3(0.0, 0.0, -3.0)).length() > 0.8, f"nearest_navigable_point ({nearest})")
+        self.check(bellows.nearest_navigable_point(bellows.Vec3(0.0, 0.0, 500.0)) is None, "nearest_navigable_point finds nothing far off the navmesh")
+        self.check(raises(lambda: bellows.nearest_navigable_point(start, -1.0), ValueError)
+                   and raises(lambda: bellows.nearest_navigable_point(start, float("nan")), ValueError), "nearest_navigable_point's search limits")
+        self.check(bellows.find_path(start, bellows.Vec3(0.0, 0.0, 900.0)) == [], "find_path to nowhere gives an empty list")
+        bellows.bake_navigation()
+        self.check(len(bellows.find_path(start, end)) >= 3, "bake_navigation rebuilds the navmesh while the game runs")

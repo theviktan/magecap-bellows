@@ -271,6 +271,9 @@ ball.destroy()
 # Scene settings live with the scene; the project starts here.
 editor.commit("Build FeatureTest")
 assert editor.save_scene("Scenes/FeatureTest.bscene")
+# Navigation: baked from the static colliders (ground, pedestals, plinth), saved beside the scene.
+baked = editor.bake_navigation()
+print(f"Baked navigation: {baked['tiles']} tiles, {baked['polygons']} polygons")
 
 editor.set_camera((0.0, 6.0, 15.0), (0.0, 1.0, 0.0))
 editor.run_frames(3)

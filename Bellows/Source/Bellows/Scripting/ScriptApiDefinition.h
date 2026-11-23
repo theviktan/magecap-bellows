@@ -482,6 +482,32 @@ namespace Bellows::Scripting {
 			return glm::degrees(glm::eulerAngles(rotation));
 		}
 
+		// --- Navigation --------------------------------------------------------
+
+		inline const NavMesh& RequireNavMesh()
+		{
+			Scene& scene = RequireContextScene();
+			if (!scene.GetNavMesh())
+				throw ScriptValueError("This scene has no navmesh to walk on yet: bake it in Scene Settings > Navigation, or call bake_navigation()");
+			return *scene.GetNavMesh();
+		}
+
+		inline std::optional<glm::vec3> NearestNavigablePoint(const glm::vec3& point, double search)
+		{
+			if (!std::isfinite(search))
+				throw ScriptValueError("nearest_navigable_point needs ordinary numbers, not NaN or infinity");
+			if (search < 0.0 || search > 1000.0)
+				throw ScriptValueError("nearest_navigable_point searches from 0 to 1000 meters away");
+			return RequireNavMesh().FindNearestPoint(point, static_cast<float>(search));
+		}
+
+		inline void BakeSceneNavigation()
+		{
+			std::string error;
+			if (!RequireContextScene().BakeNavigation(error))
+				throw ScriptValueError("bake_navigation: " + error);
+		}
+
 		// --- Physics -----------------------------------------------------------
 
 		inline void AddImpulse(const RigidBodyRef& body, const glm::vec3& impulse)
@@ -1188,6 +1214,17 @@ namespace Bellows::Scripting {
 		raycastHit.ReadOnly("normal", [](const RaycastHit& hit) { return hit.Normal; }, "");
 		raycastHit.ReadOnly("distance", [](const RaycastHit& hit) { return hit.Distance; }, "");
 
+		api.Function("find_path", [](const glm::vec3& start, const glm::vec3& end) { return Detail::RequireNavMesh().FindPath(start, end); },
+			"The corners of the shortest walkable path from start to end on the scene's navmesh, both ends included; an empty list when "
+			"either end is off the navmesh or nothing connects them. When the end can't be reached, the path goes as close as it can",
+			Arg("start"), Arg("end"));
+		api.Function("nearest_navigable_point", [](const glm::vec3& point, double search) { return Detail::NearestNavigablePoint(point, search); },
+			"The nearest point agents can stand on, within 'search' meters to the side, or None", Arg("point"), Arg("search", 2.0));
+		api.Function("is_navigable", [](const glm::vec3& point) { return Detail::RequireNavMesh().IsNavigable(point); },
+			"True when an agent can stand at the point: over the navmesh, within a step of its surface", Arg("point"));
+		api.Function("bake_navigation", []() { Detail::BakeSceneNavigation(); },
+			"Bakes the scene's navmesh again from its static colliders, for worlds built while the game runs. A big world takes a moment; "
+			"raises an error saying why when there's nothing to walk on");
 		api.Function("raycast", [](const glm::vec3& origin, const glm::vec3& direction, float maxDistance) -> std::optional<RaycastHit>
 			{
 				Scene& scene = RequireContextScene();

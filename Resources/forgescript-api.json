@@ -209,6 +209,54 @@
 			"doc": "Frames since play started"
 		},
 		{
+			"name": "find_path",
+			"params": [
+				{
+					"name": "start",
+					"type": "Vec3"
+				},
+				{
+					"name": "end",
+					"type": "Vec3"
+				}
+			],
+			"returns": "list[Vec3]",
+			"doc": "The corners of the shortest walkable path from start to end on the scene's navmesh, both ends included; an empty list when either end is off the navmesh or nothing connects them. When the end can't be reached, the path goes as close as it can"
+		},
+		{
+			"name": "nearest_navigable_point",
+			"params": [
+				{
+					"name": "point",
+					"type": "Vec3"
+				},
+				{
+					"name": "search",
+					"type": "float",
+					"default": 2.0
+				}
+			],
+			"returns": "Vec3 | None",
+			"doc": "The nearest point agents can stand on, within 'search' meters to the side, or None"
+		},
+		{
+			"name": "is_navigable",
+			"params": [
+				{
+					"name": "point",
+					"type": "Vec3"
+				}
+			],
+			"returns": "bool",
+			"doc": "True when an agent can stand at the point: over the navmesh, within a step of its surface"
+		},
+		{
+			"name": "bake_navigation",
+			"params": [],
+			"returns": "None",
+			"doc": "Bakes the scene's navmesh again from its static colliders, for worlds built while the game runs. A big world takes a moment; raises an error saying why when there's nothing to walk on"
+		},
+		{
 			"name": "raycast",
 			"params": [
 				{

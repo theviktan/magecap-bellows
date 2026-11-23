@@ -587,6 +587,28 @@ when clicked
 end
 ```
 
+## Navigation
+
+Agents walk on a scene's **navmesh**, baked from its static colliders (box, sphere, capsule and mesh
+colliders on static bodies; not triggers or moving bodies) in **Scene Settings → Navigation**, where
+the agent's radius, height, step height and steepest slope are set. **Bake Navigation** saves it beside
+the scene (`Scenes/Level.bnav`, shipped with the game), and it loads with the scene, `load_scene`
+included. The settings panel says when the navmesh is out of date. Without a navmesh these functions
+raise `ValueError` saying how to bake one.
+
+| Function | Description |
+|----------|-------------|
+| `find_path(start, end)` | The corners of the shortest walkable path, both ends included, as a list of `Vec3`; an empty list when either end is off the navmesh or nothing connects them. When the end can't be reached, the path goes as close as it can. |
+| `nearest_navigable_point(point, search=2.0)` | The nearest point an agent can stand on, within `search` meters to the side (0 to 1000), or `None`. |
+| `is_navigable(point)` | True when an agent can stand there: over the navmesh, within a step of its surface. |
+| `bake_navigation()` | Bakes the navmesh again from the static colliders, for worlds built while the game runs (a big world takes a moment). Raises `ValueError` with the reason when there's nothing to walk on. |
+
+```python
+class Guard(bellows.Script):
+    def on_create(self):
+        self.route = bellows.find_path(self.entity.position, bellows.find_entity("Gate").position)
+```
+
 ## Materials
 
 ```python
