@@ -120,6 +120,10 @@ namespace Bellows::Scripting {
 		// Checks scripts for the Inspector outside play mode; never runs them.
 		Scope<ForgeScript::VM> m_CheckVM;
 		std::unordered_map<UUID, Instance> m_Instances;
+		// Each instance's module, the other way round, so 'field changed' finds its entity in one lookup.
+		std::unordered_map<ForgeScript::Module*, UUID> m_InstanceByModule;
+		// "script|field" pairs already warned about a value 'field changed' couldn't carry.
+		std::unordered_set<std::string> m_WarnedFields;
 		std::unordered_map<std::string, std::vector<int>> m_Breakpoints;
 		ForgeScript::DebugHandler m_DebugHandler;
 		ScriptEventListenerID m_EventListener = 0;
