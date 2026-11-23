@@ -18,6 +18,9 @@
 	"AlphaMode": "Opaque",
 	"AlphaCutoff": 0.5,
 	"DoubleSided": false,
+	"TextureFilter": "Linear",
+	"WrapU": "Repeat",
+	"WrapV": "Repeat",
 	"UVTiling": [
 		10.0,
 		10.0
