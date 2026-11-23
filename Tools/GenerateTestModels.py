@@ -1,6 +1,6 @@
 """Writes the skinned test model the engine's animation tests read.
 
-BellowsTests/Data/SkinnedColumn.glb is a 2 m column standing on the origin, skinned to two joints
+BellowsTests/Data/SkinnedColumn.glb (and the copy FeatureTest animates, in its Models folder) is a 2 m column standing on the origin, skinned to two joints
 ("Base" at the floor and its child "Top" 1 m up), with two clips:
 
 * "Bend" (2 s, LINEAR): Top turns about Z from 0 to 90 degrees at 1 s and back.
@@ -19,7 +19,10 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = ROOT / "BellowsTests" / "Data" / "SkinnedColumn.glb"
+OUTPUTS = [
+    ROOT / "BellowsTests" / "Data" / "SkinnedColumn.glb",
+    ROOT / "Projects" / "FeatureTest" / "Assets" / "Models" / "SkinnedColumn.glb",
+]
 
 FLOAT, UNSIGNED_BYTE, UNSIGNED_SHORT = 5126, 5121, 5123
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
@@ -158,8 +161,10 @@ def build() -> bytes:
 
 
 def main() -> None:
-    OUTPUT.write_bytes(build())
-    print(f"Wrote {OUTPUT.relative_to(ROOT)} ({OUTPUT.stat().st_size} bytes)")
+    model = build()
+    for output in OUTPUTS:
+        output.write_bytes(model)
+        print(f"Wrote {output.relative_to(ROOT)} ({len(model)} bytes)")
 
 
 if __name__ == "__main__":

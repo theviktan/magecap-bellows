@@ -695,6 +695,9 @@ namespace Bellows {
 
 	void Scene::UpdateAnimators(float seconds)
 	{
+		// Clips that reached their end, told to scripts once every Animator has moved (a handler may
+		// add or remove Animators).
+		std::vector<std::pair<UUID, std::string>> finished;
 		auto animators = m_Registry.view<AnimatorComponent, MeshRendererComponent>();
 		for (entt::entity handle : animators)
 		{
@@ -728,9 +731,18 @@ namespace Bellows {
 					animator.RuntimePlayer.Play(startClip, 0.0f, animator.Speed);
 			}
 
-			animator.RuntimePlayer.Update(seconds, animator.Speed, animator.Loop);
+			if (animator.RuntimePlayer.Update(seconds, animator.Speed, animator.Loop) && m_IsRunning)
+				finished.emplace_back(m_Registry.get<IDComponent>(handle).ID, animator.RuntimePlayer.GetClip()->GetName());
 			if (!animator.RuntimePlayer.ComputeSkinMatrices(*skin->Rig, animator.RuntimeSkinMatrices))
 				animator.RuntimeSkinMatrices.clear();
+		}
+
+		for (const auto& [id, clip] : finished)
+		{
+			Scripting::ScriptEntity entity;
+			entity.SceneID = m_SceneID;
+			entity.ID = id;
+			Scripting::EmitScriptEvent("animation finished", { entity, clip });
 		}
 	}
 

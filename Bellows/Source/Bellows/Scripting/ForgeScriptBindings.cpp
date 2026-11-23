@@ -741,6 +741,23 @@ namespace Bellows::Scripting {
 			return Convert<ScriptEntity>::From(vm, value, std::string("'") + phrase + "'");
 		}
 
+		// The Animator of the entity a phrase names (argument 'index').
+		AnimatorRef PhraseAnimator(FS::CallContext& context, size_t index, const char* phrase, const std::string& example)
+		{
+			FS::VM& vm = context.GetVM();
+			const FS::Value value = context.Arg(index);
+			if (!FS::IsObjectType(value, FS::ObjectType::NativeObject) || FS::As<FS::NativeObject>(value)->Type != &TypeFor<ScriptEntity>())
+			{
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs an entity, like: " + example + ". This is " +
+					(value.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(value)) + ".");
+			}
+			const ScriptEntity entity = Convert<ScriptEntity>::From(vm, value, std::string("'") + phrase + "'");
+			Entity resolved = Guard([&] { return entity.Resolve(); });
+			if (!resolved.HasComponent<AnimatorComponent>())
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs an entity with an Animator, and '" + resolved.GetName() + "' has none.");
+			return AnimatorRef { entity };
+		}
+
 		// The widget a UI phrase is about.
 		ScriptEntity PhraseWidget(FS::CallContext& context, const char* phrase)
 		{
@@ -945,6 +962,28 @@ namespace Bellows::Scripting {
 					ShakeCameraPhrase() },
 				{ { "shake the camera by (strength) over (seconds) second", "Shakes the game camera's view, fading out over the second; same as shake_camera(strength, seconds)", "None", true },
 					ShakeCameraPhrase() },
+				{ { "play animation (clip) on (entity)", "Plays one of an entity's animation clips, fading in over 0.2 seconds; same as entity.get_component(\"Animator\").play(clip)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const std::string clip = context.Text(0);
+						const AnimatorRef animator = PhraseAnimator(context, 1, "play animation", "play animation \"Walk\" on hero");
+						Guard([&] { Detail::AnimatorPlay(animator, clip, 0.2); });
+						return FS::Value();
+					} },
+				{ { "pause animation on (entity)", "Holds an entity's animation where it is; same as entity.get_component(\"Animator\").pause()", "None", true },
+					[](FS::CallContext& context)
+					{
+						const AnimatorRef animator = PhraseAnimator(context, 0, "pause animation", "pause animation on hero");
+						Guard([&] { animator.Get().RuntimePlayer.Pause(); });
+						return FS::Value();
+					} },
+				{ { "resume animation on (entity)", "Lets a paused animation go on; same as entity.get_component(\"Animator\").resume()", "None", true },
+					[](FS::CallContext& context)
+					{
+						const AnimatorRef animator = PhraseAnimator(context, 0, "resume animation", "resume animation on hero");
+						Guard([&] { animator.Get().RuntimePlayer.Resume(); });
+						return FS::Value();
+					} },
 				{ { "push (entity) by (impulse)", "Gives an entity's RigidBody a sudden push, a vector of mass times speed; same as entity.rigid_body.add_impulse(impulse)", "None", true },
 					[](FS::CallContext& context)
 					{

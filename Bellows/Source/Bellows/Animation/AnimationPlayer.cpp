@@ -96,11 +96,11 @@ namespace Bellows {
 		return atEnd;
 	}
 
-	bool AnimationPlayer::ComputeSkinMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& outSkin)
+	void AnimationPlayer::ComputePose(const Skeleton& skeleton)
 	{
-		if (!m_Clip)
-			return false;
 		m_Pose = skeleton.GetRestPose();
+		if (!m_Clip)
+			return;
 		m_Clip->Sample(m_Time, m_Pose);
 		if (IsFading())
 		{
@@ -111,9 +111,22 @@ namespace Bellows {
 			for (size_t joint = 0; joint < m_Pose.size(); joint++)
 				m_Pose[joint] = JointPose::Blend(m_FromPose[joint], m_Pose[joint], t);
 		}
+	}
+
+	bool AnimationPlayer::ComputeSkinMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& outSkin)
+	{
+		if (!m_Clip)
+			return false;
+		ComputePose(skeleton);
 		skeleton.ComputeModelMatrices(m_Pose, m_Model);
 		skeleton.ComputeSkinMatrices(m_Model, outSkin);
 		return true;
+	}
+
+	void AnimationPlayer::ComputeModelMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& outModel)
+	{
+		ComputePose(skeleton);
+		skeleton.ComputeModelMatrices(m_Pose, outModel);
 	}
 
 	void AnimationPlayer::SetTime(float time)

@@ -371,6 +371,117 @@ namespace Bellows::Scripting {
 			scene.GetCameraShake().Start(static_cast<float>(strength), static_cast<float>(seconds));
 		}
 
+		// --- Animation ---------------------------------------------------------
+
+		// The skin of the Animator's mesh, made ready for a script to play it now (before the scene's
+		// next update would start it).
+		inline const MeshSkin& RequireSkin(const AnimatorRef& r)
+		{
+			AnimatorComponent& animator = r.Get();
+			Entity entity = r.GetEntity();
+			const MeshRendererComponent* meshRenderer = entity.TryGetComponent<MeshRendererComponent>();
+			const Ref<Mesh> mesh = meshRenderer ? meshRenderer->RuntimeMesh : nullptr;
+			if (!mesh || !mesh->GetSkin())
+				throw ScriptValueError("'" + entity.GetName() + "' has an Animator, but " +
+					(meshRenderer ? std::string("its mesh has no skeleton to animate") : std::string("no MeshRenderer with a skinned model")));
+			if (animator.RuntimeMesh != mesh)
+			{
+				animator.RuntimeMesh = mesh;
+				animator.RuntimePlayer.Reset();
+				animator.RuntimeSkinMatrices.clear();
+			}
+			return *mesh->GetSkin();
+		}
+
+		inline std::string ListNames(const std::vector<std::string>& names)
+		{
+			std::string text;
+			for (size_t i = 0; i < names.size() && i < 12; i++)
+				text += (i ? ", " : "") + names[i];
+			if (names.size() > 12)
+				text += " and " + std::to_string(names.size() - 12) + " more";
+			return text.empty() ? "none" : text;
+		}
+
+		inline std::vector<std::string> AnimatorClips(const AnimatorRef& r)
+		{
+			std::vector<std::string> names;
+			const MeshRendererComponent* meshRenderer = r.GetEntity().TryGetComponent<MeshRendererComponent>();
+			r.Get();
+			if (meshRenderer && meshRenderer->RuntimeMesh && meshRenderer->RuntimeMesh->GetSkin())
+			{
+				for (const Ref<AnimationClip>& clip : meshRenderer->RuntimeMesh->GetSkin()->Clips)
+					names.push_back(clip->GetName());
+			}
+			return names;
+		}
+
+		inline std::vector<std::string> AnimatorBones(const AnimatorRef& r)
+		{
+			std::vector<std::string> names;
+			const MeshRendererComponent* meshRenderer = r.GetEntity().TryGetComponent<MeshRendererComponent>();
+			r.Get();
+			if (meshRenderer && meshRenderer->RuntimeMesh && meshRenderer->RuntimeMesh->GetSkin())
+			{
+				for (const Joint& joint : meshRenderer->RuntimeMesh->GetSkin()->Rig->GetJoints())
+					names.push_back(joint.Name);
+			}
+			return names;
+		}
+
+		inline void AnimatorPlay(const AnimatorRef& r, const std::string& name, double fade)
+		{
+			if (!std::isfinite(fade))
+				throw ScriptValueError("Animator.play needs ordinary numbers, not NaN or infinity");
+			if (fade < 0.0 || fade > AnimationPlayer::MaxFadeSeconds)
+				throw ScriptValueError("An animation's fade is from 0 to 10 seconds");
+			if (!RequireContextScene().IsRunning())
+				throw ScriptValueError("Animations play while the game is playing");
+			const MeshSkin& skin = RequireSkin(r);
+			const Ref<AnimationClip> clip = skin.FindClip(name);
+			if (!clip)
+				throw ScriptValueError("'" + r.GetEntity().GetName() + "' has no animation '" + name + "'; it has: " + ListNames(AnimatorClips(r)));
+			AnimatorComponent& animator = r.Get();
+			animator.RuntimePlayer.Play(clip, static_cast<float>(fade), animator.Speed);
+		}
+
+		// A joint's transform in the world this frame.
+		inline glm::mat4 BoneTransform(const AnimatorRef& r, const std::string& name)
+		{
+			const MeshSkin& skin = RequireSkin(r);
+			const int32_t joint = skin.Rig->FindJoint(name);
+			if (joint < 0)
+				throw ScriptValueError("'" + r.GetEntity().GetName() + "' has no bone '" + name + "'; its bones are: " + ListNames(AnimatorBones(r)));
+			Entity entity = r.GetEntity();
+			const Mesh& mesh = *entity.GetComponent<MeshRendererComponent>().RuntimeMesh;
+			// The skeleton is in the model's own space; the skinned parts' transform turns it.
+			glm::mat4 turn(1.0f);
+			for (const Submesh& submesh : mesh.GetSubmeshes())
+			{
+				if (submesh.Skinned)
+				{
+					turn = submesh.Transform;
+					break;
+				}
+			}
+			std::vector<glm::mat4> model;
+			r.Get().RuntimePlayer.ComputeModelMatrices(*skin.Rig, model);
+			return entity.GetScene()->GetWorldTransform(entity) * turn * model[static_cast<size_t>(joint)];
+		}
+
+		inline glm::vec3 BonePosition(const AnimatorRef& r, const std::string& name)
+		{
+			return glm::vec3(BoneTransform(r, name)[3]);
+		}
+
+		inline glm::vec3 BoneRotation(const AnimatorRef& r, const std::string& name)
+		{
+			glm::vec3 translation(0.0f), scale(1.0f);
+			glm::quat rotation(1.0f, 0.0f, 0.0f, 0.0f);
+			Math::DecomposeTransform(BoneTransform(r, name), translation, rotation, scale);
+			return glm::degrees(glm::eulerAngles(rotation));
+		}
+
 		// --- Physics -----------------------------------------------------------
 
 		inline void AddImpulse(const RigidBodyRef& body, const glm::vec3& impulse)
@@ -670,6 +781,48 @@ namespace Bellows::Scripting {
 		audioSource.Method("stop", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Stop(e); }, "");
 		audioSource.Method("pause", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); if (GetAudio(e)) GetAudio(e)->Pause(e); }, "");
 		audioSource.ReadOnly("is_playing", [](const AudioSourceRef& r) { r.Get(); Entity e = r.GetEntity(); return GetAudio(e) ? GetAudio(e)->IsPlaying(e) : false; }, "");
+
+		auto animator = api.template Class<AnimatorRef>("Animator",
+			"Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them");
+		animator.Property("start_clip", [](const AnimatorRef& r) { return r.Get().Clip; }, [](const AnimatorRef& r, const std::string& v) { r.Get().Clip = v; },
+			"The clip played when the game starts; empty plays the mesh's first");
+		animator.Property("play_on_start", [](const AnimatorRef& r) { return r.Get().PlayOnStart; }, [](const AnimatorRef& r, bool v) { r.Get().PlayOnStart = v; }, "");
+		animator.Property("loop", [](const AnimatorRef& r) { return r.Get().Loop; }, [](const AnimatorRef& r, bool v) { r.Get().Loop = v; },
+			"When off, a clip stops at its end, holds its last pose and sends 'animation finished'");
+		animator.Property("speed", [](const AnimatorRef& r) { return r.Get().Speed; },
+			[](const AnimatorRef& r, float v)
+			{
+				if (!std::isfinite(v))
+					throw ScriptValueError("Animator.speed needs ordinary numbers, not NaN or infinity");
+				if (v < -AnimationPlayer::MaxSpeed || v > AnimationPlayer::MaxSpeed)
+					throw ScriptValueError("An Animator's speed is from -10 to 10");
+				r.Get().Speed = v;
+			}, "Times as fast, from -10 to 10; negative plays backward");
+		animator.Property("time", [](const AnimatorRef& r) { return r.Get().RuntimePlayer.GetTime(); },
+			[](const AnimatorRef& r, float v)
+			{
+				if (!std::isfinite(v))
+					throw ScriptValueError("Animator.time needs ordinary numbers, not NaN or infinity");
+				r.Get().RuntimePlayer.SetTime(v);
+			}, "Seconds into the clip (held to its length); set it to 0 to start the clip over");
+		animator.ReadOnly("clip", [](const AnimatorRef& r) { const Ref<AnimationClip>& clip = r.Get().RuntimePlayer.GetClip(); return clip ? clip->GetName() : std::string(); },
+			"The clip playing or held, or \"\" for none (the model stands in its rest pose)");
+		animator.ReadOnly("playing", [](const AnimatorRef& r) { return r.Get().RuntimePlayer.IsPlaying(); },
+			"True while the clip moves: not stopped, paused or at the end of a clip that doesn't loop");
+		animator.ReadOnly("length", [](const AnimatorRef& r) { const Ref<AnimationClip>& clip = r.Get().RuntimePlayer.GetClip(); return clip ? clip->GetDuration() : 0.0f; },
+			"The current clip's length in seconds (0 for none)");
+		animator.ReadOnly("clips", [](const AnimatorRef& r) { return Detail::AnimatorClips(r); }, "The model's clip names, in file order");
+		animator.ReadOnly("bones", [](const AnimatorRef& r) { return Detail::AnimatorBones(r); }, "The model's bone (joint) names, parents first");
+		animator.Method("play", [](const AnimatorRef& r, const std::string& clip, double fade) { Detail::AnimatorPlay(r, clip, fade); },
+			"Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Playing the clip that's already playing changes nothing, "
+			"so it's safe to call every frame; set time to 0 to restart it", Arg("clip"), Arg("fade", 0.2));
+		animator.Method("stop", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Stop(); }, "Stops the clip and holds the current pose");
+		animator.Method("pause", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Pause(); }, "");
+		animator.Method("resume", [](const AnimatorRef& r) { r.Get().RuntimePlayer.Resume(); }, "");
+		animator.Method("bone_position", [](const AnimatorRef& r, const std::string& bone) { return Detail::BonePosition(r, bone); },
+			"Where a bone is in the world this frame, to put something in a hand", Arg("bone"));
+		animator.Method("bone_rotation", [](const AnimatorRef& r, const std::string& bone) { return Detail::BoneRotation(r, bone); },
+			"A bone's rotation in the world this frame, in degrees like rotation", Arg("bone"));
 
 		auto audioListener = api.template Class<AudioListenerRef>("AudioListener", "");
 		audioListener.Property("active", [](const AudioListenerRef& r) { return r.Get().Active; }, [](const AudioListenerRef& r, bool v) { r.Get().Active = v; }, "");

@@ -1505,6 +1505,139 @@
 			]
 		},
 		{
+			"name": "Animator",
+			"doc": "Plays the animation clips of the entity's skinned model (its MeshRenderer's mesh), one at a time, crossfading between them",
+			"members": [
+				{
+					"name": "start_clip",
+					"kind": "property",
+					"type": "str",
+					"doc": "The clip played when the game starts; empty plays the mesh's first"
+				},
+				{
+					"name": "play_on_start",
+					"kind": "property",
+					"type": "bool",
+					"doc": ""
+				},
+				{
+					"name": "loop",
+					"kind": "property",
+					"type": "bool",
+					"doc": "When off, a clip stops at its end, holds its last pose and sends 'animation finished'"
+				},
+				{
+					"name": "speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Times as fast, from -10 to 10; negative plays backward"
+				},
+				{
+					"name": "time",
+					"kind": "property",
+					"type": "float",
+					"doc": "Seconds into the clip (held to its length); set it to 0 to start the clip over"
+				},
+				{
+					"name": "clip",
+					"kind": "property",
+					"type": "str",
+					"readonly": true,
+					"doc": "The clip playing or held, or \"\" for none (the model stands in its rest pose)"
+				},
+				{
+					"name": "playing",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True while the clip moves: not stopped, paused or at the end of a clip that doesn't loop"
+				},
+				{
+					"name": "length",
+					"kind": "property",
+					"type": "float",
+					"readonly": true,
+					"doc": "The current clip's length in seconds (0 for none)"
+				},
+				{
+					"name": "clips",
+					"kind": "property",
+					"type": "list[str]",
+					"readonly": true,
+					"doc": "The model's clip names, in file order"
+				},
+				{
+					"name": "bones",
+					"kind": "property",
+					"type": "list[str]",
+					"readonly": true,
+					"doc": "The model's bone (joint) names, parents first"
+				},
+				{
+					"name": "play",
+					"kind": "method",
+					"params": [
+						{
+							"name": "clip",
+							"type": "str"
+						},
+						{
+							"name": "fade",
+							"type": "float",
+							"default": 0.2
+						}
+					],
+					"returns": "None",
+					"doc": "Plays a clip, fading from the current pose over 'fade' seconds (0 cuts). Playing the clip that's already playing changes nothing, so it's safe to call every frame; set time to 0 to restart it"
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Stops the clip and holds the current pose"
+				},
+				{
+					"name": "pause",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "resume",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": ""
+				},
+				{
+					"name": "bone_position",
+					"kind": "method",
+					"params": [
+						{
+							"name": "bone",
+							"type": "str"
+						}
+					],
+					"returns": "Vec3",
+					"doc": "Where a bone is in the world this frame, to put something in a hand"
+				},
+				{
+					"name": "bone_rotation",
+					"kind": "method",
+					"params": [
+						{
+							"name": "bone",
+							"type": "str"
+						}
+					],
+					"returns": "Vec3",
+					"doc": "A bone's rotation in the world this frame, in degrees like rotation"
+				}
+			]
+		},
+		{
 			"name": "AudioListener",
 			"doc": "",
 			"members": [
@@ -2587,6 +2720,24 @@
 		{
 			"pattern": "shake the camera by (strength) over (seconds) second",
 			"doc": "Shakes the game camera's view, fading out over the second; same as shake_camera(strength, seconds)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "play animation (clip) on (entity)",
+			"doc": "Plays one of an entity's animation clips, fading in over 0.2 seconds; same as entity.get_component(\"Animator\").play(clip)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "pause animation on (entity)",
+			"doc": "Holds an entity's animation where it is; same as entity.get_component(\"Animator\").pause()",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "resume animation on (entity)",
+			"doc": "Lets a paused animation go on; same as entity.get_component(\"Animator\").resume()",
 			"returns": "None",
 			"yields_to_calls": true
 		},

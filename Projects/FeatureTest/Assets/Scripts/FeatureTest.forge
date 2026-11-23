@@ -347,6 +347,39 @@ function test_tweens()
 	box.destroy()
 end
 
+# The Dancer plays SkinnedColumn.glb's clips, "Bend" and "Wave".
+function test_animation()
+	set dancer to find_entity("Dancer")
+	set animator to dancer.get_component("Animator")
+	check(animator.clips is ["Bend", "Wave"] and animator.clip is "Wave", "the Dancer's Animator plays its start clip")
+	play animation "Bend" on dancer
+	check(animator.clip is "Bend" and animator.playing, "play animation (clip) on (entity)")
+	wait 2 frames
+	pause animation on dancer
+	set held to animator.time
+	wait 2 frames
+	check(not animator.playing and close(animator.time, held), "pause animation on (entity)")
+	resume animation on dancer
+	check(animator.playing, "resume animation on (entity)")
+	check(fails(function() play animation "Dance" on dancer end), "'play animation' refuses a clip the model doesn't have")
+	set plain to create_entity("Forge Plain")
+	check(fails(function() pause animation on plain end), "'pause animation' needs an entity with an Animator")
+	plain.destroy()
+	check(near(animator.bone_position("Top"), dancer.position + vector(0, 1, 0), 0.001), "bone_position: Top turns at the knee")
+
+	set animator.loop to false
+	animator.play("Wave", 0)
+	set animator.time to 0.9
+	wait_for(function() return events.contains("animation finished Wave") end, 2)
+	check(events.contains("animation finished Wave"), "when animation finished with who, clip")
+	set animator.loop to true
+	play animation "Wave" on dancer
+end
+
+when animation finished with who, clip
+	if who.valid and who.name is "Dancer" then add "animation finished {clip}" to events end
+end
+
 when tween finished with who, property, id
 	if who.valid and who.name is "Forge Tween Box" then add "tween finished {property}" to events end
 end
@@ -369,6 +402,7 @@ function run_tests()
 		test_physics()
 		test_events()
 		test_tweens()
+		test_animation()
 	catch problem
 		add "unexpected error: {problem}" to failures
 	end

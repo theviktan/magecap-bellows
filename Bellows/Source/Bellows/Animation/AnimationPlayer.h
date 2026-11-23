@@ -35,6 +35,8 @@ namespace Bellows {
 		// The pose as skin matrices for the shader; false (and nothing written) without a clip, when
 		// the mesh is drawn in its rest pose.
 		bool ComputeSkinMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& outSkin);
+		// Each joint's transform in the model's space for the pose shown (the rest pose without a clip).
+		void ComputeModelMatrices(const Skeleton& skeleton, std::vector<glm::mat4>& outModel);
 
 		const Ref<AnimationClip>& GetClip() const { return m_Clip; }
 		float GetTime() const { return m_Time; }
@@ -45,6 +47,7 @@ namespace Bellows {
 		bool IsPaused() const { return m_Paused; }
 		bool IsFading() const { return m_FadeSeconds > 0.0f && m_FadeElapsed < m_FadeSeconds; }
 	private:
+		void ComputePose(const Skeleton& skeleton);
 		static float Advance(const AnimationClip& clip, float time, float delta, bool loop);
 	private:
 		Ref<AnimationClip> m_Clip;
