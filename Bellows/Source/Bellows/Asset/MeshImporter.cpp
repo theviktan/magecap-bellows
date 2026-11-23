@@ -201,6 +201,10 @@ namespace Bellows {
 			return material;
 		}
 
+		// Extensions a file may require: the ones the importer reads (emissive strength) or that cgltf's
+		// accessor reads already handle (quantized vertex data).
+		constexpr std::string_view c_SupportedRequiredExtensions[] = { "KHR_materials_emissive_strength", "KHR_mesh_quantization" };
+
 		// The skeleton of one glTF skin: its joints in parents-first order, and where each node went.
 		struct ImportedSkin
 		{
@@ -592,6 +596,19 @@ namespace Bellows {
 		}
 
 		std::unique_ptr<cgltf_data, decltype(&cgltf_free)> dataGuard(data, &cgltf_free);
+
+		// A file that needs an extension Bellows doesn't read would come out wrong (compressed geometry
+		// missing, say), so it's refused with the reason. Extensions a file only uses are fine to skip.
+		for (cgltf_size i = 0; i < data->extensions_required_count; i++)
+		{
+			const std::string_view name = data->extensions_required[i] ? data->extensions_required[i] : "";
+			if (std::find(std::begin(c_SupportedRequiredExtensions), std::end(c_SupportedRequiredExtensions), name) == std::end(c_SupportedRequiredExtensions))
+			{
+				BW_CORE_ERROR("glTF: '{}' needs the extension '{}', which Bellows can't read. Export it without that extension "
+					"(in Blender: without Draco or meshopt compression)", pathString, name);
+				return nullptr;
+			}
+		}
 
 		std::string error;
 		if (!CheckBufferSizes(*data, path.parent_path(), error))
