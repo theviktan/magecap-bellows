@@ -472,9 +472,9 @@ TEST_CASE("[gpu] A textured MageCap Foundry model imports: palette sampled pixel
 TEST_CASE("[gpu] MageCap Foundry's starter house, as Forge exports it, imports and renders")
 {
 	// BellowsTests/Data/FoundryStarterHouse.glb is a copy of magecap-forge's
-	// tests/fixtures/foundry/foundry-starter-house.glb (Forge 2.65.0, commit a60d176): a floor, a
-	// wall, a mirrored wall with a window, a lantern post, and a cube, cylinder and wedge, all with the
-	// Starter pack's palette texture.
+	// tests/fixtures/foundry/foundry-starter-house.glb (Forge 2.66.0, commit 48bab47, Starter 1.1.1):
+	// a floor, a wall, a mirrored wall with a window, a lantern post, and a cube, cylinder and wedge,
+	// all with the Starter pack's palette texture.
 	Application& application = BellowsTests::GetTestApplication();
 	REQUIRE(application.IsValid());
 	const Ref<Mesh> mesh = MeshImporter::ImportGLTF(BellowsTests::GetSourceDirectory() / "BellowsTests" / "Data" / "FoundryStarterHouse.glb");
