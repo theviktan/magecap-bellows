@@ -5,7 +5,7 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
-## 1.7.0 (not released yet)
+## 1.7.0 (2026-11-23)
 
 - **S-16** (MCAudit, Audit 11): a Watch line, condition or log message that fails no longer ends
   with "(game.forge line 2)", the place of the debugger's hidden wrapper; the message is about the
