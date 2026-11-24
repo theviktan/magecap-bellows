@@ -214,7 +214,7 @@ Shipped:
 | 0.5 | Keeping entities across scenes, turning models that face the other way, safer delete and rename in the Content panel, damaged files no longer crash, ForgeScript 1.6 |
 | 0.6 | Tweens, tags, skeletal animation, navigation, `field changed`, camera shake, data files, glTF samplers and unlit materials, Script Editor refactoring and a debugger with conditional breakpoints and Watch, ForgeScript 1.7 |
 
-Planned, from Ron's priorities (section 2). The order is a proposal for Ron to confirm:
+Planned, from Ron's priorities (section 2). Ron confirmed this order, with iOS waiting for macOS, on November 24, 2026 ("Yes the order you have is perfect."):
 
 | Release | Contents |
 |---------|----------|
