@@ -570,6 +570,10 @@ TEST_CASE("DebuggerConditionsLogPointsAndEvaluate")
 		// No calls, so the game can't change; mistakes and missing names say why.
 		CHECK_FALSE(debug.Machine.Evaluate(0, "hurt(5)", value, error));
 		CHECK_CONTAINS(error, "without calling functions");
+		// The message is about the Watch line itself, with no place in the hidden wrapper (S-16).
+		CHECK(error.find(" line ") == std::string::npos);
+		CHECK_FALSE(debug.Machine.Evaluate(0, "hp.health", value, error));
+		CHECK(error.find(" line ") == std::string::npos);
 		CHECK_FALSE(debug.Machine.Evaluate(0, "[1, 2].length()", value, error));
 		CHECK_CONTAINS(error, "without calling functions");
 		CHECK_FALSE(debug.Machine.Evaluate(0, "hp +", value, error));

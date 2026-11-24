@@ -2857,7 +2857,9 @@ namespace ForgeScript {
 		if (task->IsNested)
 		{
 			task->FailureMessage = message;
-			if (line > 0)
+			// Evaluate's code is the user's one line, wrapped in a function of its own: its place (the
+			// wrapper's line 2) would only mislead (S-16), so the message stands alone.
+			if (line > 0 && !m_Evaluating)
 				task->FailureMessage += " (" + file + " line " + std::to_string(line) + ")";
 			return;
 		}
