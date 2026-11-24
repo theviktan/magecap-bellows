@@ -7,6 +7,9 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.7.0 (not released yet)
 
+- **S-16** (MCAudit, Audit 11): a Watch line, condition or log message that fails no longer ends
+  with "(game.forge line 2)", the place of the debugger's hidden wrapper; the message is about the
+  line itself.
 - **Debugger: conditions, log points and Evaluate** (expert features item 5, with MCBellows' rules):
   `VM::SetDetailedBreakpoints` takes breakpoints with a condition (stop only when `hp < 10`) or a log
   message (print `"hp is {hp}"` and go on), and `VM::Evaluate(frame, code, ...)` works out one line in
