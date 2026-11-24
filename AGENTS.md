@@ -91,9 +91,9 @@ the font tests read, is written by `Tools/GenerateTestFonts.py` (needs `pip inst
 `BellowsTests/Data/SkinnedColumn.glb`, the skinned and animated model the import, animation and fuzz
 tests read, is written by `Tools/GenerateTestModels.py` (standard library only).
 `BellowsTests/Data/FoundryStarterHouse.glb` is a copy of MageCap Forge's
-`tests/fixtures/foundry/foundry-starter-house.glb` (Forge 2.65.0, commit `a60d176`), a real Foundry
-export the import and GPU tests read; copy it again from Forge when Foundry's export changes, and
-update the commit here and in the tests.
+`tests/fixtures/foundry/foundry-starter-house.glb` (Forge 2.66.0, commit `48bab47`, Starter
+1.1.1), a real Foundry export the import and GPU tests read; copy it again from Forge when
+Foundry's export changes, and update the commit here and in the tests.
 GPU tests run with Vulkan validation enabled and fail on any validation message.
 
 ## Versions and releases
