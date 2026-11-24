@@ -2,7 +2,8 @@
 
 Where the engine stands today, what it needs to compete with Godot, and how 2D games, the
 ForgeScript language and MageCap Forge fit in. Written November 2026 against Godot 4.7.2 (current
-stable) and Godot 4.8 (beta). This is a planning document: update it as milestones land.
+stable) and Godot 4.8 (beta); updated November 24, 2026, after 0.6.0 shipped, with Ron's
+priorities (section 2). This is a planning document: update it as milestones land.
 
 ## 1. Where Bellows stands against Godot
 
@@ -12,21 +13,35 @@ term. It can compete by being excellent at a focused set of things and by offeri
 not: an editor built to be driven by AI agents, a natural-language scripting language, and tight
 integration with MageCap Forge.
 
-| Area | Godot 4.7 / 4.8 | Bellows today | Gap |
+| Area | Godot 4.7 / 4.8 | Bellows 0.6.0 | Gap |
 |------|-----------------|---------------|-----|
-| 3D rendering | Forward+/Mobile/Compatibility renderers, SDFGI/VoxelGI/lightmaps, AreaLight3D, HDR output, SSR, volumetric fog, decals, texture streaming (4.8), contact shadows (4.8) | PBR, IBL, CSM soft shadows, SSAO, bloom, tonemapping, FXAA, transparency | Large: GI, area lights, SSR, fog, decals, particles, LOD, occlusion culling, texture streaming, HDR output, TAA/upscaling |
-| 2D | Full 2D engine: sprites, TileMapLayer, 2D lights/shadows, 2D physics, Line2D, polygons, parallax, one-way collisions | None | Complete subsystem missing (see section 2) |
-| Game UI | Control nodes, containers, themes, RichTextLabel, auto-fit fonts (4.8), accessibility (AccessKit) | None (Dear ImGui is editor-only) | Critical gap: no menus, HUDs or text in games |
-| Animation | AnimationPlayer/Tree, skeletal animation, blend spaces, IK (4.6), tweens with signal waits (4.7) | None | Large |
+| 3D rendering | Forward+/Mobile/Compatibility renderers, SDFGI/VoxelGI/lightmaps, AreaLight3D, HDR output, SSR, volumetric fog, decals, texture streaming (4.8), contact shadows (4.8) | PBR, IBL, directional/point/spot/sky lights, cascaded soft shadows, SSAO, bloom, tonemapping, FXAA, transparency, unlit materials, texture filtering and wrap modes, frustum culling | Large: GI, area lights, SSR, fog, decals, particles, LOD, occlusion culling, texture streaming, HDR output, TAA/upscaling |
+| 2D | Full 2D engine: sprites, TileMapLayer, 2D lights/shadows, 2D physics, Line2D, polygons, parallax, one-way collisions | None (screen-space game UI only) | Complete subsystem missing (section 3) |
+| Game UI | Control nodes, containers, themes, RichTextLabel, auto-fit fonts (4.8), accessibility (AccessKit) | Canvases, anchored rects, panels, images, buttons, toggles, sliders, dropdowns, text inputs, scroll views, layouts, MSDF text, Main Menu and HUD templates, a UI view in the editor | Themes, rich text, accessibility |
+| Animation | AnimationPlayer/Tree, skeletal animation, blend spaces, IK (4.6), tweens with signal waits (4.7) | Skeletal animation (GPU skinning), clip crossfades, Animator with preview, tweens | Animation timeline, state machines, blend spaces, IK |
 | Physics | Jolt (default since 4.6), Godot Physics 2D | Jolt 3D, triggers, raycasts | 2D physics, joints, character controller, shape casts |
-| Audio | Buses, effects, streams, spatial audio | 2D/3D sources, listener, one-shots | Buses, effects, streaming music |
-| Scripting | GDScript (with LSP, debugger, refactoring), C#, GDExtension (C/C++/Rust) | Python 3.13 with a full API | Debugger, hot reload, signals/events, native plugin API, ForgeScript |
-| Editor | Docks, scene tabs, inspector, Asset Store (4.7), runtime 2D manipulation (4.8), symbol renaming (4.8), profiler, remote scene tree | Docked editor, inspector, content browser, console, undo, play mode, built-in script editor (ForgeScript and Python), agent server | Multiple scenes, profiler, plugin API, asset store |
-| Platforms | Windows, macOS, Linux, Android, iOS, Web, XR (Android XR, Steam Frame), visionOS (4.8) | Windows, Linux (Vulkan) | macOS, mobile, Web, consoles, XR |
-| Other | Navigation, multiplayer, localization (pseudolocalization in 4.8), input map, resources, signals | Prefabs, JSON scenes, export | Navigation, networking, localization, input actions |
+| Navigation | Navmesh, agents, avoidance | Recast/Detour navmesh baking, path queries, Nav Agents with avoidance | Navigation links, runtime rebaking |
+| Audio | Buses, effects, streams, spatial audio | 2D/3D sources, listener, one-shots, streaming of large files, buses (volume, mute) | Bus effects |
+| Scripting | GDScript (with LSP, debugger, refactoring), C#, GDExtension (C/C++/Rust) | ForgeScript and Python 3.13 on one API, hot reload, script events, LSP, refactoring, a debugger with conditional breakpoints, log points and Watch | Native plugin API |
+| Editor | Docks, scene tabs, inspector, Asset Store (4.7), runtime 2D manipulation (4.8), symbol renaming (4.8), profiler, remote scene tree | Docked editor, inspector, content browser, console, undo, play mode, prefabs, Project Manager, built-in Script Editor, agent server | Multiple scenes, profiler, plugin API, asset store |
+| Platforms | Windows, macOS, Linux, Android, iOS, Web, XR (Android XR, Steam Frame), visionOS (4.8) | Windows, Linux (Vulkan); export for the editor's own platform only | Mobile and Web (planned, section 2), then macOS, consoles, XR |
+| Other | Multiplayer, localization (pseudolocalization in 4.8), input map, resources, signals | Prefabs, JSON scenes, input actions, export | Networking, localization |
 | AI automation | None built in | Agent server, `bellows.editor` API, CLI, skills | Bellows leads |
 
-## 2. Supporting 2D games
+## 2. Ron's priorities (decided November 24, 2026)
+
+After 0.6.0, Ron set what Bellows needs to compete with the other engines:
+
+1. **Platforms:** Windows, Linux, mobile and Web now. macOS and consoles come later.
+2. **2D and 3D:** Bellows must make 2D games as well as 3D ones (section 3).
+3. **Particles and decals:** wanted (section 7, 0.7).
+4. **Performance tools:** a must: profilers first, then the systems that keep large scenes fast.
+5. **Lighting and quality:** wanted: global illumination, reflections, fog, area lights, temporal
+   anti-aliasing and upscaling, HDR output.
+6. **Ecosystem** (documentation site, tutorials, community): later, once Bellows can compete with
+   the other engines on features.
+
+## 3. Supporting 2D games
 
 2D is a parallel engine inside the engine. Recommended order:
 
@@ -48,7 +63,7 @@ integration with MageCap Forge.
 8. **Templates** - platformer, top-down, puzzle (Tetris-style) starter projects, plus a FeatureTest2D
    project that tests the whole 2D API like FeatureTest does for 3D.
 
-## 3. Becoming an engine an AAA studio could use
+## 4. Becoming an engine an AAA studio could use
 
 Large studios rarely switch engines; the realistic path is indie and AA studios first, while
 building the foundations bigger teams require:
@@ -67,8 +82,10 @@ building the foundations bigger teams require:
   editor plugin API (custom panels, inspectors, importers, gizmos).
 * **Tooling** - CPU/GPU profiler (Tracy is BSD-licensed), memory tracker, frame debugger,
   script debugger with breakpoints, crash reporting with symbol upload.
-* **Platforms** - macOS (Metal via MoltenVK first), Android, Web (WebGPU), then consoles. Console
-  SDKs are under NDA: studios typically license them, so console support means a private,
+* **Platforms** - Android (Vulkan, which NVRHI already uses) and Web (a WebGPU backend, which NVRHI
+  doesn't have, plus a Web build of Python) come first, per Ron's priorities. iOS needs Metal
+  (MoltenVK) and Apple's tools, which run only on a Mac, so it lands with macOS later. Console SDKs
+  are under NDA: studios typically license them, so console support means a private,
   partner-only branch.
 * **Release discipline** - semantic versioning, LTS branches, migration guides, CI on every
   platform (already started in `.github/workflows/ci.yml`), a public issue tracker, and a real
@@ -78,7 +95,7 @@ A business decision belongs here too: an open-source license (Godot is MIT) attr
 and trust; a commercial license with source access funds development. Decide before inviting
 outside contributors.
 
-## 4. ForgeScript
+## 5. ForgeScript
 
 Goal: ForgeScript is to Bellows what GDScript is to Godot - the flagship, easiest way to write game
 logic, with an English-like style. Python stays fully supported alongside it, the way Godot offers
@@ -163,7 +180,7 @@ end
    rename), the TextMate grammar in the Bellows script editor, a formatter, and a debugger through
    the Debug Adapter Protocol.
 
-## 5. MageCap Forge integration
+## 6. MageCap Forge integration
 
 Bellows already has the hard part: a local, token-protected agent server that can run code,
 read logs and take screenshots (`docs/EditorAutomation.md`). Forge integration builds on it:
@@ -186,19 +203,28 @@ read logs and take screenshots (`docs/EditorAutomation.md`). Forge integration b
 6. **Sightglass (stats)** - an optional analytics hook in exported games (events, session
    length) that Sightglass can import.
 
-## 6. Suggested sequence
+## 7. Sequence
 
-| Milestone | Contents |
-|-----------|----------|
-| 0.2 ForgeScript in the engine | Script API registry (Python and ForgeScript backends), `.forge` scripts on entities, lifecycle events, Inspector fields, FeatureTest.forge |
-| 0.3 Foundation | Windows build verified in CI, script debugger basics, hot reload, signals/events, input actions, audio buses |
-| 0.4 Game UI and text | MSDF text, UI components (buttons, labels, panels, layout containers), themes |
-| 0.5 2D | Sprites, Camera2D, Box2D, tilemaps, sprite animation, 2D editor mode, 2D templates |
-| 0.6 ForgeScript tooling and MageCap Forge | ForgeScript language additions, LSP, debugger; Forge Link for Bellows, Assay bug reports, Chisel/Whetstone ForgeScript support |
-| 0.7 Animation and VFX | Skeletal animation, animation timeline, particles, decals |
-| 0.8 Scale | Job system, asset import pipeline, streaming, profiler, D3D12 backend |
-| 0.9 Platforms | macOS, Android, Web |
-| 1.0 | Stable API, documentation site, LTS policy |
+Shipped:
+
+| Release | Contents (from `docs/ReleaseNotes`) |
+|---------|----------|
+| 0.3 | ForgeScript scripts in the engine, the Script Editor, materials (0.3.0); ForgeScript 1.2 (0.3.1); MSDF text, the first game UI, saving, crash reports (0.3.2) |
+| 0.4 | The UI view and other editor UI tools, more game UI, pausing the game, ForgeScript 1.5, security fixes |
+| 0.5 | Keeping entities across scenes, turning models that face the other way, safer delete and rename in the Content panel, damaged files no longer crash, ForgeScript 1.6 |
+| 0.6 | Tweens, tags, skeletal animation, navigation, `field changed`, camera shake, data files, glTF samplers and unlit materials, Script Editor refactoring and a debugger with conditional breakpoints and Watch, ForgeScript 1.7 |
+
+Planned, from Ron's priorities (section 2). The order is a proposal for Ron to confirm:
+
+| Release | Contents |
+|---------|----------|
+| 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals |
+| 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3) |
+| 0.9 | **Lighting and quality:** fog, screen-space reflections, area lights, TAA and upscaling, HDR output, then global illumination; plus LOD and occlusion culling |
+| 0.10 | **Android** on Vulkan, with touch input and Android export |
+| 0.11 | **Web** through a WebGPU backend, with Web export |
+| 1.0 | Stable API, migration guides, LTS policy; then the ecosystem (documentation site, tutorials, community) |
+| Later | macOS and iOS (Metal through MoltenVK), consoles, multiplayer, editor plugin API, multiple open scenes |
 
 ## Sources
 
