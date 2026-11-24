@@ -2,8 +2,10 @@
 
 #include "TestUtilities.h"
 
+#include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Renderer/Environment.h"
+#include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Renderer/SceneRenderer.h"
@@ -185,30 +187,32 @@ TEST_CASE("[gpu] An unlit material shows its color whatever the light; a lit one
 	REQUIRE(bright.IsValid());
 	bright.SavePNG(BellowsTests::GetTestOutputDirectory() / "SceneRenderer_Unlit.png");
 
-	// Find each cube's top and front by entity ID: 6 rows in from its highest or lowest row on screen,
-	// in the middle of that row (an edge pixel blends with the background).
-	auto find = [&](SceneRenderer& renderer, uint32_t id, bool top)
+	// Find each cube's top and front in the picture: 6 rows in from its highest or lowest green row, in
+	// the middle of that row (an edge pixel blends with the gray background). The unlit cube is in the
+	// left half, the lit one in the right. One readback, not a GPU read per pixel.
+	auto isGreen = [&](uint32_t x, uint32_t y) { const glm::u8vec4 pixel = bright.GetPixel(x, y); return pixel.g > pixel.r + 30 && pixel.g > pixel.b + 30; };
+	auto find = [&](uint32_t fromX, uint32_t toX, bool top)
 	{
-		for (int y = top ? 0 : 179; top ? y < 180 : y >= 0; y += top ? 1 : -1)
+		for (int step = 0; step < 180; step++)
 		{
-			const int row = y + (top ? 6 : -6);
-			int first = -1, last = -1;
-			for (int x = 0; x < 320; x++)
+			const int y = top ? step : 179 - step;
+			uint32_t first = toX, last = 0;
+			for (uint32_t x = fromX; x < toX; x++)
 			{
-				if (renderer.ReadEntityID(x, row) == id)
+				if (isGreen(x, static_cast<uint32_t>(y)))
 				{
-					first = first < 0 ? x : first;
+					first = std::min(first, x);
 					last = x;
 				}
 			}
-			if (renderer.ReadEntityID((first + last) / 2, y) == id && first >= 0)
-				return glm::ivec2((first + last) / 2, row);
+			if (first < toX)
+				return glm::ivec2(static_cast<int>((first + last) / 2), y + (top ? 6 : -6));
 		}
 		return glm::ivec2(-1);
 	};
-	const glm::ivec2 unlitTop = find(brightRenderer, 1, true);
-	const glm::ivec2 unlitFront = find(brightRenderer, 1, false);
-	const glm::ivec2 litTop = find(brightRenderer, 2, true);
+	const glm::ivec2 unlitTop = find(0, 160, true);
+	const glm::ivec2 unlitFront = find(0, 160, false);
+	const glm::ivec2 litTop = find(160, 320, true);
 	REQUIRE(unlitTop.x >= 0);
 	REQUIRE(unlitFront.x >= 0);
 	REQUIRE(litTop.x >= 0);
@@ -342,5 +346,62 @@ TEST_CASE("[gpu] Directional light casts shadows onto the ground")
 	INFO("unshadowed " << litValue << ", shadowed " << shadowValue);
 	CHECK(shadowValue < litValue * 0.7f);
 	CHECK(groundBrightness(shadowed, 2.5f) == doctest::Approx(groundBrightness(lit, 2.5f)).epsilon(0.05));
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] MageCap Foundry's starter house renders cleanly: textures, glass and glow")
+{
+	// The Forge export copied into BellowsTests/Data (see ModelImportTests.cpp). This checks the frame is
+	// clean under validation and fills the view; SceneRenderer_FoundryHouse.png is for a person to look at.
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+	const Ref<Mesh> house = MeshImporter::ImportGLTF(BellowsTests::GetSourceDirectory() / "BellowsTests" / "Data" / "FoundryStarterHouse.glb");
+	REQUIRE(house);
+
+	auto render = [&](bool withHouse, SceneRenderer& renderer)
+	{
+		renderer.SetViewportSize(480, 270);
+		for (int frame = 0; frame < 2; frame++)
+		{
+			renderer.BeginScene(MakeCamera(glm::vec3(-1.0f, 7.0f, -8.0f), glm::vec3(0.5f, 0.3f, 0.5f), 480.0f / 270.0f));	// From behind, where the floor is
+			DirectionalLightData sun;
+			sun.Direction = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
+			sun.Intensity = 3.0f;
+			renderer.SubmitDirectionalLight(sun);
+			if (withHouse)
+				renderer.SubmitMesh(house, glm::mat4(1.0f), 5);
+			// The ground sits just under the house, whose floor is at height 0.
+			renderer.SubmitMesh(Renderer::GetPrimitiveMesh(PrimitiveMesh::Plane),
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.02f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(20.0f)), 6);
+			renderer.EndScene();
+		}
+		return Renderer::ReadbackTexture(renderer.GetFinalImage());
+	};
+	SceneRenderer houseRenderer, emptyRenderer;
+	const Image image = render(true, houseRenderer);
+	const Image empty = render(false, emptyRenderer);
+	REQUIRE(image.IsValid());
+	REQUIRE(empty.IsValid());
+	image.SavePNG(BellowsTests::GetTestOutputDirectory() / "SceneRenderer_FoundryHouse.png");
+
+	// The house (and its shadows) changes a good part of the view, from the shapes to the walls.
+	int changed = 0;
+	uint32_t left = image.Width, right = 0;
+	for (uint32_t y = 0; y < image.Height; y++)
+	{
+		for (uint32_t x = 0; x < image.Width; x++)
+		{
+			if (glm::length(image.GetPixelNormalized(x, y) - empty.GetPixelNormalized(x, y)) < 0.05f)
+				continue;
+			changed++;
+			left = std::min(left, x);
+			right = std::max(right, x);
+		}
+	}
+	INFO("changed pixels ", changed, ", from x ", left, " to ", right);
+	CHECK(changed > 12000);		// Of 129,600
+	CHECK(right - left > 240);
+	CHECK(houseRenderer.ReadEntityID(240, 135) == 5u);
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }
