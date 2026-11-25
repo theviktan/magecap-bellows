@@ -68,10 +68,13 @@ can drive end to end.
   the editor session; saved scripts reload once the stopped script goes on.
 * **Profiler**: **View → Profiler** times every frame on the CPU, part by part: events, the scene
   update (game UI, animation, tweens, scripts with each Python script on its own line, ForgeScript,
-  navigation, physics, audio), rendering and the editor's own UI. A graph shows the last 300
-  frames; the **Average** tab lists each part's total and self time, its slowest frame and calls
-  per frame, and clicking a bar pauses recording and shows that frame in the **Frame** tab. It
-  times play inside the editor, not Play in a game window.
+  navigation, physics, audio), rendering and the editor's own UI, and on the GPU, render pass by
+  render pass (shadows, ambient occlusion, opaque, sky, transparent, bloom, tone mapping, game UI
+  and more) plus the editor UI. A graph shows the last 300 frames, CPU as bars and GPU as a line;
+  **CPU** and **GPU** on the toolbar choose what the **Average** tab (each part's total and self
+  time, its slowest frame and calls per frame) and the **Frame** tab show. Clicking a bar pauses
+  recording and shows that frame. GPU times arrive a few frames after their frame. It times play
+  inside the editor, not Play in a game window.
 * **Automation**: everything in the editor is scriptable (`bellows.editor`), from the Console,
   from `--run-script`, or remotely through the local agent server - ask an AI agent to build a
   game and it can create, play-test, screenshot and export it.

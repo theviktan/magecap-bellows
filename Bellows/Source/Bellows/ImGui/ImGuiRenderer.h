@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Bellows/Core/Base.h"
+
 #include <nvrhi/nvrhi.h>
 
 #include <unordered_map>
@@ -8,6 +10,8 @@ struct ImDrawData;
 struct ImTextureData;
 
 namespace Bellows {
+
+	class GpuTimer;
 
 	// Renders Dear ImGui draw data with NVRHI. Supports ImGuiBackendFlags_RendererHasTextures,
 	// so fonts can be rebuilt at any size at runtime. ImTextureID values are nvrhi::ITexture pointers.
@@ -32,6 +36,7 @@ namespace Bellows {
 		};
 
 		nvrhi::CommandListHandle m_CommandList;
+		Scope<GpuTimer> m_GpuTimer; // "Editor UI" in the profiler's GPU times
 		nvrhi::ShaderHandle m_VertexShader;
 		nvrhi::ShaderHandle m_PixelShader;
 		nvrhi::InputLayoutHandle m_InputLayout;

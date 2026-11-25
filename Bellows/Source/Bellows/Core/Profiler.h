@@ -3,13 +3,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace Bellows {
 
-	// One timed scope in a frame. Times are milliseconds from the start of the frame.
+	// One timed scope in a frame. Times are milliseconds from the start of the frame. A GPU sample has
+	// no start (StartMs is 0): the GPU's clock isn't the frame's.
 	struct ProfileSample
 	{
 		const char* Name = "";
@@ -18,12 +20,17 @@ namespace Bellows {
 		double DurationMs = 0.0;
 	};
 
-	// One finished frame: its CPU time and its scopes in the order they began.
+	// One finished frame: its CPU time and its scopes in the order they began, then the GPU time of
+	// the work it recorded, which arrives a few frames later (GpuTimed says it has).
 	struct ProfileFrame
 	{
 		uint64_t Index = 0;
 		double CpuMs = 0.0;
 		std::vector<ProfileSample> Samples;
+
+		bool GpuTimed = false;
+		double GpuMs = 0.0; // the depth-0 GPU samples added up
+		std::vector<ProfileSample> GpuSamples;
 	};
 
 	// One scope name over several frames: inclusive time (with the scopes inside it), self time
@@ -48,6 +55,8 @@ namespace Bellows {
 
 		static void BeginFrame(uint64_t index);
 		static void EndFrame();
+		// The index of the frame being recorded on this thread, if one is.
+		static std::optional<uint64_t> GetRecordingFrame();
 
 		// The name must outlive the profiler: a string literal, or a name from Intern.
 		static void BeginScope(const char* name);
@@ -56,6 +65,10 @@ namespace Bellows {
 		// A stable copy of a name built at run time (a script's file and handler). Each distinct
 		// name is stored once for the life of the program.
 		static const char* Intern(std::string_view name);
+
+		// GPU times of the work recorded during a frame, added to it once the GPU has done it (GpuTimer).
+		// Samples for a frame no longer in the history (or never kept, while paused) are dropped.
+		static void AddGpuSamples(uint64_t frameIndex, const std::vector<ProfileSample>& samples);
 
 		// While paused, frames are still timed but not added to the history.
 		static void SetPaused(bool paused);
@@ -70,6 +83,8 @@ namespace Bellows {
 		// Per-name totals over the newest frames (at most frameCount), in first-seen order.
 		static std::vector<ProfileSummary> Summarize(size_t frameCount);
 		static std::vector<ProfileSummary> Summarize(const std::vector<ProfileFrame>& frames);
+		// The same for GPU samples, over the frames whose GPU times have arrived.
+		static std::vector<ProfileSummary> SummarizeGpu(const std::vector<ProfileFrame>& frames);
 	};
 
 	// Times the enclosing block.

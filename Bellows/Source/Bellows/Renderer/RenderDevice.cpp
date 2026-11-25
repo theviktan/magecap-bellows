@@ -419,6 +419,10 @@ namespace Bellows {
 				m_Vulkan->PhysicalDevice = device;
 				m_Vulkan->GraphicsQueueFamily = graphicsFamily;
 				m_AdapterName = properties.deviceName;
+				// NVRHI's timer queries subtract the low 32 bits of two timestamps, so fewer valid bits than
+				// that would wrap wrongly.
+				m_SupportsTimestamps = properties.limits.timestampPeriod > 0.0f
+					&& queueFamilies[graphicsFamily].timestampValidBits >= 32;
 			}
 		}
 

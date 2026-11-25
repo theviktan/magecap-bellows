@@ -198,8 +198,9 @@ directly inside the frame.
 
 | Function | Description |
 |----------|-------------|
-| `profiler_frames(count=1)` | The newest frames, at most `count`, newest last: `[{"index", "cpu_ms", "scopes": [{"name", "depth", "start_ms", "ms"}]}]`, scopes in the order they began. |
-| `profiler_summary(frames=120)` | Each scope name over the newest `frames` frames, averaged per frame: `[{"name", "depth", "total_ms", "self_ms", "max_ms", "calls"}]`. `total_ms` includes the scopes inside it, `self_ms` leaves them out, and `max_ms` is the slowest single frame. |
+| `profiler_frames(count=1)` | The newest frames, at most `count`, newest last: `[{"index", "cpu_ms", "scopes": [{"name", "depth", "start_ms", "ms"}], "gpu_timed", "gpu_ms", "gpu_scopes": [{"name", "depth", "ms"}]}]`, scopes in the order they began. GPU times arrive a few frames after their frame (`gpu_timed` turns true); `gpu_ms` adds up the depth-0 GPU scopes. |
+| `profiler_summary(frames=120, gpu=False)` | Each scope name over the newest `frames` frames, averaged per frame: `[{"name", "depth", "total_ms", "self_ms", "max_ms", "calls"}]`. `total_ms` includes the scopes inside it, `self_ms` leaves them out, and `max_ms` is the slowest single frame. With `gpu=True`, the GPU scopes, over the frames whose GPU times have arrived. |
+| `gpu_timing_supported()` | Whether the graphics driver can time GPU work; without it no frame gets GPU times. |
 | `set_profiler_paused(paused)`, `profiler_paused()` | While paused, frames still run but aren't added to the history. |
 | `clear_profiler()` | Forgets every recorded frame. |
 
@@ -209,6 +210,11 @@ Scope names include `Events`, the layer names (`EditorLayer`), `Scene Update` wi
 `Physics Step`, `Contact Scripts`) and `Audio`, then `Scene Render`, `Render Passes`, `Editor UI`,
 `Acquire Frame` and `Present`. A scope runs only when its part does: `Animation` is missing while
 the game is paused, and `Physics` can run several times in one frame or not at all.
+
+GPU scope names: `Viewport` (the editor viewport's renderer; `Scene` in a game) with its passes
+`Uploads`, `Shadows`, `Depth Prepass`, `Ambient Occlusion`, `Opaque`, `Sky`, `Transparent`,
+`Bloom`, `Tone Mapping`, `Text`, `Overlays`, `Game UI` and `Selection Outline` inside it, then
+`Editor UI`.
 
 ## Recipe: an agent builds and verifies a game
 

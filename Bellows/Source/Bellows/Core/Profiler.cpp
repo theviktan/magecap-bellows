@@ -40,6 +40,67 @@ namespace Bellows {
 			return state.FrameThread.load(std::memory_order_relaxed) == std::this_thread::get_id();
 		}
 
+		// Per-name totals of one list of samples in each frame (the CPU's or the GPU's).
+		std::vector<ProfileSummary> SummarizeSamples(const std::vector<const std::vector<ProfileSample>*>& frames)
+		{
+			std::vector<ProfileSummary> summaries;
+			if (frames.empty())
+				return summaries;
+
+			std::unordered_map<std::string_view, size_t> indexByName;
+			std::vector<double> frameTotals;
+			for (const std::vector<ProfileSample>* samples : frames)
+			{
+				std::fill(frameTotals.begin(), frameTotals.end(), 0.0);
+				// The scopes enclosing the current sample, to find self time and recursion.
+				std::vector<const ProfileSample*> parents;
+				for (const ProfileSample& sample : *samples)
+				{
+					while (!parents.empty() && parents.back()->Depth >= sample.Depth)
+						parents.pop_back();
+
+					const std::string_view name = sample.Name;
+					auto [it, inserted] = indexByName.try_emplace(name, summaries.size());
+					if (inserted)
+					{
+						ProfileSummary summary;
+						summary.Name = std::string(name);
+						summary.Depth = sample.Depth;
+						summaries.push_back(std::move(summary));
+						frameTotals.push_back(0.0);
+					}
+					ProfileSummary& summary = summaries[it->second];
+					summary.Depth = std::min(summary.Depth, sample.Depth);
+					summary.CallsPerFrame += 1.0;
+					summary.AverageSelfMs += sample.DurationMs;
+					if (!parents.empty())
+						summaries[indexByName[parents.back()->Name]].AverageSelfMs -= sample.DurationMs;
+
+					// A name inside itself (a recursive call) is already counted by the outer one.
+					const bool nested = std::any_of(parents.begin(), parents.end(),
+						[name](const ProfileSample* parent) { return std::string_view(parent->Name) == name; });
+					if (!nested)
+						frameTotals[it->second] += sample.DurationMs;
+
+					parents.push_back(&sample);
+				}
+				for (size_t i = 0; i < summaries.size(); i++)
+				{
+					summaries[i].AverageMs += frameTotals[i];
+					summaries[i].MaxMs = std::max(summaries[i].MaxMs, frameTotals[i]);
+				}
+			}
+
+			const double frameCount = static_cast<double>(frames.size());
+			for (ProfileSummary& summary : summaries)
+			{
+				summary.AverageMs /= frameCount;
+				summary.AverageSelfMs = std::max(0.0, summary.AverageSelfMs / frameCount);
+				summary.CallsPerFrame /= frameCount;
+			}
+			return summaries;
+		}
+
 	}
 
 	void Profiler::BeginFrame(uint64_t index)
@@ -52,6 +113,9 @@ namespace Bellows {
 		state.Current.Index = index;
 		state.Current.CpuMs = 0.0;
 		state.Current.Samples.clear();
+		state.Current.GpuTimed = false;
+		state.Current.GpuMs = 0.0;
+		state.Current.GpuSamples.clear();
 		state.Open.clear();
 	}
 
@@ -82,6 +146,33 @@ namespace Bellows {
 			state.History.pop_front();
 		state.Current = ProfileFrame();
 		state.Current.Samples.reserve(sampleCount);
+	}
+
+	std::optional<uint64_t> Profiler::GetRecordingFrame()
+	{
+		const ProfilerState& state = State();
+		if (!IsRecording(state))
+			return std::nullopt;
+		return state.Current.Index;
+	}
+
+	void Profiler::AddGpuSamples(uint64_t frameIndex, const std::vector<ProfileSample>& samples)
+	{
+		// Newest first: GPU times arrive a few frames after theirs.
+		std::deque<ProfileFrame>& history = State().History;
+		for (auto it = history.rbegin(); it != history.rend(); ++it)
+		{
+			if (it->Index != frameIndex)
+				continue;
+			it->GpuTimed = true;
+			for (const ProfileSample& sample : samples)
+			{
+				it->GpuSamples.push_back(sample);
+				if (sample.Depth == 0)
+					it->GpuMs += sample.DurationMs;
+			}
+			return;
+		}
 	}
 
 	void Profiler::BeginScope(const char* name)
@@ -151,62 +242,22 @@ namespace Bellows {
 
 	std::vector<ProfileSummary> Profiler::Summarize(const std::vector<ProfileFrame>& frames)
 	{
-		std::vector<ProfileSummary> summaries;
-		if (frames.empty())
-			return summaries;
+		std::vector<const std::vector<ProfileSample>*> samples;
+		samples.reserve(frames.size());
+		for (const ProfileFrame& frame : frames)
+			samples.push_back(&frame.Samples);
+		return SummarizeSamples(samples);
+	}
 
-		std::unordered_map<std::string_view, size_t> indexByName;
-		std::vector<double> frameTotals;
+	std::vector<ProfileSummary> Profiler::SummarizeGpu(const std::vector<ProfileFrame>& frames)
+	{
+		std::vector<const std::vector<ProfileSample>*> samples;
 		for (const ProfileFrame& frame : frames)
 		{
-			std::fill(frameTotals.begin(), frameTotals.end(), 0.0);
-			// The scopes enclosing the current sample, to find self time and recursion.
-			std::vector<const ProfileSample*> parents;
-			for (const ProfileSample& sample : frame.Samples)
-			{
-				while (!parents.empty() && parents.back()->Depth >= sample.Depth)
-					parents.pop_back();
-
-				const std::string_view name = sample.Name;
-				auto [it, inserted] = indexByName.try_emplace(name, summaries.size());
-				if (inserted)
-				{
-					ProfileSummary summary;
-					summary.Name = std::string(name);
-					summary.Depth = sample.Depth;
-					summaries.push_back(std::move(summary));
-					frameTotals.push_back(0.0);
-				}
-				ProfileSummary& summary = summaries[it->second];
-				summary.Depth = std::min(summary.Depth, sample.Depth);
-				summary.CallsPerFrame += 1.0;
-				summary.AverageSelfMs += sample.DurationMs;
-				if (!parents.empty())
-					summaries[indexByName[parents.back()->Name]].AverageSelfMs -= sample.DurationMs;
-
-				// A name inside itself (a recursive call) is already counted by the outer one.
-				const bool nested = std::any_of(parents.begin(), parents.end(),
-					[name](const ProfileSample* parent) { return std::string_view(parent->Name) == name; });
-				if (!nested)
-					frameTotals[it->second] += sample.DurationMs;
-
-				parents.push_back(&sample);
-			}
-			for (size_t i = 0; i < summaries.size(); i++)
-			{
-				summaries[i].AverageMs += frameTotals[i];
-				summaries[i].MaxMs = std::max(summaries[i].MaxMs, frameTotals[i]);
-			}
+			if (frame.GpuTimed)
+				samples.push_back(&frame.GpuSamples);
 		}
-
-		const double frameCount = static_cast<double>(frames.size());
-		for (ProfileSummary& summary : summaries)
-		{
-			summary.AverageMs /= frameCount;
-			summary.AverageSelfMs = std::max(0.0, summary.AverageSelfMs / frameCount);
-			summary.CallsPerFrame /= frameCount;
-		}
-		return summaries;
+		return SummarizeSamples(samples);
 	}
 
 }

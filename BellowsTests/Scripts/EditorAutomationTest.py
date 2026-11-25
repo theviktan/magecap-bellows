@@ -188,6 +188,17 @@ check(by_name["Scripts/Mover.py"]["depth"] == by_name["Scripts"]["depth"] + 1, "
 summary = {row["name"]: row for row in editor.profiler_summary(5)}
 check(summary["Scene Update"]["calls"] == 1.0, "Scene Update runs once a frame")
 check(summary["Scene Update"]["total_ms"] >= summary["Scene Update"]["self_ms"] >= 0.0, "self time is part of total time")
+# GPU times arrive a few frames after their frame: the newest frames don't have them yet.
+check(editor.gpu_timing_supported(), "the GPU can be timed here")
+recent = editor.profiler_frames(10)
+timed = [frame for frame in recent if frame["gpu_timed"]]
+check(len(timed) >= 4 and not recent[-1]["gpu_timed"], f"older frames have GPU times, the newest not yet ({len(timed)} of 10)")
+gpu_names = [scope["name"] for scope in timed[-1]["gpu_scopes"]]
+for part in ("Viewport", "Shadows", "Opaque", "Tone Mapping", "Editor UI"):
+    check(part in gpu_names, f"the profiler times '{part}' on the GPU ({gpu_names})")
+check(timed[-1]["gpu_ms"] > 0.0, "a frame's GPU time adds up its renderers")
+gpu_summary = {row["name"]: row for row in editor.profiler_summary(10, gpu=True)}
+check(gpu_summary["Viewport"]["depth"] == 0 and gpu_summary["Shadows"]["depth"] == 1, "passes are inside their renderer")
 editor.set_profiler_paused(True)
 check(editor.profiler_paused(), "set_profiler_paused")
 last = editor.profiler_frames(1)[0]["index"]

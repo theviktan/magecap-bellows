@@ -3,6 +3,7 @@
 
 #include "Bellows/Core/Profiler.h"
 #include "Bellows/Math/Math.h"
+#include "Bellows/Renderer/GpuTimer.h"
 #include "Bellows/Renderer/Renderer.h"
 
 #include <glm/gtc/constants.hpp>
@@ -983,6 +984,14 @@ namespace Bellows {
 		m_Statistics.SpotLights = static_cast<uint32_t>(m_SpotLights.size());
 	}
 
+	void SceneRenderer::SetGpuTimingName(const char* name)
+	{
+		if (name)
+			m_GpuTimer = CreateScope<GpuTimer>(name);
+		else
+			m_GpuTimer.reset();
+	}
+
 	void SceneRenderer::EndScene()
 	{
 		// The CPU side: recording and submitting the passes. GPU time is not part of it.
@@ -1035,30 +1044,45 @@ namespace Bellows {
 
 		nvrhi::ICommandList* commandList = m_CommandList;
 		commandList->open();
+		if (m_GpuTimer)
+			m_GpuTimer->Begin(commandList);
+		// Times one pass on the GPU, when this renderer is timed.
+		const auto timed = [this, commandList](const char* name, const auto& pass)
+		{
+			if (m_GpuTimer)
+				m_GpuTimer->BeginScope(commandList, name);
+			pass();
+			if (m_GpuTimer)
+				m_GpuTimer->EndScope(commandList);
+		};
 
 		// Material constants and binding sets are refreshed up front.
-		for (const auto* draws : { &m_OpaqueDraws, &m_TransparentDraws, &shadowCasters })
+		timed("Uploads", [&]
 		{
-			for (const DrawCommand& draw : *draws)
-				draw.MaterialPtr->Prepare(commandList);
-		}
+			for (const auto* draws : { &m_OpaqueDraws, &m_TransparentDraws, &shadowCasters })
+			{
+				for (const DrawCommand& draw : *draws)
+					draw.MaterialPtr->Prepare(commandList);
+			}
+			UpdateFrameConstants(commandList);
+			UploadJointMatrices(commandList);
+		});
 
-		UpdateFrameConstants(commandList);
-		UploadJointMatrices(commandList);
+		timed("Shadows", [&] { RenderShadows(commandList, shadowCasters); });
+		timed("Depth Prepass", [&] { RenderPrepass(commandList); });
+		timed("Ambient Occlusion", [&] { RenderSSAO(commandList); });
+		timed("Opaque", [&] { RenderOpaque(commandList); });
+		timed("Sky", [&] { RenderSkybox(commandList); });
+		timed("Transparent", [&] { RenderTransparent(commandList); });
+		timed("Bloom", [&] { RenderBloom(commandList); });
+		timed("Tone Mapping", [&] { RenderTonemap(commandList); });
+		timed("Text", [&] { RenderText(commandList); });
+		timed("Overlays", [&] { RenderOverlays(commandList); });
+		timed("Game UI", [&] { RenderUI(commandList); });
+		timed("Selection Outline", [&] { RenderSelectionOutline(commandList); });
 
-		RenderShadows(commandList, shadowCasters);
-		RenderPrepass(commandList);
-		RenderSSAO(commandList);
-		RenderOpaque(commandList);
-		RenderSkybox(commandList);
-		RenderTransparent(commandList);
-		RenderBloom(commandList);
-		RenderTonemap(commandList);
-		RenderText(commandList);
-		RenderOverlays(commandList);
-		RenderUI(commandList);
-		RenderSelectionOutline(commandList);
-
+		if (m_GpuTimer)
+			m_GpuTimer->End(commandList);
 		commandList->close();
 		Renderer::GetDevice()->executeCommandList(commandList);
 	}
