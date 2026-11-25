@@ -66,6 +66,12 @@ can drive end to end.
   Shift+F9) to give it a condition (`health < 10`) or a message to log instead of stopping, and add
   lines to the Debugger's **Watch** list to see them worked out at every stop. Breakpoints last for
   the editor session; saved scripts reload once the stopped script goes on.
+* **Profiler**: **View → Profiler** times every frame on the CPU, part by part: events, the scene
+  update (game UI, animation, tweens, scripts with each Python script on its own line, ForgeScript,
+  navigation, physics, audio), rendering and the editor's own UI. A graph shows the last 300
+  frames; the **Average** tab lists each part's total and self time, its slowest frame and calls
+  per frame, and clicking a bar pauses recording and shows that frame in the **Frame** tab. It
+  times play inside the editor, not Play in a game window.
 * **Automation**: everything in the editor is scriptable (`bellows.editor`), from the Console,
   from `--run-script`, or remotely through the local agent server - ask an AI agent to build a
   game and it can create, play-test, screenshot and export it.

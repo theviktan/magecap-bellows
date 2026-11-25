@@ -3,6 +3,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
@@ -26,6 +27,7 @@ namespace Bellows {
 			py::object Object;
 			std::string ScriptPath;
 			std::string ClassName;
+			const char* ProfileName = "Python script"; // the script path, interned for the profiler
 			bool HasUpdate = false;
 			bool HasFixedUpdate = false;
 			bool HasDestroy = false;
@@ -515,6 +517,7 @@ namespace Bellows {
 				ScriptInstance instance;
 				instance.Object = object;
 				instance.ScriptPath = component.ScriptPath;
+				instance.ProfileName = Profiler::Intern(component.ScriptPath);
 				instance.Order = s_Data->NextInstanceOrder++;
 				UseClass(instance, cls);
 				s_Data->Instances[uuid] = std::move(instance);
@@ -905,12 +908,14 @@ sys.stderr = _BellowsLogWriter(2)
 					continue;
 			}
 			ScriptInstance instance = it->second;
+			ProfileScope scope(instance.ProfileName);
 			Invoke(uuid, instance, "on_update", timestep);
 			if (auto again = s_Data->Instances.find(uuid); again != s_Data->Instances.end())
 				again->second.ErrorCount = instance.ErrorCount;
 		}
 
 		// ForgeScript applies the same Run While Paused rule to its updates and waits.
+		BW_PROFILE_SCOPE("ForgeScript");
 		s_Data->ForgeScript->Update(scene, timestep);
 	}
 

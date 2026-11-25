@@ -186,6 +186,9 @@ namespace Bellows {
   entities freely.
 * The editor serializes the edited scene for undo (one snapshot per committed change) and plays a
   copy (`Scene::Copy`), so play never modifies the edited scene.
+* The CPU profiler (`Core/Profiler.h`, shown in **View → Profiler**) times the main thread's frame.
+  A new part of the frame gets a `BW_PROFILE_SCOPE("Name")`; a name built at run time (a script's
+  file) goes through `Profiler::Intern` once and is kept. Scopes on other threads are ignored.
 * Editor automation runs at a *frame boundary* (`EditorLayer::RunAtFrameBoundary`), which is the
   only place `RunFrames` may be called.
 * Adding a component touches: `Scene/Components.h` (+ `AllComponents`), `SceneSerializer`,

@@ -1,6 +1,7 @@
 #include "bwpch.h"
 #include "Bellows/Renderer/SceneRenderer.h"
 
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Renderer/Renderer.h"
 
@@ -984,6 +985,8 @@ namespace Bellows {
 
 	void SceneRenderer::EndScene()
 	{
+		// The CPU side: recording and submitting the passes. GPU time is not part of it.
+		BW_PROFILE_SCOPE("Render Passes");
 		BW_CORE_ASSERT(m_InScene, "EndScene called without BeginScene");
 		m_InScene = false;
 

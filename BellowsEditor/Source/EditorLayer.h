@@ -32,6 +32,7 @@ namespace Bellows {
 	class ContentBrowserPanel;
 	class ConsolePanel;
 	class SettingsPanel;
+	class ProfilerPanel;
 	class StatisticsPanel;
 	class ScriptEditorPanel;
 	class DebuggerPanel;
@@ -304,6 +305,7 @@ namespace Bellows {
 		Scope<ConsolePanel> m_ConsolePanel;
 		Scope<SettingsPanel> m_SettingsPanel;
 		Scope<StatisticsPanel> m_StatisticsPanel;
+		Scope<ProfilerPanel> m_ProfilerPanel;
 		Scope<ScriptEditorPanel> m_ScriptEditorPanel;
 		Scope<DebuggerPanel> m_DebuggerPanel;
 		Ref<Texture2D> m_Logo;
@@ -319,6 +321,7 @@ namespace Bellows {
 		bool m_ShowAboutDialog = false;
 		bool m_ShowSaveSceneAsDialog = false;
 		bool m_ShowStatistics = false;
+		bool m_ShowProfiler = false;
 		bool m_ShowDemoWindow = false;
 		std::string m_DialogPath;
 		std::string m_DialogMessage;
