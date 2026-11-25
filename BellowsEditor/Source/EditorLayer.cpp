@@ -10,6 +10,7 @@
 #include "Panels/SceneHierarchyPanel.h"
 #include "Panels/ScriptEditorPanel.h"
 #include "Panels/SettingsPanel.h"
+#include "Panels/ProfilerPanel.h"
 #include "Panels/StatisticsPanel.h"
 #include "ProjectManager.h"
 
@@ -109,6 +110,7 @@ namespace Bellows {
 		m_ConsolePanel = CreateScope<ConsolePanel>(*this);
 		m_SettingsPanel = CreateScope<SettingsPanel>(*this);
 		m_StatisticsPanel = CreateScope<StatisticsPanel>(*this);
+		m_ProfilerPanel = CreateScope<ProfilerPanel>();
 		m_ScriptEditorPanel = CreateScope<ScriptEditorPanel>(*this);
 		m_DebuggerPanel = CreateScope<DebuggerPanel>(*this);
 		// Linear: the UI draws texture values as they are, so decoding sRGB here would darken the icons.
@@ -185,6 +187,7 @@ namespace Bellows {
 		m_ConsolePanel.reset();
 		m_SettingsPanel.reset();
 		m_StatisticsPanel.reset();
+		m_ProfilerPanel.reset();
 		m_DebuggerPanel.reset();
 		m_Logo.reset();
 		m_ForgeScriptIcon.reset();
@@ -1602,6 +1605,8 @@ namespace Bellows {
 			m_SettingsPanel->OnImGuiRender(&panels.Settings);
 		if (m_ShowStatistics)
 			m_StatisticsPanel->OnImGuiRender(&m_ShowStatistics);
+		if (m_ShowProfiler)
+			m_ProfilerPanel->OnImGuiRender(&m_ShowProfiler);
 		DrawViewport();
 		m_ScriptEditorPanel->OnImGuiRender();
 		DrawDialogs();
@@ -1781,6 +1786,7 @@ namespace Bellows {
 			}
 			ImGui::MenuItem(ICON_BOX "  Collider Outlines", nullptr, &m_ShowColliders);
 			ImGui::MenuItem(ICON_ACTIVITY "  Statistics", nullptr, &m_ShowStatistics);
+			ImGui::MenuItem(ICON_GAUGE "  Profiler", nullptr, &m_ShowProfiler);
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_LAYOUT_GRID "  Reset Layout"))
 			{

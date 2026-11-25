@@ -7,6 +7,7 @@
 #include "Bellows/Core/Application.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Log.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 #include "Bellows/Scripting/ScriptGlue.h"
 
@@ -424,6 +425,51 @@ namespace Bellows {
 			m.def("error_count", [] { return Log::GetErrorCount(); }, "Errors logged since startup (engine and game)");
 			m.def("script_error_count", [] { return ScriptEngine::GetErrorCount(); }, "Python errors raised by game scripts");
 			m.def("frame", [] { return Application::Get().GetFrameCount(); }, "Frames rendered since the editor started");
+
+			// Profiler ----------------------------------------------------------------------------
+			m.def("profiler_frames", [](size_t count)
+			{
+				py::list result;
+				for (const ProfileFrame& frame : Profiler::GetRecentFrames(count))
+				{
+					py::list scopes;
+					for (const ProfileSample& sample : frame.Samples)
+					{
+						py::dict scope;
+						scope["name"] = sample.Name;
+						scope["depth"] = sample.Depth;
+						scope["start_ms"] = sample.StartMs;
+						scope["ms"] = sample.DurationMs;
+						scopes.append(scope);
+					}
+					py::dict entry;
+					entry["index"] = frame.Index;
+					entry["cpu_ms"] = frame.CpuMs;
+					entry["scopes"] = scopes;
+					result.append(entry);
+				}
+				return result;
+			}, py::arg("count") = 1, "The newest recorded frames (at most 'count', newest last): {index, cpu_ms, scopes: [{name, depth, start_ms, ms}]}");
+			m.def("profiler_summary", [](size_t frames)
+			{
+				py::list result;
+				for (const ProfileSummary& summary : Profiler::Summarize(frames))
+				{
+					py::dict entry;
+					entry["name"] = summary.Name;
+					entry["depth"] = summary.Depth;
+					entry["total_ms"] = summary.AverageMs;
+					entry["self_ms"] = summary.AverageSelfMs;
+					entry["max_ms"] = summary.MaxMs;
+					entry["calls"] = summary.CallsPerFrame;
+					result.append(entry);
+				}
+				return result;
+			}, py::arg("frames") = 120, "Per-scope averages over the newest frames: [{name, depth, total_ms, self_ms, max_ms, calls}]");
+			m.def("set_profiler_paused", [](bool paused) { Profiler::SetPaused(paused); }, py::arg("paused"),
+				"While paused, frames are not added to the profiler's history");
+			m.def("profiler_paused", [] { return Profiler::IsPaused(); });
+			m.def("clear_profiler", [] { Profiler::Clear(); }, "Forgets every recorded frame");
 			m.def("quit", [](int exitCode) { Editor().RequestExit(exitCode); }, py::arg("exit_code") = 0, "Closes the editor");
 		}
 

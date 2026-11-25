@@ -169,6 +169,35 @@ check(abs(bellows.find_entity("Player").transform.position.x - 1.0) < 1e-5, "sto
 check(len(bellows.get_entities()) == edit_count, "entities spawned in play mode are discarded")
 check(editor.script_error_count() == 0, "no script errors")
 
+# Profiler: every frame is timed, part by part --------------------------------------------
+editor.clear_profiler()
+check(editor.profiler_frames(5) == [], "clear_profiler forgets the frames")
+editor.play()
+editor.run_frames(10)
+frames = editor.profiler_frames(5)
+check(len(frames) == 5, f"profiler_frames returns the newest frames ({len(frames)})")
+check(all(b["index"] == a["index"] + 1 for a, b in zip(frames, frames[1:])), "profiler frames are consecutive, newest last")
+newest = frames[-1]
+names = [scope["name"] for scope in newest["scopes"]]
+for part in ("Events", "EditorLayer", "Scene Update", "Scripts", "Scripts/Mover.py", "Scene Render", "Render Passes", "Editor UI"):
+    check(part in names, f"the profiler times '{part}' ({names})")
+check(all(0.0 <= scope["ms"] and scope["start_ms"] + scope["ms"] <= newest["cpu_ms"] + 1e-6 for scope in newest["scopes"]),
+      "every scope lies inside its frame")
+by_name = {scope["name"]: scope for scope in newest["scopes"]}
+check(by_name["Scripts/Mover.py"]["depth"] == by_name["Scripts"]["depth"] + 1, "a script's time is inside Scripts")
+summary = {row["name"]: row for row in editor.profiler_summary(5)}
+check(summary["Scene Update"]["calls"] == 1.0, "Scene Update runs once a frame")
+check(summary["Scene Update"]["total_ms"] >= summary["Scene Update"]["self_ms"] >= 0.0, "self time is part of total time")
+editor.set_profiler_paused(True)
+check(editor.profiler_paused(), "set_profiler_paused")
+last = editor.profiler_frames(1)[0]["index"]
+editor.run_frames(3)
+check(editor.profiler_frames(1)[0]["index"] == last, "a paused profiler keeps the frames it has")
+editor.set_profiler_paused(False)
+editor.run_frames(2)
+check(editor.profiler_frames(1)[0]["index"] > last, "recording resumes")
+editor.stop()
+
 # ForgeScript debugger: a breakpoint pauses the game, then step, look and go on ----------
 (scripts / "Counter.forge").write_text(
     "set ticks to 0\n"

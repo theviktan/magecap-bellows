@@ -4,6 +4,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/Input.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/ImGui/ImGuiLayer.h"
 #include "Bellows/Renderer/RenderDevice.h"
 #include "Bellows/Renderer/Renderer.h"
@@ -182,18 +183,32 @@ namespace Bellows {
 		m_LastFrameTime = timestep;
 		m_Time += timestep;
 
+		Profiler::BeginFrame(m_FrameCount);
 		Input::BeginFrame();
-		if (m_Window)
-			m_Window->PollEvents();
-		ExecuteMainThreadQueue();
+		{
+			BW_PROFILE_SCOPE("Events");
+			if (m_Window)
+				m_Window->PollEvents();
+			ExecuteMainThreadQueue();
+		}
 
-		if (m_RenderDevice->BeginFrame())
+		bool rendering = false;
+		{
+			// Waits for a swapchain image, so vsync and a busy GPU show here.
+			BW_PROFILE_SCOPE("Acquire Frame");
+			rendering = m_RenderDevice->BeginFrame();
+		}
+		if (rendering)
 		{
 			for (Layer* layer : m_LayerStack)
+			{
+				ProfileScope scope(Profiler::Intern(layer->GetName()));
 				layer->OnUpdate(Timestep(timestep));
+			}
 
 			if (m_ImGuiLayer)
 			{
+				BW_PROFILE_SCOPE("Editor UI");
 				m_ImGuiLayer->Begin();
 				for (Layer* layer : m_LayerStack)
 					layer->OnImGuiRender();
@@ -209,6 +224,7 @@ namespace Bellows {
 					capture(image);
 			}
 
+			BW_PROFILE_SCOPE("Present");
 			m_RenderDevice->Present();
 		}
 		else
@@ -217,6 +233,7 @@ namespace Bellows {
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		}
 
+		Profiler::EndFrame();
 		m_FrameCount++;
 		if (m_Specification.MaxFrames > 0 && m_FrameCount >= m_Specification.MaxFrames)
 			m_Running = false;

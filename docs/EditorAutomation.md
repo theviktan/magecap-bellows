@@ -190,6 +190,26 @@ editor.set_breakpoint("Scripts/Player.forge", 20, log_message="hit for {amount}"
 | `export_game(output_directory)` | Builds a standalone game; returns `{success, executable, messages, bytes}`. |
 | `frame()`, `quit(exit_code=0)` | Frame counter; close the editor. |
 
+### Profiler
+The CPU profiler behind **View → Profiler**. It keeps the last 300 frames the editor ran (play in
+the viewport included; a game window is a separate program and isn't timed). Times are
+milliseconds; a scope's `start_ms` counts from the start of its frame, and `depth` is 0 for a scope
+directly inside the frame.
+
+| Function | Description |
+|----------|-------------|
+| `profiler_frames(count=1)` | The newest frames, at most `count`, newest last: `[{"index", "cpu_ms", "scopes": [{"name", "depth", "start_ms", "ms"}]}]`, scopes in the order they began. |
+| `profiler_summary(frames=120)` | Each scope name over the newest `frames` frames, averaged per frame: `[{"name", "depth", "total_ms", "self_ms", "max_ms", "calls"}]`. `total_ms` includes the scopes inside it, `self_ms` leaves them out, and `max_ms` is the slowest single frame. |
+| `set_profiler_paused(paused)`, `profiler_paused()` | While paused, frames still run but aren't added to the history. |
+| `clear_profiler()` | Forgets every recorded frame. |
+
+Scope names include `Events`, the layer names (`EditorLayer`), `Scene Update` with `Game UI`,
+`Animation`, `Tweens`, `Scripts` (and each Python script's path inside it, such as
+`Scripts/Mover.py`, then `ForgeScript`), `Navigation`, `Physics` (`Fixed Update Scripts`,
+`Physics Step`, `Contact Scripts`) and `Audio`, then `Scene Render`, `Render Passes`, `Editor UI`,
+`Acquire Frame` and `Present`. A scope runs only when its part does: `Animation` is missing while
+the game is paused, and `Physics` can run several times in one frame or not at all.
+
 ## Recipe: an agent builds and verifies a game
 
 ```python

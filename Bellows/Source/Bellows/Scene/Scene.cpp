@@ -3,6 +3,7 @@
 
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Navigation/SceneNavigation.h"
@@ -556,6 +557,7 @@ namespace Bellows {
 		if (!m_IsRunning)
 			return;
 
+		BW_PROFILE_SCOPE("Scene Update");
 		UpdateRuntimeCaches();
 
 		if (m_IsPaused)
@@ -570,37 +572,48 @@ namespace Bellows {
 		const float deltaTime = timestep.GetSeconds();
 
 		// The UI goes first, so scripts see this frame's UI events and only the input it left the game.
-		UpdateUIInput();
+		{
+			BW_PROFILE_SCOPE("Game UI");
+			UpdateUIInput();
+		}
 
 		// A camera shake and animations run in game time, so a paused game holds them.
 		if (!m_GamePaused)
 		{
+			BW_PROFILE_SCOPE("Animation");
 			m_CameraShake.Update(deltaTime);
 			UpdateAnimators(deltaTime);
 		}
 
 		// Tweens next, so scripts see this frame's values; while the game is paused only those marked
 		// to run while paused move.
-		for (const FinishedTween& finished : m_Tweens->Update(*this, deltaTime, m_GamePaused))
 		{
-			Scripting::ScriptEntity entity;
-			entity.SceneID = m_SceneID;
-			entity.ID = finished.Entity;
-			Scripting::EmitScriptEvent("tween finished", { entity, finished.Property, static_cast<double>(finished.ID) });
+			BW_PROFILE_SCOPE("Tweens");
+			for (const FinishedTween& finished : m_Tweens->Update(*this, deltaTime, m_GamePaused))
+			{
+				Scripting::ScriptEntity entity;
+				entity.SceneID = m_SceneID;
+				entity.ID = finished.Entity;
+				Scripting::EmitScriptEvent("tween finished", { entity, finished.Property, static_cast<double>(finished.ID) });
+			}
 		}
 
-		if (ScriptEngine::IsInitialized())
 		{
-			ScriptEngine::InstantiatePendingScripts(*this);
-			ScriptEngine::OnUpdate(*this, deltaTime);
+			BW_PROFILE_SCOPE("Scripts");
+			if (ScriptEngine::IsInitialized())
+			{
+				ScriptEngine::InstantiatePendingScripts(*this);
+				ScriptEngine::OnUpdate(*this, deltaTime);
+			}
+			// Events queued while scripts ran ('field changed'), now that none is in the middle of a line.
+			Scripting::FlushQueuedScriptEvents();
 		}
-		// Events queued while scripts ran ('field changed'), now that none is in the middle of a line.
-		Scripting::FlushQueuedScriptEvents();
 
 		// Agents walk after scripts, so a destination set this frame is used, and before physics, so
 		// a kinematic body goes where its agent went.
 		if (!m_GamePaused && m_NavAgents)
 		{
+			BW_PROFILE_SCOPE("Navigation");
 			for (const NavAgentArrival& arrival : m_NavAgents->Update(*this, deltaTime))
 			{
 				Scripting::ScriptEntity entity;
@@ -617,13 +630,21 @@ namespace Bellows {
 			m_PhysicsAccumulator = std::min(m_PhysicsAccumulator + deltaTime, fixedTimestep * 5.0f);
 		while (!m_GamePaused && m_PhysicsAccumulator >= fixedTimestep)
 		{
+			BW_PROFILE_SCOPE("Physics");
 			m_PhysicsWorld->SetGravity(m_Settings.Gravity);
 			m_PhysicsWorld->SyncBodies();
 			if (ScriptEngine::IsInitialized())
+			{
+				BW_PROFILE_SCOPE("Fixed Update Scripts");
 				ScriptEngine::OnFixedUpdate(*this, fixedTimestep);
-			m_PhysicsWorld->Step(fixedTimestep);
+			}
+			{
+				BW_PROFILE_SCOPE("Physics Step");
+				m_PhysicsWorld->Step(fixedTimestep);
+			}
 			if (ScriptEngine::IsInitialized())
 			{
+				BW_PROFILE_SCOPE("Contact Scripts");
 				for (const ContactEvent& event : m_PhysicsWorld->GetContactEvents())
 					ScriptEngine::OnContactEvent(*this, event);
 			}
@@ -632,7 +653,10 @@ namespace Bellows {
 		}
 
 		if (m_Audio)
+		{
+			BW_PROFILE_SCOPE("Audio");
 			m_Audio->OnUpdate();
+		}
 
 		Scripting::FlushQueuedScriptEvents();
 		FlushPendingDestroys();
@@ -907,6 +931,7 @@ namespace Bellows {
 
 	void Scene::OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras)
 	{
+		BW_PROFILE_SCOPE("Scene Render");
 		UpdateRuntimeCaches();
 
 		// Scene-level render settings (editor overlay switches stay with the renderer).
