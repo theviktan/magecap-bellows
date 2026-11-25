@@ -23,6 +23,7 @@ namespace Bellows {
 	void RuntimeLayer::OnAttach()
 	{
 		m_Renderer = CreateScope<SceneRenderer>();
+		m_Renderer->SetGpuTimingName("Scene");
 		m_Blitter = CreateScope<Blitter>();
 		m_CommandList = Renderer::GetDevice()->createCommandList();
 		m_Project->ApplyAudioSettings();

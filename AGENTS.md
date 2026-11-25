@@ -189,6 +189,10 @@ namespace Bellows {
 * The CPU profiler (`Core/Profiler.h`, shown in **View → Profiler**) times the main thread's frame.
   A new part of the frame gets a `BW_PROFILE_SCOPE("Name")`; a name built at run time (a script's
   file) goes through `Profiler::Intern` once and is kept. Scopes on other threads are ignored.
+  GPU time comes from `Renderer/GpuTimer` (NVRHI timer queries): a renderer given a name
+  (`SceneRenderer::SetGpuTimingName`) times its passes, and each recording's times are read when
+  its slot comes round again and go to the frame that recorded it. A new render pass in
+  `SceneRenderer::EndScene` goes inside a `timed("Name", ...)` call.
 * Editor automation runs at a *frame boundary* (`EditorLayer::RunAtFrameBoundary`), which is the
   only place `RunFrames` may be called.
 * Adding a component touches: `Scene/Components.h` (+ `AllComponents`), `SceneSerializer`,

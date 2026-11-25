@@ -1,6 +1,7 @@
 #include "bwpch.h"
 #include "Bellows/ImGui/ImGuiRenderer.h"
 
+#include "Bellows/Renderer/GpuTimer.h"
 #include "Bellows/Renderer/Renderer.h"
 
 #include <imgui.h>
@@ -32,6 +33,7 @@ namespace Bellows {
 	{
 		nvrhi::IDevice* device = Renderer::GetDevice();
 		m_CommandList = device->createCommandList();
+		m_GpuTimer = CreateScope<GpuTimer>("Editor UI");
 		m_VertexShader = Renderer::GetShader("ImGui.vert");
 		m_PixelShader = Renderer::GetShader("ImGui.frag");
 
@@ -82,6 +84,7 @@ namespace Bellows {
 		}
 		m_BindingSets.clear();
 		m_Pipeline = nullptr;
+		m_GpuTimer.reset();
 	}
 
 	void ImGuiRenderer::CreatePipeline(const nvrhi::FramebufferInfo& framebufferInfo)
@@ -174,6 +177,8 @@ namespace Bellows {
 		m_FrameCounter++;
 		nvrhi::ICommandList* commandList = m_CommandList;
 		commandList->open();
+		if (m_GpuTimer)
+			m_GpuTimer->Begin(commandList);
 
 		if (drawData->Textures)
 		{
@@ -284,6 +289,8 @@ namespace Bellows {
 			}
 		}
 
+		if (m_GpuTimer)
+			m_GpuTimer->End(commandList);
 		commandList->close();
 		Renderer::GetDevice()->executeCommandList(commandList);
 

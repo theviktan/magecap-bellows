@@ -263,3 +263,61 @@ TEST_CASE("Summaries average totals, self time and calls per frame")
 	CHECK(render->AverageMs == doctest::Approx(2.0));
 	CHECK(render->AverageSelfMs == doctest::Approx(2.0));
 }
+
+TEST_CASE("GPU samples join the frame that recorded them")
+{
+	ProfilerReset reset;
+	CHECK_FALSE(Profiler::GetRecordingFrame().has_value());
+	for (uint64_t i = 10; i < 13; i++)
+	{
+		Profiler::BeginFrame(i);
+		CHECK(Profiler::GetRecordingFrame() == i);
+		std::thread worker([] { CHECK_FALSE(Profiler::GetRecordingFrame().has_value()); });
+		worker.join();
+		Profiler::EndFrame();
+	}
+	CHECK_FALSE(Profiler::GetRecordingFrame().has_value());
+
+	auto sample = [](const char* name, uint32_t depth, double duration)
+	{
+		ProfileSample result;
+		result.Name = name;
+		result.Depth = depth;
+		result.DurationMs = duration;
+		return result;
+	};
+	// Two renderers report for frame 11, a few frames late; frame 99 isn't in the history.
+	Profiler::AddGpuSamples(11, { sample("Viewport", 0, 4.0), sample("Shadows", 1, 1.5), sample("Opaque", 1, 2.0) });
+	Profiler::AddGpuSamples(11, { sample("Editor UI", 0, 1.0) });
+	Profiler::AddGpuSamples(99, { sample("Viewport", 0, 9.0) });
+
+	const auto& history = Profiler::GetHistory();
+	REQUIRE(history.size() == 3);
+	CHECK_FALSE(history[0].GpuTimed);
+	CHECK(history[1].GpuTimed);
+	CHECK(history[1].GpuMs == doctest::Approx(5.0)); // the depth-0 samples: 4 + 1
+	CHECK(history[1].GpuSamples.size() == 4);
+	CHECK_FALSE(history[2].GpuTimed);
+
+	// Only frames with GPU times count in the GPU summary.
+	const std::vector<ProfileSummary> gpu = Profiler::SummarizeGpu(Profiler::GetRecentFrames(3));
+	REQUIRE(gpu.size() == 4);
+	CHECK(gpu[0].Name == "Viewport");
+	CHECK(gpu[0].AverageMs == doctest::Approx(4.0));
+	CHECK(gpu[0].AverageSelfMs == doctest::Approx(0.5));
+	CHECK(gpu[1].Name == "Shadows");
+	CHECK(gpu[1].Depth == 1);
+	CHECK(gpu[3].Name == "Editor UI");
+	CHECK(gpu[3].AverageMs == doctest::Approx(1.0));
+	CHECK(Profiler::SummarizeGpu({ history[0] }).empty());
+
+	// A frame begun again starts without GPU times.
+	Profiler::SetPaused(true);
+	Profiler::BeginFrame(11);
+	Profiler::EndFrame();
+	Profiler::SetPaused(false);
+	Profiler::BeginFrame(13);
+	Profiler::EndFrame();
+	CHECK_FALSE(Profiler::GetHistory().back().GpuTimed);
+	CHECK(Profiler::GetHistory().back().GpuSamples.empty());
+}

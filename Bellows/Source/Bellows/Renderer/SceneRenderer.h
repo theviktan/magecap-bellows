@@ -18,6 +18,8 @@
 
 namespace Bellows {
 
+	class GpuTimer;
+
 	enum class Tonemapper : uint8_t
 	{
 		ACES = 0,
@@ -163,6 +165,10 @@ namespace Bellows {
 		void SetViewportSize(uint32_t width, uint32_t height);
 		uint32_t GetViewportWidth() const { return m_ViewportWidth; }
 		uint32_t GetViewportHeight() const { return m_ViewportHeight; }
+
+		// Times this renderer's passes on the GPU for the profiler, under 'name' (a string literal), or
+		// stops timing them with nullptr. Off by default, so previews and tests don't take queries.
+		void SetGpuTimingName(const char* name);
 
 		SceneRendererSettings& GetSettings() { return m_Settings; }
 		const SceneRendererSettings& GetSettings() const { return m_Settings; }
@@ -364,6 +370,7 @@ namespace Bellows {
 		ShaderInterop::FrameData m_FrameData {};
 
 		nvrhi::CommandListHandle m_CommandList;
+		Scope<GpuTimer> m_GpuTimer;
 		nvrhi::InputLayoutHandle m_MeshInputLayout;
 		nvrhi::InputLayoutHandle m_SkinnedMeshInputLayout;	// Vertex and SkinVertex streams
 		nvrhi::InputLayoutHandle m_LineInputLayout;

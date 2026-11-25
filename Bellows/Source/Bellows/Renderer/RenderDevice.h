@@ -61,6 +61,8 @@ namespace Bellows {
 
 		void WaitIdle();
 		const std::string& GetAdapterName() const { return m_AdapterName; }
+		// Whether the graphics queue can write GPU timestamps, which GPU timing (GpuTimer) needs.
+		bool SupportsTimestamps() const { return m_SupportsTimestamps; }
 		uint64_t GetFrameIndex() const { return m_FrameIndex; }
 
 		// Number of validation/runtime errors reported by Vulkan or NVRHI since startup.
@@ -99,6 +101,7 @@ namespace Bellows {
 		bool m_SwapchainDirty = false;
 
 		std::string m_AdapterName;
+		bool m_SupportsTimestamps = false;
 	};
 
 }

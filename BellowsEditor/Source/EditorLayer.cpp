@@ -102,6 +102,7 @@ namespace Bellows {
 		}
 
 		m_ViewportRenderer = CreateScope<SceneRenderer>();
+		m_ViewportRenderer->SetGpuTimingName("Viewport");
 		m_Camera.SetFlySpeed(m_Settings.CameraSpeed);
 
 		m_HierarchyPanel = CreateScope<SceneHierarchyPanel>(*this);

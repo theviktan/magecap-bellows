@@ -8,6 +8,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Core/Log.h"
 #include "Bellows/Core/Profiler.h"
+#include "Bellows/Renderer/GpuTimer.h"
 #include "Bellows/Scripting/ScriptEngine.h"
 #include "Bellows/Scripting/ScriptGlue.h"
 
@@ -442,18 +443,33 @@ namespace Bellows {
 						scope["ms"] = sample.DurationMs;
 						scopes.append(scope);
 					}
+					py::list gpuScopes;
+					for (const ProfileSample& sample : frame.GpuSamples)
+					{
+						py::dict scope;
+						scope["name"] = sample.Name;
+						scope["depth"] = sample.Depth;
+						scope["ms"] = sample.DurationMs;
+						gpuScopes.append(scope);
+					}
 					py::dict entry;
 					entry["index"] = frame.Index;
 					entry["cpu_ms"] = frame.CpuMs;
 					entry["scopes"] = scopes;
+					entry["gpu_timed"] = frame.GpuTimed;
+					entry["gpu_ms"] = frame.GpuMs;
+					entry["gpu_scopes"] = gpuScopes;
 					result.append(entry);
 				}
 				return result;
-			}, py::arg("count") = 1, "The newest recorded frames (at most 'count', newest last): {index, cpu_ms, scopes: [{name, depth, start_ms, ms}]}");
-			m.def("profiler_summary", [](size_t frames)
+			}, py::arg("count") = 1,
+				"The newest recorded frames (at most 'count', newest last): {index, cpu_ms, scopes: [{name, depth, start_ms, ms}], "
+				"gpu_timed, gpu_ms, gpu_scopes: [{name, depth, ms}]}");
+			m.def("profiler_summary", [](size_t frames, bool gpu)
 			{
 				py::list result;
-				for (const ProfileSummary& summary : Profiler::Summarize(frames))
+				const std::vector<ProfileFrame> recent = Profiler::GetRecentFrames(frames);
+				for (const ProfileSummary& summary : gpu ? Profiler::SummarizeGpu(recent) : Profiler::Summarize(recent))
 				{
 					py::dict entry;
 					entry["name"] = summary.Name;
@@ -465,7 +481,9 @@ namespace Bellows {
 					result.append(entry);
 				}
 				return result;
-			}, py::arg("frames") = 120, "Per-scope averages over the newest frames: [{name, depth, total_ms, self_ms, max_ms, calls}]");
+			}, py::arg("frames") = 120, py::arg("gpu") = false,
+				"Per-scope averages over the newest frames, of the CPU's scopes or (gpu=True) the GPU's: [{name, depth, total_ms, self_ms, max_ms, calls}]");
+			m.def("gpu_timing_supported", [] { return GpuTimer::IsSupported(); }, "Whether the graphics driver can time GPU work");
 			m.def("set_profiler_paused", [](bool paused) { Profiler::SetPaused(paused); }, py::arg("paused"),
 				"While paused, frames are not added to the profiler's history");
 			m.def("profiler_paused", [] { return Profiler::IsPaused(); });
