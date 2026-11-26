@@ -199,7 +199,14 @@ tested version.
 Contributors (human or AI) should read [AGENTS.md](AGENTS.md) first. Plans for 2D, ForgeScript and
 MageCap Forge integration are in [docs/Roadmap.md](docs/Roadmap.md).
 
-## License notices
+## License
 
-MageCap Bellows uses open-source libraries, fonts and CC0 assets; see
-[ThirdPartyNotices.md](ThirdPartyNotices.md). Exported games include that file.
+MageCap Bellows and ForgeScript are free and open source under the
+[Apache License 2.0](LICENSE). Copyright 2026 MageCap Games; see [NOTICE](NOTICE).
+
+The games you make with Bellows are yours: you can sell them under any license you choose, with
+no royalties. An exported game includes the engine's license and notice files
+(`Bellows-LICENSE.txt` and `Bellows-NOTICE.txt`) because it contains the Bellows runtime.
+
+Bellows also uses open-source libraries, fonts and CC0 assets under their own licenses; see
+[ThirdPartyNotices.md](ThirdPartyNotices.md). Exported games include that file too.

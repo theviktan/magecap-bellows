@@ -33,7 +33,7 @@ EXCLUDED_PYTHON = {
 }
 EXCLUDED_PROJECT = {".bellows", "__pycache__", "Build"}
 EXECUTABLES = ("BellowsEditor", "BellowsRuntime", "forgescript")
-ENGINE_DATA = ("Shaders", "Resources", "Python", "ThirdPartyNotices.md", "forgescript-api.json")
+ENGINE_DATA = ("Shaders", "Resources", "Python", "LICENSE", "NOTICE", "ThirdPartyNotices.md", "forgescript-api.json")
 
 
 def ignore_names(excluded, patterns=()):

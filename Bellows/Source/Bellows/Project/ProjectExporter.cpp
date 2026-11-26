@@ -8,6 +8,8 @@
 
 #include <pybind11/embed.h>
 
+#include <utility>
+
 namespace py = pybind11;
 
 namespace Bellows {
@@ -272,13 +274,26 @@ namespace Bellows {
 		if (!CopyFiltered(engineDirectory / builtinFont, output / builtinFont, noExclusions, result.TotalBytes))
 			return fail("Could not copy the built-in font");
 
-		// Open-source license notices travel with every build of the game.
-		if (const std::filesystem::path notices = engineDirectory / "ThirdPartyNotices.md"; FileSystem::Exists(notices))
+		// The game contains the Bellows runtime, so the engine's Apache-2.0 license and notice and the
+		// third-party notices travel with every build. The engine files get a "Bellows-" name so
+		// players don't mistake them for the game's own license.
+		const std::pair<const char*, const char*> licenseFiles[] = {
+			{ "ThirdPartyNotices.md", "ThirdPartyNotices.md" },
+			{ "LICENSE", "Bellows-LICENSE.txt" },
+			{ "NOTICE", "Bellows-NOTICE.txt" }
+		};
+		for (const auto& [source, target] : licenseFiles)
 		{
+			const std::filesystem::path sourcePath = engineDirectory / source;
+			if (!FileSystem::Exists(sourcePath))
+			{
+				note(std::string("Warning: ") + source + " is missing from the engine folder");
+				continue;
+			}
 			std::error_code copyError;
-			std::filesystem::copy_file(notices, output / "ThirdPartyNotices.md", std::filesystem::copy_options::overwrite_existing, copyError);
+			std::filesystem::copy_file(sourcePath, output / target, std::filesystem::copy_options::overwrite_existing, copyError);
 			if (copyError)
-				note("Warning: could not copy ThirdPartyNotices.md (" + copyError.message() + ")");
+				note(std::string("Warning: could not copy ") + source + " (" + copyError.message() + ")");
 		}
 
 		auto assetExclusions = [](const std::filesystem::path& relative)
