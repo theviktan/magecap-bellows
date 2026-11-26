@@ -214,7 +214,7 @@ namespace Bellows {
 			const bool clipped = static_cast<float>(frame.CpuMs) > top;
 			const bool isSelected = m_SelectedFrame && frame.Index == selected;
 			drawList->AddRectFilled(ImVec2(x0, end.y - std::max(heightOf(frame.CpuMs), 1.0f)), ImVec2(x0 + std::max(slot - 1.0f, 1.0f), end.y),
-				isSelected ? selectedColor : clipped ? Theme::Error : Theme::Accent);
+				isSelected ? selectedColor : clipped ? Theme::Error : Theme::Neutral);
 			if (frame.GpuTimed)
 				gpuLine.emplace_back(x0 + slot * 0.5f, end.y - heightOf(frame.GpuMs));
 			if (hovered && ImGui::GetIO().MousePos.x >= x0 && ImGui::GetIO().MousePos.x < x0 + slot)

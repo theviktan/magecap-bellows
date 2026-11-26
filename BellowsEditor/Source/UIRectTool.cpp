@@ -60,7 +60,7 @@ namespace Bellows {
 			const glm::vec2 b = point + glm::vec2(direction.x * size * 1.6f, direction.y * size * 0.6f);
 			const glm::vec2 c = point + glm::vec2(direction.x * size * 0.6f, direction.y * size * 1.6f);
 			drawList->AddTriangleFilled(ToImVec(a), ToImVec(b), ToImVec(c), color);
-			drawList->AddTriangle(ToImVec(a), ToImVec(b), ToImVec(c), IM_COL32(13, 15, 19, 255));
+			drawList->AddTriangle(ToImVec(a), ToImVec(b), ToImVec(c), Theme::Background);
 		}
 
 	}

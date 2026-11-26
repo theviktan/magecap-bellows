@@ -35,7 +35,7 @@ namespace Bellows {
 		average /= static_cast<float>(m_FrameTimes.size());
 
 		const std::string overlay = fmt::format("{:.2f} ms  ({:.0f} FPS)", average, average > 0.0f ? 1000.0f / average : 0.0f);
-		ImGui::PushStyleColor(ImGuiCol_PlotLines, Theme::ToVec4(Theme::Accent));
+		ImGui::PushStyleColor(ImGuiCol_PlotLines, Theme::ToVec4(Theme::Neutral));
 		ImGui::PlotLines("##FrameTimes", m_FrameTimes.data(), static_cast<int>(m_FrameTimes.size()), static_cast<int>(m_FrameTimeOffset),
 			overlay.c_str(), 0.0f, std::max(33.4f, worst * 1.1f), ImVec2(-FLT_MIN, 70.0f * Theme::GetScale()));
 		ImGui::PopStyleColor();

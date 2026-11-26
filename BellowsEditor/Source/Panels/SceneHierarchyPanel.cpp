@@ -309,7 +309,7 @@ namespace Bellows {
 			ImGui::SameLine(rowRight - badgeWidth);
 			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::FieldHovered));
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::NeutralBright));
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 3.0f));	// Matches the tree row
 			if (ImGui::Button(ICON_FILE_CODE "##script", ImVec2(badgeWidth, 0.0f)))
 				m_Editor.GetScriptEditor().OpenScript(script->ScriptPath);

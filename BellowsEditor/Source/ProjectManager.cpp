@@ -26,14 +26,11 @@ namespace Bellows {
 		bool PrimaryButton(const char* label, const ImVec2& size, bool enabled = true)
 		{
 			ImGui::BeginDisabled(!enabled);
-			ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::Accent));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.04f, 0.03f, 1.0f));
+			UI::PushPrimaryButtonColors();
 			ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
 			const bool pressed = ImGui::Button(label, size);
 			ImGui::PopFont();
-			ImGui::PopStyleColor(4);
+			UI::PopPrimaryButtonColors();
 			ImGui::EndDisabled();
 			return pressed;
 		}
@@ -380,10 +377,10 @@ namespace Bellows {
 			// Project tile, name and folder
 			const ImVec2 tileMin(rowPosition.x + 44.0f * scale, rowPosition.y + 12.0f * scale);
 			const ImVec2 tileMax(tileMin.x + 36.0f * scale, tileMin.y + 36.0f * scale);
-			drawList->AddRectFilled(tileMin, tileMax, item.Missing ? Theme::Field : Theme::AccentSubtle, 7.0f * scale);
+			drawList->AddRectFilled(tileMin, tileMax, item.Missing ? Theme::Field : Theme::PanelRaised, 7.0f * scale);
 			const ImVec2 iconSize = ImGui::CalcTextSize(ICON_PACKAGE);
 			drawList->AddText(ImVec2((tileMin.x + tileMax.x - iconSize.x) * 0.5f, (tileMin.y + tileMax.y - iconSize.y) * 0.5f),
-				item.Missing ? Theme::TextDisabled : Theme::Accent, ICON_PACKAGE);
+				item.Missing ? Theme::TextDisabled : Theme::NeutralBright, ICON_PACKAGE);
 
 			const float textX = tileMax.x + 14.0f * scale;
 			drawList->AddText(Theme::GetFonts().SemiBold, Theme::BaseFontSize * scale * 1.05f, ImVec2(textX, rowPosition.y + 11.0f * scale), nameColor, item.Name.c_str());
