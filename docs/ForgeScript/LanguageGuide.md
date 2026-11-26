@@ -1652,6 +1652,15 @@ instructions, with their share and how many times each was called. Two more opti
 - `--json` gives the whole profile as JSON for tools, with every line of every function, and a
   `"format": 1` field that goes up if a field ever changes meaning. Add `--output profile.json` to
   keep it apart from what the script prints.
+
+**In MageCap Bellows** (1.8.0), the editor's **View → Profiler** shows where your scripts spend
+each frame. Under **Scripts → ForgeScript** there's a row for each script, such as
+`Scripts/Guard.forge`, and inside it a row for each handler or function that ran:
+`Scripts/Guard.forge: when update`, `Scripts/Guard.forge: patrol` (a task you `start`ed,
+carrying on after its `wait`), and `Scripts/Guard.forge: top level` for the lines at the top of the
+script. An event from somewhere else, such as a collision, shows under that part of the frame
+(**Physics**) instead. Run your game in the viewport, open the profiler, and the **Average** tab
+sorts out which script is slow.
 - `test` and `expect` aren't reserved: `set test to 3` and a function called `expect` still work.
   Because of that, an `expect` can't start with `(` or `[` (`expect (x)` is a call to `expect`):
   write `expect 2 is in [1, 2]`, not `expect [1, 2] contains 2`.

@@ -116,6 +116,10 @@ namespace Bellows::Scripting {
 		void EmitTimed(Scene& scene, const std::string& event, float timestep,
 			const std::unordered_set<const ForgeScript::Module*>* only = nullptr);
 		bool RunsWhilePaused(Scene& scene, UUID entity) const;
+		// Unloads a module, and forgets the profiler names of its functions, which go with it.
+		void UnloadModule(ForgeScript::Module* module);
+		// Times each run of a ForgeScript task in the profiler (VM::SetTaskRunHandler).
+		void ProfileTaskRun(bool begin, const ForgeScript::Module* owner, const ForgeScript::Function* entry);
 
 	private:
 		ErrorReporter m_Reporter;
@@ -131,6 +135,17 @@ namespace Bellows::Scripting {
 		ForgeScript::DebugHandler m_DebugHandler;
 		ScriptEventListenerID m_EventListener = 0;
 		std::unordered_set<std::string> m_WarnedEvents;
+		// The profiler's names for the function a task began with: its script's path, and the script's
+		// path with the function ("Scripts/Player.forge: when hit"). Interned once per function; the owner
+		// and the function's name are kept too, so a function made later at the same address is named anew.
+		struct ProfileNames
+		{
+			const ForgeScript::Module* Owner = nullptr;
+			const ForgeScript::String* FunctionName = nullptr;
+			const char* Script = nullptr;
+			const char* Entry = nullptr;
+		};
+		std::unordered_map<const ForgeScript::Function*, ProfileNames> m_ProfileNames;
 	};
 
 }

@@ -281,6 +281,22 @@ m_VM.WatchScriptVariables(module, { "health", "speed" });
 - **Cost:** a module with no watched names pays one test per variable write; a watched module one lookup.
 - `WatchScriptVariables(module, {})` stops it; a new list replaces the old one.
 
+To time scripts in your own profiler, set a task-run handler. It's called just before each run of a task (a handler, a `start`, a timer, the top level, or a task carrying on after its `wait`) and just after it:
+
+```cpp
+m_VM.SetTaskRunHandler([](bool begin, const ForgeScript::Module* owner, const ForgeScript::Function* entry)
+{
+	if (begin)
+		MyProfiler::Begin(owner->Name, entry->Name ? entry->Name->Text : "function"); // "when hit", "patrol"
+	else
+		MyProfiler::End();
+});
+```
+
+- **Pairs nest:** a task run inside another (a `trigger` inside a `when` handler) begins and ends before the outer one ends.
+- **Read `owner` and `entry` only when `begin` is true:** a script can unload its own module while it runs. Both are good keys for caching a name while the module is loaded; MageCap Bellows forgets its cache whenever it unloads a module.
+- **Cost:** with no handler (the default), one test per run of a task.
+
 ---
 
 ## Step 7: Destroying entities and stopping play mode
