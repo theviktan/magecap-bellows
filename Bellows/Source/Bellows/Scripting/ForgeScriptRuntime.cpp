@@ -2,6 +2,7 @@
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Scene/Components.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
@@ -219,6 +220,11 @@ namespace Bellows::Scripting {
 		m_WarnedFields.clear();
 		m_WarnedEvents.clear();
 		m_VM = CreateMachine();
+		m_ProfileNames.clear();
+		m_VM->SetTaskRunHandler([this](bool begin, const ForgeScript::Module* owner, const ForgeScript::Function* entry)
+		{
+			ProfileTaskRun(begin, owner, entry);
+		});
 
 		// Broadcasts from other languages (Python's bellows.emit) reach every ForgeScript 'when' handler.
 		// An event for one entity (a UI widget's, on its way up the hierarchy) reaches only that entity's
@@ -318,6 +324,7 @@ namespace Bellows::Scripting {
 		RemoveScriptEventListener(m_EventListener);
 		m_EventListener = 0;
 		m_VM.reset();
+		m_ProfileNames.clear();
 	}
 
 	ForgeScript::Module* ForgeScriptRuntime::LoadModule(Entity entity, const std::string& scriptPath, const std::string& source)
@@ -327,7 +334,7 @@ namespace Bellows::Scripting {
 		// Errors in the script's top level reach the reporter through the VM's error handler.
 		if (!m_VM->RunInModule(module, source, scriptPath).Success)
 		{
-			m_VM->UnloadModule(module);
+			UnloadModule(module);
 			return nullptr;
 		}
 		return module;
@@ -450,13 +457,13 @@ namespace Bellows::Scripting {
 			const std::vector<std::string> carried = m_VM->CarryOverVariables(oldModule, newModule, { "self" });
 			// Inspector values still apply to settings the new version adds.
 			ApplyFields(newModule, entity, sources[scriptPath], carried);
-			m_VM->UnloadModule(oldModule);
+			UnloadModule(oldModule);
 
 			// Loading ran script code, which may have changed the instance map.
 			auto again = m_Instances.find(uuid);
 			if (again == m_Instances.end())
 			{
-				m_VM->UnloadModule(newModule);
+				UnloadModule(newModule);
 				continue;
 			}
 			m_InstanceByModule.erase(oldModule);
@@ -471,6 +478,38 @@ namespace Bellows::Scripting {
 			}
 		}
 		return allReloaded;
+	}
+
+	void ForgeScriptRuntime::UnloadModule(ForgeScript::Module* module)
+	{
+		m_ProfileNames.clear();
+		m_VM->UnloadModule(module);
+	}
+
+	void ForgeScriptRuntime::ProfileTaskRun(bool begin, const ForgeScript::Module* owner, const ForgeScript::Function* entry)
+	{
+		// Each run gets two scopes: the script, and inside it what the task began with. They nest under
+		// whatever ran the task (Scripts, then ForgeScript, for updates and waits; Physics for contacts).
+		if (!begin)
+		{
+			Profiler::EndScope();
+			Profiler::EndScope();
+			return;
+		}
+		ProfileNames& names = m_ProfileNames[entry];
+		if (names.Owner != owner || names.FunctionName != entry->Name || !names.Script)
+		{
+			const std::string script = owner->Name;
+			std::string function = entry->Name ? entry->Name->Text : std::string("function");
+			if (function == script)
+				function = "top level";
+			names.Owner = owner;
+			names.FunctionName = entry->Name;
+			names.Script = Profiler::Intern(script);
+			names.Entry = Profiler::Intern(script + ": " + function);
+		}
+		Profiler::BeginScope(names.Script);
+		Profiler::BeginScope(names.Entry);
 	}
 
 	void ForgeScriptRuntime::Emit(UUID entity, const std::string& event, const std::vector<ForgeScript::Value>& values, const std::string& source)
@@ -588,7 +627,7 @@ namespace Bellows::Scripting {
 		// Look the entity up again: the handler may have created entities, which changes the map.
 		m_Instances.erase(entity);
 		m_InstanceByModule.erase(module);
-		m_VM->UnloadModule(module);
+		UnloadModule(module);
 	}
 
 	void ForgeScriptRuntime::Contact(UUID self, Entity other, ContactEventType type)

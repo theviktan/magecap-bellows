@@ -13,5 +13,5 @@
 // up with new language or tool features, the patch number with fixes; CHANGELOG.md lists each version.
 // forgescript --version, the language server's serverInfo and MageCap Bellows' Install.json show it.
 #ifndef FORGESCRIPT_VERSION
-	#define FORGESCRIPT_VERSION "1.7.0"
+	#define FORGESCRIPT_VERSION "1.8.0"
 #endif

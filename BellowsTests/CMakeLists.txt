@@ -55,6 +55,15 @@ set_tests_properties(BellowsFeatureTest PROPERTIES
 	FAIL_REGULAR_EXPRESSION "FEATURE TEST FAILED;Traceback;script error"
 	TIMEOUT 900)
 
+# Nothing we push carries an AI label or a content-credentials stamp (AGENTS.md, rule 7).
+add_test(NAME RepositoryNoAiStamps
+	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckNoAiStamps.py"
+	WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+set_tests_properties(RepositoryNoAiStamps PROPERTIES PASS_REGULAR_EXPRESSION "NO AI STAMPS FOUND")
+add_test(NAME RepositoryNoAiStampsSelfTest
+	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckNoAiStamps.py" --self-test)
+set_tests_properties(RepositoryNoAiStampsSelfTest PROPERTIES PASS_REGULAR_EXPRESSION "SELF-TEST PASSED")
+
 # A release package holds everything its programs load: package the build, then run the package.
 if(TARGET BellowsEditor AND TARGET ForgeScriptCLI)
 	add_test(NAME BellowsPackageTest

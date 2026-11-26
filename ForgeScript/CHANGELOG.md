@@ -5,6 +5,14 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
+## 1.8.0 (not released yet)
+
+- **Script time in MageCap Bellows' profiler** (Roadmap 3.0, 1.8.0 item 2): the editor's View →
+  Profiler shows each ForgeScript script under Scripts → ForgeScript, and inside it each handler or
+  function a task began with (`Scripts/Guard.forge: when update`, `... : patrol` after its `wait`,
+  `... : top level`). For hosts, `VM::SetTaskRunHandler` is called just before and after every run of
+  a task, with the task's module and the function it began with; with no handler, nothing changes.
+
 ## 1.7.0 (2026-11-23)
 
 - **S-16** (MCAudit, Audit 11): a Watch line, condition or log message that fails no longer ends

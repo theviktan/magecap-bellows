@@ -21,7 +21,7 @@ fully scriptable so agents can build games through it.
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows), `CheckNoAiStamps.py` (rule 7: no AI labels in tracked files or commit messages, no C2PA stamps in images). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -63,6 +63,7 @@ The tests:
 | `BellowsEditorAutomationTests` | Headless editor driven by `BellowsTests/Scripts/EditorAutomationTest.py`. |
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
 | `BellowsEditorFeatureTest` | The same, in editor play mode. |
+| `RepositoryNoAiStamps` | `Tools/CheckNoAiStamps.py` over every tracked file outside `vendor/`: no AI-made labels in text, no content-credentials stamps in PNG or JPEG images (rule 7). `RepositoryNoAiStampsSelfTest` checks the checker on made-up files. |
 | `BellowsPackageTest` | `BellowsTests/Scripts/PackageTest.py`: packages the build with `Tools/PackageRelease.py`, checks that everything the programs load is in the package, then runs the packaged programs (check tools, FeatureTest, a game exported by the packaged editor). Add a file the programs load to its list. |
 
 Without a GPU, run on the Mesa software rasterizer:
@@ -132,6 +133,14 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
 5. **Keep docs true.** README, AGENTS.md, docs/ and skills describe the code as it is.
 6. **No placeholders.** No TODO stubs, dead code, commented-out code or "hack" fixes in
    committed code. If something is out of scope, leave it out completely.
+7. **No AI stamps, AI labels, tool notices or secrets in anything pushed or shared** (Sync rule 16,
+   from Ron, Nov 25, 2026), private repositories included. That means content credentials (C2PA,
+   such as a PNG's `caBX` chunk) and other AI metadata in images; AI-made labels in files, pages,
+   release notes and PR text (generated-with footers, made-with-AI notes); `Co-Authored-By` and
+   session trailers for an AI in commit messages; notices an AI tool leaves inside files; and
+   secrets. Strip them before every push, release or send. `RepositoryNoAiStamps` checks every
+   tracked file; before pushing, also run `python Tools/CheckNoAiStamps.py --commits origin/main..HEAD`
+   for the new commits' messages. Old history stays as it is.
 
 ## Code style (Hazel-style C++)
 

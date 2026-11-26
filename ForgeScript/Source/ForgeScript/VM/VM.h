@@ -61,6 +61,13 @@ namespace ForgeScript {
 	// in the middle of the script's instruction: queue what it starts (an event) instead of running
 	// scripts from inside it.
 	using ScriptVariableChangedHandler = std::function<void(Module* module, const std::string& name, const Value& now, const Value& before)>;
+	// Called around every run of a task, so a host can time it (MageCap Bellows' profiler): with 'begin'
+	// true just before the task runs, and false just after it finishes, fails, waits or stops. A task
+	// that runs inside another (a 'trigger' inside a 'when' handler) begins and ends before the outer one
+	// ends. 'owner' is the module the task belongs to and 'entry' the function it began with: its
+	// handler, the function a 'start' or a timer called, or the module's top level. Both stay loaded for
+	// the whole run, but may be gone when 'begin' is false, so read them only when it is true.
+	using TaskRunHandler = std::function<void(bool begin, const Module* owner, const Function* entry)>;
 
 	// ---------------------------------------------------------------- Debugger
 
@@ -207,6 +214,8 @@ namespace ForgeScript {
 		// run, so its starting values aren't reported. Names replace the module's earlier ones; none stops.
 		void WatchScriptVariables(Module* module, const std::vector<std::string>& names);
 		void SetScriptVariableChangedHandler(ScriptVariableChangedHandler handler) { m_ScriptVariableChangedHandler = std::move(handler); }
+		// No handler (the default) costs one check per run of a task.
+		void SetTaskRunHandler(TaskRunHandler handler) { m_TaskRunHandler = std::move(handler); }
 
 		// Makes a C++ function callable from every script:  random(1, 6)
 		void RegisterFunction(const std::string& name, int arity, NativeFn fn);
@@ -492,6 +501,7 @@ namespace ForgeScript {
 		ModuleLoader m_ModuleLoader;
 		TriggerHandler m_TriggerHandler;
 		ScriptVariableChangedHandler m_ScriptVariableChangedHandler;
+		TaskRunHandler m_TaskRunHandler;
 		// Sets a script variable, reporting it when it is watched and its value changed.
 		void WriteScriptVariable(Module* module, String* name, const Value& value);
 

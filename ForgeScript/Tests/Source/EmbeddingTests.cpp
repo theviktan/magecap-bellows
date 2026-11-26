@@ -1029,3 +1029,38 @@ TEST_CASE("EmitAllCanNameTheEntityItIsAbout")
 	CHECK_EQ(h.Output, std::string("hero here\nsomeone\nsomeone\n"));
 	CHECK(h.Errors.empty());
 }
+
+TEST_CASE("TheTaskRunHandlerSeesEveryRunOfATaskWithItsScriptAndEntry")
+{
+	// A host's profiler times each run: the top level, a 'start', a handler and a 'trigger' inside it,
+	// and each task carrying on after its wait. Runs inside a run begin and end inside it.
+	Harness h;
+	std::vector<std::string> runs;
+	h.Machine.SetTaskRunHandler([&](bool begin, const Module* owner, const Function* entry)
+	{
+		runs.push_back(begin ? owner->Name + ": " + (entry->Name ? entry->Name->Text : std::string("function")) : "end");
+	});
+	const LoadResult loaded = h.Machine.Load(
+		"function patrol()\n\twait 2 frames\nend\n"
+		"when hit\n\ttrigger ouch\n\twait\nend\n"
+		"when ouch\n\tsay \"ouch\"\nend\n"
+		"start patrol()\n", "player.forge");
+	REQUIRE(loaded.LoadedModule != nullptr);
+	CHECK_EQ(runs, std::vector<std::string>{ "player.forge: player.forge", "player.forge: patrol", "end", "end" });
+
+	runs.clear();
+	h.Machine.Emit(loaded.LoadedModule, "hit");
+	CHECK_EQ(runs, std::vector<std::string>{ "player.forge: when hit", "player.forge: when ouch", "end", "end" });
+
+	runs.clear();
+	h.Machine.Update(1.0 / 60.0); // 'when hit' carries on after its one-frame wait
+	h.Machine.Update(1.0 / 60.0); // and patrol after its two
+	CHECK_EQ(runs, std::vector<std::string>{ "player.forge: when hit", "end", "player.forge: patrol", "end" });
+
+	runs.clear();
+	h.Machine.SetTaskRunHandler(nullptr);
+	h.Machine.Emit(loaded.LoadedModule, "ouch");
+	CHECK(runs.empty());
+	CHECK_EQ(h.Output, std::string("ouch\nouch\n"));
+	CHECK(h.Errors.empty());
+}

@@ -1538,7 +1538,20 @@ namespace ForgeScript {
 	void VM::RunTask(Task* task)
 	{
 		m_RunningTasks.push_back(task);
-		Execute(task);
+		if (m_TaskRunHandler && !task->Frames.empty())
+		{
+			// The handler is copied: one that runs scripts could replace it while the task runs.
+			const TaskRunHandler handler = m_TaskRunHandler;
+			const Module* owner = task->Owner;
+			const Function* entry = task->Frames.front().Function->Fn;
+			handler(true, owner, entry);
+			Execute(task);
+			handler(false, owner, entry);
+		}
+		else
+		{
+			Execute(task);
+		}
 		m_RunningTasks.pop_back();
 
 		if (task->State == TaskState::Waiting)
