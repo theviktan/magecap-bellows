@@ -267,6 +267,20 @@ function test_groups()
 	bay.destroy()
 end
 
+function test_group_phrases()
+	set yard to create_group("Forge Yard", "flag")
+	set crane to create_entity("Forge Crane")
+	set hook to create_entity("Forge Crane Hook", crane)
+	put crane in group "forge yard"
+	check(crane.group is yard and group "Forge Yard" has hook, "put (entity) in group (name), and a child is in its parent's group")
+	check(length(everything in group "Forge Yard") is 1 and length(everything under group "Forge Yard") is 2, "everything in / under group (name)")
+	remove crane from group "Forge Yard"
+	check(crane.group is nothing and not (group "Forge Yard" has crane), "remove (entity) from group (name)")
+	check(fails(function() put crane in group "Forge Yrd" end), "a misspelled group name is an error")
+	yard.delete()
+	crane.destroy()
+end
+
 function test_data_files()
 	set data to the data in "Data/FeatureData.json"
 	check(data["name"] is "FeatureTest data" and data["levels"][2]["title"] is "Caves", "the data in (path) reads a JSON data file")
@@ -473,6 +487,7 @@ function run_tests()
 		test_keep_across_scenes()
 		test_tags()
 		test_groups()
+		test_group_phrases()
 		test_camera_shake()
 		test_data_files()
 		test_saved_data()

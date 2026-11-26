@@ -276,6 +276,17 @@ for bay in bellows.group("Docking").entities():
     bay.add_tag("open")
 ```
 
+In ForgeScript the same loop can also be written with the group phrases (Engine phrases, under
+[Using the API from ForgeScript](#using-the-api-from-forgescript)). In a phrase, a name with no group
+is an error that names the closest one, and `put` never makes a group; `group(name)` still gives
+`nothing`:
+
+```forge
+for each bay in everything in group "Docking" do
+	tag bay as "open"
+end
+```
+
 ## Components
 
 Component objects are lightweight views: keep the entity and call `get_component` again rather
@@ -823,6 +834,11 @@ engine sends these events, which the script handles with `when`:
   | `tag (entity) as (tag)` | `entity.add_tag(tag)` |
   | `untag (entity) as (tag)` | `entity.remove_tag(tag)` |
   | `everything tagged (tag)` | `find_tagged(tag)`, so `for each enemy in everything tagged "enemy"` works |
+  | `everything in group (name)` | `group(name).entities()`, so `for each bay in everything in group "Docking"` works |
+  | `everything under group (name)` | `group(name).all_entities()`: the members and everything under them |
+  | `group (name) has (entity)` | `group(name).has_entity(entity)`, so `if group "Docking" has bay then` works |
+  | `put (entity) in group (name)` | `group(name).add_entity(entity)` |
+  | `remove (entity) from group (name)` | `group(name).remove_entity(entity)` |
   | `the data in (path)` | `load_json(path)`, so `set items to the data in "Data/items.json"` works |
   | `shake the camera by (strength) over (seconds) seconds` | `shake_camera(strength, seconds)`; `second` works too |
   | `play animation (clip) on (entity)` | `entity.get_component("Animator").play(clip)` |
