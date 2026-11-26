@@ -3,6 +3,7 @@
 
 #include "Bellows/Scripting/ScriptApiDefinition.h"
 
+#include "ForgeScript/Core/Suggest.h"
 
 #include <charconv>
 #include <cmath>
@@ -737,16 +738,45 @@ namespace Bellows::Scripting {
 		};
 
 		// The entity a phrase is about ('example' shows the phrase written right).
-		ScriptEntity PhraseEntity(FS::CallContext& context, const char* phrase, const char* what, const std::string& example)
+		ScriptEntity PhraseEntityAt(FS::CallContext& context, size_t index, const char* phrase, const char* what, const std::string& example)
 		{
 			FS::VM& vm = context.GetVM();
-			const FS::Value value = context.Arg(0);
+			const FS::Value value = context.Arg(index);
 			if (!FS::IsObjectType(value, FS::ObjectType::NativeObject) || FS::As<FS::NativeObject>(value)->Type != &TypeFor<ScriptEntity>())
 			{
 				throw FS::RuntimeError(std::string("'") + phrase + "' needs " + what + ", like: " + example + ". This is " +
 					(value.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(value)) + ".");
 			}
 			return Convert<ScriptEntity>::From(vm, value, std::string("'") + phrase + "'");
+		}
+
+		ScriptEntity PhraseEntity(FS::CallContext& context, const char* phrase, const char* what, const std::string& example)
+		{
+			return PhraseEntityAt(context, 0, phrase, what, example);
+		}
+
+		// The Hierarchy group a phrase names (argument 'index'), found by name in any letter case. A name
+		// with no group is an error that names the closest one: 'put' never makes a group by itself, so a
+		// typo can't quietly start a new one.
+		ScriptGroup PhraseGroup(FS::CallContext& context, size_t index)
+		{
+			const std::string name = context.Text(index);
+			return Guard([&]
+			{
+				Scene& scene = RequireContextScene();
+				if (const SceneGroup* group = scene.FindGroup(name))
+					return Detail::MakeScriptGroup(scene, *group);
+				std::vector<std::string_view> names;
+				for (const SceneGroup& group : scene.GetGroups())
+					names.push_back(group.Name);
+				std::string message = "There's no group called '" + name + "'.";
+				const std::string closest = FS::DidYouMean(name, names);
+				if (!closest.empty())
+					message += closest;
+				else
+					message += " Make one in the Hierarchy, or with create_group(\"" + name + "\").";
+				throw FS::RuntimeError(message);
+			});
 		}
 
 		// The Animator of the entity a phrase names (argument 'index').
@@ -969,6 +999,52 @@ namespace Bellows::Scripting {
 								entities.emplace_back(entity);
 						});
 						return ReturnValue(context.GetVM(), entities);
+					} },
+				{ { "everything in group (name)", "A list of the top-level entities in the Hierarchy group, in Hierarchy order; same as group(name).entities()", "list[Entity]", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptGroup group = PhraseGroup(context, 0);
+						return ReturnValue(context.GetVM(), Guard([&] { return Detail::GroupEntities(group, false); }));
+					} },
+				{ { "everything under group (name)", "A list of the entities in the Hierarchy group and everything under them, parents before their children; same as group(name).all_entities()", "list[Entity]", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptGroup group = PhraseGroup(context, 0);
+						return ReturnValue(context.GetVM(), Guard([&] { return Detail::GroupEntities(group, true); }));
+					} },
+				{ { "group (name) has (entity)", "Yes when the entity, or its top-level ancestor, is in the Hierarchy group; same as group(name).has_entity(entity)", "bool", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptGroup group = PhraseGroup(context, 0);
+						const ScriptEntity entity = PhraseEntityAt(context, 1, "group ... has", "an entity", "if group \"Docking\" has bay then");
+						return FS::Value::FromBool(Guard([&]
+						{
+							auto [scene, sceneGroup] = Detail::ResolveGroup(group);
+							Entity resolved = entity.Resolve();
+							return resolved.GetScene() == scene && scene->GetEntityGroup(resolved) == sceneGroup->ID;
+						}));
+					} },
+				{ { "put (entity) in group (name)", "Moves a top-level entity into the Hierarchy group, from any other; same as group(name).add_entity(entity)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "put", "an entity", "put bay in group \"Docking\"");
+						const ScriptGroup group = PhraseGroup(context, 1);
+						Guard([&] { Detail::SetEntityGroup(entity, group); });
+						return FS::Value();
+					} },
+				{ { "remove (entity) from group (name)", "Takes a top-level entity out of the Hierarchy group, into none (nothing happens when it isn't in it); same as group(name).remove_entity(entity)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ScriptEntity entity = PhraseEntity(context, "remove", "an entity", "remove bay from group \"Docking\"");
+						const ScriptGroup group = PhraseGroup(context, 1);
+						Guard([&]
+						{
+							auto [scene, sceneGroup] = Detail::ResolveGroup(group);
+							Entity resolved = entity.Resolve();
+							if (resolved.GetScene() == scene && !resolved.GetParent() && scene->GetEntityGroup(resolved) == sceneGroup->ID)
+								scene->SetEntityGroup(resolved, 0);
+						});
+						return FS::Value();
 					} },
 				{ { "the data in (path)", "The contents of a JSON data file in the Assets folder (\"Data/items.json\"), as maps and lists; same as load_json(path)", "Value", true },
 					[](FS::CallContext& context)

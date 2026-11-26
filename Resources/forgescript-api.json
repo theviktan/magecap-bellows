@@ -3024,6 +3024,36 @@
 			"yields_to_calls": true
 		},
 		{
+			"pattern": "everything in group (name)",
+			"doc": "A list of the top-level entities in the Hierarchy group, in Hierarchy order; same as group(name).entities()",
+			"returns": "list[Entity]",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "everything under group (name)",
+			"doc": "A list of the entities in the Hierarchy group and everything under them, parents before their children; same as group(name).all_entities()",
+			"returns": "list[Entity]",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "group (name) has (entity)",
+			"doc": "Yes when the entity, or its top-level ancestor, is in the Hierarchy group; same as group(name).has_entity(entity)",
+			"returns": "bool",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "put (entity) in group (name)",
+			"doc": "Moves a top-level entity into the Hierarchy group, from any other; same as group(name).add_entity(entity)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "remove (entity) from group (name)",
+			"doc": "Takes a top-level entity out of the Hierarchy group, into none (nothing happens when it isn't in it); same as group(name).remove_entity(entity)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
 			"pattern": "the data in (path)",
 			"doc": "The contents of a JSON data file in the Assets folder (\"Data/items.json\"), as maps and lists; same as load_json(path)",
 			"returns": "Value",

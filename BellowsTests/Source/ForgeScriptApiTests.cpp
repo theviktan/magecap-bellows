@@ -272,6 +272,60 @@ TEST_CASE("ForgeScript UI phrases show, hide, enable, disable and focus widgets"
 	scene->OnRuntimeStop();
 }
 
+TEST_CASE("ForgeScript group phrases use Hierarchy groups and keep old meanings")
+{
+	Ref<Scene> scene = CreateRef<Scene>("Group phrases");
+	const UUID docking = scene->CreateGroup("Docking").ID;
+	scene->CreateGroup("Cargo");
+	Entity bay = scene->CreateEntity("Bay");
+	Entity arm = scene->CreateEntity("Arm");
+	scene->SetParent(arm, bay);
+	scene->CreateEntity("Tug");
+	scene->SetEntityGroup(bay, docking);
+
+	ForgeScriptHarness h(*scene);
+	h.Machine.Load(
+		"set bay to find_entity(\"Bay\")\n"
+		"set arm to find_entity(\"Arm\")\n"
+		"set tug to find_entity(\"Tug\")\n"
+		"for each e in everything in group \"Docking\" do\n\tsay e.name\nend\n"
+		"say length(everything under group \"docking\")\n"
+		"say group \"Docking\" has arm\n"
+		"say group \"Cargo\" has bay\n"
+		"put tug in group \"Docking\"\n"
+		"say tug.group.name\n"
+		"remove tug from group \"Docking\"\n"
+		"say tug.group\n"
+		"remove tug from group \"Docking\"\n"
+		"try\n\tput tug in group \"Dockng\"\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tsay everything in group \"Engines\"\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tput arm in group \"Cargo\"\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tput 5 in group \"Cargo\"\ncatch problem\n\tsay problem\nend\n"
+		// The words keep their old meanings: the group(name) function, variables, functions and methods.
+		"say group(\"Docking\") is bay.group\n"
+		"set group to 4\n"
+		"say group + 1\n"
+		"function inside()\n\tset group to [7, 8]\n\treturn group[1]\nend\n"
+		"say inside()\n"
+		"function put(x)\n\treturn x * 2\nend\n"
+		"say put(4)\n"
+		"set remove to \"r\"\n"
+		"say remove\n"
+		"set items to [1, 2, 3]\n"
+		"items.remove(2)\n"
+		"say items\n",
+		"group_phrases.forge");
+
+	INFO(h.AllErrors());
+	CHECK(h.Errors.empty());
+	CHECK_EQ(h.Output, std::string("Bay\n2\ntrue\nfalse\nDocking\nnothing\n"
+		"There's no group called 'Dockng'. Did you mean 'Docking'?\n"
+		"There's no group called 'Engines'. Make one in the Hierarchy, or with create_group(\"Engines\").\n"
+		"'Arm' has a parent, so it is in its top-level ancestor's group; move that one, or unparent it first\n"
+		"'put' needs an entity, like: put bay in group \"Docking\". This is a number.\n"
+		"true\n5\n7\n8\nr\n[1, 3]\n"));
+}
+
 TEST_CASE("Engine phrases are listed for tools")
 {
 	const std::vector<Scripting::ForgeScriptPhraseInfo> phrases = Scripting::GetForgeScriptPhrases();
@@ -284,7 +338,8 @@ TEST_CASE("Engine phrases are listed for tools")
 	}
 	std::vector<std::string> expected = { "save screenshot", "save screenshot to (path)", "user folder",
 		"pause the game", "resume the game", "the game is paused", "keep (entity) across scenes", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)",
-		"tag (entity) as (tag)", "untag (entity) as (tag)", "everything tagged (tag)", "the data in (path)", "shake the camera by (strength) over (seconds) seconds", "shake the camera by (strength) over (seconds) second",
+		"tag (entity) as (tag)", "untag (entity) as (tag)", "everything tagged (tag)", "everything in group (name)", "everything under group (name)",
+		"group (name) has (entity)", "put (entity) in group (name)", "remove (entity) from group (name)", "the data in (path)", "shake the camera by (strength) over (seconds) seconds", "shake the camera by (strength) over (seconds) second",
 		"play animation (clip) on (entity)", "pause animation on (entity)", "resume animation on (entity)", "walk (entity) to (position)", "halt (entity)", "the path from (start) to (end)", "push (entity) by (impulse)" };
 	// Each tween phrase comes with "seconds" and "second", each with and without "with (style)".
 	for (const char* start : { "move (entity) to (position)", "move (entity) by (offset)", "turn (entity) to (angles)", "turn (entity) by (angles)",
