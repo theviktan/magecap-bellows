@@ -77,6 +77,19 @@
 					}
 				},
 				{
+					"match": "^\\s*(property)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=$|\\bas\\b|\\bdo\\b)",
+					"captures": { "1": { "name": "storage.type.property.forge" }, "2": { "name": "variable.other.property.forge" } }
+				},
+				{
+					"match": "^\\s*(keep)\\s+(my)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(between)\\b",
+					"captures": {
+						"1": { "name": "keyword.other.keep.forge" },
+						"2": { "name": "variable.language.self.forge" },
+						"3": { "name": "variable.other.property.forge" },
+						"4": { "name": "keyword.operator.word.forge" }
+					}
+				},
+				{
 					"match": "^\\s*(phrase)\\s+(.*)$",
 					"captures": { "1": { "name": "storage.type.function.forge" }, "2": { "name": "entity.name.function.forge" } }
 				},

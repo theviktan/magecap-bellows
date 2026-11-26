@@ -190,10 +190,23 @@ namespace ForgeScript {
 		// any costs one check; and the fields that have one, so a write to another field costs one lookup.
 		bool WatchesFields = false;
 		std::unordered_set<String*> WatchedFields;
+		// 'property health_percent ... end': read like a field, worked out by its method at each read.
+		std::unordered_map<String*, Closure*> Properties;
+		// 'keep my health between 0 and my max_health': a method giving the two ends, as a list, worked out
+		// at each write.
+		std::unordered_map<String*, Closure*> Keeps;
+		// 'when my is_open is set to wanted ... end': a method run instead of each write to the field.
+		std::unordered_map<String*, Closure*> SetHandlers;
+		// Whether this kind or one it extends has any of those three, so the reads and writes of other
+		// kinds cost one check.
+		bool HasFieldRules = false;
 
 		explicit Kind(String* name) : Object(ObjectType::Kind), Name(name) {}
 
 		Closure* FindMethod(String* name) const;
+		// The property, keep or set handler (as 'rules' says) for this name, in this kind or the nearest
+		// kind it extends; null if none.
+		Closure* FindFieldRule(std::unordered_map<String*, Closure*> Kind::*rules, String* name) const;
 		// The shared value with this name, in this kind or the nearest kind it extends; null if none.
 		// 'owner' is set to the kind that has it.
 		Value* FindShared(String* name, Kind** owner = nullptr);

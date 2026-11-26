@@ -7,6 +7,18 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.8.0 (not released yet)
 
+- **Properties on kinds** (Roadmap 3.0, item 3, design approved by Ron on Nov 25), three new forms
+  inside a kind. Each was a mistake in 1.7.0, and `property` and `keep` stay ordinary names
+  everywhere else:
+  - `property health_percent [as number] ... end`: read like a field, worked out by its block at each
+    read. Setting it is an error that says why; `parent.health_percent` reads the one a kind replaced.
+  - `keep my health between 0 and my max_health`: every write to the field is clamped into the range,
+    with the ends worked out at that write.
+  - `when my is_open is set to wanted ... end`: runs instead of each write; inside it, the field's own
+    write stores the value.
+  - The checker explains a name that's both a field and a property, two of one form on a name, and a
+    keep with a set handler. The language server lists properties in the outline and as members of
+    their kind, and the formatter indents their blocks. Cookbook recipe 32 shows all three.
 - **Script time in MageCap Bellows' profiler** (Roadmap 3.0, 1.8.0 item 2): the editor's View →
   Profiler shows each ForgeScript script under Scripts → ForgeScript, and inside it each handler or
   function a task began with (`Scripts/Guard.forge: when update`, `... : patrol` after its `wait`,

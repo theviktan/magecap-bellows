@@ -116,6 +116,10 @@ namespace ForgeScript {
 		NumberTest,      // u8 NumberTest             value -> bool ('is even', 'is odd', 'is a whole number')
 		WaitEvent,       // u16 event name, u16 entity name ("" = any), u8 count: pauses the task until its
 		                 // script gets the event, then pushes the event's first 'count' values (nothing for missing ones)
+		PropertyGetter,  // u16 name                  kind closure -> kind ('property name ... end' in a kind)
+		KeepRange,       // u16 field                 kind closure -> kind ('keep my field between low and high'; the
+		                 // closure gives [low, high])
+		SetHandler,      // u16 field                 kind closure -> kind ('when my field is set to value ... end')
 	};
 
 	enum class NumberTest : uint8_t

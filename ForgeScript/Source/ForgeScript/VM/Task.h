@@ -80,6 +80,10 @@ namespace ForgeScript {
 		// to that field inside it doesn't run it again.
 		Instance* ChangeInstance = nullptr;
 		String* ChangeField = nullptr;
+		// For a task running a 'when my field is set to value' handler: the object and field, so a write
+		// to that field inside it stores the value instead of running the handler again.
+		Instance* SetInstance = nullptr;
+		String* SetField = nullptr;
 		StepMode Step = StepMode::None;
 		size_t StepDepth = 0;     // How many frames the task had when the step began.
 		std::string FailureMessage;

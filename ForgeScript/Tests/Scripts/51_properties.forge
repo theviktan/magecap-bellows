@@ -1,0 +1,101 @@
+# Properties on kinds: a worked-out value, a field kept in a range, and a set handler.
+kind Player
+	set health to 80
+	set max_health to 100
+	keep my health between 0 and my max_health
+
+	property health_percent as number
+		return my health / my max_health * 100
+	end
+
+	function heal(amount)
+		add amount to my health
+	end
+end
+
+set hero to new Player()
+say hero.health_percent                                 # expect: 80
+say hero's health_percent                               # expect: 80
+
+# Every write is clamped, from anywhere, with the ends worked out at the write.
+take 500 from hero.health
+say hero.health                                         # expect: 0
+hero.heal(1000)
+say hero.health                                         # expect: 100
+set hero.max_health to 200
+add 50 to hero.health
+say hero.health                                         # expect: 150
+say hero.health_percent                                 # expect: 75
+multiply hero.health by -1
+say hero.health                                         # expect: 0
+
+# A property is worked out at each read, so it can't be set; a kept field takes numbers only.
+try
+	set hero.health_percent to 3
+catch problem
+	say problem                                         # expect: 'health_percent' is worked out by its property, so it can't be set. To change it, change what it's worked out from.
+end
+try
+	set hero.health to "a lot"
+catch problem
+	say problem                                         # expect: 'health' is kept between 0 and 200, so it needs a number, but got text.
+end
+
+# A set handler runs instead of the write; inside it, the field's own write stores the value.
+kind Door
+	set is_open to false
+	set is_locked to true
+	when my is_open is set to wanted
+		if my is_locked and wanted then
+			say "It's locked."
+		else
+			set my is_open to wanted
+		end
+	end
+	when my is_open changes with now
+		say "The door is now {now}."
+	end
+end
+
+set door to new Door()
+say door.is_open                                        # expect: false
+set door.is_open to true                                # expect: It's locked.
+say door.is_open                                        # expect: false
+set door.is_locked to false
+set door.is_open to true                                # expect: The door is now true.
+say door.is_open                                        # expect: true
+
+# A kind that extends another gets its properties and keeps, and can replace a property;
+# 'parent.name' reads the one it replaces.
+kind Boss extends Player
+	set max_health to 500
+	property health_percent
+		return round(parent.health_percent)
+	end
+end
+
+set boss to new Boss()
+add 1000 to boss.health
+say boss.health                                         # expect: 500
+take 1 from boss.health
+say boss.health_percent                                 # expect: 100
+take 165 from boss.health
+say boss.health_percent                                 # expect: 67
+
+# A property can't wait: it runs to its end right away.
+kind Slow
+	property late
+		wait 1 second
+		return 1
+	end
+end
+try
+	say new Slow().late
+catch problem
+	say problem                                         # expect: 'wait' cannot be used here, because this code must finish right away. Use 'start' to run it as its own task. (test.forge line 88)
+end
+
+# 'property' and 'keep' are still names everywhere else.
+set property to 3
+set keep to 4
+say property + keep                                     # expect: 7

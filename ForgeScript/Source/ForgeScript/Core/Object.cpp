@@ -60,6 +60,17 @@ namespace ForgeScript {
 		return nullptr;
 	}
 
+	Closure* Kind::FindFieldRule(std::unordered_map<String*, Closure*> Kind::*rules, String* name) const
+	{
+		for (const Kind* kind = this; kind; kind = kind->Parent)
+		{
+			auto it = (kind->*rules).find(name);
+			if (it != (kind->*rules).end())
+				return it->second;
+		}
+		return nullptr;
+	}
+
 	Value* Kind::FindShared(String* name, Kind** owner)
 	{
 		for (Kind* kind = this; kind; kind = kind->Parent)

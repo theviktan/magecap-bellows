@@ -590,6 +590,15 @@ namespace ForgeScript {
 				add(Kind::Function, name, label, "function " + (owner.empty() ? "" : owner + ".") + label + "(" + params + ")" + ReturnTypeAfter(tokens, j),
 					docAbove(token.Line), owner);
 			}
+			else if (opens && !owner.empty() && PropertyOpensBlock(tokens, i))
+			{
+				// 'property health_percent [as number]': read like a field of its kind.
+				const Token& name = tokens[i + 1];
+				std::string signature = "property " + owner + "." + std::string(name.Lexeme);
+				if (i + 3 < tokens.size() && tokens[i + 2].Type == TokenType::Identifier && tokens[i + 2].Lexeme == "as")
+					signature += " as " + std::string(tokens[i + 3].Lexeme);
+				add(Kind::Variable, name, std::string(name.Lexeme), signature, docAbove(token.Line), owner);
+			}
 			else if (token.Type == TokenType::Phrase && opens)
 			{
 				std::string pattern;
@@ -1857,6 +1866,10 @@ namespace ForgeScript {
 					last = j;
 				const int length = tokens[last].Column + static_cast<int>(tokens[last].Lexeme.size()) - token.Column;
 				item = add(Kind::Handler, lineText(i), "", token, token, length, parent);
+			}
+			else if (listed && inKind && opens && PropertyOpensBlock(tokens, i))
+			{
+				item = add(Kind::Variable, std::string(next->Lexeme), lineText(i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && !inKind && opens && TestOpensBlock(tokens, i))
 			{

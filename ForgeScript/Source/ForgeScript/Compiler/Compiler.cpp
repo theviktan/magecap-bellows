@@ -2,6 +2,7 @@
 
 #include "ForgeScript/Compiler/Lexer.h"
 #include "ForgeScript/Compiler/Phrase.h"
+#include "ForgeScript/Compiler/ScriptVariables.h"
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/Core/Suggest.h"
 #include "ForgeScript/Core/Utf8.h"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string_view>
 #include <utility>
@@ -689,7 +691,7 @@ namespace ForgeScript {
 					// A match with no 'is' choice is a mistake, but its 'end' still belongs to it, so the
 					// rest of the script pairs up as written.
 					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i)) ||
-						IsTimerAt(tokens, i) || IsTestAt(tokens, i);
+						IsTimerAt(tokens, i) || IsTestAt(tokens, i) || PropertyOpensBlock(tokens, i);
 				default:
 					return false;
 			}
@@ -3356,6 +3358,10 @@ namespace ForgeScript {
 			// First pass: compile methods and shared values, remember where the field lines are.
 			std::vector<size_t> fieldLines;
 			std::set<std::string> sharedNames;
+			// Properties, keeps and set handlers, by name, for the mistakes of two on one name.
+			std::map<std::string, Token> properties;
+			std::map<std::string, Token> keeps;
+			std::map<std::string, Token> setHandlers;
 			SkipNewlines();
 			while (!Check(TokenType::End))
 			{
@@ -3412,6 +3418,60 @@ namespace ForgeScript {
 					FunctionBody("when my " + field + " changes", ScopeKind::Method, params, handlerOpener, "'when'");
 					EmitWithName(OpCode::ChangeHandler, field);
 				}
+				else if (IsPropertyLine())
+				{
+					// 'property health_percent [as number] ... end': read like a field, worked out at each read.
+					const Token propertyOpener = Current();
+					Advance(); // property
+					const Token nameToken = Current();
+					const std::string property(nameToken.Lexeme);
+					Advance();
+					if (!properties.emplace(property, nameToken).second)
+						ErrorAt(nameToken, "'" + property + "' has two properties in this kind. Keep one.");
+					ReturnTypeAfterParameters();
+					Match(TokenType::Do);
+					FunctionBody("property " + property, ScopeKind::Method, {}, propertyOpener, "'property'");
+					EmitWithName(OpCode::PropertyGetter, property);
+				}
+				else if (CheckWord("keep") && Peek(1).Type == TokenType::My && Peek(2).Type == TokenType::Identifier &&
+					Peek(3).Type == TokenType::Identifier && Peek(3).Lexeme == "between")
+				{
+					// 'keep my health between 0 and my max_health': each write is clamped into the range,
+					// whose ends are worked out at the write (a hidden method gives them as a list).
+					Advance(); // keep
+					Advance(); // my
+					const Token fieldToken = Current();
+					const std::string field(fieldToken.Lexeme);
+					Advance();
+					Advance(); // between
+					if (!keeps.emplace(field, fieldToken).second)
+						ErrorAt(fieldToken, "'" + field + "' is kept in a range twice in this kind. Keep one 'keep' line.");
+					KeepEnds(field);
+					EmitWithName(OpCode::KeepRange, field);
+				}
+				else if (Check(TokenType::When) && Peek(1).Type == TokenType::My && Peek(2).Type == TokenType::Identifier &&
+					Peek(3).Type == TokenType::Is && Peek(4).Type == TokenType::Set && Peek(5).Type == TokenType::To &&
+					Peek(6).Type == TokenType::Identifier)
+				{
+					// 'when my is_open is set to wanted ... end': runs instead of each write to the field; a
+					// write to the field inside it stores the value (see VM::SetFieldWithRules).
+					const Token handlerOpener = Current();
+					Advance(); // when
+					Advance(); // my
+					const Token fieldToken = Current();
+					const std::string field(fieldToken.Lexeme);
+					Advance();
+					Advance(); // is
+					Advance(); // set
+					Advance(); // to
+					const std::string value(Current().Lexeme);
+					Advance();
+					if (!setHandlers.emplace(field, fieldToken).second)
+						ErrorAt(fieldToken, "'" + field + "' has two 'when my " + field + " is set to' handlers in this kind. Keep one.");
+					Match(TokenType::Do);
+					FunctionBody("when my " + field + " is set", ScopeKind::Method, { value }, handlerOpener, "'when'");
+					EmitWithName(OpCode::SetHandler, field);
+				}
 				else if (Check(TokenType::Function))
 				{
 					Token methodOpener = Current();
@@ -3425,12 +3485,39 @@ namespace ForgeScript {
 				}
 				else
 				{
-					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods, 'shared name is value' for one value all its objects share, or 'when my name changes' to react to a field.");
+					ErrorAtCurrent("Inside a kind, use 'set name to value' for fields and 'function' for methods, 'shared name is value' for one value all its objects share, 'when my name changes' to react to a field, or 'property name ... end' for a value worked out from the others.");
 				}
 				EndOfStatement();
 				SkipNewlines();
 			}
 			size_t afterBody = m_Pos;
+
+			// A name is a field, or a property, not both; and a field is kept in a range, or has its own
+			// set handler, not both.
+			for (size_t line : fieldLines)
+			{
+				size_t at = line + 1;
+				if (at < m_Tokens.size() && m_Tokens[at].Type == TokenType::My)
+					at++;
+				if (at >= m_Tokens.size())
+					continue;
+				auto property = properties.find(std::string(m_Tokens[at].Lexeme));
+				if (property != properties.end())
+					ErrorAt(property->second, "'" + property->first + "' is a field of this kind already ('set " + property->first +
+						" to ...'), so it can't be a property too. Give the property another name.");
+			}
+			for (const auto& [field, token] : keeps)
+			{
+				if (properties.count(field))
+					ErrorAt(token, "'" + field + "' is a property, worked out each time it's read, so there's nothing to keep in a range.");
+				if (setHandlers.count(field))
+					ErrorAt(token, "'" + field + "' has a 'when my " + field + " is set to' handler, so keep it in range there instead, with clamp(value, low, high).");
+			}
+			for (const auto& [field, token] : setHandlers)
+			{
+				if (properties.count(field))
+					ErrorAt(token, "'" + field + "' is a property, worked out each time it's read, so it can't be set.");
+			}
 
 			// Second pass: compile all field lines into one hidden "set up fields" method.
 			Function* fields = m_VM.NewFunction();
@@ -3481,6 +3568,57 @@ namespace ForgeScript {
 			m_Pos = afterBody;
 			ConsumeEnd(opener, "kind");
 			EmitOp(OpCode::Pop);
+		}
+
+		// 'property name' (and an optional 'as type') alone on its line, inside a kind. Outside a kind the
+		// same words stay what they were (a phrase, or a mistake).
+		bool IsPropertyLine() const
+		{
+			if (!CheckWord("property") || Peek(1).Type != TokenType::Identifier)
+				return false;
+			const TokenType after = Peek(2).Type;
+			return after == TokenType::Newline || after == TokenType::Eof || after == TokenType::Do ||
+				(Peek(2).Type == TokenType::Identifier && Peek(2).Lexeme == "as");
+		}
+
+		// The two ends of 'keep my field between low and high', compiled into a hidden method of the kind
+		// that gives them as a list, so they're worked out at each write ('my max_health' can change).
+		void KeepEnds(const std::string& field)
+		{
+			Function* ends = m_VM.NewFunction();
+			ends->Name = m_VM.Intern("keep my " + field);
+			ends->Owner = m_Module;
+			ends->IsMethod = true;
+
+			FunctionState state;
+			state.Enclosing = m_State;
+			state.Fn = ends;
+			state.Kind = ScopeKind::Method;
+			m_State = &state;
+			BeginScope();
+			state.Locals.push_back({ "self", state.ScopeDepth, false });
+			NameLocal(0);
+			ends->BodyIp = CurrentChunk().Size();
+
+			EmitOp(OpCode::NewList);
+			Term();
+			EmitOp(OpCode::ListAppend);
+			if (!CheckOperator(TokenType::And))
+				ErrorAtCurrent("Expected 'and' between the two ends, like: keep my " + field + " between 0 and 100");
+			else
+				Advance();
+			Term();
+			EmitOp(OpCode::ListAppend);
+			EmitOp(OpCode::Return);
+			m_State = state.Enclosing;
+
+			EmitOp(OpCode::Closure);
+			EmitU16(MakeConstant(Value::FromObject(ends)));
+			for (const UpvalueInfo& upvalue : state.Upvalues)
+			{
+				EmitByte(upvalue.IsLocal ? 1 : 0);
+				EmitByte(upvalue.Index);
+			}
 		}
 
 		// 'finally' at the start of a line, with nothing after it that would make it a value.

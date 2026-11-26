@@ -28,6 +28,9 @@ Everything in the language on one page. For explanations and examples, see the [
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
 | Change handler | `when my health changes [with now, before] ... end` inside a kind: runs right after a write that changes the field (not for its first value; not again for a write inside it) |
+| Property | `property health_percent [as number] ... return ... end` inside a kind (1.8.0): read like a field (`hero.health_percent`), worked out by its block at each read; can't be set or `wait`; a kind that extends it can replace it, and `parent.health_percent` reads the one it replaced |
+| Keep in range | `keep my health between 0 and my max_health` inside a kind (1.8.0): every write to the field (`set`, `add`, `take`, ..., from anywhere) is clamped into the range, with the ends worked out at that write; a value that isn't a number is an error; the kind's own `set` line gives the first value as written |
+| Set handler | `when my is_open is set to wanted ... end` inside a kind (1.8.0): runs instead of each write to the field, right away (no `wait`); inside it, `set my is_open to ...` stores the value; storing nothing leaves the field as it was; `when my is_open changes` runs after a stored change |
 | Shared value | `shared count is 0` inside a kind: one value for the kind and all its objects, read and changed as `Enemy.count` (also inside its functions; `Boss.count` for a kind that extends it) |
 | New object | `new Enemy("Goblin")`, `new Point` |
 | Event handler | `when hit by damage ... end`, `when key pressed with key and shift ... end` |

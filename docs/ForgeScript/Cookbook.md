@@ -1,11 +1,11 @@
 # ForgeScript Cookbook
 
-Thirty-one short recipes for things almost every game needs: moving, fighting, inventories, saving,
+Thirty-two short recipes for things almost every game needs: moving, fighting, inventories, saving,
 timers, menus, getting around a level and the math in between. Each recipe is a complete script you can copy, followed by
 **how it works** for people new to ForgeScript and **going further** for people who know it.
 
 Every recipe here is checked with `forgescript --check` against MageCap Bellows' API each time
-ForgeScript is tested. The seventeen recipes that don't need the engine also carry their own `test`
+ForgeScript is tested. The eighteen recipes that don't need the engine also carry their own `test`
 blocks, and those run too, so what a recipe's tests say is what its code does. Run them yourself
 with `forgescript --test recipe.forge`. The others need a scene, so copy them into a script attached
 to an entity in MageCap Bellows.
@@ -1261,3 +1261,60 @@ not just how far away the player stands. `nearest_navigable_point(point)` moves 
 clicked spot onto the navmesh, and `is_navigable(point)` says whether an agent could stand there.
 Set the agent's `speed`, `acceleration` and `stopping_distance` in the Inspector or from a script
 (`set my_agent.speed to 6` after `set my_agent to self.get_component("NavAgent")`).
+
+## Keeping fields right
+
+### 32. A health bar that's always right
+
+Attach to the player. Health stays between 0 and the maximum however it changes, the bar's width is
+worked out from it, and a shield can refuse a hit.
+
+```forge
+kind Health
+	set amount to 100
+	set maximum to 100
+	set shielded to false
+	keep my amount between 0 and my maximum
+
+	property percent as number
+		return my amount / my maximum * 100
+	end
+
+	when my shielded is set to on
+		if on then
+			say "Shield up"
+		end
+		set my shielded to on
+	end
+
+	function hurt(damage)
+		if my shielded then
+			say "The shield took it"
+		else
+			take damage from my amount
+		end
+	end
+end
+
+test "health stays in range"
+	set health to new Health()
+	health.hurt(250)
+	expect health.amount is 0
+	expect health.percent is 0
+	add 40 to health.amount
+	expect health.percent is 40
+	set health.shielded to true
+	health.hurt(10)
+	expect health.amount is 40
+end
+```
+
+**How it works.** `keep my amount between 0 and my maximum` clamps every change to `amount`, from
+`hurt`, from another script or from the console, so it never goes below 0 or above the maximum.
+`property percent` is read like a field (`health.percent`) but worked out each time, so a bar that
+reads it every frame is never out of date. `when my shielded is set to on` runs whenever something
+sets `shielded`, and stores the value itself with `set my shielded to on`.
+
+**Going further.** Raise `maximum` and `amount` can go higher at once, since the ends are worked out
+at each change. To show the bar, set a UI image's width from `percent` in `when update`. Add
+`when my amount changes with now, before` to play a sound only when health really changes.
