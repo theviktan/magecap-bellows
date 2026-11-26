@@ -739,6 +739,7 @@ namespace ForgeScript {
 				state.TryDepth = tryDepth;
 				m_StopWords.resize(stopWords);
 				m_NoInvoke = false;
+				m_NumberConstantAt = c_NoNumberConstant;
 				// A mistake that knows its block reaches further (a match with no 'is') says where to go on.
 				const size_t next = resume();
 				m_Pos = m_ResumeAfter != c_NoResume ? std::max(next, m_ResumeAfter) : next;
@@ -1017,8 +1018,48 @@ namespace ForgeScript {
 
 		Chunk& CurrentChunk() { return m_State->Fn->Chunk; }
 
-		void EmitByte(uint8_t byte) { CurrentChunk().Write(byte, CodeLine()); }
-		void EmitOp(OpCode op) { CurrentChunk().Write(op, CodeLine()); }
+		void EmitByte(uint8_t byte)
+		{
+			m_NumberConstantAt = c_NoNumberConstant;
+			CurrentChunk().Write(byte, CodeLine());
+		}
+
+		void EmitOp(OpCode op)
+		{
+			if (FuseWithNumberConstant(op))
+				return;
+			EmitByte(static_cast<uint8_t>(op));
+		}
+
+		// 'n - 1', 'n < 2': an operator right after a number constant becomes one NumberOp, one step
+		// instead of two. Only when nothing can jump to the operator: the constant was the last thing
+		// emitted (any jump patched since forgets it), so no other path reaches the operator.
+		bool FuseWithNumberConstant(OpCode op)
+		{
+			switch (op)
+			{
+				case OpCode::Add: case OpCode::Subtract: case OpCode::Multiply:
+				case OpCode::Less: case OpCode::LessEqual: case OpCode::Greater: case OpCode::GreaterEqual:
+				case OpCode::Equal: case OpCode::NotEqual:
+					break;
+				default:
+					return false;
+			}
+			Chunk& chunk = CurrentChunk();
+			const size_t at = m_NumberConstantAt;
+			if (at == c_NoNumberConstant || m_NumberConstantChunk != &chunk || at + 3 != chunk.Size() ||
+				chunk.GetCode()[at] != static_cast<uint8_t>(OpCode::Constant))
+				return false;
+			std::vector<uint8_t>& code = chunk.GetCode();
+			const uint8_t high = code[at + 1];
+			const uint8_t low = code[at + 2];
+			code[at] = static_cast<uint8_t>(OpCode::NumberOp);
+			code[at + 1] = static_cast<uint8_t>(op);
+			code[at + 2] = high;
+			chunk.Write(low, CodeLine());
+			m_NumberConstantAt = c_NoNumberConstant;
+			return true;
+		}
 
 		// The line code being emitted belongs to. Code emitted right after an 'end' closes its block (a
 		// loop's jump back, a definition's closure) and belongs to the line that opened the block, so
@@ -1061,6 +1102,11 @@ namespace ForgeScript {
 		{
 			EmitOp(OpCode::Constant);
 			EmitU16(MakeConstant(value));
+			if (value.IsNumber())
+			{
+				m_NumberConstantAt = CurrentChunk().Size() - 3;
+				m_NumberConstantChunk = &CurrentChunk();
+			}
 		}
 
 		void EmitWithName(OpCode op, const std::string& name)
@@ -1095,6 +1141,8 @@ namespace ForgeScript {
 
 		void PatchJump(size_t offset)
 		{
+			// The jump lands here, so an operator emitted next can be reached without the constant before it.
+			m_NumberConstantAt = c_NoNumberConstant;
 			size_t jump = CurrentChunk().Size() - offset - 2;
 			if (jump > 0xffff)
 				Error("This block of code is too long to jump over. Split it into smaller functions.");
@@ -1716,12 +1764,10 @@ namespace ForgeScript {
 			{
 				Expression();
 				Match(TokenType::Then);
-				size_t skip = EmitJump(OpCode::JumpIfFalse);
-				EmitOp(OpCode::Pop);
+				size_t skip = EmitJump(OpCode::PopJumpIfFalse);
 				ScopedBlock();
 				endJumps.push_back(EmitJump(OpCode::Jump));
 				PatchJump(skip);
-				EmitOp(OpCode::Pop);
 
 				if (Match(TokenType::Else) || Match(TokenType::Otherwise))
 				{
@@ -2095,12 +2141,10 @@ namespace ForgeScript {
 					PatchJump(jump);
 				Match(TokenType::Then);
 
-				size_t skip = EmitJump(OpCode::JumpIfFalse);
-				EmitOp(OpCode::Pop);
+				size_t skip = EmitJump(OpCode::PopJumpIfFalse);
 				ScopedBlock();
 				endJumps.push_back(EmitJump(OpCode::Jump));
 				PatchJump(skip);
-				EmitOp(OpCode::Pop);
 			}
 
 			bool hasOtherwise = false;
@@ -2726,14 +2770,12 @@ namespace ForgeScript {
 				(Peek(1).Type == TokenType::Do || Peek(1).Type == TokenType::Newline);
 			Expression();
 			Match(TokenType::Do);
-			size_t exit = EmitJump(isUntil ? OpCode::JumpIfTrue : OpCode::JumpIfFalse);
-			EmitOp(OpCode::Pop);
+			size_t exit = EmitJump(isUntil ? OpCode::PopJumpIfTrue : OpCode::PopJumpIfFalse);
 			PushLoop(loopStart, true);
 			size_t bodyStart = m_Pos;
 			ScopedBlock();
 			EmitLoop(loopStart);
 			PatchJump(exit);
-			EmitOp(OpCode::Pop);
 			PopLoop();
 			if (forever && m_Options.Warnings && !MayPauseOrLeave(bodyStart, m_Pos))
 				Warn(opener, "This '" + std::string(opener.Lexeme) + " " + condition + "' loop never waits, so nothing else in the "
@@ -4387,12 +4429,14 @@ namespace ForgeScript {
 				return;
 			Advance();
 			const Chunk::Piece value = CurrentChunk().Cut(start);
+			m_NumberConstantAt = c_NoNumberConstant;
 			OrExpression();
 			if (!Match(TokenType::Otherwise) && !Match(TokenType::Else))
 				ErrorAtCurrent("Say which value to use when it isn't true, like: set size to \"big\" if x > 3 otherwise \"small\"");
 			const size_t otherwise = EmitJump(OpCode::JumpIfFalse);
 			EmitOp(OpCode::Pop);
 			CurrentChunk().Paste(value);
+			m_NumberConstantAt = c_NoNumberConstant;
 			const size_t done = EmitJump(OpCode::Jump);
 			PatchJump(otherwise);
 			EmitOp(OpCode::Pop);
@@ -5437,6 +5481,10 @@ namespace ForgeScript {
 		std::set<std::string> m_ScriptPhraseWords; // first words of phrases the scripts make (those may wait)
 		static constexpr size_t c_NoResume = static_cast<size_t>(-1);
 		size_t m_ResumeAfter = c_NoResume; // where to go on after the mistake being reported, if past its statement
+		// Where the last emitted instruction, a number constant, starts (see FuseWithNumberConstant).
+		static constexpr size_t c_NoNumberConstant = static_cast<size_t>(-1);
+		size_t m_NumberConstantAt = c_NoNumberConstant;
+		const Chunk* m_NumberConstantChunk = nullptr;
 		CompileError m_Error;
 		CompileError m_Fix;   // only its Fix fields: the change the next ErrorAt offers (see FixTokens)
 		Token m_MisplacedEndOpener;

@@ -65,6 +65,10 @@ namespace ForgeScript {
 		Jump,            // u16 forward offset
 		JumpIfFalse,     // u16 forward offset (does not pop)
 		JumpIfTrue,      // u16 forward offset (does not pop)
+		PopJumpIfFalse,  // u16 forward offset         value -> (pops the condition, then jumps if it was false)
+		PopJumpIfTrue,   // u16 forward offset         value -> (pops the condition, then jumps if it was true)
+		NumberOp,        // u8 op, u16 constant        left -> left op constant: an Add, Subtract, Multiply, comparison,
+		                 // Equal or NotEqual whose right side is a number constant ('n - 1', 'n < 2'), in one step
 		Loop,            // u16 backward offset
 
 		ForPrepare,      // u8 slot of counter (counter, end, step occupy slot..slot+2)
@@ -185,6 +189,19 @@ namespace ForgeScript {
 			return m_Constants.size() - 1;
 		}
 
+		// Where a 'GetGlobal' found its name last time, by the name's constant index, so a script that
+		// reads the same global (a function it calls, a setting) skips the lookup. Valid while the module
+		// and the built-ins have gained no names since (their versions are unchanged): a value's place in
+		// its table never moves, and names are only added, never removed, while the module is loaded.
+		struct GlobalCacheEntry
+		{
+			const void* Module = nullptr;
+			uint32_t ModuleVersion = 0;
+			uint32_t SharedVersion = 0;
+			Value* Slot = nullptr;
+		};
+		std::vector<GlobalCacheEntry>& GetGlobalCache() { return m_GlobalCache; }
+
 		std::vector<uint8_t>& GetCode() { return m_Code; }
 		const std::vector<uint8_t>& GetCode() const { return m_Code; }
 		const std::vector<Value>& GetConstants() const { return m_Constants; }
@@ -217,6 +234,7 @@ namespace ForgeScript {
 		}
 
 	private:
+		std::vector<GlobalCacheEntry> m_GlobalCache;
 		std::vector<uint8_t> m_Code;
 		std::vector<int> m_Lines;
 		std::vector<Value> m_Constants;

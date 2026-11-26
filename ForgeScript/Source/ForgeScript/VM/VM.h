@@ -454,6 +454,8 @@ namespace ForgeScript {
 		bool RunFieldRule(Task* task, Instance* instance, Closure* rule, const Value* argument, String* setField, Value& outResult);
 		bool GetIndex(Task* task, const Value& object, const Value& index, Value& outValue);
 		bool SetIndex(Task* task, const Value& object, const Value& index, const Value& value);
+		// Where a global's value is kept: the module's own name first, then a built-in; null if neither.
+		Value* FindGlobalSlot(Module* module, String* name);
 		bool LookupGlobal(Module* module, String* name, Value& outValue);
 		// Every name code in this function can read, for a "Did you mean ...?" hint: its variables, its
 		// script's and the shared ones.
@@ -512,6 +514,7 @@ namespace ForgeScript {
 
 		PhraseTable m_Phrases;
 		std::unordered_map<String*, Value> m_SharedGlobals;
+		uint32_t m_SharedGlobalsVersion = 0; // Goes up each time m_SharedGlobals gains a name (Chunk::GlobalCacheEntry).
 		StringTable m_Strings;
 		std::vector<Module*> m_Modules;
 		std::unordered_map<std::string, Module*> m_UsedModules;
@@ -555,6 +558,14 @@ namespace ForgeScript {
 		// InstructionLimit, CountInstructions or profiling: anything that looks at every instruction. One
 		// test of this per instruction is cheaper than testing all three.
 		bool m_WatchEachInstruction = false;
+		// What Execute must look at before an instruction, as bits, so the usual run tests one byte: the
+		// collector is due (c_CheckCollect), instructions are counted or profiled (c_CheckWatch), or the
+		// debugger is on (c_CheckDebug).
+		static constexpr uint8_t c_CheckCollect = 1;
+		static constexpr uint8_t c_CheckWatch = 2;
+		static constexpr uint8_t c_CheckDebug = 4;
+		uint8_t m_DispatchChecks = 0;
+		void SetDispatchCheck(uint8_t check, bool on) { m_DispatchChecks = on ? (m_DispatchChecks | check) : (m_DispatchChecks & ~check); }
 		std::unordered_map<const Function*, ProfileEntry> m_Profile;
 		const Function* m_ProfiledFunction = nullptr; // the last function counted, and its entry
 		ProfileEntry* m_ProfiledEntry = nullptr;
@@ -610,6 +621,8 @@ namespace ForgeScript {
 		m_Objects = object;
 		m_BytesAllocated += object->m_AllocatedSize;
 		m_ObjectCount++;
+		if (m_BytesAllocated > m_NextGC)
+			m_DispatchChecks |= c_CheckCollect;
 		return object;
 	}
 

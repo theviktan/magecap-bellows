@@ -1,0 +1,92 @@
+# The faster steps for calls, number math and if/while must give the same answers as before.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+
+# A number on the right of + - * and the comparisons, with a number on the left.
+set n to 10
+say n + 1                                               # expect: 11
+say n - 1                                               # expect: 9
+say n * 2                                               # expect: 20
+say n < 2                                               # expect: false
+say n <= 10                                             # expect: true
+say n > 2                                               # expect: true
+say n >= 11                                             # expect: false
+say n == 10                                             # expect: true
+say n != 10                                             # expect: false
+
+# Something else on the left still works as it always did.
+say "level " + 1                                        # expect: level 1
+say problem_of(function() return [1, 2] + 3 end)        # expect: Cannot add list and number.
+say "a" == 1                                            # expect: false
+say "a" != 1                                            # expect: true
+say nothing == 0                                        # expect: false
+say [1] == 1                                            # expect: false
+say problem_of(function() return "a" < 1 end)           # expect: Cannot compare text with number. Only numbers with numbers, or text with text.
+say problem_of(function() return 1 < 5 < 10 end)        # expect: Cannot compare boolean with number. Only numbers with numbers, or text with text. To check that a value is between two others, write: if x is between 1 and 10
+say problem_of(function() return nothing - 1 end)       # expect: Cannot subtract nothing and number.
+say problem_of(function() return true * 2 end)          # expect: Cannot multiply boolean and number.
+
+# A jump that lands right before an operator: both ways of reaching it must work.
+function pick(flag)
+	return (5 if flag otherwise 7) - 1
+end
+say pick(true)                                          # expect: 4
+say pick(false)                                         # expect: 6
+say (2 if n > 5 otherwise 3) * 10                       # expect: 20
+say (true and 3) + 1                                    # expect: 4
+say (false or 8) - 1                                    # expect: 7
+
+# if, else if, while and until pop their condition: the stack stays the same size through many rounds.
+set count to 0
+set i to 0
+while i < 1000
+	if i % 3 == 0
+		add 1 to count
+	else if i % 3 == 1
+		add 2 to count
+	else
+		add 3 to count
+	end
+	add 1 to i
+end
+say count                                               # expect: 1999
+set j to 0
+until j >= 5
+	add 1 to j
+end
+say j                                                   # expect: 5
+
+# Calls through the fast path: plain arity, then defaults, extra names and deep recursion use the slow one.
+function fib(x)
+	if x < 2
+		return x
+	end
+	return fib(x - 1) + fib(x - 2)
+end
+say fib(20)                                             # expect: 6765
+function greet(name, greeting is "Hi")
+	return greeting + " " + name
+end
+say greet("Ana")                                        # expect: Hi Ana
+say greet("Ana", "Hello")                               # expect: Hello Ana
+function deep(k)
+	if k == 0
+		return 0
+	end
+	return deep(k - 1) + 1
+end
+say deep(150)                                           # expect: 150
+
+# A variable made after a function first read the script's variables is still found (the cache refreshes).
+function read_later()
+	return later_value
+end
+say problem_of(read_later)                              # expect: 'later_value' has not been given a value yet. Use: set later_value to ...
+set later_value to 42
+say read_later()                                        # expect: 42

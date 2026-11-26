@@ -75,9 +75,14 @@ namespace ForgeScript
 				Grow(count);
 		}
 
-		// New places hold nothing, as with std::vector.
-		void resize(size_t count)
+		// New places hold nothing, as with std::vector. Shrinking (every return) is just the size.
+		FORGESCRIPT_ALWAYS_INLINE void resize(size_t count)
 		{
+			if (count <= m_Size)
+			{
+				m_Size = count;
+				return;
+			}
 			if (count > m_Capacity)
 				Grow(count);
 			for (size_t i = m_Size; i < count; i++)

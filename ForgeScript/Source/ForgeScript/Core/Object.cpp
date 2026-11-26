@@ -105,6 +105,7 @@ namespace ForgeScript {
 		{
 			GlobalOrder.push_back(name);
 			Globals.emplace(name, value);
+			GlobalsVersion++;
 			return;
 		}
 		it->second = value;
