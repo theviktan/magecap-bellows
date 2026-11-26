@@ -224,6 +224,8 @@ class Checker(bellows.Script):
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Assets" / "Scripts" / "Checker.py"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Shaders" / "PBR.frag.spv"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "ThirdPartyNotices.md"));
+	CHECK(FileSystem::ReadTextFile(options.OutputDirectory / "Bellows-LICENSE.txt").value_or("").find("Apache License") != std::string::npos);
+	CHECK(FileSystem::ReadTextFile(options.OutputDirectory / "Bellows-NOTICE.txt").value_or("").find("Copyright 2026 MageCap Games") != std::string::npos);
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Resources" / "Fonts" / "Inter" / "Inter-Regular.ttf"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Resources" / "Fonts" / "Inter" / "OFL.txt"));
 	CHECK(FileSystem::Exists(options.OutputDirectory / "Python" / "bellows" / "__init__.py"));

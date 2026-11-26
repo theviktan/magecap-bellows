@@ -120,7 +120,8 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
 
 1. **Stay inside this repository.** Do not read, copy from or reference other code on the
    machine. Third-party code comes in only as a submodule in `vendor/` with a compatible license,
-   recorded in `ThirdPartyNotices.md`.
+   recorded in `ThirdPartyNotices.md`. The repository is Apache-2.0 (`LICENSE`, `NOTICE`:
+   "Copyright 2026 MageCap Games"); source files carry no per-file license headers.
 2. **Everything is tested.** New engine behavior gets a doctest case; new script API gets a check
    in `FeatureTest.py` and, when ForgeScript uses it differently, `FeatureTest.forge` (and a line
    in `docs/ScriptingAPI.md`); new editor automation gets a check in `EditorAutomationTest.py`

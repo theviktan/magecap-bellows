@@ -2539,12 +2539,15 @@ namespace Bellows {
 			ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 1.4f);
 			ImGui::TextUnformatted("MageCap Bellows");
 			ImGui::PopFont();
-			UI::TextMuted(("Version " + BuildInfo::GetVersionText() + "  -  (c) MageCap Games").c_str());
+			UI::TextMuted(("Version " + BuildInfo::GetVersionText() + "  -  Copyright 2026 MageCap Games").c_str());
 			ImGui::EndGroup();
 			ImGui::Spacing();
 			ImGui::TextWrapped("Renderer: %s (Vulkan via NVRHI)", Application::Get().GetRenderDevice().GetAdapterName().c_str());
 			ImGui::Spacing();
 			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
+			ImGui::TextWrapped("Free and open source under the Apache License 2.0 (LICENSE and NOTICE). "
+				"The games you make with Bellows are yours, with no royalties.");
+			ImGui::Spacing();
 			ImGui::TextWrapped("Built with GLFW, NVRHI, Dear ImGui, ImGuizmo, EnTT, Jolt Physics, miniaudio, pybind11, glm, spdlog, cgltf, "
 				"stb, nlohmann/json, portable-file-dialogs, Inter, JetBrains Mono and Lucide icons. See ThirdPartyNotices.md.");
 			ImGui::PopFont();
