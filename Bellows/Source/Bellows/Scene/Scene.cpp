@@ -126,6 +126,7 @@ namespace Bellows {
 	{
 		Ref<Scene> scene = CreateRef<Scene>(source->m_Name);
 		scene->m_Settings = source->m_Settings;
+		scene->m_Groups = source->m_Groups;
 		scene->m_NavMesh = source->m_NavMesh;
 		scene->m_ViewportWidth = source->m_ViewportWidth;
 		scene->m_ViewportHeight = source->m_ViewportHeight;
@@ -336,6 +337,9 @@ namespace Bellows {
 		}
 
 		const glm::mat4 worldTransform = GetWorldTransform(child);
+		// A child follows its top-level ancestor's group; one that becomes top-level stays in the group
+		// it was in, so it doesn't jump to another place in the Hierarchy.
+		const UUID group = GetEntityGroup(child);
 		RemoveFromParentList(child);
 
 		RelationshipComponent& relationship = child.GetComponent<RelationshipComponent>();
@@ -348,6 +352,7 @@ namespace Bellows {
 		{
 			m_RootEntities.push_back(child.GetUUID());
 		}
+		child.GetComponent<TagComponent>().Group = parent ? UUID(0) : group;
 
 		if (keepWorldTransform)
 			SetWorldTransform(child, worldTransform);
@@ -372,6 +377,131 @@ namespace Bellows {
 		siblings.erase(it);
 		index = std::min(index, siblings.size());
 		siblings.insert(siblings.begin() + static_cast<std::ptrdiff_t>(index), uuid);
+	}
+
+	SceneGroup* Scene::FindGroup(UUID id)
+	{
+		if (!id.IsValid())
+			return nullptr;
+		auto it = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const SceneGroup& group) { return group.ID == id; });
+		return it != m_Groups.end() ? &*it : nullptr;
+	}
+
+	SceneGroup* Scene::FindGroup(std::string_view name)
+	{
+		const std::string trimmed = SceneGroups::Trim(name);
+		auto it = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const SceneGroup& group) { return SceneGroups::NamesMatch(group.Name, trimmed); });
+		return it != m_Groups.end() ? &*it : nullptr;
+	}
+
+	SceneGroup& Scene::CreateGroup(std::string_view name)
+	{
+		const std::string trimmed = SceneGroups::Trim(name);
+		if (const std::optional<std::string> problem = SceneGroups::CheckName(trimmed))
+			throw std::invalid_argument(*problem);
+		if (const SceneGroup* existing = FindGroup(trimmed))
+			throw std::invalid_argument("The scene already has a group named '" + existing->Name + "'");
+		if (m_Groups.size() >= SceneGroups::MaxGroups)
+			throw std::invalid_argument("A scene can have at most " + std::to_string(SceneGroups::MaxGroups) + " groups");
+		SceneGroup& group = m_Groups.emplace_back();
+		group.Name = trimmed;
+		return group;
+	}
+
+	void Scene::RenameGroup(UUID id, std::string_view name)
+	{
+		SceneGroup* group = FindGroup(id);
+		if (!group)
+			throw std::invalid_argument("The group no longer exists");
+		const std::string trimmed = SceneGroups::Trim(name);
+		if (const std::optional<std::string> problem = SceneGroups::CheckName(trimmed))
+			throw std::invalid_argument(*problem);
+		if (const SceneGroup* existing = FindGroup(trimmed); existing && existing != group)
+			throw std::invalid_argument("The scene already has a group named '" + existing->Name + "'");
+		group->Name = trimmed;
+	}
+
+	bool Scene::DeleteGroup(UUID id)
+	{
+		auto it = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const SceneGroup& group) { return group.ID == id; });
+		if (it == m_Groups.end())
+			return false;
+		m_Groups.erase(it);
+		for (entt::entity handle : m_Registry.view<TagComponent>())
+		{
+			TagComponent& tag = m_Registry.get<TagComponent>(handle);
+			if (tag.Group == id)
+				tag.Group = 0;
+		}
+		return true;
+	}
+
+	void Scene::MoveGroup(UUID id, size_t index)
+	{
+		auto it = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const SceneGroup& group) { return group.ID == id; });
+		if (it == m_Groups.end())
+			return;
+		SceneGroup group = std::move(*it);
+		m_Groups.erase(it);
+		index = std::min(index, m_Groups.size());
+		m_Groups.insert(m_Groups.begin() + static_cast<std::ptrdiff_t>(index), std::move(group));
+	}
+
+	UUID Scene::GetEntityGroup(Entity entity)
+	{
+		if (!entity)
+			return 0;
+		Entity root = entity;
+		while (Entity parent = root.GetParent())
+			root = parent;
+		const UUID group = root.GetComponent<TagComponent>().Group;
+		return FindGroup(group) ? group : UUID(0);
+	}
+
+	bool Scene::SetEntityGroup(Entity entity, UUID group)
+	{
+		if (!entity || entity.GetParent() || (group.IsValid() && !FindGroup(group)))
+			return false;
+		entity.GetComponent<TagComponent>().Group = group;
+		return true;
+	}
+
+	std::vector<Entity> Scene::GetGroupEntities(UUID group, bool withDescendants)
+	{
+		std::vector<Entity> entities;
+		if (!FindGroup(group))
+			return entities;
+		std::function<void(Entity)> visit = [&](Entity entity)
+		{
+			if (IsPendingDestroy(entity))
+				return;
+			entities.push_back(entity);
+			if (withDescendants)
+			{
+				for (Entity child : entity.GetChildren())
+				{
+					if (child)
+						visit(child);
+				}
+			}
+		};
+		for (Entity root : GetRootEntities())
+		{
+			if (root.GetComponent<TagComponent>().Group == group)
+				visit(root);
+		}
+		return entities;
+	}
+
+	void Scene::SetGroups(std::vector<SceneGroup> groups)
+	{
+		m_Groups = std::move(groups);
+		for (entt::entity handle : m_Registry.view<TagComponent>())
+		{
+			TagComponent& tag = m_Registry.get<TagComponent>(handle);
+			if (tag.Group.IsValid() && !FindGroup(tag.Group))
+				tag.Group = 0;
+		}
 	}
 
 	glm::mat4 Scene::GetWorldTransform(Entity entity)

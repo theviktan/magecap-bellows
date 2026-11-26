@@ -208,6 +208,9 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `find_entity(name)` | First entity with that name, or `None`. |
 | `find_tagged(tag)` | Every entity with the tag, parents before their children; an empty list when there are none. |
 | `get_entity(id)` | Entity by its persistent ID (`entity.id`), or `None`. |
+| `group(name)` | The Hierarchy group with that name (any letter case), or `None`. See Groups below. |
+| `groups()` | Every Hierarchy group of the scene, in the order the Hierarchy shows them. |
+| `create_group(name, icon="folder")` | Adds a group at the end of the list and returns it. The name is trimmed, 1 to 64 characters on one line, and not used by another group in any letter case; a scene has at most 256 groups. A bad name, a name in use or an unknown icon raises `ValueError`. |
 | `get_entities(component=None)` | All entities, optionally only those with a component (`get_entities(bellows.RigidBody)` or `get_entities("RigidBody")`). |
 | `instantiate(prefab, position=None, parent=None)` | Spawns a `.bprefab` and returns its root entity. |
 | `primary_camera()` | The entity whose Camera is primary, or `None`. |
@@ -229,8 +232,10 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `valid` / `bool(entity)` | `False` once destroyed. |
 | `name` | Read/write. |
 | `keep_across_scenes` | Read/write. When true, the entity and its children stay when `load_scene` changes the scene (the Inspector's **Keep Across Scenes**, saved in the scene). A kept child of an entity that goes moves to the top level and stays where it is in the world. |
-| `tags` | The groups the entity belongs to (`["enemy", "boss"]`), in the order they were added; the Inspector's **Tags**, saved in the scene. Read-only: change it with the methods below. |
+| `tags` | The labels the entity has (`["enemy", "boss"]`), in the order they were added; the Inspector's **Tags**, saved in the scene. Read-only: change it with the methods below. Tags label entities; groups (below) are how the Hierarchy is laid out. |
 | `add_tag(tag)`, `remove_tag(tag)`, `has_tag(tag)` | `add_tag` returns `False` when the entity has the tag already, and `remove_tag` when it didn't. A tag is trimmed, 1 to 64 characters on one line, and matches exactly (letter case counts); an entity has at most 32. A tag that breaks these rules raises `ValueError`. |
+| `group` | The Hierarchy group the entity is in, or `None`. A child is in its top-level ancestor's group. Read/write: setting a `Group` (or `None`) moves a top-level entity; setting it on a child raises `ValueError`. |
+| `is_in_group(name)` | `True` when the entity, or its top-level ancestor, is in the group with that name (any letter case). |
 | `position` | **World** position (read/write). |
 | `local_position` | Position relative to the parent. |
 | `rotation` | Local rotation as Euler angles in **degrees**. |
@@ -244,6 +249,32 @@ if bellows.is_action_pressed("jump") and self.on_ground:
 | `value` | A widget's value: a `UIToggle`'s `on`, a `UISlider`'s `value`, a `UIDropdown`'s `selected` or a `UITextInput`'s text (see Widgets). |
 | `text`, `visible`, `interactable`, `focus()` | Everyday UI shortcuts: `text` is its `Text` component's text; `visible` is its `UIRect`'s (or `UICanvas`'s) visibility; `interactable` is its `UIRect`'s; `focus()` gives it keyboard and gamepad focus and returns `False` when it can't take it. An entity without the component they need raises `RuntimeError` naming the entity. |
 | `script` | The running script instance (play mode), or `None`. |
+
+### Groups
+
+A group is a named folder in the Hierarchy that a scene's top-level entities are filed under; each
+entity's children follow it. Groups never move, parent or hide anything: they are how a scene is laid
+out, and scripts can use them to reach everything in one ("Docking", "Enemies"). They are saved in the
+scene, kept in play mode, and on `load_scene` the groups of kept entities stay (a group of the same name
+in the new scene is the same group).
+
+| Member | Description |
+|--------|-------------|
+| `id`, `valid` | Its persistent ID; `valid` is `False` once it has been deleted. Using a deleted group raises `RuntimeError`. |
+| `name` | Read/write, with the rules of `create_group`. |
+| `note` | What the group is for, shown under its name in the Hierarchy (at most 200 characters). |
+| `icon` | `folder`, `mountain`, `anchor`, `rocket`, `lightbulb`, `layout`, `music`, `camera`, `box`, `user`, `users`, `flag`, `star`, `swords`, `trees` or `house`. |
+| `color` | Its icon's color, a `Vec3` of red, green and blue from 0 to 1. |
+| `entities()` | The top-level entities in the group, in Hierarchy order. |
+| `all_entities()` | The same with everything under them, parents before their children. |
+| `has_entity(entity)` | `True` when the entity, or its top-level ancestor, is in the group. |
+| `add_entity(entity)`, `remove_entity(entity)` | Move a top-level entity into the group (from any other) or out of it, into none. `add_entity` returns `False` when it was already in it, `remove_entity` when it wasn't; a child raises `ValueError`. |
+| `delete()` | Removes the group; its entities stay where they are, in no group. |
+
+```python
+for bay in bellows.group("Docking").entities():
+    bay.add_tag("open")
+```
 
 ## Components
 

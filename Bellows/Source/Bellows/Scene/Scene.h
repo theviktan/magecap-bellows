@@ -7,6 +7,7 @@
 #include "Bellows/Navigation/NavMesh.h"
 #include "Bellows/Renderer/SceneRenderer.h"
 #include "Bellows/Scene/CameraShake.h"
+#include "Bellows/Scene/SceneGroups.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UITheme.h"
 
@@ -16,6 +17,7 @@
 
 #include <chrono>
 #include <functional>
+#include <string_view>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -80,6 +82,33 @@ namespace Bellows {
 		void Unparent(Entity child, bool keepWorldTransform = true);
 		// Moves a root entity (or a child within its parent) to a new index in its sibling list.
 		void SetSiblingIndex(Entity entity, size_t index);
+
+		// Hierarchy groups (Scene/SceneGroups.h), in the order the Hierarchy shows them. Top-level entities
+		// are filed under a group; their children follow them. A group never moves anything.
+		const std::vector<SceneGroup>& GetGroups() const { return m_Groups; }
+		SceneGroup* FindGroup(UUID id);
+		// By name, in any letter case; null when there is none.
+		SceneGroup* FindGroup(std::string_view name);
+		// Adds a group at the end and returns it. Throws std::invalid_argument with the reason when the
+		// name can't be used or another group has it, or the scene has MaxGroups already.
+		SceneGroup& CreateGroup(std::string_view name);
+		// Throws std::invalid_argument as CreateGroup does; renaming a group to its own name in another
+		// letter case is allowed.
+		void RenameGroup(UUID id, std::string_view name);
+		// Removes a group; its entities stay where they are, in no group. False when there is no such group.
+		bool DeleteGroup(UUID id);
+		// Moves a group to a new place in the list.
+		void MoveGroup(UUID id, size_t index);
+		// The group of a top-level entity, or of a child's top-level ancestor; 0 for none.
+		UUID GetEntityGroup(Entity entity);
+		// Files a top-level entity under a group (0 for none). False, with nothing changed, when the entity
+		// has a parent (it follows its parent's) or the group doesn't exist.
+		bool SetEntityGroup(Entity entity, UUID group);
+		// The top-level entities filed under a group, in hierarchy order, leaving out those destroyed this
+		// frame; with descendants, each one's children follow it.
+		std::vector<Entity> GetGroupEntities(UUID group, bool withDescendants = false);
+		// Replaces every group (scene files, undo); entities filed under a group that is gone are in none.
+		void SetGroups(std::vector<SceneGroup> groups);
 
 		glm::mat4 GetWorldTransform(Entity entity);
 		void SetWorldTransform(Entity entity, const glm::mat4& worldTransform);
@@ -279,6 +308,7 @@ namespace Bellows {
 		std::unordered_map<UUID, entt::entity> m_EntityMap;
 		std::vector<UUID> m_RootEntities;
 		std::vector<UUID> m_PendingDestroy;
+		std::vector<SceneGroup> m_Groups;
 		SceneSettings m_Settings;
 
 		uint32_t m_ViewportWidth = 1280;

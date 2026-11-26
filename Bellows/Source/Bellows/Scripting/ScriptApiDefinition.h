@@ -262,6 +262,60 @@ namespace Bellows::Scripting {
 			return entity ? entity->Resolve() : Entity();
 		}
 
+		// --- Groups ----------------------------------------------------------
+
+		inline ScriptGroup MakeScriptGroup(const Scene& scene, const SceneGroup& group)
+		{
+			return ScriptGroup { scene.GetID(), group.ID };
+		}
+
+		// The scene and the group a handle names; throws when either is gone.
+		inline std::pair<Scene*, SceneGroup*> ResolveGroup(const ScriptGroup& handle)
+		{
+			Scene* scene = Scene::GetSceneByID(handle.SceneID);
+			SceneGroup* group = scene ? scene->FindGroup(handle.ID) : nullptr;
+			if (!group)
+				throw std::runtime_error("This group no longer exists (it was deleted, or its scene was closed)");
+			return { scene, group };
+		}
+
+		inline std::vector<ScriptEntity> GroupEntities(const ScriptGroup& handle, bool withDescendants)
+		{
+			auto [scene, group] = ResolveGroup(handle);
+			std::vector<ScriptEntity> result;
+			for (Entity entity : scene->GetGroupEntities(group->ID, withDescendants))
+				result.emplace_back(entity);
+			return result;
+		}
+
+		// Files a top-level entity under a group (none for no group); a child can't be filed by itself.
+		inline void SetEntityGroup(const ScriptEntity& entity, const std::optional<ScriptGroup>& handle)
+		{
+			Entity resolved = entity.Resolve();
+			Scene& scene = *resolved.GetScene();
+			UUID group = 0;
+			if (handle)
+			{
+				auto [groupScene, sceneGroup] = ResolveGroup(*handle);
+				if (groupScene != &scene)
+					throw ScriptValueError("The group '" + sceneGroup->Name + "' is in another scene");
+				group = sceneGroup->ID;
+			}
+			if (resolved.GetParent())
+				throw ScriptValueError("'" + resolved.GetName() + "' has a parent, so it is in its top-level ancestor's group; move that one, or unparent it first");
+			scene.SetEntityGroup(resolved, group);
+		}
+
+		inline std::string RequireGroupIcon(const std::string& icon)
+		{
+			if (SceneGroups::IsIcon(icon))
+				return icon;
+			std::string names;
+			for (std::string_view name : SceneGroups::GetIcons())
+				names += (names.empty() ? "" : ", ") + std::string(name);
+			throw ScriptValueError("Unknown group icon '" + icon + "'. Icons: " + names);
+		}
+
 		// --- Tweens ----------------------------------------------------------
 
 		inline double RequireTweenSeconds(double seconds, const char* what)
@@ -1171,6 +1225,10 @@ namespace Bellows::Scripting {
 		scroll.ReadOnly("viewport_size", [](const UIScrollRef& r) { return Detail::ToScriptVector(r.Get().RuntimeViewportSize); },
 			"The size of the part in view, in reference pixels, as of the last frame drawn (z unused)");
 
+		auto group = api.template Class<ScriptGroup>("Group",
+			"A Hierarchy group: a named folder the scene's top-level entities are filed under (their children follow them). "
+			"It never moves anything; find one with group(name)");
+
 		// --- Entity -----------------------------------------------------------
 		auto entity = api.template Class<ScriptEntity>("Entity", "A handle to an entity in a scene");
 		entity.ReadOnly("id", [](const ScriptEntity& e) { return static_cast<uint64_t>(e.ID); }, "");
@@ -1180,7 +1238,7 @@ namespace Bellows::Scripting {
 			[](const ScriptEntity& e, bool v) { e.Resolve().GetComponent<TagComponent>().KeepAcrossScenes = v; },
 			"The entity and its children stay when load_scene changes the scene, keeping their scripts, physics and sounds");
 		entity.ReadOnly("tags", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TagComponent>().Tags; },
-			"The groups the entity belongs to (\"enemy\"), in the order they were added; find them with find_tagged");
+			"The labels the entity has (\"enemy\"), in the order they were added; find them with find_tagged");
 		entity.Method("add_tag", [](const ScriptEntity& e, const std::string& tag) { return Detail::AddTag(e, tag); },
 			"Adds a tag, and returns false when the entity already had it. A tag is trimmed, 1 to 64 characters, and an entity has at most 32",
 			Arg("tag"));
@@ -1188,6 +1246,23 @@ namespace Bellows::Scripting {
 			"Removes a tag, and returns false when the entity didn't have it", Arg("tag"));
 		entity.Method("has_tag", [](const ScriptEntity& e, const std::string& tag) { return EntityTags::HasTag(e.Resolve().GetComponent<TagComponent>(), tag); },
 			"True when the entity has the tag (letter case counts)", Arg("tag"));
+		entity.Property("group",
+			[](const ScriptEntity& e) -> std::optional<ScriptGroup>
+			{
+				Entity resolved = e.Resolve();
+				Scene& scene = *resolved.GetScene();
+				const SceneGroup* group = scene.FindGroup(scene.GetEntityGroup(resolved));
+				return group ? std::optional<ScriptGroup>(Detail::MakeScriptGroup(scene, *group)) : std::nullopt;
+			},
+			[](const ScriptEntity& e, const std::optional<ScriptGroup>& group) { Detail::SetEntityGroup(e, group); },
+			"The Hierarchy group the entity is in, or None. A child is in its top-level ancestor's group; only a top-level entity can be moved to another");
+		entity.Method("is_in_group", [](const ScriptEntity& e, const std::string& name)
+			{
+				Entity resolved = e.Resolve();
+				Scene& scene = *resolved.GetScene();
+				const SceneGroup* group = scene.FindGroup(name);
+				return group && scene.GetEntityGroup(resolved) == group->ID;
+			}, "True when the entity, or its top-level ancestor, is in the group with this name (any letter case)", Arg("name"));
 		entity.ReadOnly("transform", [](const ScriptEntity& e) { e.Resolve(); return TransformRef { e }; }, "");
 		entity.Property("position", [](const ScriptEntity& e) { return GetWorldPosition(e); }, [](const ScriptEntity& e, const glm::vec3& v) { SetWorldPosition(e, v); }, "World-space position");
 		entity.Property("local_position", [](const ScriptEntity& e) { return e.Resolve().GetComponent<TransformComponent>().Translation; },
@@ -1342,6 +1417,73 @@ namespace Bellows::Scripting {
 		api.Function("destroy", [](const ScriptEntity& target) { if (Entity e = target.TryResolve()) e.GetScene()->DestroyEntity(e); }, "", Arg("entity"));
 
 		// --- Tweens ------------------------------------------------------------
+		// --- Group ------------------------------------------------------------
+		// Declared above Entity, which refers to it; its members follow Entity's, which they refer to.
+		group.ReadOnly("id", [](const ScriptGroup& g) { Detail::ResolveGroup(g); return static_cast<uint64_t>(g.ID); }, "");
+		group.ReadOnly("valid", [](const ScriptGroup& g)
+			{
+				Scene* scene = Scene::GetSceneByID(g.SceneID);
+				return scene && scene->FindGroup(g.ID);
+			}, "False once the group has been deleted");
+		group.Property("name", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->Name; },
+			[](const ScriptGroup& g, const std::string& name)
+			{
+				auto [scene, sceneGroup] = Detail::ResolveGroup(g);
+				try
+				{
+					scene->RenameGroup(sceneGroup->ID, name);
+				}
+				catch (const std::invalid_argument& error)
+				{
+					throw ScriptValueError(error.what());
+				}
+			}, "Trimmed, 1 to 64 characters, and not used by another group of the scene in any letter case");
+		group.Property("note", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->Note; },
+			[](const ScriptGroup& g, const std::string& note)
+			{
+				if (const std::optional<std::string> problem = SceneGroups::CheckNote(note))
+					throw ScriptValueError(*problem);
+				Detail::ResolveGroup(g).second->Note = note;
+			}, "What the group is for, shown under its name in the Hierarchy (at most 200 characters)");
+		group.Property("icon", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->Icon; },
+			[](const ScriptGroup& g, const std::string& icon) { Detail::ResolveGroup(g).second->Icon = Detail::RequireGroupIcon(icon); },
+			"The icon it shows: folder, mountain, anchor, rocket, lightbulb, layout, music, camera, box, user, users, flag, star, swords, trees or house");
+		group.Property("color", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->Color; },
+			[](const ScriptGroup& g, const glm::vec3& color) { Detail::ResolveGroup(g).second->Color = glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)); },
+			"Its icon's color, red, green and blue from 0 to 1");
+		group.Method("entities", [](const ScriptGroup& g) { return Detail::GroupEntities(g, false); },
+			"The top-level entities in the group, in Hierarchy order");
+		group.Method("all_entities", [](const ScriptGroup& g) { return Detail::GroupEntities(g, true); },
+			"The top-level entities in the group and everything under them, parents before their children");
+		group.Method("has_entity", [](const ScriptGroup& g, const ScriptEntity& e)
+			{
+				auto [scene, sceneGroup] = Detail::ResolveGroup(g);
+				Entity resolved = e.Resolve();
+				return resolved.GetScene() == scene && scene->GetEntityGroup(resolved) == sceneGroup->ID;
+			}, "True when the entity, or its top-level ancestor, is in the group", Arg("entity"));
+		group.Method("add_entity", [](const ScriptGroup& g, const ScriptEntity& e)
+			{
+				Detail::ResolveGroup(g);
+				Entity resolved = e.Resolve();
+				const bool already = resolved.GetScene()->GetEntityGroup(resolved) == g.ID && !resolved.GetParent();
+				Detail::SetEntityGroup(e, g);
+				return !already;
+			}, "Moves a top-level entity into the group from any other, and returns false when it was already in it", Arg("entity"));
+		group.Method("remove_entity", [](const ScriptGroup& g, const ScriptEntity& e)
+			{
+				auto [scene, sceneGroup] = Detail::ResolveGroup(g);
+				Entity resolved = e.Resolve();
+				if (resolved.GetScene() != scene || resolved.GetParent() || resolved.GetComponent<TagComponent>().Group != sceneGroup->ID)
+					return false;
+				scene->SetEntityGroup(resolved, 0);
+				return true;
+			}, "Takes a top-level entity out of the group, into none; false when it wasn't in it", Arg("entity"));
+		group.Method("delete", [](const ScriptGroup& g)
+			{
+				auto [scene, sceneGroup] = Detail::ResolveGroup(g);
+				scene->DeleteGroup(sceneGroup->ID);
+			}, "Removes the group; its entities stay where they are, in no group");
+
 		auto tween = api.template Class<ScriptTween>("Tween",
 			"A property moving smoothly over time (what tween and tween_by return); 'tween finished' is sent when it reaches its end");
 		tween.ReadOnly("id", [](const ScriptTween& t) { return t.ID; }, "The ID sent with 'tween finished'");
@@ -1411,6 +1553,36 @@ namespace Bellows::Scripting {
 					result.emplace_back(entity);
 				return result;
 			}, "Every entity of the scene with the tag, parents before their children; an empty list when there are none", Arg("tag"));
+		api.Function("group", [](const std::string& name) -> std::optional<ScriptGroup>
+			{
+				Scene& scene = RequireContextScene();
+				const SceneGroup* group = scene.FindGroup(name);
+				return group ? std::optional<ScriptGroup>(Detail::MakeScriptGroup(scene, *group)) : std::nullopt;
+			}, "The Hierarchy group with this name (any letter case), or None", Arg("name"));
+		api.Function("groups", []()
+			{
+				Scene& scene = RequireContextScene();
+				std::vector<ScriptGroup> result;
+				for (const SceneGroup& group : scene.GetGroups())
+					result.push_back(Detail::MakeScriptGroup(scene, group));
+				return result;
+			}, "Every Hierarchy group of the scene, in the order the Hierarchy shows them");
+		api.Function("create_group", [](const std::string& name, const std::string& icon)
+			{
+				Scene& scene = RequireContextScene();
+				const std::string checkedIcon = Detail::RequireGroupIcon(icon);
+				try
+				{
+					SceneGroup& group = scene.CreateGroup(name);
+					group.Icon = checkedIcon;
+					return Detail::MakeScriptGroup(scene, group);
+				}
+				catch (const std::invalid_argument& error)
+				{
+					throw ScriptValueError(error.what());
+				}
+			}, "Adds a Hierarchy group at the end of the list. The name is trimmed, 1 to 64 characters, and not used by another group "
+				"in any letter case; a scene has at most 256 groups", Arg("name"), Arg("icon", std::string("folder")));
 		api.Function("get_entity", [](uint64_t id) { return EntityOrNone(RequireContextScene().TryGetEntityByUUID(UUID(id))); }, "", Arg("id"));
 		api.Function("get_entities", [](const std::optional<ComponentName>& component)
 			{

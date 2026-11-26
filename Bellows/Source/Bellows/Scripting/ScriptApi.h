@@ -284,6 +284,16 @@ namespace Bellows::Scripting {
 		bool operator==(const ScriptTween& other) const { return SceneID == other.SceneID && ID == other.ID; }
 	};
 
+	// A script's handle to a Hierarchy group (Scene/SceneGroups.h): IDs, so a deleted group fails with a
+	// clear error instead of crashing.
+	struct ScriptGroup
+	{
+		uint64_t SceneID = 0;
+		UUID ID = 0;
+
+		bool operator==(const ScriptGroup& other) const { return SceneID == other.SceneID && ID == other.ID; }
+	};
+
 	struct ComponentInfo
 	{
 		const char* Name;

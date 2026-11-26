@@ -589,6 +589,8 @@ namespace Bellows::Scripting {
 			return { static_cast<uint64_t>(reinterpret_cast<uintptr_t>(material.Instance.get())), 0 };
 		}
 
+		inline std::pair<uint64_t, uint64_t> IdentityOf(const ScriptGroup& group) { return { group.SceneID, static_cast<uint64_t>(group.ID) }; }
+
 		template<typename T>
 		concept HasIdentity = requires(const T& value) { IdentityOf(value); };
 
@@ -599,6 +601,12 @@ namespace Bellows::Scripting {
 		}
 
 		inline std::string TextOf(const ScriptEntity& entity, const std::string&) { return EntityText(entity); }
+		inline std::string TextOf(const ScriptGroup& group, const std::string&)
+		{
+			Scene* scene = Scene::GetSceneByID(group.SceneID);
+			const SceneGroup* found = scene ? scene->FindGroup(group.ID) : nullptr;
+			return found ? "Group('" + found->Name + "')" : std::string("Group(<deleted>)");
+		}
 
 		template<typename C>
 		std::string TextOf(const ComponentRef<C>& component, const std::string& typeName) { return typeName + " of " + EntityText(component.Owner); }

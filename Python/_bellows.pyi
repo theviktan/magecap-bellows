@@ -314,13 +314,20 @@ class Entity:
     def keep_across_scenes(self, value: bool) -> None: ...
     @property
     def tags(self) -> list[str]:
-        """The groups the entity belongs to ("enemy"), in the order they were added; find them with find_tagged"""
+        """The labels the entity has ("enemy"), in the order they were added; find them with find_tagged"""
     def add_tag(self, tag: str) -> bool:
         """Adds a tag, and returns false when the entity already had it. A tag is trimmed, 1 to 64 characters, and an entity has at most 32"""
     def remove_tag(self, tag: str) -> bool:
         """Removes a tag, and returns false when the entity didn't have it"""
     def has_tag(self, tag: str) -> bool:
         """True when the entity has the tag (letter case counts)"""
+    @property
+    def group(self) -> Group | None:
+        """The Hierarchy group the entity is in, or None. A child is in its top-level ancestor's group; only a top-level entity can be moved to another"""
+    @group.setter
+    def group(self, value: Group | None) -> None: ...
+    def is_in_group(self, name: str) -> bool:
+        """True when the entity, or its top-level ancestor, is in the group with this name (any letter case)"""
     @property
     def transform(self) -> Transform: ...
     @property
@@ -519,6 +526,50 @@ class Entity:
     def __eq__(self, arg0: object) -> bool: ...
     def __hash__(self) -> int: ...
     def __bool__(self) -> bool: ...
+    def __repr__(self) -> str: ...
+
+
+class Group:
+    """A Hierarchy group: a named folder the scene's top-level entities are filed under (their children follow them). It never moves anything; find one with group(name)"""
+    @property
+    def id(self) -> int: ...
+    @property
+    def valid(self) -> bool:
+        """False once the group has been deleted"""
+    @property
+    def name(self) -> str:
+        """Trimmed, 1 to 64 characters, and not used by another group of the scene in any letter case"""
+    @name.setter
+    def name(self, value: str) -> None: ...
+    @property
+    def note(self) -> str:
+        """What the group is for, shown under its name in the Hierarchy (at most 200 characters)"""
+    @note.setter
+    def note(self, value: str) -> None: ...
+    @property
+    def icon(self) -> str:
+        """The icon it shows: folder, mountain, anchor, rocket, lightbulb, layout, music, camera, box, user, users, flag, star, swords, trees or house"""
+    @icon.setter
+    def icon(self, value: str) -> None: ...
+    @property
+    def color(self) -> Vec3:
+        """Its icon's color, red, green and blue from 0 to 1"""
+    @color.setter
+    def color(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    def entities(self) -> list[Entity]:
+        """The top-level entities in the group, in Hierarchy order"""
+    def all_entities(self) -> list[Entity]:
+        """The top-level entities in the group and everything under them, parents before their children"""
+    def has_entity(self, entity: Entity) -> bool:
+        """True when the entity, or its top-level ancestor, is in the group"""
+    def add_entity(self, entity: Entity) -> bool:
+        """Moves a top-level entity into the group from any other, and returns false when it was already in it"""
+    def remove_entity(self, entity: Entity) -> bool:
+        """Takes a top-level entity out of the group, into none; false when it wasn't in it"""
+    def delete(self) -> None:
+        """Removes the group; its entities stay where they are, in no group"""
+    def __eq__(self, arg0: object) -> bool: ...
+    def __hash__(self) -> int: ...
     def __repr__(self) -> str: ...
 
 
@@ -1585,6 +1636,9 @@ def clamp(value: float, low: float, high: float) -> float: ...
 def create_entity(name: str = 'Entity', parent: Entity | None = None) -> Entity:
     """Creates an entity in the active scene"""
 
+def create_group(name: str, icon: str = 'folder') -> Group:
+    """Adds a Hierarchy group at the end of the list. The name is trimmed, 1 to 64 characters, and not used by another group in any letter case; a scene has at most 256 groups"""
+
 def delete_data(name: str) -> bool:
     """Deletes the value saved under the name; false when there was none"""
 
@@ -1620,6 +1674,12 @@ def get_entity(id: int) -> Entity | None: ...
 def get_gravity() -> Vec3: ...
 
 def get_master_volume() -> float: ...
+
+def group(name: str) -> Group | None:
+    """The Hierarchy group with this name (any letter case), or None"""
+
+def groups() -> list[Group]:
+    """Every Hierarchy group of the scene, in the order the Hierarchy shows them"""
 
 def has_data(name: str) -> bool:
     """True when a value is saved under the name"""

@@ -247,6 +247,26 @@ function test_tags()
 	scout.destroy()
 end
 
+function test_groups()
+	check(group("Forge Bays") is nothing, "group (name) is nothing before it exists")
+	set bays to create_group("Forge Bays", "anchor")
+	set bay to create_entity("Forge Bay")
+	set arm to create_entity("Forge Bay Arm", bay)
+	check(bays.add_entity(bay) and not bays.add_entity(bay), "add_entity files a top-level entity once")
+	check(bay.group is bays and arm.is_in_group("forge bays") and group("FORGE BAYS") is bays, "a child follows its parent's group, in any letter case")
+	set found to []
+	for each entity in bays.all_entities()
+		add entity.name to found
+	end
+	check(found is ["Forge Bay", "Forge Bay Arm"], "all_entities ({found})")
+	check(fails(function() bays.add_entity(arm) end), "a child can't be filed by itself")
+	set bay.group to nothing
+	check(bays.entities().is_empty() and bay.group is nothing, "setting group to nothing")
+	bays.delete()
+	check(not bays.valid, "delete")
+	bay.destroy()
+end
+
 function test_data_files()
 	set data to the data in "Data/FeatureData.json"
 	check(data["name"] is "FeatureTest data" and data["levels"][2]["title"] is "Caves", "the data in (path) reads a JSON data file")
@@ -452,6 +472,7 @@ function run_tests()
 		test_pause()
 		test_keep_across_scenes()
 		test_tags()
+		test_groups()
 		test_camera_shake()
 		test_data_files()
 		test_saved_data()

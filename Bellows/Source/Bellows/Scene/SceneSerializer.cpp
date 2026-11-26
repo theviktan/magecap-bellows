@@ -81,10 +81,76 @@ namespace Bellows {
 				owner, fields);
 		}
 
+		Json SerializeGroups(const std::vector<SceneGroup>& groups)
+		{
+			Json json = Json::array();
+			for (const SceneGroup& group : groups)
+			{
+				Json& entry = json.emplace_back();
+				entry["ID"] = static_cast<uint64_t>(group.ID);
+				entry["Name"] = group.Name;
+				entry["Icon"] = group.Icon;
+				entry["Color"] = group.Color;
+				if (!group.Note.empty())
+					entry["Note"] = group.Note;
+			}
+			return json;
+		}
+
+		// The groups of a scene file, as the scene's own rules would leave them: a group without a usable
+		// name, a repeated name or ID, or one past MaxGroups is left out (with a warning); an unknown icon
+		// becomes the default, a color is kept between 0 and 1, and a note is cut to MaxNoteLength.
+		std::vector<SceneGroup> DeserializeGroups(const Json& json)
+		{
+			std::vector<SceneGroup> groups;
+			if (!json.is_array())
+			{
+				BW_CORE_WARN("Scene groups: 'Groups' is not a list, so the scene has none");
+				return groups;
+			}
+			for (const Json& entry : json)
+			{
+				JsonReadIssues issues;
+				SceneGroup group;
+				uint64_t id = 0;
+				JsonRead(entry, "ID", id);
+				std::string name;
+				JsonRead(entry, "Name", name);
+				name = SceneGroups::Trim(name);
+				JsonRead(entry, "Icon", group.Icon);
+				JsonRead(entry, "Color", group.Color);
+				JsonRead(entry, "Note", group.Note);
+				WarnUnreadValues(issues, entry, "Group '" + name + "'");
+
+				const bool repeated = std::any_of(groups.begin(), groups.end(), [&](const SceneGroup& other)
+				{
+					return other.ID == UUID(id) || SceneGroups::NamesMatch(other.Name, name);
+				});
+				if (id == 0 || repeated || SceneGroups::CheckName(name) || groups.size() >= SceneGroups::MaxGroups)
+				{
+					BW_CORE_WARN("Scene groups: the group '{}' was left out (no ID, an unusable or repeated name, or past {} groups); its entities are in no group",
+						name, SceneGroups::MaxGroups);
+					continue;
+				}
+				group.ID = UUID(id);
+				group.Name = std::move(name);
+				if (!SceneGroups::IsIcon(group.Icon))
+					group.Icon = std::string(SceneGroups::GetIcons().front());
+				group.Color = glm::clamp(group.Color, glm::vec3(0.0f), glm::vec3(1.0f));
+				while (SceneGroups::CheckNote(group.Note))
+					group.Note.pop_back();
+				groups.push_back(std::move(group));
+			}
+			return groups;
+		}
+
 		void DeserializeComponents(Entity entity, const Json& json)
 		{
 			TagComponent& tag = entity.GetComponent<TagComponent>();
 			JsonRead(json, "KeepAcrossScenes", tag.KeepAcrossScenes);
+			uint64_t group = 0;
+			JsonRead(json, "Group", group);
+			tag.Group = UUID(group);
 			std::vector<std::string> tags;
 			JsonRead(json, "Tags", tags);
 			std::vector<std::string> dropped;
@@ -451,6 +517,9 @@ namespace Bellows {
 			json["KeepAcrossScenes"] = true;
 		if (const std::vector<std::string>& tags = entity.GetComponent<TagComponent>().Tags; !tags.empty())
 			json["Tags"] = tags;
+		// Only a top-level entity is filed under a group, and only one the scene has.
+		if (const UUID group = entity.GetComponent<TagComponent>().Group; group.IsValid() && !entity.GetParent() && entity.GetScene()->FindGroup(group))
+			json["Group"] = static_cast<uint64_t>(group);
 
 		{
 			const TransformComponent& transform = entity.GetComponent<TransformComponent>();
@@ -820,6 +889,10 @@ namespace Bellows {
 			if (newParent)
 				scene.SetParent(entity, newParent, false);
 		}
+		// The tree's top entity keeps its group when the scene has it (a prefab placed in the scene it was
+		// made in, a paste); otherwise it goes in none. SetParent cleared the children's.
+		if (TagComponent& tag = root.GetComponent<TagComponent>(); root.GetParent() || !scene.FindGroup(tag.Group))
+			tag.Group = 0;
 		return root;
 	}
 
@@ -900,6 +973,8 @@ namespace Bellows {
 		json["Scene"] = scene.GetName();
 		json["Version"] = SceneFormatVersion;
 		json["Settings"] = SerializeSettings(scene.GetSettings());
+		if (!scene.GetGroups().empty())
+			json["Groups"] = SerializeGroups(scene.GetGroups());
 
 		Json entities = Json::array();
 		for (Entity root : scene.GetRootEntities())
@@ -938,6 +1013,33 @@ namespace Bellows {
 		if (!entities.is_array())
 			return false;
 
+		// The file's groups. On a scene change (skipExistingTrees), groups the kept entities are in stay;
+		// a file group with a kept group's name is that group, so its entities join it.
+		std::unordered_map<uint64_t, UUID> groupRemap;
+		{
+			std::vector<SceneGroup> groups = json.contains("Groups") ? DeserializeGroups(json["Groups"]) : std::vector<SceneGroup>();
+			if (skipExistingTrees)
+			{
+				std::vector<SceneGroup> merged;
+				for (Entity root : scene.GetRootEntities())
+				{
+					const SceneGroup* kept = scene.FindGroup(root.GetComponent<TagComponent>().Group);
+					if (kept && std::none_of(merged.begin(), merged.end(), [&](const SceneGroup& g) { return g.ID == kept->ID; }))
+						merged.push_back(*kept);
+				}
+				for (SceneGroup& group : groups)
+				{
+					auto same = std::find_if(merged.begin(), merged.end(), [&](const SceneGroup& g) { return g.ID == group.ID || SceneGroups::NamesMatch(g.Name, group.Name); });
+					if (same != merged.end())
+						groupRemap[static_cast<uint64_t>(group.ID)] = same->ID;
+					else if (merged.size() < SceneGroups::MaxGroups)
+						merged.push_back(std::move(group));
+				}
+				groups = std::move(merged);
+			}
+			scene.SetGroups(std::move(groups));
+		}
+
 		// Entities the scene already has (kept across a scene change) win over the file's copies, at
 		// any depth: a kept player is left out of the file wherever it is there, under "Level" or at
 		// the top, with the copy's children. Parents come before their children in the file.
@@ -969,6 +1071,13 @@ namespace Bellows {
 			if (parentID == 0)
 				flush();
 			tree.push_back(entity);
+			if (!groupRemap.empty())
+			{
+				uint64_t group = 0;
+				JsonRead(entity, "Group", group);
+				if (auto it = groupRemap.find(group); it != groupRemap.end())
+					tree.back()["Group"] = static_cast<uint64_t>(it->second);
+			}
 		}
 		flush();
 		return true;
