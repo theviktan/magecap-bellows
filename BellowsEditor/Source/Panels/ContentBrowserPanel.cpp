@@ -311,7 +311,7 @@ namespace Bellows {
 		}
 
 		ImGui::SameLine(0.0f, 2.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(IM_COL32(232, 184, 92, 255)));
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::NeutralBright));
 		ImGui::TextUnformatted(open && !children.empty() ? ICON_FOLDER_OPEN : ICON_FOLDER);
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
@@ -430,7 +430,7 @@ namespace Bellows {
 		}
 		if (!drewThumbnail)
 		{
-			const ImU32 color = item.IsDirectory ? IM_COL32(214, 170, 90, 255) : UI::AssetColor(type);
+			const ImU32 color = item.IsDirectory ? Theme::NeutralBright : UI::AssetColor(type);
 			drawList->AddRectFilled(tileMin, tileMax, Theme::Field, 6.0f * scale);
 			const char* icon = item.IsDirectory ? ICON_FOLDER : UI::AssetIcon(type);
 			const float iconSize = (tileMax.x - tileMin.x) * 0.42f;

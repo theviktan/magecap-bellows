@@ -45,6 +45,9 @@ namespace Bellows::UI {
 	bool ComponentHeader(const char* icon, const char* name, bool canRemove, bool& outRemove, bool& outReset);
 
 	bool IconButton(const char* icon, const char* tooltip = nullptr, bool active = false, ImVec2 size = ImVec2(0.0f, 0.0f));
+	// Colors for the one primary action of a dialog or screen; pop with PopPrimaryButtonColors.
+	void PushPrimaryButtonColors();
+	void PopPrimaryButtonColors();
 	void Tooltip(const char* text);
 	void TextMuted(const char* text);
 	void SectionHeader(const char* text);

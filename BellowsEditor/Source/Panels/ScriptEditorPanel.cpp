@@ -168,7 +168,7 @@ namespace Bellows {
 		{
 			switch (language)
 			{
-				case ScriptLanguage::ForgeScript:	return Theme::Accent;
+				case ScriptLanguage::ForgeScript:	return Theme::Success;
 				case ScriptLanguage::Python:		return IM_COL32(120, 210, 230, 255);
 				case ScriptLanguage::None:			break;
 			}
@@ -748,9 +748,9 @@ namespace Bellows {
 
 		ImGui::Spacing();
 		ImGui::BeginDisabled(needsMessage);
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		UI::PushPrimaryButtonColors();
 		const bool save = ImGui::Button(exists ? "Save" : "Add", ImVec2(110.0f * scale, 0.0f)) || (enter && !needsMessage);
-		ImGui::PopStyleColor();
+		UI::PopPrimaryButtonColors();
 		ImGui::EndDisabled();
 		ImGui::SameLine();
 		bool remove = false;
@@ -1031,9 +1031,9 @@ namespace Bellows {
 			ImGui::PopStyleColor();
 		}
 		ImGui::Spacing();
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		UI::PushPrimaryButtonColors();
 		const bool rename = ImGui::Button("Rename", ImVec2(110.0f * scale, 0.0f)) || enter;
-		ImGui::PopStyleColor();
+		UI::PopPrimaryButtonColors();
 		ImGui::SameLine();
 		const bool cancel = ImGui::Button("Cancel", ImVec2(110.0f * scale, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
 
@@ -1364,9 +1364,9 @@ namespace Bellows {
 		Document& document = *m_Documents[m_PendingClose];
 		ImGui::TextWrapped("Save changes to '%s' before closing?", document.Name.c_str());
 		ImGui::Spacing();
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		UI::PushPrimaryButtonColors();
 		const bool save = ImGui::Button(ICON_SAVE "  Save", ImVec2(110.0f * scale, 0.0f));
-		ImGui::PopStyleColor();
+		UI::PopPrimaryButtonColors();
 		ImGui::SameLine();
 		const bool discard = ImGui::Button("Don't Save", ImVec2(110.0f * scale, 0.0f));
 		ImGui::SameLine();
@@ -1627,7 +1627,7 @@ namespace Bellows {
 			drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(start.x + 24.0f * scale, textY), dirty ? Theme::Text : Theme::TextMuted,
 				document.Name.c_str(), nullptr, 0.0f, &clip);
 			if (dirty)
-				drawList->AddCircleFilled(ImVec2(rightEdge - 7.0f * scale, start.y + ImGui::GetFrameHeight() * 0.5f), 3.5f * scale, Theme::Accent);
+				drawList->AddCircleFilled(ImVec2(rightEdge - 7.0f * scale, start.y + ImGui::GetFrameHeight() * 0.5f), 3.5f * scale, Theme::NeutralBright);
 
 			// Close button on the right.
 			ImGui::SameLine(rowRight - ImGui::GetFrameHeight());
@@ -1792,11 +1792,10 @@ namespace Bellows {
 		ImGui::Spacing();
 		ImGui::Spacing();
 
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
+		UI::PushPrimaryButtonColors();
 		if (ImGui::Button(ICON_FILE_PLUS "  New ForgeScript"))
 			ShowCreateDialog(ScriptLanguage::ForgeScript);
-		ImGui::PopStyleColor(2);
+		UI::PopPrimaryButtonColors();
 		ImGui::SameLine();
 		if (ImGui::Button(ICON_FILE_PLUS "  New Python Script"))
 			ShowCreateDialog(ScriptLanguage::Python);

@@ -1681,7 +1681,7 @@ namespace Bellows {
 		ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, barWindow->Pos.y + barWindow->TitleBarHeight + (barHeight - logoSize) * 0.5f));
 		DrawLogo(logoSize);
 		ImGui::PushFont(Theme::GetFonts().Bold, 0.0f);
-		ImGui::TextUnformatted("Bellows");
+		ImGui::TextUnformatted("MageCap Bellows");
 		ImGui::PopFont();
 		ImGui::Dummy(ImVec2(8.0f, 0.0f));
 
@@ -2086,7 +2086,7 @@ namespace Bellows {
 		auto beginOverlay = [&](const char* id, ImVec2 position, int buttons)
 		{
 			const ImVec2 size(buttonSize * static_cast<float>(buttons) + padding * static_cast<float>(buttons + 1), buttonSize + padding * 2.0f);
-			drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y), IM_COL32(13, 15, 19, 210), 6.0f * scale);
+			drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y), Theme::WithAlpha(Theme::Background, 210), 6.0f * scale);
 			drawList->AddRect(position, ImVec2(position.x + size.x, position.y + size.y), Theme::Border, 6.0f * scale);
 			ImGui::SetCursorScreenPos(ImVec2(position.x + padding, position.y + padding));
 			ImGui::PushID(id);
@@ -2377,12 +2377,9 @@ namespace Bellows {
 		auto primaryButton = [&](const char* label, bool enabled = true)
 		{
 			ImGui::BeginDisabled(!enabled);
-			ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::Accent));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.04f, 0.03f, 1.0f));
+			UI::PushPrimaryButtonColors();
 			const bool pressed = ImGui::Button(label, ImVec2(120.0f * scale, 0.0f));
-			ImGui::PopStyleColor(4);
+			UI::PopPrimaryButtonColors();
 			ImGui::EndDisabled();
 			return pressed;
 		};

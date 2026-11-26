@@ -151,7 +151,7 @@ namespace Bellows {
 				const Entry& entry = *visible[static_cast<size_t>(i)];
 				ImU32 color = Theme::Text;
 				const char* icon = "  ";
-				if (entry.IsCommand) { color = Theme::Accent; icon = ICON_CHEVRON_RIGHT; }
+				if (entry.IsCommand) { color = Theme::NeutralBright; icon = ICON_CHEVRON_RIGHT; }
 				else if (entry.Level >= LogLevel::Error) { color = Theme::Error; icon = ICON_CIRCLE_X; }
 				else if (entry.Level == LogLevel::Warn) { color = Theme::Warning; icon = ICON_TRIANGLE_ALERT; }
 				else if (entry.Level == LogLevel::Trace) color = Theme::TextDisabled;
@@ -183,7 +183,7 @@ namespace Bellows {
 
 		// Python prompt
 		ImGui::PushFont(Theme::GetFonts().Mono, 0.0f);
-		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Accent));
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::NeutralBright));
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextUnformatted(">>>");
 		ImGui::PopStyleColor();

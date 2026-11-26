@@ -168,8 +168,8 @@ namespace Bellows {
 			entity.SetName(name);
 		ImGui::PopFont();
 		ImGui::SameLine();
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::AccentMuted));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(IM_COL32(242, 112, 26, 90)));
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::PanelRaised));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(IM_COL32(44, 50, 80, 255)));
 		if (ImGui::Button(ICON_PLUS "  Add Component", ImVec2(-FLT_MIN, 0.0f)))
 		{
 			m_ComponentFilter.clear();

@@ -576,14 +576,28 @@ namespace Bellows::UI {
 		if (size.x <= 0.0f)
 			size = ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
 
-		ImGui::PushStyleColor(ImGuiCol_Button, active ? Theme::ToVec4(Theme::AccentMuted) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(active ? Theme::AccentMuted : Theme::FieldHovered));
-		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(active ? Theme::AccentHovered : Theme::Text));
+		// An active toggle is a raised neutral tile with white text; the accent is kept for the selection and Play.
+		ImGui::PushStyleColor(ImGuiCol_Button, active ? Theme::ToVec4(Theme::PanelRaised) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(active ? IM_COL32(44, 50, 80, 255) : Theme::Hover));
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(active ? IM_COL32(255, 255, 255, 255) : Theme::Text));
 		const bool pressed = ImGui::Button(icon, size);
 		ImGui::PopStyleColor(3);
 		if (tooltip)
 			Tooltip(tooltip);
 		return pressed;
+	}
+
+	void PushPrimaryButtonColors()
+	{
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Primary));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::PrimaryHovered));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::PrimaryActive));
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::PrimaryText));
+	}
+
+	void PopPrimaryButtonColors()
+	{
+		ImGui::PopStyleColor(4);
 	}
 
 	void Tooltip(const char* text)
@@ -663,7 +677,7 @@ namespace Bellows::UI {
 	{
 		switch (type)
 		{
-			case AssetType::Scene:			return IM_COL32(242, 112, 26, 255);
+			case AssetType::Scene:			return Theme::Text;
 			case AssetType::Prefab:			return IM_COL32(96, 160, 245, 255);
 			case AssetType::Mesh:			return IM_COL32(150, 200, 255, 255);
 			case AssetType::Material:		return IM_COL32(230, 120, 200, 255);
@@ -672,7 +686,7 @@ namespace Bellows::UI {
 			case AssetType::Audio:			return IM_COL32(170, 140, 245, 255);
 			case AssetType::Script:			return IM_COL32(120, 210, 230, 255);
 			case AssetType::Font:			return IM_COL32(235, 225, 200, 255);
-			case AssetType::Theme:			return IM_COL32(245, 135, 58, 255);
+			case AssetType::Theme:			return IM_COL32(214, 170, 90, 255);
 			default:						return Theme::TextMuted;
 		}
 	}

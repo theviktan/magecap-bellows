@@ -226,6 +226,30 @@ Planned, from Ron's priorities (section 2). Ron confirmed this order, with iOS w
 | 1.0 | Stable API, migration guides, LTS policy; then the ecosystem (documentation site, tutorials, community) |
 | Later | macOS and iOS (Metal through MoltenVK), consoles, multiplayer, editor plugin API, multiple open scenes |
 
+### Editor redesign
+
+Ron chose design F, "Bellows: its own personality", on November 25, 2026 ("Awesome, we are going
+with F"), on the "MageCap Bellows Editor Redesign" canvas. Its rules: MageCap's navy surfaces,
+shared with MageCap Forge; the ember accent only for the selection and Play, everything else neutral;
+a hovered row never looks like a selected one; plain wording ("Running", not "Stoked"); "MageCap
+Bellows" as the name everywhere. The work lands in steps, alongside the 0.7 features, each one
+tested and shown to Ron against the design:
+
+1. **Theme tokens** (0.7): the navy palette, neutral toggles and primary buttons, the warm
+   selection, rounder fields and tabs, the "MageCap Bellows" title.
+2. **Title bar and icon rail:** the search box (Ctrl+K), the project breadcrumb with the unsaved
+   dot, Export game, the ember Play button; Scene, Script, Animation, Profiler and Content on a
+   rail at the left.
+3. **Panels:** rounded panels with gaps and grips between them, the panel headers, the warm
+   selection in the Hierarchy and Content panels.
+4. **Viewport:** one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the
+   CPU/GPU readout, a faint selection glow with an off switch in the View menu; it also moves the
+   toolbar off the game's own UI.
+5. **Inspector:** compact X/Y/Z drag fields, the uniform-scale lock, switches, and the ForgeScript
+   card with the script inline (Open in Script, Debug).
+6. **Content and status bar:** asset previews with type badges; the frame-time graph and plain
+   status text.
+
 ## Sources
 
 * [Godot 4.7 release page](https://godotengine.org/releases/4.7/)
