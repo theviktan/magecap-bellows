@@ -19,6 +19,10 @@ with new language or tool features, the patch number with fixes.
   - The checker explains a name that's both a field and a property, two of one form on a name, and a
     keep with a set handler. The language server lists properties in the outline and as members of
     their kind, and the formatter indents their blocks. Cookbook recipe 32 shows all three.
+  - Found by MFC while testing Forge 2.68.0: the outline sends a property as an LSP Property (7), not a
+    Field (8); and properties that use each other forever now name the place the error happened once,
+    not 64 times. The same fix leaves only the innermost place on an error from a callback inside a
+    callback (`[1].map(outer)` where `outer` calls `map` again), which used to list every level.
 - **Faster function calls and math** (Roadmap 3.0, item 1): `fib(30)` now runs in about 0.10 s
   against Python 3.13's 0.12 s, and a plain counting loop in about 0.37 s against Python's 0.65 s
   (Linux, Release build, the whole program run). Nothing a script writes changes meaning. Inside, a

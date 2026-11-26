@@ -1242,7 +1242,7 @@ TEST_CASE("LanguageServerGivesAnOutline")
 {
 	Session session;
 	const std::string uri = "file:///tmp/outline.forge";
-	session.Open(uri, "set name to \"caf\xC3\xA9\"\nkind Door\n\tset open to no\n\tfunction toggle()\n\tend\nend\nwhen hit\n\tsay 1\nend\n");
+	session.Open(uri, "set name to \"caf\xC3\xA9\"\nkind Door\n\tset open to no\n\tfunction toggle()\n\tend\n\tproperty shut\n\t\treturn not my open\n\tend\nend\nwhen hit\n\tsay 1\nend\n");
 	Json params;
 	Json document;
 	document.Set("uri", uri);
@@ -1261,12 +1261,13 @@ TEST_CASE("LanguageServerGivesAnOutline")
 	const Json& door = symbols.AsArray()[1];
 	CHECK_EQ(door.Get("kind").AsNumber(), 5.0);
 	CHECK_EQ(door.Get("range").Get("start").Get("line").AsNumber(), 1.0);
-	CHECK_EQ(door.Get("range").Get("end").Get("line").AsNumber(), 5.0);
+	CHECK_EQ(door.Get("range").Get("end").Get("line").AsNumber(), 8.0);
 	CHECK_EQ(door.GetString("detail"), std::string("kind Door"));
 	const Json::Array& children = door.Get("children").AsArray();
-	REQUIRE_EQ(children.size(), static_cast<size_t>(2));
+	REQUIRE_EQ(children.size(), static_cast<size_t>(3));
 	CHECK_EQ(children[0].Get("kind").AsNumber(), 8.0);  // a field
 	CHECK_EQ(children[1].Get("kind").AsNumber(), 6.0);  // a method
+	CHECK_EQ(children[2].Get("kind").AsNumber(), 7.0);  // a property
 	CHECK_EQ(symbols.AsArray()[2].Get("kind").AsNumber(), 24.0); // an event handler
 
 	Json missing;
@@ -1488,6 +1489,8 @@ TEST_CASE("OutlineAndSymbolsListPropertiesInTheirKind")
 	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
 	REQUIRE_EQ(outline[0].Children.size(), static_cast<size_t>(3));
 	CHECK_EQ(outline[0].Children[1].Name, std::string("percent"));
+	CHECK(outline[0].Children[1].ItemKind == OutlineItem::Kind::Property);
+	CHECK(outline[0].Children[0].ItemKind == OutlineItem::Kind::Variable);
 	CHECK_EQ(outline[0].Children[1].Detail, std::string("property percent as number"));
 	CHECK_EQ(outline[0].Children[1].StartLine, 4);
 	CHECK_EQ(outline[0].Children[1].EndLine, 7);

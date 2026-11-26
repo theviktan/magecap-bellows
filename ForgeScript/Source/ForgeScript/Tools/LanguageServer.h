@@ -191,7 +191,8 @@ namespace ForgeScript {
 			KindType,
 			Handler,
 			Variable,
-			Constant
+			Constant,
+			Property // 'property name ... end' inside a kind: read like a field, worked out by its block.
 		};
 		Kind ItemKind = Kind::Function;
 		std::string Name;   // "jump", "deal (amount) damage", "Door", "when hit with damage", "speed".

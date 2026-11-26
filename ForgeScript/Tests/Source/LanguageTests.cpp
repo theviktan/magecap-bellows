@@ -1406,6 +1406,29 @@ TEST_CASE("TypesFollowAFunctionsOwnVariables")
 	CHECK(vm.FindWarnings("function g(e as Enemy)\nend\nfunction f()\n\tset n to \"x\"\n\tg(n)\nend\n", "t.forge", {}).empty());
 }
 
+TEST_CASE("AnErrorFromNestedRunsSaysWhereItHappenedOnce")
+{
+	// Properties that read each other go 64 runs deep before they stop; each run the error passed
+	// through on its way out used to add its own place, 64 of them.
+	auto places = [](const std::string& text)
+	{
+		size_t count = 0;
+		for (size_t at = text.find("(test line"); at != std::string::npos; at = text.find("(test line", at + 1))
+			count++;
+		return count;
+	};
+	const std::string loop = Output("kind K\n\tproperty x\n\t\treturn my y\n\tend\n\tproperty y\n\t\treturn my x\n\tend\nend\n"
+		"try\n\tsay new K().x\ncatch problem\n\tsay problem\nend\n");
+	CHECK_CONTAINS(loop, "was run from inside 64 others; properties and set handlers that use each other need a way to stop. (test line 3)");
+	CHECK_EQ(places(loop), static_cast<size_t>(1));
+
+	// A callback inside a callback: the place is where the error happened, the innermost one.
+	const std::string callbacks = Output("function inner(x)\n\treturn x / 0\nend\nfunction outer(x)\n\treturn [x].map(inner)\nend\n"
+		"try\n\tsay [1].map(outer)\ncatch problem\n\tsay problem\nend\n");
+	CHECK_CONTAINS(callbacks, "Cannot divide by zero. (test line 2)");
+	CHECK_EQ(places(callbacks), static_cast<size_t>(1));
+}
+
 TEST_CASE("PropertiesOnKindsKeepOldMeaningsAndExplainMistakes")
 {
 	// Outside a kind, 'property' and 'keep' are names, and a phrase can still start with them.
