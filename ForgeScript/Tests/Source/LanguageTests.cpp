@@ -413,7 +413,7 @@ TEST_CASE("ChangeHandlersKeepOldMeaningsAndExplainMistakes")
 	CHECK_EQ(Output("when my health changes with by_how_much\n\tsay by_how_much\nend\ntrigger my health changes with 5\n"), std::string("5\n"));
 	CHECK_CONTAINS(CompileFails("kind P\n\twhen my hp changes with a, b, c\n\tend\nend\n").Message,
 		"'when my hp changes' gives two values: the new one and the old one, like: with now, before");
-	CHECK_CONTAINS(CompileFails("kind P\n\twhen hp changes\n\tend\nend\n").Message, "or 'when my name changes' to react to a field.");
+	CHECK_CONTAINS(CompileFails("kind P\n\twhen hp changes\n\tend\nend\n").Message, "'when my name changes' to react to a field, or 'property name ... end' for a value worked out from the others.");
 }
 
 TEST_CASE("BigChoiceSetsStayQuick")
@@ -1404,4 +1404,38 @@ TEST_CASE("TypesFollowAFunctionsOwnVariables")
 	CHECK(takes("function f()\n\tset n to \"a\"\n\tfunction g()\n\t\tset n to 5\n\tend\n\theal(n)\nend\n").empty());
 	// A parameter of a kind's type is never compared: 'object' or a kind may hold many things.
 	CHECK(vm.FindWarnings("function g(e as Enemy)\nend\nfunction f()\n\tset n to \"x\"\n\tg(n)\nend\n", "t.forge", {}).empty());
+}
+
+TEST_CASE("PropertiesOnKindsKeepOldMeaningsAndExplainMistakes")
+{
+	// Outside a kind, 'property' and 'keep' are names, and a phrase can still start with them.
+	CHECK_EQ(Output("set property to 3\nset keep to 4\nsay property + keep\n"), std::string("7\n"));
+	CHECK_EQ(Output("phrase property (thing)\n\tsay thing\nend\nproperty 5\n"), std::string("5\n"));
+	CHECK_EQ(Output("phrase keep (thing) across scenes\n\tsay thing\nend\nkeep 5 across scenes\n"), std::string("5\n"));
+	CHECK_EQ(Output("kind K\n\tset property to 1\n\tset keep to 2\nend\nsay new K().property + new K().keep\n"), std::string("3\n"));
+
+	// Two of one form on a name, or two forms that can't go together.
+	CHECK_CONTAINS(CompileFails("kind K\n\tset hp to 1\n\tproperty hp\n\t\treturn 2\n\tend\nend\n").Message,
+		"'hp' is a field of this kind already ('set hp to ...'), so it can't be a property too. Give the property another name.");
+	CHECK_CONTAINS(CompileFails("kind K\n\tproperty x\n\t\treturn 1\n\tend\n\tproperty x\n\t\treturn 3\n\tend\nend\n").Message,
+		"'x' has two properties in this kind. Keep one.");
+	CHECK_CONTAINS(CompileFails("kind K\n\tkeep my y between 0 and 1\n\tkeep my y between 0 and 2\nend\n").Message,
+		"'y' is kept in a range twice in this kind. Keep one 'keep' line.");
+	CHECK_CONTAINS(CompileFails("kind K\n\twhen my y is set to v\n\tend\n\twhen my y is set to w\n\tend\nend\n").Message,
+		"'y' has two 'when my y is set to' handlers in this kind. Keep one.");
+	CHECK_CONTAINS(CompileFails("kind K\n\tkeep my y between 0 and 1\n\twhen my y is set to v\n\t\tset my y to v\n\tend\nend\n").Message,
+		"'y' has a 'when my y is set to' handler, so keep it in range there instead, with clamp(value, low, high).");
+	CHECK_CONTAINS(CompileFails("kind K\n\tproperty x\n\t\treturn 1\n\tend\n\tkeep my x between 0 and 1\nend\n").Message,
+		"'x' is a property, worked out each time it's read, so there's nothing to keep in a range.");
+	CHECK_CONTAINS(CompileFails("kind K\n\tproperty x\n\t\treturn 1\n\tend\n\twhen my x is set to v\n\tend\nend\n").Message,
+		"'x' is a property, worked out each time it's read, so it can't be set.");
+	CHECK_CONTAINS(CompileFails("kind K\n\tkeep my y between 0\nend\n").Message,
+		"Expected 'and' between the two ends, like: keep my y between 0 and 100");
+
+	// A keep whose ends aren't numbers says so when it's used.
+	CHECK_CONTAINS(Output("kind K\n\tset y to 1\n\tkeep my y between \"a\" and 2\nend\nset k to new K()\ntry\n\tset k.y to 5\ncatch problem\n\tsay problem\nend\n"),
+		"'y' is kept between two numbers, but its ends are \"a\" and 2.");
+	// A misspelled property gets a suggestion, like a field.
+	CHECK_CONTAINS(Output("kind K\n\tproperty total\n\t\treturn 1\n\tend\nend\ntry\n\tsay new K().totl\ncatch problem\n\tsay problem\nend\n"),
+		"Did you mean 'total'?");
 }

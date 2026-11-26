@@ -447,6 +447,11 @@ namespace ForgeScript {
 		// Writes a field of an object whose kind has 'when my field changes' handlers, then runs the ones
 		// for that field when the value changed (see the Specification, 9).
 		bool SetWatchedField(Task* task, Instance* instance, String* name, const Value& value);
+		// A write to a field of a kind with properties, keeps or set handlers (Kind::HasFieldRules).
+		bool SetFieldWithRules(Task* task, Instance* instance, String* name, const Value& value);
+		// Runs a property, a keep's ends or a set handler on the object, right away. 'setField' marks the
+		// run as that field's set handler, so the field's own writes inside it store the value.
+		bool RunFieldRule(Task* task, Instance* instance, Closure* rule, const Value* argument, String* setField, Value& outResult);
 		bool GetIndex(Task* task, const Value& object, const Value& index, Value& outValue);
 		bool SetIndex(Task* task, const Value& object, const Value& index, const Value& value);
 		bool LookupGlobal(Module* module, String* name, Value& outValue);

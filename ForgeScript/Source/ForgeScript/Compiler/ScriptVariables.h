@@ -11,6 +11,8 @@ namespace ForgeScript {
 	// True when tokens[index] starts a block that an 'end' closes (if, while, function, kind ...),
 	// following the compiler's rule. For tools that read scripts from their tokens.
 	bool TokenOpensBlock(const std::vector<Token>& tokens, size_t index);
+	// Whether tokens[index] is 'property name' alone on its line directly inside a kind, which opens a block.
+	bool PropertyOpensBlock(const std::vector<Token>& tokens, size_t index);
 
 	// A script variable set to a plain value at the top of a script, like
 	//     set speed to 2.5

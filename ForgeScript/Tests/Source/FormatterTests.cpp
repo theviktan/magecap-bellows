@@ -168,3 +168,11 @@ TEST_CASE("FormatterIsSteadyOnEveryTestScript")
 	}
 	CHECK(formatted > 40);
 }
+
+TEST_CASE("FormatterIndentsProperties")
+{
+	// Inside a kind, a property's block is indented; outside one, a 'property' line is a plain statement.
+	const FormatResult result = FormatScript("kind K\nproperty v as number\nreturn 1\nend\nkeep my a between 1 and 2\nwhen my a is set to n\nset my a to n\nend\nend\nproperty 7\n");
+	REQUIRE(result.Error.empty());
+	CHECK_EQ(result.Text, std::string("kind K\n\tproperty v as number\n\t\treturn 1\n\tend\n\tkeep my a between 1 and 2\n\twhen my a is set to n\n\t\tset my a to n\n\tend\nend\nproperty 7\n"));
+}

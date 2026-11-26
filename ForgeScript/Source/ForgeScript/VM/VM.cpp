@@ -831,6 +831,8 @@ namespace ForgeScript {
 			task->EventDepth = 0;
 			task->ChangeInstance = nullptr;
 			task->ChangeField = nullptr;
+			task->SetInstance = nullptr;
+			task->SetField = nullptr;
 			task->Step = StepMode::None;
 			task->StepDepth = 0;
 			task->Result = Value();
@@ -2067,11 +2069,18 @@ namespace ForgeScript {
 					outValue = field->second;
 					return true;
 				}
+				if (instance->Class->HasFieldRules)
+				{
+					if (Closure* property = instance->Class->FindFieldRule(&Kind::Properties, name))
+						return RunFieldRule(task, instance, property, nullptr, nullptr, outValue);
+				}
 				if (BindMethod(task, object, name, outValue))
 					return true;
 				std::vector<std::string_view> names;
 				AddNames(names, instance->Fields);
 				AddKindMethods(names, instance->Class);
+				for (const Kind* kind = instance->Class; kind; kind = kind->Parent)
+					AddNames(names, kind->Properties);
 				Kind* owner = nullptr;
 				if (instance->Class->FindShared(name, &owner))
 				{
@@ -2218,6 +2227,82 @@ namespace ForgeScript {
 		return Fail("A " + TypeOf(object) + " has no property called '" + key + "'.");
 	}
 
+	bool VM::RunFieldRule(Task* task, Instance* instance, Closure* rule, const Value* argument, String* setField, Value& outResult)
+	{
+		// Like a function called from built-in code: it runs to its end right away, so it can't wait.
+		const size_t depth = task ? task->EventDepth + 1 : 0;
+		if (m_RunningTasks.size() >= m_Config.MaxNestedCalls || depth >= m_Config.MaxNestedCalls)
+			return Fail("'" + rule->Fn->Name->Text + "' was run from inside " + std::to_string(m_Config.MaxNestedCalls) +
+				" others; properties and set handlers that use each other need a way to stop.");
+		Task* ruleTask = NewTask(rule->Fn->Owner);
+		ruleTask->CanYield = false;
+		ruleTask->IsNested = true;
+		ruleTask->EventDepth = depth;
+		ruleTask->SetInstance = setField ? instance : nullptr;
+		ruleTask->SetField = setField;
+		m_PendingTasks.push_back(ruleTask);
+		// The pending task keeps the bound method, and through it the object and the rule, while it runs.
+		ruleTask->Stack.push_back(Value::FromObject(Allocate<BoundMethod>(0, Value::FromObject(instance), rule)));
+		if (argument && rule->Fn->Arity > 0)
+			ruleTask->Stack.push_back(*argument);
+		StartCall(ruleTask, ruleTask->Stack.size() - 1);
+		RemovePending(ruleTask);
+		if (ruleTask->State == TaskState::Failed)
+			return Fail(ruleTask->FailureMessage);
+		outResult = ruleTask->Result;
+		return true;
+	}
+
+	bool VM::SetFieldWithRules(Task* task, Instance* instance, String* name, const Value& value)
+	{
+		auto store = [&](const Value& stored)
+		{
+			if (instance->Class->WatchesFields)
+				return SetWatchedField(task, instance, name, stored);
+			instance->SetField(name, stored);
+			return true;
+		};
+		// The kind's 'set' lines give first values as written.
+		if (task && !task->Frames.empty() && task->Frames.back().Function->Fn->IsFieldInit)
+			return store(value);
+		Kind* kind = instance->Class;
+		if (kind->FindFieldRule(&Kind::Properties, name))
+		{
+			return Fail("'" + name->Text + "' is worked out by its property, so it can't be set. To change it, change what it's worked out from.");
+		}
+		if (Closure* handler = kind->FindFieldRule(&Kind::SetHandlers, name))
+		{
+			// Inside its own handler, a write to the field stores the value.
+			if (task && task->SetInstance == instance && task->SetField == name)
+				return store(value);
+			Value ignored;
+			return RunFieldRule(task, instance, handler, &value, name, ignored);
+		}
+		if (Closure* keep = kind->FindFieldRule(&Kind::Keeps, name))
+		{
+			Value ends;
+			if (!RunFieldRule(task, instance, keep, nullptr, nullptr, ends))
+				return false;
+			const List* range = As<List>(ends);
+			const Value& low = range->Items[0];
+			const Value& high = range->Items[1];
+			if (!low.IsNumber() || !high.IsNumber())
+			{
+				return Fail("'" + name->Text + "' is kept between two numbers, but its ends are " + Describe(low, true) + " and " +
+					Describe(high, true) + ".");
+			}
+			if (!value.IsNumber())
+			{
+				return Fail("'" + name->Text + "' is kept between " + Describe(low, true) + " and " + Describe(high, true) +
+					", so it needs a number, but got " + (value.IsNothing() ? std::string("nothing") : TypeOf(value)) + ".");
+			}
+			const double lowest = std::min(low.AsNumber(), high.AsNumber());
+			const double highest = std::max(low.AsNumber(), high.AsNumber());
+			return store(Value::FromNumber(std::clamp(value.AsNumber(), lowest, highest)));
+		}
+		return store(value);
+	}
+
 	bool VM::SetWatchedField(Task* task, Instance* instance, String* name, const Value& value)
 	{
 		if (!instance->Class->WatchedFields.count(name))
@@ -2299,6 +2384,8 @@ namespace ForgeScript {
 			case ObjectType::Instance:
 			{
 				Instance* instance = As<Instance>(object);
+				if (instance->Class && instance->Class->HasFieldRules)
+					return SetFieldWithRules(task, instance, name, value);
 				if (instance->Class && instance->Class->WatchesFields)
 					return SetWatchedField(task, instance, name, value);
 				instance->SetField(name, value);
@@ -3551,9 +3638,20 @@ namespace ForgeScript {
 					Closure* method = owner->Parent->FindMethod(name);
 					if (!method)
 					{
+						// 'parent.label' inside a property that replaces the parent kind's: the parent's property.
+						Closure* property = owner->Parent->FindFieldRule(&Kind::Properties, name);
+						if (property && IsObjectType(stack.back(), ObjectType::Instance))
+						{
+							Value result;
+							FORGESCRIPT_CHECK(RunFieldRule(task, As<Instance>(stack.back()), property, nullptr, nullptr, result));
+							stack.back() = result;
+							break;
+						}
 						std::vector<std::string_view> names;
 						AddKindMethods(names, owner->Parent);
-						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function called '" + name->Text + "'." +
+						for (const Kind* kind = owner->Parent; kind; kind = kind->Parent)
+							AddNames(names, kind->Properties);
+						FORGESCRIPT_FAIL("The parent kind '" + owner->Parent->Name->Text + "' has no function or property called '" + name->Text + "'." +
 							DidYouMean(name->Text, names));
 					}
 					stack.back() = Value::FromObject(Allocate<BoundMethod>(0, stack.back(), method));
@@ -3629,6 +3727,7 @@ namespace ForgeScript {
 					kind->Parent = As<Kind>(parent);
 					kind->WatchesFields = kind->WatchesFields || kind->Parent->WatchesFields;
 					kind->WatchedFields.insert(kind->Parent->WatchedFields.begin(), kind->Parent->WatchedFields.end());
+					kind->HasFieldRules = kind->HasFieldRules || kind->Parent->HasFieldRules;
 					break;
 				}
 				case OpCode::ChangeHandler:
@@ -3640,6 +3739,20 @@ namespace ForgeScript {
 					kind->ChangeHandlers[field].push_back(handler);
 					kind->WatchesFields = true;
 					kind->WatchedFields.insert(field);
+					break;
+				}
+				case OpCode::PropertyGetter:
+				case OpCode::KeepRange:
+				case OpCode::SetHandler:
+				{
+					String* field = FORGESCRIPT_READ_STRING();
+					Closure* rule = As<Closure>(stack.back());
+					stack.pop_back();
+					Kind* kind = As<Kind>(stack.back());
+					auto& rules = op == OpCode::PropertyGetter ? kind->Properties : op == OpCode::KeepRange ? kind->Keeps : kind->SetHandlers;
+					rule->OwnerKind = kind;
+					rules[field] = rule;
+					kind->HasFieldRules = true;
 					break;
 				}
 				case OpCode::AddTest:
@@ -4081,6 +4194,14 @@ namespace ForgeScript {
 					for (Closure* handler : handlers)
 						MarkObject(handler);
 				}
+				for (auto* rules : { &kind->Properties, &kind->Keeps, &kind->SetHandlers })
+				{
+					for (auto& [name, rule] : *rules)
+					{
+						MarkObject(name);
+						MarkObject(rule);
+					}
+				}
 				break;
 			}
 			case ObjectType::Instance:
@@ -4141,6 +4262,10 @@ namespace ForgeScript {
 					MarkObject(task->ChangeInstance);
 				if (task->ChangeField)
 					MarkObject(task->ChangeField);
+				if (task->SetInstance)
+					MarkObject(task->SetInstance);
+				if (task->SetField)
+					MarkObject(task->SetField);
 				break;
 			}
 		}

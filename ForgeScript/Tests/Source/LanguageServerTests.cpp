@@ -1478,3 +1478,31 @@ TEST_CASE("LanguageServerKeepsUseInsideTheProject")
 		CHECK_EQ(linked.AsArray()[0].GetString("message"), std::string("Could not find the script \"Linked\" to use."));
 	}
 }
+
+TEST_CASE("OutlineAndSymbolsListPropertiesInTheirKind")
+{
+	// A property is a member of its kind, like a field, and its block's lines aren't listed.
+	const std::string source = "kind Player\n\tset health to 5\n\tkeep my health between 0 and 10\n\tproperty percent as number\n\t\tset x to 1\n"
+		"\t\treturn my health * 10\n\tend\n\twhen my health is set to amount\n\t\tset my health to amount\n\tend\nend\nset property to 2\n";
+	const std::vector<OutlineItem> outline = FindOutline(source);
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
+	REQUIRE_EQ(outline[0].Children.size(), static_cast<size_t>(3));
+	CHECK_EQ(outline[0].Children[1].Name, std::string("percent"));
+	CHECK_EQ(outline[0].Children[1].Detail, std::string("property percent as number"));
+	CHECK_EQ(outline[0].Children[1].StartLine, 4);
+	CHECK_EQ(outline[0].Children[1].EndLine, 7);
+	CHECK_EQ(outline[0].Children[2].Name, std::string("when my health is set to amount"));
+	CHECK_EQ(outline[0].EndLine, 11);
+	CHECK_EQ(outline[1].Name, std::string("property"));
+	bool sawProperty = false;
+	for (const LanguageServer::Symbol& symbol : FindScriptSymbols(source))
+	{
+		if (symbol.Name == "percent")
+		{
+			sawProperty = true;
+			CHECK_EQ(symbol.Owner, std::string("Player"));
+			CHECK_EQ(symbol.Signature, std::string("property Player.percent as number"));
+		}
+	}
+	CHECK(sawProperty);
+}

@@ -37,10 +37,37 @@ namespace ForgeScript {
 			case TokenType::Function: case TokenType::Kind:
 				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 			case TokenType::Identifier:
-				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i) || TestOpensBlock(tokens, i);
+				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i) || TestOpensBlock(tokens, i) || PropertyOpensBlock(tokens, i);
 			default:
 				return false;
 		}
+	}
+
+	bool PropertyOpensBlock(const std::vector<Token>& tokens, size_t i)
+	{
+		// 'property name [as type]' alone on its line, directly inside a kind (the compiler's IsPropertyLine).
+		if (tokens[i].Type != TokenType::Identifier || tokens[i].Lexeme != "property" || i + 1 >= tokens.size() ||
+			tokens[i + 1].Type != TokenType::Identifier || (i > 0 && tokens[i - 1].Type != TokenType::Newline))
+			return false;
+		const TokenType after = i + 2 < tokens.size() ? tokens[i + 2].Type : TokenType::Eof;
+		if (!(after == TokenType::Newline || after == TokenType::Eof || after == TokenType::Do ||
+			(after == TokenType::Identifier && tokens[i + 2].Lexeme == "as")))
+			return false;
+		// The innermost block it's in must be a kind: walk back, skipping blocks that are closed.
+		int depth = 0;
+		for (size_t j = i; j-- > 0;)
+		{
+			const TokenType previous = j > 0 ? tokens[j - 1].Type : TokenType::Newline;
+			if (tokens[j].Type == TokenType::End && previous != TokenType::Dot && previous != TokenType::Possessive)
+				depth++;
+			else if (TokenOpensBlock(tokens, j))
+			{
+				if (depth == 0)
+					return tokens[j].Type == TokenType::Kind;
+				depth--;
+			}
+		}
+		return false;
 	}
 
 	namespace {

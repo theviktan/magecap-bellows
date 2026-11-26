@@ -1056,6 +1056,84 @@ set hero.health to 70         # nothing: it didn't change
 - This works only inside a kind. At the top level of a script, `when my health changes` is still an
   ordinary event called "my health changes", as it always was.
 
+### Values worked out from fields: `property`, `keep` and set handlers
+
+Three more things a kind can say about its fields (ForgeScript 1.8.0). They're the place for health
+bars, values that must stay in range, and doors that won't open while locked.
+
+**A value worked out each time you read it: `property`.**
+
+```forge
+kind Player
+	set health to 80
+	set max_health to 100
+
+	property health_percent
+		return my health / my max_health * 100
+	end
+end
+
+set hero to new Player()
+say hero.health_percent        # 80
+take 20 from hero.health
+say hero.health_percent        # 60, always up to date
+```
+
+- You read it like a field: `hero.health_percent`, `my health_percent`, `hero's health_percent`.
+- Nothing is stored, so it can't be out of date, and it can't be set: a `set` on it says so.
+- It runs right away, so it can't `wait`.
+- You can say what it gives, like a function: `property health_percent as number`.
+
+**A number that must stay in range: `keep`.**
+
+```forge
+kind Player
+	set health to 100
+	set max_health to 100
+	keep my health between 0 and my max_health
+end
+
+set hero to new Player()
+take 500 from hero.health
+say hero.health                # 0, not -400
+add 1000 to hero.health
+say hero.health                # 100
+```
+
+- Every change to `health`, from anywhere in your game, is kept between the two ends.
+- The ends are worked out at each change, so raising `max_health` lets `health` go higher at once.
+- Only numbers can be kept in a range; setting `health` to text is an error that says so.
+
+**Your own code for every change: `when my ... is set to`.**
+
+```forge
+kind Door
+	set is_open to false
+	set is_locked to true
+
+	when my is_open is set to wanted
+		if my is_locked and wanted then
+			say "It's locked."
+		else
+			set my is_open to wanted
+		end
+	end
+end
+
+set door to new Door()
+set door.is_open to true       # It's locked.
+say door.is_open               # false
+```
+
+- It runs instead of the change, with the value you tried to set (here, `wanted`).
+- Inside it, `set my is_open to ...` really changes the field. If it never does, the field stays
+  as it was.
+- `when my is_open changes` still runs after a real change.
+- It runs right away, so it can't `wait`.
+
+A kind that `extends` another gets its properties, keeps and set handlers. It can replace a
+property with its own, and `parent.health_percent` inside it reads the one it replaced.
+
 ### Going through an object's fields
 
 `for each` goes through an object's fields, like a map's keys and values:

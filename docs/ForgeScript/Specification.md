@@ -519,6 +519,9 @@ kind Name [extends Name]
     { set field to expression }
     { shared name is expression }
     { when my field changes [ with name [ , name ] ]  block  end }
+    { property name [ as type ]  block  end }
+    { keep my field between term and term }
+    { when my field is set to name  block  end }
     { function name ( [parameters] )  block  end }
 end
 ```
@@ -530,6 +533,11 @@ end
 - A `to_text()` method decides how the object prints.
 - **Change handlers:** `when my` *field* `changes` inside a kind is a method kept by the kind. After a write to that field of an object made from the kind (or one that extends it) that leaves a value not equal (by `is`) to the one before, each handler for the field runs as its own task, right away, like `trigger`'s: the kind it extends first, then in the order written. Its `with` names (at most two) get the new value and the old one. A write is not a change when the field had no value before, when it is made by the kind's field lines (when `new` makes the object), or when it happens in a task that is running a handler for the same object and field. A change made from handlers nested 64 deep is an error ("'b' was changed from inside 64 other changes and events ..."). Writes to kinds without handlers, and to fields without them, run as before. At the top level of a script, `when my field changes` is still an event handler for the event named `my field changes`.
 - **Shared values:** `shared name is expression` (or `to`) makes one value for the kind and all its objects, worked out once when the `kind` statement runs, in the scope around the kind. `Name.name2` reads it and `set Name.name2 to ...` (also `add`, `take` and the rest) changes it, inside the kind's methods too; a bare `name2` in a method is not the shared value. A kind that extends another reads and changes the parent's shared values through its own name (`Boss.count` is `Enemy.count`). Reading one through an object (`goblin.count`) is an error that says to write `Enemy.count`. A shared value can't be called `name` (a kind's `name` is its name), and a name can be shared once per kind. `shared` is a contextual word: only at the start of a line inside a kind, followed by a name and `is` or `to`.
+- **Properties, keeps and set handlers** (1.8.0) are methods kept by the kind, found in the kind or the nearest kind it extends (a kind's own replaces its parent's). Each runs as a nested task that must finish right away: a `wait` or `wait for` in one is an error, and one run from inside 64 others is an error.
+  - `property` *name* `[as` *type*`]` ... `end`: reading *name* on an object that has no field of that name runs the block, with `self` as the object, and gives its `return` value (`nothing` without one). Writing it is an error ("'*name*' is worked out by its property, so it can't be set. ..."). `parent.`*name* inside a kind that extends another runs the parent's property. A name can't be both a field (`set` *name* line) and a property of one kind, and has at most one property per kind.
+  - `keep my` *field* `between` *low* `and` *high*: each write to the field of an object (by `set`, `add`, `take`, `multiply`, `divide`, `obj["field"]`, from any code) first works out *low* and *high* (arithmetic terms, as in `is between`, with `self` as the object), then stores the value clamped into the range, the ends in either order. Ends that aren't numbers, or a value that isn't a number, are errors. The kind's field lines store first values unclamped. One `keep` per field per kind.
+  - `when my` *field* `is set to` *name* ... `end`: each write to the field, except the kind's field lines, runs the block instead of storing the value, with *name* holding the value written. Inside the task running it, a write to the same field of the same object stores the value (and runs `when ... changes` handlers as usual). The write's expression still gives the value written. A field can't have both `keep` and a set handler in one kind, nor either on a property's name.
+  - `property`, `keep` and the set handler's words are contextual: only at the start of a line inside a kind, in these shapes. Everywhere else they mean what they meant in 1.7.0.
 - Reading or calling a field or method an object doesn't have is an error that names the kind.
 
 ---
