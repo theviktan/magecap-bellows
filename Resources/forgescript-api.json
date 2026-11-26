@@ -455,6 +455,39 @@
 			"doc": "Every entity of the scene with the tag, parents before their children; an empty list when there are none"
 		},
 		{
+			"name": "group",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				}
+			],
+			"returns": "Group | None",
+			"doc": "The Hierarchy group with this name (any letter case), or None"
+		},
+		{
+			"name": "groups",
+			"params": [],
+			"returns": "list[Group]",
+			"doc": "Every Hierarchy group of the scene, in the order the Hierarchy shows them"
+		},
+		{
+			"name": "create_group",
+			"params": [
+				{
+					"name": "name",
+					"type": "str"
+				},
+				{
+					"name": "icon",
+					"type": "str",
+					"default": "folder"
+				}
+			],
+			"returns": "Group",
+			"doc": "Adds a Hierarchy group at the end of the list. The name is trimmed, 1 to 64 characters, and not used by another group in any letter case; a scene has at most 256 groups"
+		},
+		{
 			"name": "get_entity",
 			"params": [
 				{
@@ -2368,6 +2401,107 @@
 			]
 		},
 		{
+			"name": "Group",
+			"doc": "A Hierarchy group: a named folder the scene's top-level entities are filed under (their children follow them). It never moves anything; find one with group(name)",
+			"members": [
+				{
+					"name": "id",
+					"kind": "property",
+					"type": "int",
+					"readonly": true,
+					"doc": ""
+				},
+				{
+					"name": "valid",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "False once the group has been deleted"
+				},
+				{
+					"name": "name",
+					"kind": "property",
+					"type": "str",
+					"doc": "Trimmed, 1 to 64 characters, and not used by another group of the scene in any letter case"
+				},
+				{
+					"name": "note",
+					"kind": "property",
+					"type": "str",
+					"doc": "What the group is for, shown under its name in the Hierarchy (at most 200 characters)"
+				},
+				{
+					"name": "icon",
+					"kind": "property",
+					"type": "str",
+					"doc": "The icon it shows: folder, mountain, anchor, rocket, lightbulb, layout, music, camera, box, user, users, flag, star, swords, trees or house"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Its icon's color, red, green and blue from 0 to 1"
+				},
+				{
+					"name": "entities",
+					"kind": "method",
+					"params": [],
+					"returns": "list[Entity]",
+					"doc": "The top-level entities in the group, in Hierarchy order"
+				},
+				{
+					"name": "all_entities",
+					"kind": "method",
+					"params": [],
+					"returns": "list[Entity]",
+					"doc": "The top-level entities in the group and everything under them, parents before their children"
+				},
+				{
+					"name": "has_entity",
+					"kind": "method",
+					"params": [
+						{
+							"name": "entity",
+							"type": "Entity"
+						}
+					],
+					"returns": "bool",
+					"doc": "True when the entity, or its top-level ancestor, is in the group"
+				},
+				{
+					"name": "add_entity",
+					"kind": "method",
+					"params": [
+						{
+							"name": "entity",
+							"type": "Entity"
+						}
+					],
+					"returns": "bool",
+					"doc": "Moves a top-level entity into the group from any other, and returns false when it was already in it"
+				},
+				{
+					"name": "remove_entity",
+					"kind": "method",
+					"params": [
+						{
+							"name": "entity",
+							"type": "Entity"
+						}
+					],
+					"returns": "bool",
+					"doc": "Takes a top-level entity out of the group, into none; false when it wasn't in it"
+				},
+				{
+					"name": "delete",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Removes the group; its entities stay where they are, in no group"
+				}
+			]
+		},
+		{
 			"name": "Entity",
 			"doc": "A handle to an entity in a scene",
 			"members": [
@@ -2402,7 +2536,7 @@
 					"kind": "property",
 					"type": "list[str]",
 					"readonly": true,
-					"doc": "The groups the entity belongs to (\"enemy\"), in the order they were added; find them with find_tagged"
+					"doc": "The labels the entity has (\"enemy\"), in the order they were added; find them with find_tagged"
 				},
 				{
 					"name": "add_tag",
@@ -2439,6 +2573,24 @@
 					],
 					"returns": "bool",
 					"doc": "True when the entity has the tag (letter case counts)"
+				},
+				{
+					"name": "group",
+					"kind": "property",
+					"type": "Group | None",
+					"doc": "The Hierarchy group the entity is in, or None. A child is in its top-level ancestor's group; only a top-level entity can be moved to another"
+				},
+				{
+					"name": "is_in_group",
+					"kind": "method",
+					"params": [
+						{
+							"name": "name",
+							"type": "str"
+						}
+					],
+					"returns": "bool",
+					"doc": "True when the entity, or its top-level ancestor, is in the group with this name (any letter case)"
 				},
 				{
 					"name": "transform",

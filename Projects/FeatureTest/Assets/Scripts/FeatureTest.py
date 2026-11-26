@@ -101,6 +101,7 @@ class FeatureTest(bellows.Script):
         self.test_time_and_input()
         self.test_scene_queries()
         self.test_entities_and_hierarchy()
+        self.test_groups()
         self.test_components()
         self.test_materials()
         self.test_scripts()
@@ -303,6 +304,44 @@ class FeatureTest(bellows.Script):
         self.check(child.parent is None and parent.children == [], "unparenting")
         for entity in (grandchild, child, parent):
             entity.destroy()
+
+    def test_groups(self):
+        """Hierarchy groups: top-level entities filed under named folders; children follow them."""
+        self.check(bellows.group("Test Bays") is None, "group() finds nothing before it exists")
+        bays = bellows.create_group(" Test Bays ", "anchor")
+        self.check(bays.name == "Test Bays" and bays.icon == "anchor" and bays.valid, "create_group trims the name and sets the icon")
+        self.check(bellows.group("test bays") == bays and bays in bellows.groups(), "groups are found in any letter case")
+        self.check(raises(lambda: bellows.create_group("TEST BAYS"), ValueError), "a name another group has is refused")
+        self.check(raises(lambda: bellows.create_group("  "), ValueError) and raises(lambda: bellows.create_group("Odd", "no-icon"), ValueError),
+                   "bad names and icons are refused")
+
+        bay = bellows.create_entity("Test Bay")
+        arm = bellows.create_entity("Test Bay Arm", bay)
+        self.check(bay.group is None and not bay.is_in_group("Test Bays"), "entities start in no group")
+        self.check(bays.add_entity(bay) and not bays.add_entity(bay), "add_entity files a top-level entity once")
+        self.check(bay.group == bays and arm.group == bays and arm.is_in_group("TEST BAYS") and bays.has_entity(arm), "a child follows its parent's group")
+        self.check(bays.entities() == [bay] and bays.all_entities() == [bay, arm], "entities and all_entities")
+        self.check(raises(lambda: bays.add_entity(arm), ValueError), "a child can't be filed by itself")
+
+        bays.note = "Where ships dock"
+        bays.color = Vec3(2.0, 0.5, -1.0)
+        bays.name = "Test Docks"
+        self.check(bays.note == "Where ships dock" and close(bays.color, (1.0, 0.5, 0.0)) and bellows.group("Test Docks") == bays,
+                   "note, color (kept from 0 to 1) and renaming")
+        self.check(raises(lambda: setattr(bays, "icon", "nope"), ValueError) and raises(lambda: setattr(bays, "note", "n" * 201), ValueError),
+                   "bad icons and long notes are refused")
+
+        spare = bellows.create_group("Test Spare")
+        bay.group = spare
+        self.check(spare.entities() == [bay] and bays.entities() == [], "setting entity.group moves it between groups")
+        self.check(not bays.remove_entity(bay) and spare.remove_entity(bay) and bay.group is None, "remove_entity")
+
+        spare.delete()
+        self.check(not spare.valid and raises(lambda: spare.name, RuntimeError), "a deleted group's handle says so")
+        bays.add_entity(bay)
+        bays.delete()
+        self.check(bay.valid and bay.group is None and bellows.group("Test Docks") is None, "deleting a group leaves its entities in none")
+        bay.destroy()
 
     def test_components(self):
         entity = bellows.create_entity("Component Test")

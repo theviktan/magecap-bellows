@@ -567,6 +567,19 @@ namespace Bellows::Scripting {
 				return entity ? "Entity('" + entity.GetName() + "', id=" + std::to_string(static_cast<uint64_t>(e.ID)) + ")" : std::string("Entity(<destroyed>)");
 			});
 
+		api.Get<ScriptGroup>()
+			.def("__eq__", [](const ScriptGroup& a, const py::object& b)
+			{
+				return py::isinstance<ScriptGroup>(b) && a == b.cast<ScriptGroup>();
+			})
+			.def("__hash__", [](const ScriptGroup& g) { return std::hash<uint64_t>()(static_cast<uint64_t>(g.ID)); })
+			.def("__repr__", [](const ScriptGroup& g)
+			{
+				Scene* scene = Scene::GetSceneByID(g.SceneID);
+				const SceneGroup* group = scene ? scene->FindGroup(g.ID) : nullptr;
+				return group ? "Group('" + group->Name + "')" : std::string("Group(<deleted>)");
+			});
+
 		// Python-only: a variable number of values doesn't fit the shared API description, so ForgeScript
 		// has 'trigger' instead. The event reaches every script in either language, the sender included.
 		m.def("emit", [](const std::string& name, const py::args& values)

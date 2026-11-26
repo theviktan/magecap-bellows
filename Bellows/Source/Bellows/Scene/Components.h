@@ -36,7 +36,10 @@ namespace Bellows {
 	{
 		std::string Tag;				// The entity's name
 		bool KeepAcrossScenes = false;	// The entity and its children stay when load_scene changes the scene
-		std::vector<std::string> Tags;	// Groups it belongs to ("enemy"); see Scene/EntityTags.h for the rules
+		std::vector<std::string> Tags;	// Labels it has ("enemy"); see Scene/EntityTags.h for the rules
+		// The Hierarchy group a top-level entity is filed under (Scene/SceneGroups.h), 0 for none. A
+		// child's is always 0: it follows its top-level ancestor (Scene::GetEntityGroup).
+		UUID Group = 0;
 	};
 
 	// Local transform relative to the parent entity (or the world for root entities).
