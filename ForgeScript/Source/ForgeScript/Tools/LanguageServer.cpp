@@ -114,6 +114,7 @@ namespace ForgeScript {
 		// LSP SymbolKind values for the outline.
 		constexpr int c_SymbolClass = 5;
 		constexpr int c_SymbolMethod = 6;
+		constexpr int c_SymbolProperty = 7;
 		constexpr int c_SymbolField = 8;
 		constexpr int c_SymbolFunction = 12;
 		constexpr int c_SymbolVariable = 13;
@@ -1869,7 +1870,7 @@ namespace ForgeScript {
 			}
 			else if (listed && inKind && opens && PropertyOpensBlock(tokens, i))
 			{
-				item = add(Kind::Variable, std::string(next->Lexeme), lineText(i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
+				item = add(Kind::Property, std::string(next->Lexeme), lineText(i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && !inKind && opens && TestOpensBlock(tokens, i))
 			{
@@ -1955,6 +1956,7 @@ namespace ForgeScript {
 				case OutlineItem::Kind::Handler:  kind = c_SymbolEvent; break;
 				case OutlineItem::Kind::Variable: kind = inKind ? c_SymbolField : c_SymbolVariable; break;
 				case OutlineItem::Kind::Constant: kind = c_SymbolConstant; break;
+				case OutlineItem::Kind::Property: kind = c_SymbolProperty; break;
 			}
 			// The whole lines from the definition to its 'end'.
 			const size_t endIndex = static_cast<size_t>(std::clamp(item.EndLine - 1, 0, static_cast<int>(lines.size()) - 1));

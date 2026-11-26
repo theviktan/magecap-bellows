@@ -533,6 +533,8 @@ namespace ForgeScript {
 		std::unordered_map<Object*, int> m_Pinned;
 		std::unordered_map<const NativeType::MethodInfo*, NativeFunction*> m_NativeMethodCache;
 		std::string m_ErrorMessage;
+		// The last nested failure given its place, so the tasks it fails on its way out add no more.
+		std::string m_LastPlacedNestedFailure;
 
 		// Garbage collector state
 		Object* m_Objects = nullptr;

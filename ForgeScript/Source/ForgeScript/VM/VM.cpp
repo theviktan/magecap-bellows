@@ -2974,9 +2974,14 @@ namespace ForgeScript {
 		{
 			task->FailureMessage = message;
 			// Evaluate's code is the user's one line, wrapped in a function of its own: its place (the
-			// wrapper's line 2) would only mislead (S-16), so the message stands alone.
-			if (line > 0 && !m_Evaluating)
+			// wrapper's line 2) would only mislead (S-16), so the message stands alone. A message that
+			// comes out of a nested run already ends with the place it happened (properties that use each
+			// other go 64 deep), so the tasks it passes through on its way out don't add theirs.
+			if (line > 0 && !m_Evaluating && message != m_LastPlacedNestedFailure)
+			{
 				task->FailureMessage += " (" + file + " line " + std::to_string(line) + ")";
+				m_LastPlacedNestedFailure = task->FailureMessage;
+			}
 			return;
 		}
 
