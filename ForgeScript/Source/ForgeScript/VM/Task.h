@@ -3,7 +3,13 @@
 #include "ForgeScript/Core/Object.h"
 #include "ForgeScript/Core/ValueStack.h"
 
+#include <cassert>
 #include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <memory>
+#include <new>
+#include <type_traits>
 #include <vector>
 
 namespace ForgeScript {
@@ -24,6 +30,72 @@ namespace ForgeScript {
 		// Which values with defaults the call gave (bit i: the i-th of them), so their default code is skipped.
 		uint64_t Given = ~uint64_t(0);
 		int DebugLine = 0; // The line the debugger last saw this frame on (only kept while debugging).
+	};
+
+	// A task's call frames. It acts like std::vector<CallFrame> for the parts the VM uses, but adding a
+	// frame is small enough to be inlined into the VM's main loop: with std::vector it was a function
+	// call on every script function call (about a tenth of a call's cost).
+	static_assert(std::is_trivially_copyable_v<CallFrame> && std::is_trivially_destructible_v<CallFrame>,
+		"FrameStack keeps CallFrames in raw memory, which only works while a CallFrame is plain data.");
+
+	class FrameStack
+	{
+	public:
+		FrameStack() = default;
+		FrameStack(const FrameStack&) = delete;
+		FrameStack& operator=(const FrameStack&) = delete;
+
+		size_t size() const { return m_Size; }
+		bool empty() const { return m_Size == 0; }
+
+		CallFrame& operator[](size_t index) { assert(index < m_Size); return m_Data.get()[index]; }
+		const CallFrame& operator[](size_t index) const { assert(index < m_Size); return m_Data.get()[index]; }
+		CallFrame& back() { assert(m_Size > 0); return m_Data.get()[m_Size - 1]; }
+		const CallFrame& back() const { assert(m_Size > 0); return m_Data.get()[m_Size - 1]; }
+		CallFrame& front() { assert(m_Size > 0); return m_Data.get()[0]; }
+		const CallFrame& front() const { assert(m_Size > 0); return m_Data.get()[0]; }
+
+		CallFrame* begin() { return m_Data.get(); }
+		CallFrame* end() { return m_Data.get() + m_Size; }
+		const CallFrame* begin() const { return m_Data.get(); }
+		const CallFrame* end() const { return m_Data.get() + m_Size; }
+		std::reverse_iterator<CallFrame*> rbegin() { return std::reverse_iterator<CallFrame*>(end()); }
+		std::reverse_iterator<CallFrame*> rend() { return std::reverse_iterator<CallFrame*>(begin()); }
+
+		// A new frame, as a default-made CallFrame.
+		FORGESCRIPT_ALWAYS_INLINE CallFrame& emplace_back()
+		{
+			if (m_Size == m_Capacity)
+				Grow();
+			CallFrame* frame = m_Data.get() + m_Size++;
+			*frame = CallFrame();
+			return *frame;
+		}
+		FORGESCRIPT_ALWAYS_INLINE void push_back(const CallFrame& frame) { emplace_back() = frame; }
+		void pop_back() { assert(m_Size > 0); m_Size--; }
+		void clear() { m_Size = 0; }
+		// Only ever shrinks: the VM uses it to drop the frames above a 'try'.
+		void resize(size_t count) { assert(count <= m_Size); m_Size = count; }
+
+	private:
+		// Doubles the room; rare, since a task starts with room for 16 frames.
+		void Grow()
+		{
+			const size_t capacity = m_Capacity ? m_Capacity * 2 : 16;
+			std::unique_ptr<CallFrame, FreeMemory> data(static_cast<CallFrame*>(::operator new(capacity * sizeof(CallFrame))));
+			if (m_Size)
+				std::memcpy(data.get(), m_Data.get(), m_Size * sizeof(CallFrame));
+			m_Data = std::move(data);
+			m_Capacity = capacity;
+		}
+
+		struct FreeMemory
+		{
+			void operator()(CallFrame* data) const { ::operator delete(data); }
+		};
+		std::unique_ptr<CallFrame, FreeMemory> m_Data;
+		size_t m_Size = 0;
+		size_t m_Capacity = 0;
 	};
 
 	struct TryHandler
@@ -60,7 +132,7 @@ namespace ForgeScript {
 	struct Task : public Object
 	{
 		ValueStack Stack;
-		std::vector<CallFrame> Frames;
+		FrameStack Frames;
 		std::vector<TryHandler> Handlers;
 		// Names for the last values of the next call, set by NamedArgs just before it (kept alive by the
 		// function's constants). Taken by the call, and cleared by any error.

@@ -1,12 +1,12 @@
 # Instructions each benchmark executes (forgescript --benchmark). ForgeScriptBenchmarks fails when one
 # grows by more than 5%. When a change makes the VM do less work, lower the number here in the same
 # pull request: run forgescript --benchmark ForgeScript/Benchmarks/*.forge and copy the counts.
-calls.forge 1800594
-closures.forge 1000136
-events.forge 580027
-lists.forge 830044
-math.forge 2362767
+calls.forge 1350448
+closures.forge 900136
+events.forge 540027
+lists.forge 770044
+math.forge 1897086
 methods.forge 1800029
 numbers_to_text.forge 440017
-tasks.forge 62257
-text.forge 572035
+tasks.forge 62227
+text.forge 532035

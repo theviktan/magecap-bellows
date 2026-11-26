@@ -255,6 +255,8 @@ namespace ForgeScript {
 		std::string Name;
 		std::unordered_map<String*, Value> Globals;
 		std::vector<String*> GlobalOrder;
+		// Goes up each time Globals gains a name, which can hide a built-in a chunk's cache points at.
+		uint32_t GlobalsVersion = 0;
 		// Script variables the host asked to hear about (VM::WatchScriptVariables), like an entity
 		// script's Inspector fields. Empty for nearly every module, which keeps writes to one test.
 		std::unordered_set<String*> WatchedGlobals;

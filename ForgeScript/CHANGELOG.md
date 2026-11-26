@@ -19,6 +19,14 @@ with new language or tool features, the patch number with fixes.
   - The checker explains a name that's both a field and a property, two of one form on a name, and a
     keep with a set handler. The language server lists properties in the outline and as members of
     their kind, and the formatter indents their blocks. Cookbook recipe 32 shows all three.
+- **Faster function calls and math** (Roadmap 3.0, item 1): `fib(30)` now runs in about 0.10 s
+  against Python 3.13's 0.12 s, and a plain counting loop in about 0.37 s against Python's 0.65 s
+  (Linux, Release build, the whole program run). Nothing a script writes changes meaning. Inside, a
+  call to a plain function goes straight to it; reading a script variable remembers where it was found;
+  `if`, `while` and `until` drop their condition as they jump; and `n - 1` or `n < 2` (a number written
+  on the right) is one step instead of two. For hosts: `forgescript --benchmark` and
+  `GetInstructionsRun()` count fewer instructions for the same script (`calls.forge` 1,800,594 →
+  1,350,448), so an `InstructionLimit` now lets a script do a little more work before it stops.
 - **Script time in MageCap Bellows' profiler** (Roadmap 3.0, 1.8.0 item 2): the editor's View →
   Profiler shows each ForgeScript script under Scripts → ForgeScript, and inside it each handler or
   function a task began with (`Scripts/Guard.forge: when update`, `... : patrol` after its `wait`,

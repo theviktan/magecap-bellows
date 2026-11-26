@@ -279,6 +279,7 @@ namespace ForgeScript {
 	{
 		m_NextGC = m_Config.InitialGCThreshold;
 		m_WatchEachInstruction = m_Config.InstructionLimit || m_Config.CountInstructions;
+		SetDispatchCheck(c_CheckWatch, m_WatchEachInstruction);
 		m_PrintHandler = [](const std::string& text) { std::cout << text << std::endl; };
 		m_ErrorHandler = [](const ScriptError& error) { std::cerr << error.ToString() << std::endl; };
 
@@ -343,6 +344,7 @@ namespace ForgeScript {
 		GCPause pause(*this);
 		NativeFunction* native = Allocate<NativeFunction>(name.size(), name, arity, std::move(fn));
 		m_SharedGlobals[Intern(name)] = Value::FromObject(native);
+		m_SharedGlobalsVersion++;
 	}
 
 	bool VM::RegisterPhrase(const std::string& pattern, NativeFn fn, std::string* outError, bool yieldToCalls)
@@ -395,6 +397,7 @@ namespace ForgeScript {
 	{
 		GCPause pause(*this);
 		m_SharedGlobals[Intern(name)] = value;
+		m_SharedGlobalsVersion++;
 	}
 
 	std::vector<std::string> VM::GetSharedGlobalNames() const
@@ -853,6 +856,7 @@ namespace ForgeScript {
 		m_ProfileClock = std::chrono::steady_clock::now();
 		m_Profiling = true;
 		m_WatchEachInstruction = true;
+		SetDispatchCheck(c_CheckWatch, true);
 	}
 
 	// Every 256 profiled instructions: the time since the last sample goes to the code running now.
@@ -871,6 +875,7 @@ namespace ForgeScript {
 	{
 		m_Profiling = false;
 		m_WatchEachInstruction = m_Config.InstructionLimit || m_Config.CountInstructions;
+		SetDispatchCheck(c_CheckWatch, m_WatchEachInstruction);
 		std::vector<ProfileEntry> entries;
 		for (auto& [fn, entry] : m_Profile)
 		{
@@ -1105,6 +1110,7 @@ namespace ForgeScript {
 	void VM::RefreshDebugActive()
 	{
 		m_DebugActive = !m_Breakpoints.empty() || m_PauseRequested || m_SteppingTasks > 0;
+		SetDispatchCheck(c_CheckDebug, m_DebugActive);
 	}
 
 	void VM::ReleaseStep(Task* task)
@@ -1283,7 +1289,7 @@ namespace ForgeScript {
 		std::vector<DebugFrame> frames;
 		if (!m_StoppedTask)
 			return frames;
-		const std::vector<CallFrame>& calls = m_StoppedTask->Frames;
+		const FrameStack& calls = m_StoppedTask->Frames;
 		for (size_t i = calls.size(); i-- > 0;)
 		{
 			const CallFrame& call = calls[i];
@@ -2014,6 +2020,15 @@ namespace ForgeScript {
 	}
 
 	// ======================================================================= Properties and indexing
+
+	Value* VM::FindGlobalSlot(Module* module, String* name)
+	{
+		auto it = module->Globals.find(name);
+		if (it != module->Globals.end())
+			return &it->second;
+		auto shared = m_SharedGlobals.find(name);
+		return shared != m_SharedGlobals.end() ? &shared->second : nullptr;
+	}
 
 	bool VM::LookupGlobal(Module* module, String* name, Value& outValue)
 	{
@@ -2762,7 +2777,8 @@ namespace ForgeScript {
 			auto old = from->Globals.find(name);
 			if (old == from->Globals.end())
 				continue;
-			const Value& current = to->Globals[name];
+			auto found = to->Globals.find(name);
+			const Value current = found != to->Globals.end() ? found->second : Value();
 			if (isCode(old->second) || isCode(current) || TypeOf(old->second) != TypeOf(current))
 				continue;
 			to->SetGlobal(name, old->second);
@@ -3051,48 +3067,52 @@ namespace ForgeScript {
 		for (;;)
 		{
 		dispatch:
-			if (m_BytesAllocated > m_NextGC && m_GCPaused == 0)
-				CollectGarbage();
-			// One test for the limit, counting and the profiler, and none of their work in the usual run.
-			if (m_WatchEachInstruction)
+			// One test for the collector, the limit, counting, the profiler and the debugger, and none of
+			// their work in the usual run.
+			if (m_DispatchChecks)
 			{
-				executed.Executed++;
-				if (m_Profiling)
+				if ((m_DispatchChecks & c_CheckCollect) && m_GCPaused == 0)
+					CollectGarbage();
+				if (m_WatchEachInstruction)
 				{
-					const Function* fn = frame->Function->Fn;
-					if (fn != m_ProfiledFunction)
+					executed.Executed++;
+					if (m_Profiling)
 					{
-						m_ProfiledEntry = &ProfileOf(fn);
-						m_ProfiledLines = &m_ProfileLines[fn];
-						m_ProfiledFunction = fn;
-					}
-					m_ProfiledEntry->Instructions++;
-					const int line = fn->Chunk.GetLine(frame->Ip);
-					if (line >= 0)
-					{
-						if (static_cast<size_t>(line) >= m_ProfiledLines->Instructions.size())
+						const Function* fn = frame->Function->Fn;
+						if (fn != m_ProfiledFunction)
 						{
-							m_ProfiledLines->Instructions.resize(static_cast<size_t>(line) + 1, 0);
-							m_ProfiledLines->Seconds.resize(static_cast<size_t>(line) + 1, 0.0);
+							m_ProfiledEntry = &ProfileOf(fn);
+							m_ProfiledLines = &m_ProfileLines[fn];
+							m_ProfiledFunction = fn;
 						}
-						m_ProfiledLines->Instructions[static_cast<size_t>(line)]++;
+						m_ProfiledEntry->Instructions++;
+						const int line = fn->Chunk.GetLine(frame->Ip);
+						if (line >= 0)
+						{
+							if (static_cast<size_t>(line) >= m_ProfiledLines->Instructions.size())
+							{
+								m_ProfiledLines->Instructions.resize(static_cast<size_t>(line) + 1, 0);
+								m_ProfiledLines->Seconds.resize(static_cast<size_t>(line) + 1, 0.0);
+							}
+							m_ProfiledLines->Instructions[static_cast<size_t>(line)]++;
+						}
+						if (++m_ProfileTick >= 256)
+						{
+							m_ProfileTick = 0;
+							ProfileSample(line);
+						}
 					}
-					if (++m_ProfileTick >= 256)
+					if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
 					{
-						m_ProfileTick = 0;
-						ProfileSample(line);
+						instructions = 0;
+						FORGESCRIPT_FAIL("This script ran too long without waiting. Add a 'wait' inside long loops.");
 					}
 				}
-				if (m_Config.InstructionLimit && ++instructions > m_Config.InstructionLimit)
+				if (m_DebugActive && DebugLineReached(task, frame))
 				{
-					instructions = 0;
-					FORGESCRIPT_FAIL("This script ran too long without waiting. Add a 'wait' inside long loops.");
+					task->State = TaskState::Stopped;
+					return;
 				}
-			}
-			if (m_DebugActive && DebugLineReached(task, frame))
-			{
-				task->State = TaskState::Stopped;
-				return;
 			}
 
 			OpCode op = static_cast<OpCode>(FORGESCRIPT_READ_BYTE());
@@ -3132,9 +3152,31 @@ namespace ForgeScript {
 
 				case OpCode::GetGlobal:
 				{
-					String* name = FORGESCRIPT_READ_STRING();
+					const uint16_t nameIndex = FORGESCRIPT_READ_U16();
+					Function* fn = frame->Function->Fn;
+					Module* owner = fn->Owner;
+					auto& cache = fn->Chunk.GetGlobalCache();
+					if (owner && nameIndex < cache.size())
+					{
+						const Chunk::GlobalCacheEntry& entry = cache[nameIndex];
+						if (entry.Slot && entry.Module == owner && entry.ModuleVersion == owner->GlobalsVersion &&
+							entry.SharedVersion == m_SharedGlobalsVersion)
+						{
+							stack.push_back(*entry.Slot);
+							break;
+						}
+					}
+					String* name = As<String>(constants[nameIndex]);
 					Value value;
-					if (!LookupGlobal(frame->Function->Fn->Owner, name, value))
+					if (Value* slot = owner ? FindGlobalSlot(owner, name) : nullptr)
+					{
+						if (cache.size() <= nameIndex)
+							cache.resize(fn->Chunk.GetConstants().size());
+						cache[nameIndex] = { owner, owner->GlobalsVersion, m_SharedGlobalsVersion, slot };
+						stack.push_back(*slot);
+						break;
+					}
+					if (!LookupGlobal(owner, name, value))
 					{
 						// A name from another language ('True', 'len') gets the ForgeScript for it; otherwise a typo of
 						// a known name is far more likely than a forgotten 'set', so name the match.
@@ -3460,6 +3502,68 @@ namespace ForgeScript {
 						frame->Ip += offset;
 					break;
 				}
+				case OpCode::NumberOp:
+				{
+					// 'n - 1', 'n < 2': the right side is a number constant. A number on the left is worked
+					// out here; anything else goes the way the two separate steps would.
+					const OpCode inner = static_cast<OpCode>(FORGESCRIPT_READ_BYTE());
+					const Value right = FORGESCRIPT_READ_CONSTANT();
+					Value& left = stack.back();
+					if (left.IsNumber())
+					{
+						const double x = left.AsNumber();
+						const double y = right.AsNumber();
+						switch (inner)
+						{
+							case OpCode::Add:          left = Value::FromNumber(x + y); break;
+							case OpCode::Subtract:     left = Value::FromNumber(x - y); break;
+							case OpCode::Multiply:     left = Value::FromNumber(x * y); break;
+							case OpCode::Less:         left = Value::FromBool(x < y); break;
+							case OpCode::LessEqual:    left = Value::FromBool(x <= y); break;
+							case OpCode::Greater:      left = Value::FromBool(x > y); break;
+							case OpCode::GreaterEqual: left = Value::FromBool(x >= y); break;
+							case OpCode::Equal:        left = Value::FromBool(x == y); break;
+							default:                   left = Value::FromBool(x != y); break;
+						}
+						break;
+					}
+					switch (inner)
+					{
+						case OpCode::Add: case OpCode::Subtract: case OpCode::Multiply:
+						{
+							Value result;
+							FORGESCRIPT_CHECK(Arithmetic(task, inner, left, right, result));
+							stack.back() = result;
+							break;
+						}
+						case OpCode::Equal: case OpCode::NotEqual:
+						{
+							const bool equal = ContentsEqual(left, right);
+							stack.back() = Value::FromBool(inner == OpCode::Equal ? equal : !equal);
+							break;
+						}
+						default:
+						{
+							if (left.IsBool())
+								FORGESCRIPT_FAIL(std::string("Cannot compare boolean with number. Only numbers with numbers, or text with text. To check that a value is between two others, write: if x is between 1 and 10"));
+							bool result = false;
+							FORGESCRIPT_CHECK(Compare(task, inner, left, right, result));
+							stack.back() = Value::FromBool(result);
+							break;
+						}
+					}
+					break;
+				}
+				case OpCode::PopJumpIfFalse:
+				case OpCode::PopJumpIfTrue:
+				{
+					uint16_t offset = FORGESCRIPT_READ_U16();
+					const bool truthy = stack.back().IsTruthy();
+					stack.pop_back();
+					if (truthy == (op == OpCode::PopJumpIfTrue))
+						frame->Ip += offset;
+					break;
+				}
 				case OpCode::JumpIfTrue:
 				{
 					uint16_t offset = FORGESCRIPT_READ_U16();
@@ -3594,7 +3698,23 @@ namespace ForgeScript {
 					uint8_t count = FORGESCRIPT_READ_BYTE();
 					if (m_Evaluating && frame->Function->Fn->NoCalls)
 						FORGESCRIPT_FAIL("The debugger works things out without calling functions, so the game can't change. Read values instead, like: enemy.health");
-					FORGESCRIPT_CHECK(CallValue(task, stack[stack.size() - 1 - count], count));
+					// The usual call, a script function given exactly its values, goes straight to its frame;
+					// everything else (natives, defaults, named values, wrong counts) through CallValue.
+					const Value callee = stack[stack.size() - 1 - count];
+					if (IsObjectType(callee, ObjectType::Closure) && !task->PendingNames && !m_Profiling)
+					{
+						Closure* closure = As<Closure>(callee);
+						const Function* fn = closure->Fn;
+						if (!fn->HasRest && fn->DefaultIps.empty() && fn->Arity == count && task->Frames.size() < m_Config.MaxCallDepth)
+						{
+							CallFrame& next = task->Frames.emplace_back();
+							next.Function = closure;
+							next.Base = stack.size() - static_cast<size_t>(count) - 1;
+							FORGESCRIPT_REFRESH();
+							break;
+						}
+					}
+					FORGESCRIPT_CHECK(CallValue(task, callee, count));
 					FORGESCRIPT_REFRESH();
 					break;
 				}
@@ -3689,7 +3809,8 @@ namespace ForgeScript {
 					Value result = stack.back();
 					stack.pop_back();
 					CallFrame finished = *frame;
-					CloseUpvalues(task, finished.Base);
+					if (task->OpenUpvalues)
+						CloseUpvalues(task, finished.Base);
 					task->Frames.pop_back();
 					while (!task->Handlers.empty() && task->Handlers.back().FrameCount > task->Frames.size())
 						task->Handlers.pop_back();
@@ -4311,6 +4432,7 @@ namespace ForgeScript {
 		TraceReferences();
 		Sweep();
 		m_NextGC = std::max(m_Config.InitialGCThreshold, m_BytesAllocated * 2);
+		SetDispatchCheck(c_CheckCollect, m_BytesAllocated > m_NextGC);
 	}
 
 	void VM::MaybeCollect()
