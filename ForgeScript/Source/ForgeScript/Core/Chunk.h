@@ -81,7 +81,7 @@ namespace ForgeScript {
 		Invoke,          // u16 name, u8 argument count
 		InvokeParent,    // u16 name, u8 argument count
 		GetParent,       // u16 name                  self -> bound method
-		Start,           // u8 argument count (spawns a new task instead of calling)
+		Start,           // u8 argument count (spawns a new task instead of calling; pushes the task)
 		Closure,         // u16 function constant, then per upvalue: u8 isLocal, u8 index
 		Return,
 

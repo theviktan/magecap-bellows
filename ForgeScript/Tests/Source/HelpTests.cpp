@@ -62,6 +62,7 @@ TEST_CASE("HelpCoversEveryBuiltInFunctionPhraseAndMethod")
 	CheckMethods(vm.ListMethods, "list");
 	CheckMethods(vm.MapMethods, "map");
 	CheckMethods(vm.VectorMethods, "vector");
+	CheckMethods(vm.TaskMethods, "task");
 }
 
 TEST_CASE("HelpOnlyDescribesThingsThatExist")
@@ -76,7 +77,7 @@ TEST_CASE("HelpOnlyDescribesThingsThatExist")
 	auto hasMethod = [&vm](const std::string& owner, const std::string& name)
 	{
 		const std::unordered_map<String*, NativeFunction*>* table = owner == "text" ? &vm.TextMethods
-			: owner == "list" ? &vm.ListMethods : owner == "map" ? &vm.MapMethods : &vm.VectorMethods;
+			: owner == "list" ? &vm.ListMethods : owner == "map" ? &vm.MapMethods : owner == "task" ? &vm.TaskMethods : &vm.VectorMethods;
 		return std::any_of(table->begin(), table->end(), [&name](const auto& entry) { return entry.first->Text == name; });
 	};
 	auto contains = [](const std::vector<std::string>& names, const std::string& name)

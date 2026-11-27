@@ -87,6 +87,8 @@ TEST_CASE("CompileErrorBadPlacement")
 	CHECK_CONTAINS(CompileFails("say parent.x").Message, "'parent' can only be used");
 	CHECK_CONTAINS(CompileFails("kind A\n\tsay 1\nend").Message, "Inside a kind");
 	CHECK_CONTAINS(CompileFails("start 5").Message, "'start' needs a function call");
+	CHECK_CONTAINS(CompileFails("set p to start 5").Message, "'start' needs a function call after it, like: set p to start patrol()");
+	CHECK_CONTAINS(CompileFails("function f()\nend\nsay start f().done").Message, "(start patrol()).done");
 	CHECK_CONTAINS(CompileFails("else").Message, "needs an 'if'");
 }
 

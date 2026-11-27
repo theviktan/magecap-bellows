@@ -1,0 +1,129 @@
+# Control over started tasks (Roadmap 3.0 item 2): 'start' gives back the task.
+function slow_sum(count)
+	set total to 0
+	for i from 1 to count
+		add i to total
+		wait 1 frames
+	end
+	return total
+end
+
+function broken()
+	wait 1 frames
+	return 1 / 0
+end
+
+function forever()
+	repeat forever
+		wait 1 frames
+	end
+end
+
+# A task runs to its first wait before 'start' gives it back.
+set sum to start slow_sum(3)
+say sum                                         # expect: <task slow_sum>
+say sum.running                                 # expect: true
+say sum.done                                    # expect: false
+say sum.result                                  # expect: nothing
+wait until sum.done
+say sum.running                                 # expect: false
+say sum.failed                                  # expect: false
+say sum.cancelled                               # expect: false
+say sum.result                                  # expect: 6
+say sum.problem                                 # expect: nothing
+
+# A task that fails: done, failed, and its message without the place.
+set bad to start broken()
+wait until bad.done
+say bad.failed                                  # expect: true
+say bad.problem                                 # expect: Cannot divide by zero.
+say bad.result                                  # expect: nothing
+# expect error: Cannot divide by zero.
+
+# Cancelling a waiting task: it never runs again, and its result stays nothing.
+set loop to start forever()
+loop.cancel()
+say loop.running                                # expect: false
+say loop.done                                   # expect: true
+say loop.cancelled                              # expect: true
+say loop.failed                                 # expect: false
+loop.cancel()
+say loop.cancelled                              # expect: true
+
+# Cancelling a task that has ended does nothing.
+sum.cancel()
+say sum.cancelled                               # expect: false
+say sum.result                                  # expect: 6
+
+# A task that cancels itself stops right there.
+set me to nothing
+function quits()
+	wait 1 frames
+	say "before"
+	me.cancel()
+	say "after"
+end
+set me to start quits()
+# expect: before
+wait until me.done
+say me.cancelled                                # expect: true
+
+# Two tasks woken in the same frame: the first cancels the second before its turn.
+set second to nothing
+function first_one()
+	wait 1 frames
+	second.cancel()
+end
+function second_one()
+	wait 1 frames
+	say "the second ran"
+end
+set one to start first_one()
+set second to start second_one()
+wait until one.done and second.done
+say second.cancelled                            # expect: true
+
+# Cancelled from inside a built-in's callback while it runs: it stops at its next step.
+set inner to nothing
+function maps()
+	wait 1 frames
+	[1, 2].each(function(x) inner.cancel() end)
+	say "not reached"
+end
+set inner to start maps()
+wait until inner.done
+say inner.cancelled                             # expect: true
+
+# A kind's function, 'is', the text of a task, and a misspelled field.
+kind Guard
+	set rounds to 0
+	function patrol(times)
+		repeat times times
+			add 1 to my rounds
+			wait 1 frames
+		end
+		return my rounds
+	end
+end
+set guard to new Guard()
+set walk to start guard.patrol(2)
+set same to walk
+say walk is same                                # expect: true
+say walk is start slow_sum(1)                   # expect: false
+wait until walk.done
+say walk.result                                 # expect: 2
+say "" + walk                                   # expect: <task patrol>
+try
+	say walk.runing
+catch problem
+	say problem                                 # expect: A task has no property called 'runing'. Did you mean 'running'?
+end
+try
+	say walk.result()
+catch problem
+	say problem                                 # expect: 'result' of a task is a value, not a function. Write it without brackets: .result
+end
+
+# 'start' on a line of its own works as it always did.
+start slow_sum(2)
+say (start slow_sum(1)).running                 # expect: true

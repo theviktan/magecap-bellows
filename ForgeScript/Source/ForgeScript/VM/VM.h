@@ -335,6 +335,13 @@ namespace ForgeScript {
 		void StartProfile();
 		std::vector<ProfileEntry> TakeProfile();
 		void CancelTasks(Module* module);
+		// Stops one task, as 'task.cancel()' does: a waiting or debugger-held task at once, a running one
+		// before its next instruction. A task that has ended is left as it is.
+		void CancelTask(Task* task);
+	private:
+		void CancelTasksWhere(const std::function<bool(Task*)>& match);
+		void DropFrames(Task* task);
+	public:
 
 		// ---------------------------------------------------------- Debugger
 		//
@@ -500,6 +507,7 @@ namespace ForgeScript {
 		std::unordered_map<String*, NativeFunction*> TextMethods;
 		std::unordered_map<String*, NativeFunction*> MapMethods;
 		std::unordered_map<String*, NativeFunction*> VectorMethods;
+		std::unordered_map<String*, NativeFunction*> TaskMethods;
 
 	private:
 		VMConfig m_Config;
@@ -562,10 +570,12 @@ namespace ForgeScript {
 		bool m_WatchEachInstruction = false;
 		// What Execute must look at before an instruction, as bits, so the usual run tests one byte: the
 		// collector is due (c_CheckCollect), instructions are counted or profiled (c_CheckWatch), or the
-		// debugger is on (c_CheckDebug).
+		// debugger is on (c_CheckDebug), or a running task was asked to cancel (c_CheckCancel).
 		static constexpr uint8_t c_CheckCollect = 1;
 		static constexpr uint8_t c_CheckWatch = 2;
 		static constexpr uint8_t c_CheckDebug = 4;
+		static constexpr uint8_t c_CheckCancel = 8;
+		size_t m_PendingCancels = 0; // running tasks with CancelRequested set
 		uint8_t m_DispatchChecks = 0;
 		void SetDispatchCheck(uint8_t check, bool on) { m_DispatchChecks = on ? (m_DispatchChecks | check) : (m_DispatchChecks & ~check); }
 		std::unordered_map<const Function*, ProfileEntry> m_Profile;

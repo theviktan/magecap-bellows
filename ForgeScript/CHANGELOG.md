@@ -23,6 +23,14 @@ with new language or tool features, the patch number with fixes.
     Field (8); and properties that use each other forever now name the place the error happened once,
     not 64 times. The same fix leaves only the innermost place on an error from a callback inside a
     callback (`[1].map(outer)` where `outer` calls `map` again), which used to list every level.
+- **Control over started tasks** (Roadmap 3.0, item 2; Ron, 3:55 AM Nov 27): `start` gives back the
+  task, `set scan to start scan_bays()`, with `scan.running`, `scan.done`, `scan.failed`,
+  `scan.cancelled`, `scan.result`, `scan.problem` and `scan.cancel()`. `done` is true once the task has
+  ended in any way, so `wait until scan.done` never waits forever. No new reserved words; a `start` line
+  works as before, and `start` as a value was a compile error until now. A task prints as `<task name>`.
+  For hosts: a `start` line runs one more instruction (it drops the task), so `tasks.forge` counts
+  62,727 instructions, not 62,227, and `VM::CancelTask` stops one task the way `CancelTasks` stops a
+  module's.
 - **The public name is MageCap ForgeScript** (Ron, 11:29 PM Nov 26), to keep it apart from another
   project called ForgeScript. The README, the docs' titles and the VS Code extension's display name use
   it; the extension now also says it's Apache-2.0. Nothing else changes: the language is still

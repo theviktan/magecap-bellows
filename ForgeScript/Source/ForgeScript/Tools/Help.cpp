@@ -74,7 +74,7 @@ namespace ForgeScript {
 				Keyword("self", "self.position", "The object or entity this code belongs to."),
 				Keyword("set", "set name to value, set x, y to list", "Makes or changes a variable, property or list item. With several names it takes a list (or a vector) apart, one item per name."),
 				Keyword("skip", "skip", "Jumps to the next round of the loop."),
-				Keyword("start", "start patrol()", "Runs a function as its own task, so it can wait while the rest of the game goes on."),
+				Keyword("start", "start patrol()", "Runs a function as its own task, so it can wait while the rest of the game goes on. 'set p to start patrol()' keeps the task, to ask p.running, p.done or p.result, or to p.cancel() it."),
 				Keyword("stop", "stop", "Leaves the loop right away."),
 				Keyword("take", "take value from target", "Subtracts a number from a variable, or removes an item from a list."),
 				Keyword("then", "if condition then ... end", "Optional word after the condition of an if."),
@@ -253,6 +253,13 @@ namespace ForgeScript {
 				Method("vector", "distance_to", "vector.distance_to(other)", "How far it is to the other vector."),
 				Method("vector", "lerp", "vector.lerp(other, t)", "The point t of the way to the other vector."),
 				Method("vector", "copy", "vector.copy()", "A separate copy of the vector."),
+				Property("task", "running", "task.running", "Yes until the task has ended: set p to start patrol(), then if p.running then ... end."),
+				Property("task", "done", "task.done", "Yes once the task has ended in any way (returned, failed or cancelled), so 'wait until p.done' never waits forever."),
+				Property("task", "failed", "task.failed", "Yes when an error ended the task; task.problem says what went wrong."),
+				Property("task", "cancelled", "task.cancelled", "Yes when task.cancel() stopped it."),
+				Property("task", "result", "task.result", "What the task's function returned, or nothing until it has."),
+				Property("task", "problem", "task.problem", "The message of the error that ended the task, like 'catch problem' gets; nothing otherwise."),
+				Method("task", "cancel", "task.cancel()", "Stops the task where it is: its waits end and it never runs again. A task that has ended stays as it is."),
 			};
 		}
 

@@ -979,6 +979,47 @@ namespace ForgeScript {
 
 	void VM::CancelTasks(Module* module)
 	{
+		CancelTasksWhere([module](Task* task) { return !module || task->Owner == module; });
+	}
+
+	void VM::CancelTask(Task* task)
+	{
+		if (task->State == TaskState::Done || task->State == TaskState::Failed || task->State == TaskState::Cancelled)
+			return;
+		// A running task can't be taken off the C++ stack it runs on, so it stops at its next instruction.
+		if (std::find(m_RunningTasks.begin(), m_RunningTasks.end(), task) != m_RunningTasks.end())
+		{
+			if (!task->CancelRequested)
+			{
+				task->CancelRequested = true;
+				m_PendingCancels++;
+				SetDispatchCheck(c_CheckCancel, true);
+			}
+			return;
+		}
+		CancelTasksWhere([task](Task* other) { return other == task; });
+		// A task woken with others this frame is on none of the lists until its turn comes; marking it
+		// cancelled is enough, since its turn only runs a task that is still waiting.
+		if (task->State != TaskState::Cancelled)
+		{
+			EndEventWait(task);
+			task->State = TaskState::Cancelled;
+			CloseUpvalues(task, 0);
+			ReleaseStep(task);
+		}
+		DropFrames(task);
+	}
+
+	// A script can keep a task that has ended: what it was in the middle of goes, as for a failed task.
+	void VM::DropFrames(Task* task)
+	{
+		task->Frames.clear();
+		task->Handlers.clear();
+		task->Stack.clear();
+	}
+
+	void VM::CancelTasksWhere(const std::function<bool(Task*)>& match)
+	{
 		auto cancel = [this](Task* task)
 		{
 			EndEventWait(task);
@@ -988,21 +1029,21 @@ namespace ForgeScript {
 		};
 		for (Task* task : m_Tasks)
 		{
-			if (!module || task->Owner == module)
+			if (match(task))
 				cancel(task);
 		}
 		m_Tasks.erase(std::remove_if(m_Tasks.begin(), m_Tasks.end(),
 			[](Task* task) { return task->State == TaskState::Cancelled; }), m_Tasks.end());
 
-		// Stopped tasks of the module go too; the next waiting stop, if any, takes the place of the current one.
+		// Tasks held by the debugger go too; the next waiting stop, if any, takes the place of the current one.
 		for (auto& [task, stop] : m_QueuedStops)
 		{
-			if (!module || task->Owner == module)
+			if (match(task))
 				cancel(task);
 		}
 		m_QueuedStops.erase(std::remove_if(m_QueuedStops.begin(), m_QueuedStops.end(),
 			[](const std::pair<Task*, DebugStop>& queued) { return queued.first->State == TaskState::Cancelled; }), m_QueuedStops.end());
-		if (m_StoppedTask && (!module || m_StoppedTask->Owner == module))
+		if (m_StoppedTask && match(m_StoppedTask))
 		{
 			cancel(m_StoppedTask);
 			m_StoppedTask = nullptr;
@@ -1561,6 +1602,23 @@ namespace ForgeScript {
 			Execute(task);
 		}
 		m_RunningTasks.pop_back();
+		if (task->CancelRequested)
+		{
+			// Asked while it ran: if it got as far as an instruction it stopped there (Cancelled); if it
+			// finished, failed or waited first, the wait is cancelled now and an ending stays as it is.
+			task->CancelRequested = false;
+			if (--m_PendingCancels == 0)
+				SetDispatchCheck(c_CheckCancel, false);
+			if (task->State == TaskState::Waiting && std::find(m_RunningTasks.begin(), m_RunningTasks.end(), task) == m_RunningTasks.end())
+			{
+				task->State = TaskState::Cancelled;
+				EndEventWait(task);
+				CloseUpvalues(task, 0);
+				ReleaseStep(task);
+				DropFrames(task);
+				return;
+			}
+		}
 
 		if (task->State == TaskState::Waiting)
 		{
@@ -1583,6 +1641,26 @@ namespace ForgeScript {
 	{
 		m_ErrorMessage = message;
 		return false;
+	}
+
+	// The name of what 'start' runs, for a task's text: a script function, a kind's or a built-in one.
+	static std::string CallableName(const Value& callee)
+	{
+		if (!callee.IsObject())
+			return "?";
+		Object* object = callee.AsObject();
+		if (object->GetType() == ObjectType::BoundMethod)
+			object = static_cast<BoundMethod*>(object)->Method;
+		switch (object->GetType())
+		{
+			case ObjectType::Closure:
+			{
+				const Function* fn = static_cast<Closure*>(object)->Fn;
+				return fn->Name ? fn->Name->Text : std::string("function");
+			}
+			case ObjectType::NativeFunction: return static_cast<NativeFunction*>(object)->Name;
+			default:                         return "?";
+		}
 	}
 
 	static std::string ValueCount(int count)
@@ -1914,6 +1992,7 @@ namespace ForgeScript {
 			case ObjectType::List:   return callBuiltin(ListMethods, "list", { "length", "size", "count", "first", "last" });
 			case ObjectType::String: return callBuiltin(TextMethods, "text", { "length", "size", "count" });
 			case ObjectType::Vector: return callBuiltin(VectorMethods, "vector", { "x", "y", "z", "length" });
+			case ObjectType::Task:   return callBuiltin(TaskMethods, "task", { "running", "done", "failed", "cancelled", "result", "problem" });
 			case ObjectType::Module:
 			{
 				Module* module = As<Module>(receiver);
@@ -1965,6 +2044,7 @@ namespace ForgeScript {
 			case ObjectType::String: table = &TextMethods; break;
 			case ObjectType::Map:    table = &MapMethods; break;
 			case ObjectType::Vector: table = &VectorMethods; break;
+			case ObjectType::Task:   table = &TaskMethods; break;
 			case ObjectType::NativeObject:
 			{
 				NativeObject* object = As<NativeObject>(receiver);
@@ -2176,6 +2256,32 @@ namespace ForgeScript {
 				std::vector<std::string_view> names = { "length", "size", "count" };
 				AddNames(names, TextMethods);
 				return Fail("Text has no property called '" + key + "'." + DidYouMean(key, names));
+			}
+			case ObjectType::Task:
+			{
+				// What a started task tells about itself (Roadmap 3.0 item 2). A task held by the debugger
+				// is still running.
+				Task* started = As<Task>(object);
+				const bool ended = started->State == TaskState::Done || started->State == TaskState::Failed || started->State == TaskState::Cancelled;
+				if (key == "running")   { outValue = Value::FromBool(!ended); return true; }
+				if (key == "done")      { outValue = Value::FromBool(ended); return true; }
+				if (key == "failed")    { outValue = Value::FromBool(started->State == TaskState::Failed); return true; }
+				if (key == "cancelled") { outValue = Value::FromBool(started->State == TaskState::Cancelled); return true; }
+				if (key == "result")
+				{
+					outValue = started->State == TaskState::Done ? started->Result : Value();
+					return true;
+				}
+				if (key == "problem")
+				{
+					outValue = started->State == TaskState::Failed ? Value::FromObject(Intern(started->Problem)) : Value();
+					return true;
+				}
+				if (BindMethod(task, object, name, outValue))
+					return true;
+				std::vector<std::string_view> names = { "running", "done", "failed", "cancelled", "result", "problem" };
+				AddNames(names, TaskMethods);
+				return Fail("A task has no property called '" + key + "'." + DidYouMean(key, names));
 			}
 			case ObjectType::Vector:
 			{
@@ -2965,6 +3071,7 @@ namespace ForgeScript {
 		}
 
 		task->State = TaskState::Failed;
+		task->Problem = message;
 		CloseUpvalues(task, 0);
 		task->Frames.clear();
 		task->Handlers.clear();
@@ -3076,6 +3183,14 @@ namespace ForgeScript {
 			// their work in the usual run.
 			if (m_DispatchChecks)
 			{
+				if ((m_DispatchChecks & c_CheckCancel) && task->CancelRequested)
+				{
+					task->State = TaskState::Cancelled;
+					CloseUpvalues(task, 0);
+					ReleaseStep(task);
+					DropFrames(task);
+					return;
+				}
 				if ((m_DispatchChecks & c_CheckCollect) && m_GCPaused == 0)
 					CollectGarbage();
 				if (m_WatchEachInstruction)
@@ -3787,6 +3902,7 @@ namespace ForgeScript {
 					uint8_t count = FORGESCRIPT_READ_BYTE();
 					size_t calleeIndex = stack.size() - 1 - count;
 					Task* spawned = NewTask(frame->Function->Fn->Owner);
+					spawned->EntryName = CallableName(stack[calleeIndex]);
 					spawned->PendingNames = std::exchange(task->PendingNames, nullptr);
 					spawned->Stack.assign(stack.begin() + static_cast<std::ptrdiff_t>(calleeIndex), stack.end());
 					stack.resize(calleeIndex);
@@ -3794,6 +3910,8 @@ namespace ForgeScript {
 					StartCall(spawned, count);
 					RemovePending(spawned);
 					FORGESCRIPT_REFRESH();
+					// 'set p to start patrol()' keeps the task; a 'start' line drops it with a Pop.
+					stack.push_back(Value::FromObject(spawned));
 					break;
 				}
 				case OpCode::Closure:
@@ -4230,6 +4348,7 @@ namespace ForgeScript {
 		markTable(TextMethods);
 		markTable(MapMethods);
 		markTable(VectorMethods);
+		markTable(TaskMethods);
 		for (auto& [info, fn] : m_NativeMethodCache)
 			MarkObject(fn);
 		for (Task* task : m_Tasks)
