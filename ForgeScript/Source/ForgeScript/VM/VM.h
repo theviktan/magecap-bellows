@@ -402,6 +402,7 @@ namespace ForgeScript {
 
 		String* Intern(std::string_view text);
 		Function* NewFunction();
+		Contract* NewContract();
 		const PhraseTable& GetPhraseTable() const { return m_Phrases; }
 		bool ResolveModuleSource(const std::string& path, std::string& outName, std::string& outSource);
 

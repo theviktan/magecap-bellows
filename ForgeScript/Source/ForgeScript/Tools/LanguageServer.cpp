@@ -116,6 +116,7 @@ namespace ForgeScript {
 		constexpr int c_SymbolMethod = 6;
 		constexpr int c_SymbolProperty = 7;
 		constexpr int c_SymbolField = 8;
+		constexpr int c_SymbolInterface = 11;
 		constexpr int c_SymbolFunction = 12;
 		constexpr int c_SymbolVariable = 13;
 		constexpr int c_SymbolConstant = 14;
@@ -1811,7 +1812,8 @@ namespace ForgeScript {
 
 			// Only the script's top level and a kind's body are listed, not the code inside functions.
 			const int parent = open.empty() ? -1 : open.back();
-			const bool listed = open.empty() || (parent >= 0 && flat[static_cast<size_t>(parent)].Item.ItemKind == Kind::KindType);
+			const Kind parentKind = parent >= 0 ? flat[static_cast<size_t>(parent)].Item.ItemKind : Kind::Function;
+			const bool listed = open.empty() || (parent >= 0 && (parentKind == Kind::KindType || parentKind == Kind::Contract));
 			const bool inKind = !open.empty();
 			const bool opens = TokenOpensBlock(tokens, i);
 			const Token* next = i + 1 < tokens.size() ? &tokens[i + 1] : nullptr;
@@ -1867,6 +1869,29 @@ namespace ForgeScript {
 					last = j;
 				const int length = tokens[last].Column + static_cast<int>(tokens[last].Lexeme.size()) - token.Column;
 				item = add(Kind::Handler, lineText(i), "", token, token, length, parent);
+			}
+			else if (listed && !inKind && opens && ContractOpensBlock(tokens, i))
+			{
+				item = add(Kind::Contract, std::string(next->Lexeme), "contract " + std::string(next->Lexeme), token, *next, static_cast<int>(next->Lexeme.size()), parent);
+			}
+			else if (listed && parentKind == Kind::Contract && token.Type == TokenType::Identifier && token.Lexeme == "needs" && next &&
+				next->Type == TokenType::Identifier)
+			{
+				const bool function = i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::LeftParen;
+				std::string detail = "needs " + std::string(next->Lexeme);
+				if (function)
+				{
+					std::string params;
+					for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::RightParen && tokens[j].Type != TokenType::Newline &&
+						tokens[j].Type != TokenType::Eof; j++)
+					{
+						if (tokens[j].Type == TokenType::Identifier)
+							params += (params.empty() ? "" : ", ") + std::string(tokens[j].Lexeme);
+					}
+					detail += "(" + params + ")";
+				}
+				add(function ? Kind::Function : Kind::Variable, std::string(next->Lexeme), detail, token, *next,
+					static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && inKind && opens && PropertyOpensBlock(tokens, i))
 			{
@@ -1957,6 +1982,7 @@ namespace ForgeScript {
 				case OutlineItem::Kind::Variable: kind = inKind ? c_SymbolField : c_SymbolVariable; break;
 				case OutlineItem::Kind::Constant: kind = c_SymbolConstant; break;
 				case OutlineItem::Kind::Property: kind = c_SymbolProperty; break;
+				case OutlineItem::Kind::Contract: kind = c_SymbolInterface; break;
 			}
 			// The whole lines from the definition to its 'end'.
 			const size_t endIndex = static_cast<size_t>(std::clamp(item.EndLine - 1, 0, static_cast<int>(lines.size()) - 1));

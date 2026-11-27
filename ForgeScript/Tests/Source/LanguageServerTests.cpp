@@ -1480,6 +1480,22 @@ TEST_CASE("LanguageServerKeepsUseInsideTheProject")
 	}
 }
 
+TEST_CASE("OutlineListsContractsWithTheirNeeds")
+{
+	const std::string source = "contract Damageable\n\tneeds health\n\tneeds take_hit(amount)\nend\nkind Crate follows Damageable\n\tset health to 1\nend\n";
+	const std::vector<OutlineItem> outline = FindOutline(source);
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
+	CHECK(outline[0].ItemKind == OutlineItem::Kind::Contract);
+	CHECK_EQ(outline[0].Name, std::string("Damageable"));
+	CHECK_EQ(outline[0].EndLine, 4);
+	REQUIRE_EQ(outline[0].Children.size(), static_cast<size_t>(2));
+	CHECK(outline[0].Children[0].ItemKind == OutlineItem::Kind::Variable);
+	CHECK(outline[0].Children[1].ItemKind == OutlineItem::Kind::Function);
+	CHECK_EQ(outline[0].Children[1].Detail, std::string("needs take_hit(amount)"));
+	CHECK(outline[1].ItemKind == OutlineItem::Kind::KindType);
+	CHECK_EQ(outline[1].Children.size(), static_cast<size_t>(1));
+}
+
 TEST_CASE("OutlineAndSymbolsListPropertiesInTheirKind")
 {
 	// A property is a member of its kind, like a field, and its block's lines aren't listed.

@@ -1,0 +1,4 @@
+# A contract another script uses (54_contracts.forge).
+contract Openable
+	needs open()
+end

@@ -1160,6 +1160,50 @@ end
 - Inside the kind, `for each field, value in self do` goes through the object's own fields: handy for
   saving or showing a debug panel.
 
+### Promises between kinds: `contract` and `follows`
+
+A **contract** lists what a kind promises to have. Different kinds can follow the same contract, and
+your script can then treat them all the same way, without knowing which kind each one is:
+
+```forge
+contract Damageable
+	needs health
+	needs take_hit(amount)
+end
+
+kind Crate follows Damageable
+	set health to 10
+	function take_hit(amount)
+		take amount from my health
+	end
+end
+
+kind Door follows Damageable
+	set health to 30
+	function take_hit(amount)
+		take amount / 2 from my health
+	end
+end
+
+for each thing in [new Crate(), new Door(), "a sign"] do
+	if thing is a Damageable then
+		thing.take_hit(10)
+	end
+end
+```
+
+- `needs health` is a value the object has: a field (a `set` line) or a property.
+- `needs take_hit(amount)` is a function that can be called with that many values. Extra values with
+  defaults are fine.
+- A kind can follow several contracts, `kind Door follows Damageable, Lockable`, and use `extends` too:
+  `kind Gate extends Door follows Openable`. What it gets from the kind it extends counts, and a kind
+  that extends one that follows a contract follows it too.
+- If a kind is missing something, the `kind` line is a mistake that says what to add, like *Crate
+  follows Damageable but has no function take_hit(amount). Add: function take_hit(amount) ... end*.
+  When the contract is in the same script, the editor shows this before the game runs.
+- Write a contract at the top of a script, above the kinds that follow it.
+- `contract`, `follows` and `needs` aren't reserved: elsewhere they are ordinary names.
+
 ---
 
 ## 12. Events with `when` and `trigger`

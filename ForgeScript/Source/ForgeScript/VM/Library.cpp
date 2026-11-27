@@ -170,6 +170,9 @@ namespace ForgeScript {
 			case ObjectType::Kind:
 				out += "<kind " + static_cast<Kind*>(object)->Name->Text + ">";
 				return out.size() <= m_TextLimit;
+			case ObjectType::Contract:
+				out += "<contract " + static_cast<Contract*>(object)->Name->Text + ">";
+				return out.size() <= m_TextLimit;
 			case ObjectType::Task:
 			{
 				const std::string& entry = static_cast<Task*>(object)->EntryName;

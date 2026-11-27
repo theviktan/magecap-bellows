@@ -31,7 +31,8 @@ namespace ForgeScript {
 		Vector,
 		NativeObject,
 		Module,
-		Task
+		Task,
+		Contract
 	};
 
 	// Base class of everything that lives on the ForgeScript heap.
@@ -118,8 +119,9 @@ namespace ForgeScript {
 		// a list. MinArity and DefaultIps count only the parameters before it.
 		bool HasRest = false;
 		// The hidden method that gives a kind's fields their first values: its writes run no
-		// 'when my field changes' handlers.
+		// 'when my field changes' handlers. FieldNames are the fields it sets, for contracts' 'needs'.
 		bool IsFieldInit = false;
+		std::vector<std::string> FieldNames;
 		int UpvalueCount = 0;
 		String* Name = nullptr;
 		Module* Owner = nullptr;
@@ -150,6 +152,7 @@ namespace ForgeScript {
 	};
 
 	struct Kind;
+	struct Contract;
 
 	struct Closure : public Object
 	{
@@ -176,10 +179,29 @@ namespace ForgeScript {
 		NativeFunction(std::string name, int arity, NativeFn fn) : Object(ObjectType::NativeFunction), Name(std::move(name)), Arity(arity), Fn(std::move(fn)) {}
 	};
 
+	// 'contract Damageable ... needs take_hit(amount) ... end': what a kind that follows it promises to have
+	// (Roadmap 3.0 item 4). A need with an Arity is a function that can be called with that many values;
+	// one without (Arity -1) is a value read from the object, a field or a property.
+	struct Contract : public Object
+	{
+		struct Need
+		{
+			String* Name = nullptr;
+			int Arity = -1;
+			std::string Shape; // as written, 'take_hit(amount)', for the messages
+		};
+		String* Name = nullptr;
+		std::vector<Need> Needs;
+
+		Contract() : Object(ObjectType::Contract) {}
+	};
+
 	struct Kind : public Object
 	{
 		String* Name = nullptr;
 		Kind* Parent = nullptr;
+		// The contracts written after 'follows'; a kind follows these and the ones of the kinds it extends.
+		std::vector<Contract*> Contracts;
 		Closure* Fields = nullptr;
 		std::unordered_map<String*, Closure*> Methods;
 		// 'shared count is 0': one value for the kind and every object made from it, read as Enemy.count.
