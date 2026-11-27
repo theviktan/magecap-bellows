@@ -1444,6 +1444,14 @@ TEST_CASE("ContractsExplainTheirMistakesBeforeTheGameRuns")
 	CHECK_CONTAINS(CompileFails("kind Box\nend\ncontract Box\n\tneeds x\nend\n").Message, "'Box' is a kind in this script already.");
 	CHECK_CONTAINS(CompileFails("function f()\n\tcontract Inner\n\t\tneeds x\n\tend\nend\n").Message,
 		"Write a contract at the top level of the script");
+	// At run time (a kind inside a function, compiled before the contract) a missing need is
+	// reported at the kind's own line, not the last line of its body.
+	VM vm;
+	ScriptError error;
+	vm.SetErrorHandler([&error](const ScriptError& e) { error = e; });
+	vm.RunInModule(vm.CreateModule("test"), damageable + "function make()\n\tkind Crate follows Damageable\n\t\tset health to 1\n\t\tset other to 2\n\tend\nend\nmake()\n", "test.forge");
+	CHECK_CONTAINS(error.Message, "Crate follows Damageable but has no function take_hit(amount).");
+	CHECK_EQ(error.Line, 6);
 	// The words are still ordinary names everywhere else.
 	CHECK(Compiles("set contract to 1\nset needs to contract + 1\nset follows to needs\nsay contract\n"));
 	CHECK(Compiles("phrase contract (x)\n\tsay x\nend\ncontract 5\n"));
