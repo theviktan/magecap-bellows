@@ -3861,6 +3861,11 @@ namespace ForgeScript {
 							ErrorAt(token, missing);
 					}
 				}
+			}
+			ConsumeEnd(opener, "kind");
+			// After the 'end', so a need the kind doesn't meet is reported at its 'kind' line (CodeLine).
+			if (!follows.empty())
+			{
 				for (size_t at : follows)
 				{
 					const std::string contract(m_Tokens[at].Lexeme);
@@ -3875,7 +3880,6 @@ namespace ForgeScript {
 				EmitOp(OpCode::Follows);
 				EmitByte(static_cast<uint8_t>(follows.size()));
 			}
-			ConsumeEnd(opener, "kind");
 			EmitOp(OpCode::Pop);
 		}
 
