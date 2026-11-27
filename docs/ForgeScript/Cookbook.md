@@ -1,4 +1,4 @@
-# ForgeScript Cookbook
+# MageCap ForgeScript Cookbook
 
 Thirty-two short recipes for things almost every game needs: moving, fighting, inventories, saving,
 timers, menus, getting around a level and the math in between. Each recipe is a complete script you can copy, followed by

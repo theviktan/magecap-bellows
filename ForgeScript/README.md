@@ -1,6 +1,6 @@
-# ForgeScript
+# MageCap ForgeScript
 
-**ForgeScript** is the natural-language scripting language of MageCap Bellows. It reads like plain English, is quick to learn, and has game features built in: events, timers and tasks that run side by side.
+**MageCap ForgeScript** (ForgeScript for short) is the natural-language scripting language of MageCap Bellows. It reads like plain English, is quick to learn, and has game features built in: events, timers and tasks that run side by side.
 
 ```forge
 set health to 100

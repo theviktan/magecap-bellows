@@ -23,6 +23,11 @@ with new language or tool features, the patch number with fixes.
     Field (8); and properties that use each other forever now name the place the error happened once,
     not 64 times. The same fix leaves only the innermost place on an error from a callback inside a
     callback (`[1].map(outer)` where `outer` calls `map` again), which used to list every level.
+- **The public name is MageCap ForgeScript** (Ron, 11:29 PM Nov 26), to keep it apart from another
+  project called ForgeScript. The README, the docs' titles and the VS Code extension's display name use
+  it; the extension now also says it's Apache-2.0. Nothing else changes: the language is still
+  ForgeScript in the docs after the first mention, files are still `.forge`, and the command is still
+  `forgescript`, with the same output.
 - **Faster function calls and math** (Roadmap 3.0, item 1): `fib(30)` now runs in about 0.10 s
   against Python 3.13's 0.12 s, and a plain counting loop in about 0.37 s against Python's 0.65 s
   (Linux, Release build, the whole program run). Nothing a script writes changes meaning. Inside, a

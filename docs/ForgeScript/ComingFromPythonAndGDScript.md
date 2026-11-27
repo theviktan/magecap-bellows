@@ -1,4 +1,4 @@
-# Coming from Python or GDScript
+# Coming to MageCap ForgeScript from Python or GDScript
 
 If you already write Python or GDScript (Godot 4), most of ForgeScript will feel familiar: it has variables, functions, lists, dictionaries, classes and events. This page shows the same code in all three languages, so you can read ForgeScript in terms you know. Every ForgeScript example here is run by ForgeScript's tests (`ForgeScript/Tests/Scripts/33_coming_from_python_and_gdscript.forge`), so it works as written.
 

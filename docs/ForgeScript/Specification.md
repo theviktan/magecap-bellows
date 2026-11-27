@@ -1,4 +1,4 @@
-# ForgeScript Language Specification
+# MageCap ForgeScript Language Specification
 
 This is the exact description of ForgeScript **1.6.0**: what a script may contain and what it means. Use it when you need a precise answer, when you build a tool that reads ForgeScript, or when you change the language.
 
