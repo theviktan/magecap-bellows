@@ -4208,16 +4208,33 @@ namespace ForgeScript {
 
 		void StartStatement()
 		{
+			StartCall(true);
+			// The task 'start' gives back isn't kept on a line of its own.
+			EmitOp(OpCode::Pop);
+		}
+
+		// 'start patrol()' runs the call as a task and leaves the task as a value: on a line of its own
+		// (StartStatement), or as a value, 'set p to start patrol()' (Primary), which reads only the call,
+		// so '(start patrol()).done' needs its brackets.
+		void StartCall(bool statement)
+		{
 			Token keyword = Current();
 			Advance();
+			const bool noInvoke = m_NoInvoke;
 			m_NoInvoke = true;
 			m_LastCallPos = static_cast<size_t>(-1);
 			// A single call, so not 'start a() if x otherwise b()': only one of those calls could become a start.
-			OrExpression();
-			m_NoInvoke = false;
+			if (statement)
+				OrExpression();
+			else
+				Postfix();
+			m_NoInvoke = noInvoke;
 			std::vector<uint8_t>& code = CurrentChunk().GetCode();
 			if (m_LastCallPos == static_cast<size_t>(-1) || m_LastCallPos + 2 != code.size())
-				ErrorAt(keyword, "'start' needs a function call after it, like: start patrol()");
+			{
+				ErrorAt(keyword, statement ? "'start' needs a function call after it, like: start patrol()" :
+					"'start' needs a function call after it, like: set p to start patrol(). To read the task at once, put it in brackets: (start patrol()).done");
+			}
 			code[m_LastCallPos] = static_cast<uint8_t>(OpCode::Start);
 		}
 
@@ -4289,6 +4306,7 @@ namespace ForgeScript {
 				case TokenType::Self: case TokenType::My: case TokenType::Parent:
 				case TokenType::LeftParen: case TokenType::LeftBracket: case TokenType::LeftBrace:
 				case TokenType::Minus: case TokenType::Not: case TokenType::Function: case TokenType::New:
+				case TokenType::Start: // 'say start patrol()': before tasks were values this was a mistake
 					return true;
 				default:
 					return false;
@@ -5269,6 +5287,9 @@ namespace ForgeScript {
 				case TokenType::Nothing:
 					Advance();
 					EmitOp(OpCode::Nothing);
+					return;
+				case TokenType::Start:
+					StartCall(false);
 					return;
 				case TokenType::Identifier:
 				{

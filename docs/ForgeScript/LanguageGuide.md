@@ -1297,6 +1297,41 @@ say "This prints immediately, while blinking continues."
 
 Every `when` block also runs as its own task, which is why handlers can `wait`.
 
+**Keeping a task.** `start` gives you back the task it started, so you can check on it, wait for it, or stop it:
+
+```forge
+function scan_bays()
+	set free to 0
+	repeat 3 times
+		wait 1 second
+		add 1 to free
+	end
+	return free
+end
+
+set scan to start scan_bays()
+wait until scan.done or time() > 10
+if scan.running then
+	scan.cancel()
+	say "The scan took too long."
+else if scan.failed then
+	say "Scan failed: " + scan.problem
+else
+	say "Found " + scan.result + " free bays"
+end
+```
+
+| Write | To get |
+|---|---|
+| `scan.running` | `true` while the task is still going |
+| `scan.done` | `true` once it has ended in any way: it returned, failed or was cancelled |
+| `scan.failed`, `scan.cancelled` | how it ended |
+| `scan.result` | what the function returned (`nothing` until it has) |
+| `scan.problem` | the error message, if an error ended it |
+| `scan.cancel()` | stops it where it is; its waits end and it never runs again |
+
+Because `done` is also `true` when a task fails or is cancelled, `wait until scan.done` can never get stuck. Cancelling a task that has already ended does nothing. A plain `start scan_bays()` line works as it always did.
+
 **Important:** a loop that never waits freezes the game, because nothing else gets a turn. Always put a `wait` inside `repeat forever` and other long-running loops. The engine can stop runaway scripts with an error, and the editor (and `forgescript --check`) warns about a `repeat forever` (or `while true`, or `until false`) that has no `wait`, `stop` or `return` inside and calls nothing that might wait.
 
 Code the engine calls directly and needs an answer from right away (for example, a sorting function you pass to `sort_by`) cannot `wait`. ForgeScript tells you clearly if this happens; use `start` for code that needs to wait.

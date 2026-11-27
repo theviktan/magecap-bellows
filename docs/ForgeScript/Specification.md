@@ -570,6 +570,17 @@ end
 - `wait for` *event-name* pauses the task until its module next gets the event, delivered as a `when` block would get it (to that module only, or to every module, as the host sends it); `wait for "Start" is clicked` needs the event's source to be that entity, ignoring letter case. The module's `when` blocks for the event run first, then its waiting tasks, in the order they began waiting. The waiting tasks are chosen before any block runs, so a wait that begins during the event waits for its next one. The names after `with` or `by` receive the event's values like a `when` block's names (missing ones are `nothing`); at the top of a script they are script variables, elsewhere variables of the function. An event wait is never ended by time, and ends when its event comes even while the host's game is paused. `VM::HasHandler` reports a module that waits for an event as one that has a handler for it.
 - `every` *expression unit* ... `end` and `after` *expression unit* ... `end` are **timers**. The unit is one of `second`, `seconds`, `ms`, `millisecond`, `milliseconds`, `minute`, `minutes`, `frame`, `frames`, and is required. Each timer runs as a task of its module, made from its block as from an anonymous function (it sees the variables around it), started where it is written; the line after the timer runs right away. `after` waits once (as `wait` *expression unit* would) and runs its block. `every` repeats forever: it works out the expression, waits, and runs its block; `stop` and `skip` inside the block (outside any inner loop) end or restart it. Timers are cancelled with their module. `every` and `after` are not reserved: a line is a timer when it starts a statement with one of them, a value follows, and the line ends in a unit. A script whose phrases (its own, the host's, or a used script's) start with that word calls the phrase instead.
 - Code that a host or a built-in function calls directly and must finish right away (a function passed to `sort_by`, an object's `to_text`) cannot `wait` or `wait for`. It can start a task or a timer, which runs on its own.
+- **`start` is also a value**: `start` *call* gives back the task it started, after the task has run to its first wait (or its end). On a line of its own the task is dropped, as before. As a value it reads only the call, so `start f().done` is a compile error and `(start f()).done` reads the task. A task has these fields:
+
+  | Field | Is |
+  |---|---|
+  | `running` | `true` until the task has ended (a task held by the debugger is running) |
+  | `done` | `true` once it has ended in any way: returned, failed or cancelled |
+  | `failed`, `cancelled` | how it ended |
+  | `result` | what its function returned; `nothing` until then, and when it failed or was cancelled |
+  | `problem` | the message of the error that ended it (the value `catch` would get); `nothing` otherwise |
+
+  `task.cancel()` stops the task: a waiting task (for time, a frame, `wait until` or an event) at once, so it never runs again; a running one (it cancelled itself, or it is inside a built-in function whose callback cancelled it) before its next instruction. Cancelling a task that has ended does nothing. Its own `try` blocks don't catch a cancel, and tasks it started keep running. Another field name is an error that names the closest one. `is` is true only for the same task, and a task's text is `<task NAME>`, with the started function's name.
 
 ---
 

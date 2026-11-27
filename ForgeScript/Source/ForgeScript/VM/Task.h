@@ -145,6 +145,13 @@ namespace ForgeScript {
 		uint64_t WakeFrame = 0;
 		bool CanYield = true;
 		bool IsNested = false;    // Run by native code: errors go back to that code instead of the host.
+		// 'task.cancel()' asked while this task is running (it cancelled itself, or it is inside a built-in
+		// function that called the script that cancelled it): it stops before its next instruction.
+		bool CancelRequested = false;
+		// The function 'start' ran, for the task's text ('<task patrol>'), kept after its frames are gone.
+		std::string EntryName;
+		// The message of the error that ended it, as 'catch problem' would get it ('task.problem').
+		std::string Problem;
 		// How many 'trigger's this handler runs inside (0 for a task not started by an event, or after a
 		// 'wait', when the trigger has returned). Kept by a debugger stop, which leaves the task inside.
 		size_t EventDepth = 0;

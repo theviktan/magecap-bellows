@@ -39,7 +39,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Wait | `wait 2 seconds`, `wait 250 ms`, `wait 3 frames`, `wait`, `wait until ready` |
 | Wait for an event | `wait for door opened`, `wait for hit with damage, source`, `wait for "Start" is clicked` (the script's `when` blocks run first; a wait begun during the event waits for the next one) |
 | Timers | `every 3 seconds ... end` (waits, runs, again; `stop` ends it), `after 2 seconds ... end` (once). Same units as `wait`; the line after runs right away |
-| Run as a task | `start patrol()`, `start guard.patrol(3)` |
+| Run as a task | `start patrol()`, `start guard.patrol(3)`; keep it: `set p to start patrol()`, then `p.running`, `p.done`, `p.failed`, `p.cancelled`, `p.result`, `p.problem`, `p.cancel()`, `wait until p.done` |
 | Errors | `try ... catch problem ... end`, `fail "message"`, cleanup that always runs: `try ... catch problem ... finally ... end` (without `catch`, the error goes on after the finally code) |
 | Tests | `test "name" ... end` at the top level (runs only with `forgescript --test file.forge`); `expect x is 5` anywhere: an error naming what was found unless it's true |
 | Use another script | `use "helpers"`, `use "helpers" as h` |
@@ -131,6 +131,7 @@ Words such as `times`, `forever`, `seconds`, `frames`, `above`, `below`, `least`
 ## Tasks and time
 
 - Every `when` handler, every `start` and every timer (`every`, `after`) runs as its own task.
+- `start` gives back its task. `p.done` is true once the task has ended in any way (returned, failed or cancelled), so `wait until p.done` never waits forever; `p.cancel()` stops it where it is.
 - `wait` pauses only the current task. The engine moves time forward once per frame.
 - While the game is paused (`pause the game`), waits hold and `time()` stops, except in scripts marked Run While Paused, whose waits count down in real time. Held waits carry on with the time they had left (guide, [Pausing the game](LanguageGuide.md#pausing-the-game)).
 - Code called directly by the engine or by a built-in function (such as the function given to `sort_by`) must finish right away and cannot `wait`.

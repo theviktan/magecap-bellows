@@ -170,6 +170,12 @@ namespace ForgeScript {
 			case ObjectType::Kind:
 				out += "<kind " + static_cast<Kind*>(object)->Name->Text + ">";
 				return out.size() <= m_TextLimit;
+			case ObjectType::Task:
+			{
+				const std::string& entry = static_cast<Task*>(object)->EntryName;
+				out += entry.empty() ? std::string("<task>") : "<task " + entry + ">";
+				return out.size() <= m_TextLimit;
+			}
 			case ObjectType::Instance:
 			{
 				Instance* instance = static_cast<Instance*>(object);
@@ -210,9 +216,6 @@ namespace ForgeScript {
 				return out.size() <= m_TextLimit;
 			case ObjectType::Upvalue:
 				out += "<upvalue>";
-				return out.size() <= m_TextLimit;
-			case ObjectType::Task:
-				out += "<task>";
 				return out.size() <= m_TextLimit;
 		}
 		out += "?";
@@ -1077,6 +1080,12 @@ namespace ForgeScript {
 			Vector* b = c.VectorArg(1);
 			double dx = a->X - b->X, dy = a->Y - b->Y, dz = a->Z - b->Z;
 			return Value::FromNumber(std::sqrt(dx * dx + dy * dy + dz * dz));
+		});
+
+		RegisterMethod(TaskMethods, "cancel", 0, [](CallContext& c)
+		{
+			c.GetVM().CancelTask(As<Task>(c.Self()));
+			return Value();
 		});
 
 		auto selfVector = [](CallContext& c) -> Vector*

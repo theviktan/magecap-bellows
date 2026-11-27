@@ -8,5 +8,5 @@ lists.forge 770044
 math.forge 1897086
 methods.forge 1800029
 numbers_to_text.forge 440017
-tasks.forge 62227
+tasks.forge 62727
 text.forge 532035
