@@ -482,11 +482,10 @@ namespace Bellows {
 				ImGui::EndMenu();
 			}
 			ImGui::Separator();
-			const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>();
 			const bool editing = m_Editor.GetSceneState() == SceneState::Edit;
 			if (ImGui::MenuItem(ICON_PAPERCLIP "  Attach Script...", nullptr, false, editing))
 				m_Editor.GetScriptEditor().ShowAttachDialog(entity);
-			if (script && !script->ScriptPath.empty())
+			if (hasScript)
 			{
 				if (ImGui::MenuItem(ICON_FILE_CODE "  Open Script"))
 					m_Editor.GetScriptEditor().OpenScript(script->ScriptPath);
