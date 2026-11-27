@@ -504,6 +504,18 @@ namespace Bellows {
 		}
 	}
 
+	bool Scene::IsHiddenInEditor(Entity entity)
+	{
+		const SceneGroup* group = FindGroup(GetEntityGroup(entity));
+		return group && group->HiddenInEditor;
+	}
+
+	bool Scene::IsLockedInEditor(Entity entity)
+	{
+		const SceneGroup* group = FindGroup(GetEntityGroup(entity));
+		return group && group->LockedInEditor;
+	}
+
 	glm::mat4 Scene::GetWorldTransform(Entity entity)
 	{
 		glm::mat4 transform = entity.GetComponent<TransformComponent>().GetTransform();
@@ -1059,10 +1071,23 @@ namespace Bellows {
 		m_ViewportHeight = std::max(height, 1u);
 	}
 
-	void Scene::OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras)
+	void Scene::OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras, bool editorView)
 	{
 		BW_PROFILE_SCOPE("Scene Render");
 		UpdateRuntimeCaches();
+
+		// Entities of groups hidden in the editor, with everything under them (editor view only).
+		std::unordered_set<entt::entity> hidden;
+		if (editorView && std::any_of(m_Groups.begin(), m_Groups.end(), [](const SceneGroup& group) { return group.HiddenInEditor; }))
+		{
+			for (const SceneGroup& group : m_Groups)
+			{
+				if (!group.HiddenInEditor)
+					continue;
+				for (Entity entity : GetGroupEntities(group.ID, true))
+					hidden.insert(entity);
+			}
+		}
 
 		// Scene-level render settings (editor overlay switches stay with the renderer).
 		SceneRendererSettings& settings = renderer.GetSettings();
@@ -1098,6 +1123,8 @@ namespace Bellows {
 		auto directionalLights = m_Registry.view<DirectionalLightComponent>();
 		for (entt::entity entity : directionalLights)
 		{
+			if (hidden.contains(entity))
+				continue;
 			const DirectionalLightComponent& light = directionalLights.get<DirectionalLightComponent>(entity);
 			const glm::mat4 world = GetWorldTransform(Entity(entity, this));
 			DirectionalLightData data;
@@ -1112,6 +1139,8 @@ namespace Bellows {
 		auto pointLights = m_Registry.view<PointLightComponent>();
 		for (entt::entity entity : pointLights)
 		{
+			if (hidden.contains(entity))
+				continue;
 			const PointLightComponent& light = pointLights.get<PointLightComponent>(entity);
 			PointLightData data;
 			data.Position = GetWorldPosition(Entity(entity, this));
@@ -1124,6 +1153,8 @@ namespace Bellows {
 		auto spotLights = m_Registry.view<SpotLightComponent>();
 		for (entt::entity entity : spotLights)
 		{
+			if (hidden.contains(entity))
+				continue;
 			const SpotLightComponent& light = spotLights.get<SpotLightComponent>(entity);
 			const glm::mat4 world = GetWorldTransform(Entity(entity, this));
 			SpotLightData data;
@@ -1141,7 +1172,7 @@ namespace Bellows {
 		for (entt::entity handle : meshes)
 		{
 			const MeshRendererComponent& meshRenderer = meshes.get<MeshRendererComponent>(handle);
-			if (!meshRenderer.Visible || !meshRenderer.RuntimeMesh)
+			if (!meshRenderer.Visible || !meshRenderer.RuntimeMesh || hidden.contains(handle))
 				continue;
 			Entity entity(handle, this);
 			const AnimatorComponent* animator = m_Registry.try_get<AnimatorComponent>(handle);
@@ -1156,7 +1187,7 @@ namespace Bellows {
 		for (entt::entity handle : texts)
 		{
 			TextComponent& text = texts.get<TextComponent>(handle);
-			if (!text.Visible || text.Text.empty() || m_UIEntities.contains(handle))
+			if (!text.Visible || text.Text.empty() || m_UIEntities.contains(handle) || hidden.contains(handle))
 				continue;
 			const TextLayout* layout = UpdateTextLayout(text);
 			if (!layout)

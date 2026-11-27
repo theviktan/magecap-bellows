@@ -75,6 +75,47 @@ check(bellows.group("Heroes") is not None and player.group == bellows.group("Her
 editor.run_frames(1)
 check(editor.hierarchy_rows()[0]["name"] == "Heroes", "the Hierarchy follows undo and redo")
 
+# The Hierarchy's views, search, pins, stacks and Organize
+crates = [bellows.create_entity(f"Crate {i}") for i in range(1, 5)]
+lamp = bellows.create_entity("Lamp")
+lamp.add_component(bellows.PointLight)
+lamp.add_tag("light source")
+editor.set_pinned(player)
+editor.commit("Crates, a lamp and a pin")
+editor.run_frames(1)
+rows = editor.hierarchy_rows()
+check([(r["kind"], r["name"]) for r in rows[:3]] == [("section", "PINNED"), ("entity", "Player"), ("section", "SCENE")],
+      "a pinned entity is listed at the top")
+stacks = [r for r in rows if r["kind"] == "stack"]
+check([(r["name"], r["count"]) for r in stacks] == [("Crate", 4)], f"numbered siblings fold into one stack row ({stacks})")
+editor.set_hierarchy_search("has:light")
+editor.run_frames(1)
+names = [r["name"] for r in editor.hierarchy_rows() if r["kind"] == "entity"]
+check("Lamp" in names and "Player" not in names, f"the search's has: finds lights ({names})")
+editor.set_hierarchy_search("")
+editor.set_hierarchy_view("tag")
+editor.run_frames(1)
+check(editor.hierarchy_view() == "tag", "set_hierarchy_view")
+headings = [(r["name"], r["count"]) for r in editor.hierarchy_rows() if r["kind"] == "heading"]
+check(headings[0] == ("light source", 1) and headings[-1][0] == "No tags", f"the By tag view lists each tag, then those with none ({headings})")
+editor.set_hierarchy_view("type")
+editor.run_frames(1)
+lights = [r for r in editor.hierarchy_rows() if r["kind"] == "heading" and r["name"] == "Lights"]
+check(lights and lights[0]["count"] >= 1, "the By type view has a Lights heading")
+editor.set_hierarchy_view("groups")
+moves = editor.organize_scene()
+check(any(m["entity"] == bellows.find_entity("Lamp") and m["group"] == "Lighting" and m["new_group"] for m in moves),
+      f"Organize suggests a Lighting group for the lamp ({moves})")
+editor.organize_scene(apply=True)
+check(bellows.find_entity("Lamp").is_in_group("Lighting"), "Organize applies its moves")
+editor.undo()
+check(bellows.group("Lighting") is None, "Organize is one undo step")
+for name in ("Lamp", "Crate 1", "Crate 2", "Crate 3", "Crate 4"):
+    bellows.find_entity(name).destroy()
+editor.set_pinned(bellows.find_entity("Player"), False)
+check(not editor.pinned(bellows.find_entity("Player")), "set_pinned(entity, False) unpins")
+editor.commit("Clean up the Hierarchy checks")
+
 # Saving and reopening -----------------------------------------------------------------
 check(editor.save_scene(), "save scene")
 check(not editor.is_dirty(), "saved scene is clean")

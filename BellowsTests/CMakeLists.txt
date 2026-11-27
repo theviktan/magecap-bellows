@@ -14,6 +14,8 @@ set(EDITOR_LOGIC_SOURCES
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ForgeScriptAssist.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/GameWindowSession.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/GameWindowSession.h"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/HierarchyLogic.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/HierarchyLogic.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDebugger.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDebugger.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ProjectList.cpp"

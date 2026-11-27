@@ -1090,7 +1090,8 @@ namespace Bellows {
 		}
 		m_ViewportRenderer->SetSelectedEntities(selectedIDs);
 
-		scene->OnRender(*m_ViewportRenderer, camera, [this](SceneRenderer& renderer) { SubmitEditorOverlays(renderer); });
+		scene->OnRender(*m_ViewportRenderer, camera, [this](SceneRenderer& renderer) { SubmitEditorOverlays(renderer); },
+			m_SceneState == SceneState::Edit);
 	}
 
 	void EditorLayer::SubmitEditorOverlays(SceneRenderer& renderer)
@@ -1279,6 +1280,9 @@ namespace Bellows {
 
 		const uint32_t id = m_ViewportRenderer->ReadEntityID(static_cast<uint32_t>(scaled.x), static_cast<uint32_t>(scaled.y));
 		Entity entity = scene->GetEntityByRenderID(id);
+		// A locked group's entities can't be picked here (they can still be selected in the Hierarchy).
+		if (entity && m_SceneState == SceneState::Edit && scene->IsLockedInEditor(entity))
+			entity = {};
 
 		// Clicking a part of a selected prefab/hierarchy selects the root first, then the part.
 		if (entity && !ImGui::GetIO().KeyAlt)

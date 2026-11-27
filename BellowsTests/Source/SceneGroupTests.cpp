@@ -208,6 +208,39 @@ TEST_CASE("Groups are saved with the scene, and damaged groups load cleaned with
 	CHECK(warnings.find("Group 'Audio': Color could not be read") != std::string::npos);
 }
 
+TEST_CASE("A group can be hidden and locked in the editor, and an entity pinned; all are saved")
+{
+	Scene scene("Editor Flags");
+	SceneGroup& props = scene.CreateGroup("Props");
+	props.HiddenInEditor = true;
+	props.LockedInEditor = true;
+	const UUID propsID = props.ID;
+	Entity crate = scene.CreateEntity("Crate");
+	Entity lid = scene.CreateChildEntity(crate, "Lid");
+	Entity loose = scene.CreateEntity("Loose");
+	scene.SetEntityGroup(crate, propsID);
+	loose.GetComponent<TagComponent>().Pinned = true;
+	CHECK(scene.IsHiddenInEditor(lid));
+	CHECK(scene.IsLockedInEditor(lid));
+	CHECK_FALSE(scene.IsHiddenInEditor(loose));
+
+	const Json json = SceneSerializer::SerializeToJson(scene);
+	Scene loaded("Loaded");
+	REQUIRE(SceneSerializer::DeserializeFromJson(loaded, json));
+	REQUIRE(loaded.FindGroup(propsID));
+	CHECK(loaded.FindGroup(propsID)->HiddenInEditor);
+	CHECK(loaded.FindGroup(propsID)->LockedInEditor);
+	CHECK(loaded.FindEntityByName("Loose").GetComponent<TagComponent>().Pinned);
+	CHECK_FALSE(loaded.FindEntityByName("Crate").GetComponent<TagComponent>().Pinned);
+
+	// A plain group writes neither flag.
+	Scene plain("Plain");
+	plain.CreateGroup("Plain");
+	const std::string text = SceneSerializer::SerializeToJson(plain).dump();
+	CHECK(text.find("HiddenInEditor") == std::string::npos);
+	CHECK(text.find("Pinned") == std::string::npos);
+}
+
 TEST_CASE("A scene change keeps the groups of kept entities, and joins a file group of the same name")
 {
 	Scene scene("Level 1");

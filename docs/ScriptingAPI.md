@@ -265,6 +265,7 @@ in the new scene is the same group).
 | `note` | What the group is for, shown under its name in the Hierarchy (at most 200 characters). |
 | `icon` | `folder`, `mountain`, `anchor`, `rocket`, `lightbulb`, `layout`, `music`, `camera`, `box`, `user`, `users`, `flag`, `star`, `swords`, `trees` or `house`. |
 | `color` | Its icon's color, a `Vec3` of red, green and blue from 0 to 1. |
+| `hidden_in_editor`, `locked_in_editor` | The Hierarchy's eye and lock: the editor's viewport doesn't draw the group's entities (meshes, lights, world text), or doesn't let a click there select them. Editor only: the game always shows them and they work as usual. Saved with the scene. |
 | `entities()` | The top-level entities in the group, in Hierarchy order. |
 | `all_entities()` | The same with everything under them, parents before their children. |
 | `has_entity(entity)` | `True` when the entity, or its top-level ancestor, is in the group. |

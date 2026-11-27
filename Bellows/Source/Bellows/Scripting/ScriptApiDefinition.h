@@ -1451,6 +1451,12 @@ namespace Bellows::Scripting {
 		group.Property("color", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->Color; },
 			[](const ScriptGroup& g, const glm::vec3& color) { Detail::ResolveGroup(g).second->Color = glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)); },
 			"Its icon's color, red, green and blue from 0 to 1");
+		group.Property("hidden_in_editor", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->HiddenInEditor; },
+			[](const ScriptGroup& g, bool hidden) { Detail::ResolveGroup(g).second->HiddenInEditor = hidden; },
+			"The editor's eye: its viewport doesn't draw the group's entities. The game always shows them");
+		group.Property("locked_in_editor", [](const ScriptGroup& g) { return Detail::ResolveGroup(g).second->LockedInEditor; },
+			[](const ScriptGroup& g, bool locked) { Detail::ResolveGroup(g).second->LockedInEditor = locked; },
+			"The editor's lock: clicking in its viewport doesn't select the group's entities. The game is unaffected");
 		group.Method("entities", [](const ScriptGroup& g) { return Detail::GroupEntities(g, false); },
 			"The top-level entities in the group, in Hierarchy order");
 		group.Method("all_entities", [](const ScriptGroup& g) { return Detail::GroupEntities(g, true); },

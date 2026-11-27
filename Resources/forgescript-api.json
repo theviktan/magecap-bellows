@@ -2443,6 +2443,18 @@
 					"doc": "Its icon's color, red, green and blue from 0 to 1"
 				},
 				{
+					"name": "hidden_in_editor",
+					"kind": "property",
+					"type": "bool",
+					"doc": "The editor's eye: its viewport doesn't draw the group's entities. The game always shows them"
+				},
+				{
+					"name": "locked_in_editor",
+					"kind": "property",
+					"type": "bool",
+					"doc": "The editor's lock: clicking in its viewport doesn't select the group's entities. The game is unaffected"
+				},
+				{
 					"name": "entities",
 					"kind": "method",
 					"params": [],

@@ -145,22 +145,7 @@ namespace Bellows {
 			return;
 		}
 
-		// Search, new group and create
-		const float buttonWidth = ImGui::GetFrameHeight();
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 2.0f * (buttonWidth + ImGui::GetStyle().ItemSpacing.x));
-		ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Search entities", &m_Filter);
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_FOLDER_PLUS, "New group: a folder to file top-level entities under"))
-			OpenGroupSettings(CreateGroup());
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_PLUS, "Create entity"))
-			ImGui::OpenPopup("##CreateEntity");
-		if (ImGui::BeginPopup("##CreateEntity"))
-		{
-			DrawCreateMenu({});
-			ImGui::EndPopup();
-		}
-		ImGui::Spacing();
+		DrawToolbar();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 2.0f * Theme::GetScale()));
 		ImGui::BeginChild("##Tree");
@@ -182,6 +167,9 @@ namespace Bellows {
 					case RowKind::Group:		DrawGroupRow(row); break;
 					case RowKind::Note:			DrawNoteRow(row); break;
 					case RowKind::Ungrouped:	DrawUngroupedRow(); break;
+					case RowKind::Section:		DrawSectionRow(row); break;
+					case RowKind::Heading:		DrawHeadingRow(row); break;
+					case RowKind::Stack:		DrawStackRow(row); break;
 				}
 			}
 		}
@@ -228,6 +216,7 @@ namespace Bellows {
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 		DrawGroupSettings();
+		DrawOrganize();
 
 		if (scene->GetEntityCount() == 0 && scene->GetGroups().empty())
 			UI::CenteredText("The scene is empty.\nRight-click to create an entity.");
@@ -245,23 +234,131 @@ namespace Bellows {
 		return nodeID;
 	}
 
+	void SceneHierarchyPanel::DrawToolbar()
+	{
+		// Search, Organize, new group and create
+		const float scale = Theme::GetScale();
+		const float buttonWidth = ImGui::GetFrameHeight();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 3.0f * (buttonWidth + ImGui::GetStyle().ItemSpacing.x));
+		ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Search", &m_Filter);
+		UI::Tooltip("Words match names. tag:enemy needs a tag, group:docking a group, and has: a kind of component: "
+			"script, light, camera, physics, audio, mesh, ui, animation, nav, or tag for any tag.");
+		ImGui::SameLine();
+		if (UI::IconButton(ICON_SPARKLES, "Organize: suggests groups for lights, cameras, UI and sound, and shows the moves before making them"))
+			OpenOrganize();
+		ImGui::SameLine();
+		if (UI::IconButton(ICON_FOLDER_PLUS, "New group: a folder to file top-level entities under"))
+			OpenGroupSettings(CreateGroup());
+		ImGui::SameLine();
+		if (UI::IconButton(ICON_PLUS, "Create entity"))
+			ImGui::OpenPopup("##CreateEntity");
+		if (ImGui::BeginPopup("##CreateEntity"))
+		{
+			DrawCreateMenu({});
+			ImGui::EndPopup();
+		}
+
+		// The view: groups and hierarchy, or every entity by kind or by tag.
+		const char* views[] = { "Groups", "By type", "By tag" };
+		const float viewWidth = (ImGui::GetContentRegionAvail().x - 2.0f * 2.0f * scale) / 3.0f;
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f * scale, ImGui::GetStyle().ItemSpacing.y));
+		for (int i = 0; i < 3; i++)
+		{
+			if (i > 0)
+				ImGui::SameLine();
+			const bool active = static_cast<int>(m_View) == i;
+			ImGui::PushStyleColor(ImGuiCol_Button, active ? Theme::ToVec4(Theme::PanelRaised) : Theme::ToVec4(Theme::Field));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(active ? Theme::Text : Theme::TextMuted));
+			if (ImGui::Button(views[i], ImVec2(viewWidth, 0.0f)))
+				m_View = static_cast<View>(i);
+			ImGui::PopStyleColor(2);
+		}
+		ImGui::PopStyleVar();
+
+		// Filter chips, each a "has:" on top of the search; they wrap when the panel is narrow.
+		const float chipPadding = 9.0f * scale;
+		const float rightEdge = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+		bool firstChip = true;
+		auto chip = [&](const char* label, bool& on, const char* tooltip)
+		{
+			const float width = ImGui::CalcTextSize(label).x + 2.0f * chipPadding;
+			if (!firstChip)
+			{
+				ImGui::SameLine(0.0f, 4.0f * scale);
+				if (ImGui::GetCursorPosX() + width > rightEdge)
+					ImGui::NewLine();
+			}
+			firstChip = false;
+			ImGui::PushStyleColor(ImGuiCol_Button, on ? Theme::ToVec4(Theme::PanelRaised) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+			ImGui::PushStyleColor(ImGuiCol_Border, Theme::ToVec4(on ? Theme::BorderStrong : Theme::Border));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(on ? Theme::Text : Theme::TextMuted));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 99.0f);
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(chipPadding, 2.0f * scale));
+			if (ImGui::Button(label))
+				on = !on;
+			ImGui::PopStyleVar(3);
+			ImGui::PopStyleColor(3);
+			UI::Tooltip(tooltip);
+		};
+		chip("Has script", m_ChipScript, "Only entities with a script");
+		chip("Lights", m_ChipLights, "Only lights and skies");
+		chip("Physics", m_ChipPhysics, "Only physics bodies");
+		chip("Tagged", m_ChipTagged, "Only entities with a tag");
+
+		const HierarchyLogic::Filter filter = HierarchyLogic::ParseFilter(m_Filter);
+		if (!filter.Unknown.empty())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+			ImGui::TextWrapped("has:%s isn't a kind the search knows: script, light, camera, physics, audio, mesh, ui, animation, nav, tag",
+				filter.Unknown.front().c_str());
+			ImGui::PopStyleColor();
+		}
+		ImGui::Spacing();
+	}
+
 	void SceneHierarchyPanel::CollectRows(Scene& scene)
 	{
 		m_Rows.clear();
-		const std::string filter = ToLower(m_Filter);
-		auto collect = [&](Entity root, int depth, UUID group)
+		HierarchyLogic::Filter filter = HierarchyLogic::ParseFilter(m_Filter);
+		if (m_ChipScript) filter.Has.push_back("script");
+		if (m_ChipLights) filter.Has.push_back("light");
+		if (m_ChipPhysics) filter.Has.push_back("physics");
+		if (m_ChipTagged) filter.Has.push_back("tag");
+		m_Searching = filter.IsActive();
+		if (m_View == View::Groups)
+			CollectGroupsView(scene, filter);
+		else
+			CollectListView(scene, filter);
+	}
+
+	void SceneHierarchyPanel::CollectGroupsView(Scene& scene, const HierarchyLogic::Filter& filter)
+	{
+		const HierarchyLogic::Filter* search = filter.IsActive() ? &filter : nullptr;
+
+		// Pinned entities, wherever they are, listed at the top.
+		std::vector<Entity> pinned;
+		for (Entity entity : scene.GetAllEntities())
 		{
-			if (filter.empty())
-				CollectRows(root, depth, group);
-			else
-				CollectMatchingRows(root, depth, group, filter);
-		};
+			if (entity.GetComponent<TagComponent>().Pinned && (!search || HierarchyLogic::Matches(scene, entity, filter)))
+				pinned.push_back(entity);
+		}
+		if (!pinned.empty())
+		{
+			m_Rows.push_back({ RowKind::Section, {}, 0, 0, false, "PINNED" });
+			for (Entity entity : pinned)
+			{
+				Row row { RowKind::Entity, entity, ShownGroup(scene, entity), 0, false };
+				row.Section = 1;
+				m_Rows.push_back(row);
+			}
+			m_Rows.push_back({ RowKind::Section, {}, 0, 0, false, "SCENE" });
+		}
 
 		const std::vector<Entity> roots = scene.GetRootEntities();
 		if (scene.GetGroups().empty())
 		{
-			for (Entity root : roots)
-				collect(root, 0, 0);
+			CollectSiblings(roots, 0, 0, search);
 			return;
 		}
 
@@ -270,31 +367,145 @@ namespace Bellows {
 		{
 			const size_t header = m_Rows.size();
 			m_Rows.push_back({ RowKind::Group, {}, group.ID });
-			const bool open = !filter.empty() || !m_ClosedGroups.contains(group.ID);
-			if (open && filter.empty() && !group.Note.empty())
+			const bool open = search || !m_ClosedGroups.contains(group.ID);
+			if (open && !search && !group.Note.empty())
 				m_Rows.push_back({ RowKind::Note, {}, group.ID });
 			const size_t members = m_Rows.size();
+			std::vector<Entity> inGroup;
 			for (Entity root : roots)
 			{
-				if (ShownGroup(scene, root) != group.ID)
-					continue;
-				m_Rows[header].HasChildren = true;
-				if (open)
-					collect(root, 1, group.ID);
+				if (ShownGroup(scene, root) == group.ID)
+					inGroup.push_back(root);
 			}
-			if (!filter.empty() && m_Rows.size() == members)
+			m_Rows[header].HasChildren = !inGroup.empty();
+			if (open)
+				CollectSiblings(inGroup, 1, group.ID, search);
+			if (search && m_Rows.size() == members)
 				m_Rows.resize(header);
 		}
 		const size_t divider = m_Rows.size();
 		m_Rows.push_back({ RowKind::Ungrouped });
+		std::vector<Entity> loose;
 		for (Entity root : roots)
 		{
 			if (!ShownGroup(scene, root).IsValid())
-				collect(root, 0, 0);
+				loose.push_back(root);
 		}
+		CollectSiblings(loose, 0, 0, search);
 		// The divider shows while searching only above a match.
-		if (!filter.empty() && m_Rows.size() == divider + 1)
+		if (search && m_Rows.size() == divider + 1)
 			m_Rows.resize(divider);
+	}
+
+	void SceneHierarchyPanel::CollectListView(Scene& scene, const HierarchyLogic::Filter& filter)
+	{
+		// Every entity, flat, under a heading for its kind or for each of its tags.
+		std::vector<std::pair<std::string, std::vector<Entity>>> sections;
+		auto sectionFor = [&](const std::string& name) -> std::vector<Entity>&
+		{
+			for (auto& [label, entities] : sections)
+			{
+				if (label == name)
+					return entities;
+			}
+			return sections.emplace_back(name, std::vector<Entity>()).second;
+		};
+		const std::vector<Entity> all = scene.GetAllEntities();
+		if (m_View == View::Type)
+		{
+			for (int kind = 0; kind <= static_cast<int>(HierarchyLogic::EntityKind::Other); kind++)
+				sectionFor(HierarchyLogic::KindName(static_cast<HierarchyLogic::EntityKind>(kind)));
+			for (Entity entity : all)
+				sectionFor(HierarchyLogic::KindName(HierarchyLogic::Classify(entity))).push_back(entity);
+		}
+		else
+		{
+			// Tags in alphabetical order (any letter case), then the entities with none.
+			std::vector<std::string> tags;
+			for (Entity entity : all)
+			{
+				for (const std::string& tag : entity.GetComponent<TagComponent>().Tags)
+				{
+					if (std::find(tags.begin(), tags.end(), tag) == tags.end())
+						tags.push_back(tag);
+				}
+			}
+			std::sort(tags.begin(), tags.end(), [](const std::string& a, const std::string& b) { return ToLower(a) < ToLower(b); });
+			for (const std::string& tag : tags)
+				sectionFor(tag);
+			for (Entity entity : all)
+			{
+				const std::vector<std::string>& entityTags = entity.GetComponent<TagComponent>().Tags;
+				for (const std::string& tag : entityTags)
+					sectionFor(tag).push_back(entity);
+				if (entityTags.empty())
+					sectionFor("No tags").push_back(entity);
+			}
+		}
+
+		const bool searching = filter.IsActive();
+		int section = 2;
+		for (auto& [label, entities] : sections)
+		{
+			section++;
+			std::vector<Entity> shown;
+			for (Entity entity : entities)
+			{
+				if (!searching || HierarchyLogic::Matches(scene, entity, filter))
+					shown.push_back(entity);
+			}
+			if (shown.empty())
+				continue;
+			const std::string key = (m_View == View::Type ? "type:" : "tag:") + label;
+			Row heading { RowKind::Heading, {}, 0, 0, true, key };
+			heading.Count = shown.size();
+			m_Rows.push_back(heading);
+			if (!searching && m_ClosedHeadings.contains(key))
+				continue;
+			for (Entity entity : shown)
+			{
+				Row row { RowKind::Entity, entity, ShownGroup(scene, entity), 1, false };
+				row.Section = section;
+				m_Rows.push_back(row);
+			}
+		}
+	}
+
+	void SceneHierarchyPanel::CollectSiblings(const std::vector<Entity>& siblings, int depth, UUID group, const HierarchyLogic::Filter* filter)
+	{
+		if (filter)
+		{
+			for (Entity sibling : siblings)
+			{
+				if (sibling)
+					CollectMatchingRows(sibling, depth, group, *filter);
+			}
+			return;
+		}
+		size_t i = 0;
+		while (i < siblings.size())
+		{
+			const std::string name = siblings[i] ? HierarchyLogic::StackName(siblings[i].GetName()) : std::string();
+			size_t end = i + 1;
+			while (!name.empty() && end < siblings.size() && siblings[end] && HierarchyLogic::StackName(siblings[end].GetName()) == name)
+				end++;
+			if (end - i >= HierarchyLogic::MinStackSize)
+			{
+				Row stack { RowKind::Stack, siblings[i], group, depth, true, name };
+				stack.Count = end - i;
+				m_Rows.push_back(stack);
+				if (m_OpenStacks.contains(siblings[i].GetUUID()))
+				{
+					for (size_t k = i; k < end; k++)
+						CollectRows(siblings[k], depth + 1, group);
+				}
+				i = end;
+				continue;
+			}
+			if (siblings[i])
+				CollectRows(siblings[i], depth, group);
+			i++;
+		}
 	}
 
 	void SceneHierarchyPanel::CollectRows(Entity entity, int depth, UUID group)
@@ -304,20 +515,16 @@ namespace Bellows {
 		// The tree node keeps whether it is open in the window's storage, under its ID.
 		if (children.empty() || ImGui::GetStateStorage()->GetInt(GetNodeID(entity.GetUUID()), 0) == 0)
 			return;
-		for (Entity child : children)
-		{
-			if (child)
-				CollectRows(child, depth + 1, group);
-		}
+		CollectSiblings(children, depth + 1, group, nullptr);
 	}
 
-	bool SceneHierarchyPanel::CollectMatchingRows(Entity entity, int depth, UUID group, const std::string& filter)
+	bool SceneHierarchyPanel::CollectMatchingRows(Entity entity, int depth, UUID group, const HierarchyLogic::Filter& filter)
 	{
-		// An entity shows when its name matches or something under it does, with every row open.
+		// An entity shows when it matches or something under it does, with every row open.
 		const size_t index = m_Rows.size();
 		const std::vector<Entity> children = entity.GetChildren();
 		m_Rows.push_back({ RowKind::Entity, entity, group, depth, !children.empty() });
-		bool matched = ToLower(entity.GetName()).find(filter) != std::string::npos;
+		bool matched = HierarchyLogic::Matches(*entity.GetScene(), entity, filter);
 		for (Entity child : children)
 		{
 			if (child)
@@ -345,12 +552,15 @@ namespace Bellows {
 			flags |= ImGuiTreeNodeFlags_Selected;
 		if (!row.HasChildren)
 			flags |= ImGuiTreeNodeFlags_Leaf;
-		if (!m_Filter.empty())
+		if (m_Searching && row.Section == 0)
 			ImGui::SetNextItemOpen(true);
 
 		const float indent = static_cast<float>(row.Depth) * ImGui::GetStyle().IndentSpacing;
 		if (indent > 0.0f)
 			ImGui::Indent(indent);
+		// An entity listed twice (Pinned, or under two tags) gets one ID per place it is listed.
+		if (row.Section != 0)
+			ImGui::PushID(row.Section);
 		char id[24];
 		std::snprintf(id, sizeof(id), "%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(uuid)));
 		ImGui::PushID(id);
@@ -416,9 +626,21 @@ namespace Bellows {
 		else
 		{
 			const bool pending = scene->IsPendingDestroy(entity);
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(pending ? Theme::TextDisabled : Theme::Text));
+			const bool hidden = m_Editor.GetSceneState() == SceneState::Edit && scene->IsHiddenInEditor(entity);
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(pending || hidden ? Theme::TextDisabled : Theme::Text));
 			ImGui::TextUnformatted(entity.GetName().c_str());
 			ImGui::PopStyleColor();
+			// The flat views say which group an entity is in.
+			if (m_View != View::Groups)
+			{
+				if (const SceneGroup* group = scene->FindGroup(row.Group))
+				{
+					ImGui::SameLine();
+					ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextDisabled));
+					ImGui::Text("in %s", group->Name.c_str());
+					ImGui::PopStyleColor();
+				}
+			}
 		}
 
 		// Badges at the end of the row say what else the entity has; the script badge opens its script.
@@ -481,6 +703,12 @@ namespace Bellows {
 				DrawMoveToGroupMenu();
 				ImGui::EndMenu();
 			}
+			TagComponent& tag = entity.GetComponent<TagComponent>();
+			if (ImGui::MenuItem(tag.Pinned ? ICON_PIN_OFF "  Unpin" : ICON_PIN "  Pin to Top"))
+			{
+				tag.Pinned = !tag.Pinned;
+				m_Editor.CommitChange(tag.Pinned ? "Pin entity" : "Unpin entity");
+			}
 			ImGui::Separator();
 			const bool editing = m_Editor.GetSceneState() == SceneState::Edit;
 			if (ImGui::MenuItem(ICON_PAPERCLIP "  Attach Script...", nullptr, false, editing))
@@ -505,6 +733,8 @@ namespace Bellows {
 		}
 
 		ImGui::PopID();
+		if (row.Section != 0)
+			ImGui::PopID();
 		if (indent > 0.0f)
 			ImGui::Unindent(indent);
 	}
@@ -569,7 +799,9 @@ namespace Bellows {
 		ImGui::SameLine(0.0f, 7.0f * scale);
 		ImGui::AlignTextToFramePadding();
 		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(group->HiddenInEditor ? Theme::TextMuted : Theme::Text));
 		ImGui::TextUnformatted(group->Name.c_str());
+		ImGui::PopStyleColor();
 		ImGui::PopFont();
 		size_t count = 0;
 		for (Entity root : scene.GetRootEntities())
@@ -581,7 +813,28 @@ namespace Bellows {
 		if (!group->Note.empty() && !open)
 			UI::Tooltip(group->Note.c_str());
 
-		ImGui::SameLine(rowRight - ImGui::GetFrameHeight());
+		// The eye and the lock work in the editor only; the game always shows the group's entities.
+		const float buttonWidth = ImGui::GetFrameHeight();
+		const bool locked = group->LockedInEditor, hidden = group->HiddenInEditor;
+		ImGui::SameLine(rowRight - 3.0f * buttonWidth);
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(locked ? Theme::Text : Theme::TextDisabled));
+		if (UI::IconButton(locked ? ICON_LOCK : ICON_UNLOCK, locked ? "Locked in the editor: clicking in the viewport doesn't select its entities. Click to unlock"
+			: "Lock in the editor, so clicking in the viewport doesn't select its entities (the game is unaffected)"))
+		{
+			scene.FindGroup(id)->LockedInEditor = !locked;
+			m_Editor.CommitChange(locked ? "Unlock group" : "Lock group");
+		}
+		ImGui::PopStyleColor();
+		ImGui::SameLine(rowRight - 2.0f * buttonWidth);
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(hidden ? Theme::Text : Theme::TextDisabled));
+		if (UI::IconButton(hidden ? ICON_EYE_OFF : ICON_EYE, hidden ? "Hidden in the editor's viewport. Click to show"
+			: "Hide in the editor's viewport (the game still shows it)"))
+		{
+			scene.FindGroup(id)->HiddenInEditor = !hidden;
+			m_Editor.CommitChange(hidden ? "Show group" : "Hide group");
+		}
+		ImGui::PopStyleColor();
+		ImGui::SameLine(rowRight - buttonWidth);
 		if (UI::IconButton(ICON_SETTINGS, "Group settings: name, note, icon and color"))
 			OpenGroupSettings(id);
 
@@ -672,6 +925,184 @@ namespace Bellows {
 		drawList->AddText(font, size, ImVec2(start.x + 6.0f * Theme::GetScale(), y - textSize.y * 0.5f), Theme::TextDisabled, text);
 		drawList->AddLine(ImVec2(start.x + textSize.x + 14.0f * Theme::GetScale(), y), ImVec2(start.x + width, y), Theme::Border);
 		ImGui::PopStyleVar();
+	}
+
+	void SceneHierarchyPanel::DrawSectionRow(const Row& row)
+	{
+		// A small label and a line, like the "Not in a group" one, but nothing can be dropped here.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		const ImVec2 start = ImGui::GetCursorScreenPos();
+		const float width = ImGui::GetContentRegionAvail().x;
+		ImGui::Dummy(ImVec2(width, ImGui::GetFrameHeight()));
+		ImFont* font = Theme::GetFonts().SemiBold;
+		const float size = ImGui::GetFontSize() * 0.8f;
+		const ImVec2 textSize = font->CalcTextSizeA(size, FLT_MAX, 0.0f, row.Label.c_str());
+		const float y = start.y + ImGui::GetFrameHeight() * 0.5f;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(font, size, ImVec2(start.x + 6.0f * Theme::GetScale(), y - textSize.y * 0.5f), Theme::TextDisabled, row.Label.c_str());
+		drawList->AddLine(ImVec2(start.x + textSize.x + 14.0f * Theme::GetScale(), y), ImVec2(start.x + width, y), Theme::Border);
+		ImGui::PopStyleVar();
+	}
+
+	void SceneHierarchyPanel::DrawHeadingRow(const Row& row)
+	{
+		// The flat views' headings: a kind or a tag, with how many entities it holds. The label is kept
+		// with its view's prefix ("type:Lights") so each view remembers what is open.
+		const std::string_view label = std::string_view(row.Label).substr(row.Label.find(':') + 1);
+		ImGui::PushID(row.Label.c_str());
+		const bool open = m_Searching || !m_ClosedHeadings.contains(row.Label);
+		ImGui::SetNextItemOpen(open);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Theme::ToVec4(Theme::Hover));
+		ImGui::TreeNodeEx("##heading", ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap
+			| ImGuiTreeNodeFlags_NoTreePushOnOpen);
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
+		if (ImGui::IsItemToggledOpen() && !m_Searching)
+		{
+			if (open)
+				m_ClosedHeadings.insert(row.Label);
+			else
+				m_ClosedHeadings.erase(row.Label);
+		}
+		ImGui::SameLine(0.0f, 2.0f);
+		ImGui::AlignTextToFramePadding();
+		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::TextUnformatted(label.data(), label.data() + label.size());
+		ImGui::PopFont();
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextDisabled));
+		ImGui::Text("%zu", row.Count);
+		ImGui::PopStyleColor();
+		ImGui::PopID();
+	}
+
+	void SceneHierarchyPanel::DrawStackRow(const Row& row)
+	{
+		// A run of siblings with one numbered name, folded into one row; open it to see each.
+		Entity first = row.Target;
+		if (!first)
+			return;
+		const UUID key = first.GetUUID();
+		const float indent = static_cast<float>(row.Depth) * ImGui::GetStyle().IndentSpacing;
+		if (indent > 0.0f)
+			ImGui::Indent(indent);
+		char id[24];
+		std::snprintf(id, sizeof(id), "s%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(key)));
+		ImGui::PushID(id);
+		const bool open = m_OpenStacks.contains(key);
+		ImGui::SetNextItemOpen(open);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		ImGui::TreeNodeEx("##stack", ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding
+			| ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen);
+		ImGui::PopStyleVar();
+		if (ImGui::IsItemToggledOpen())
+		{
+			if (open)
+				m_OpenStacks.erase(key);
+			else
+				m_OpenStacks.insert(key);
+		}
+		else if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+		{
+			// Clicking the row selects the whole run.
+			Scene& scene = *m_Editor.GetActiveScene();
+			Entity parent = first.GetParent();
+			const std::vector<Entity> siblings = parent ? parent.GetChildren() : scene.GetRootEntities();
+			if (!ImGui::GetIO().KeyCtrl)
+				m_Editor.ClearSelection();
+			auto it = std::find(siblings.begin(), siblings.end(), first);
+			for (size_t taken = 0; it != siblings.end() && taken < row.Count; ++it, ++taken)
+				m_Editor.Select(*it, true);
+		}
+		UI::Tooltip("A run of entities with one numbered name. Click to select them all; open it to see each one.");
+		ImGui::SameLine(0.0f, 2.0f);
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::NeutralBright));
+		ImGui::TextUnformatted(ICON_LAYERS);
+		ImGui::PopStyleColor();
+		ImGui::SameLine();
+		ImGui::TextUnformatted(row.Label.c_str());
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextMuted));
+		ImGui::Text("\xc3\x97%zu", row.Count);
+		ImGui::PopStyleColor();
+		ImGui::PopID();
+		if (indent > 0.0f)
+			ImGui::Unindent(indent);
+	}
+
+	void SceneHierarchyPanel::OpenOrganize()
+	{
+		m_OrganizeMoves = HierarchyLogic::SuggestOrganize(*m_Editor.GetActiveScene());
+		m_OrganizeOpenPending = true;
+	}
+
+	void SceneHierarchyPanel::DrawOrganize()
+	{
+		if (m_OrganizeOpenPending)
+		{
+			ImGui::OpenPopup("Organize Scene##Hierarchy");
+			m_OrganizeOpenPending = false;
+		}
+		const float scale = Theme::GetScale();
+		ImGui::SetNextWindowSize(ImVec2(420.0f * scale, 0.0f));
+		if (!ImGui::BeginPopup("Organize Scene##Hierarchy"))
+			return;
+		Scene& scene = *m_Editor.GetActiveScene();
+		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::TextUnformatted(ICON_SPARKLES "  Organize scene");
+		ImGui::PopFont();
+		ImGui::Spacing();
+		if (m_OrganizeMoves.empty())
+		{
+			ImGui::TextWrapped("Nothing to move: every light, camera, UI canvas and sound source at the top is already in a group.");
+			ImGui::Spacing();
+			if (ImGui::Button("Close", ImVec2(-FLT_MIN, 0.0f)))
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+		ImGui::TextWrapped("Bellows suggests %zu %s. Nothing changes until you click Apply, and Ctrl+Z undoes it.",
+			m_OrganizeMoves.size(), m_OrganizeMoves.size() == 1 ? "move" : "moves");
+		ImGui::Spacing();
+		constexpr size_t c_Shown = 8;
+		for (size_t i = 0; i < m_OrganizeMoves.size() && i < c_Shown; i++)
+		{
+			const HierarchyLogic::OrganizeMove& move = m_OrganizeMoves[i];
+			Entity entity = scene.TryGetEntityByUUID(move.Entity);
+			if (!entity)
+				continue;
+			ImGui::TextUnformatted(entity.GetName().c_str());
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextDisabled));
+			ImGui::TextUnformatted("\xe2\x86\x92");
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(ToColor(move.Color)));
+			ImGui::TextUnformatted(GroupIconGlyph(move.Icon));
+			ImGui::PopStyleColor();
+			ImGui::SameLine();
+			ImGui::Text("%s%s", move.Group.c_str(), move.NewGroup ? " (new)" : "");
+		}
+		if (m_OrganizeMoves.size() > c_Shown)
+			UI::TextMuted(("and " + std::to_string(m_OrganizeMoves.size() - c_Shown) + " more").c_str());
+		ImGui::Spacing();
+		ImGui::Separator();
+		const float buttonWidth = 120.0f * scale;
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 2.0f * buttonWidth - ImGui::GetStyle().ItemSpacing.x);
+		if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0.0f)))
+			ImGui::CloseCurrentPopup();
+		ImGui::SameLine();
+		UI::PushPrimaryButtonColors();
+		const std::string apply = "Apply " + std::to_string(m_OrganizeMoves.size());
+		if (ImGui::Button(apply.c_str(), ImVec2(buttonWidth, 0.0f)))
+		{
+			if (HierarchyLogic::ApplyOrganize(scene, m_OrganizeMoves) > 0)
+				m_Editor.CommitChange("Organize scene");
+			ImGui::CloseCurrentPopup();
+		}
+		UI::PopPrimaryButtonColors();
+		ImGui::EndPopup();
 	}
 
 	void SceneHierarchyPanel::DrawMoveToGroupMenu()

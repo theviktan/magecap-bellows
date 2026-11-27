@@ -109,6 +109,9 @@ namespace Bellows {
 		std::vector<Entity> GetGroupEntities(UUID group, bool withDescendants = false);
 		// Replaces every group (scene files, undo); entities filed under a group that is gone are in none.
 		void SetGroups(std::vector<SceneGroup> groups);
+		// Whether the entity's group (its top-level ancestor's) is hidden or locked in the editor.
+		bool IsHiddenInEditor(Entity entity);
+		bool IsLockedInEditor(Entity entity);
 
 		glm::mat4 GetWorldTransform(Entity entity);
 		void SetWorldTransform(Entity entity, const glm::mat4& worldTransform);
@@ -145,8 +148,10 @@ namespace Bellows {
 		// world text, reference pixels for screen text). Leaves the cached layout alone.
 		static glm::vec2 MeasureTextSize(TextComponent& text);
 		// Submits every renderable, light, the environment and the screen UI. Uses 'camera' as the view.
-		// 'submitExtras' runs before the frame is finished (editor overlays, debug lines).
-		void OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras = {});
+		// 'submitExtras' runs before the frame is finished (editor overlays, debug lines). With
+		// 'editorView', groups hidden in the editor leave out their entities' meshes, lights and world text.
+		void OnRender(SceneRenderer& renderer, const RenderCamera& camera, const std::function<void(SceneRenderer&)>& submitExtras = {},
+			bool editorView = false);
 
 		// Lays out every UI canvas for a screen of 'screenSize' pixels: sets each UIRectComponent's
 		// RuntimeRect and the order UI elements are drawn in (OnRender does this every frame).

@@ -22,6 +22,10 @@ namespace Bellows {
 		std::string Icon = "folder";			// One of SceneGroups::GetIcons()
 		glm::vec3 Color { 0.553f, 0.580f, 0.690f };
 		std::string Note;						// What the group is for, shown under its name
+		// Editor-only: the editor's viewport doesn't draw the group's entities (their meshes, lights and
+		// world text), or doesn't let them be picked. The game always shows them.
+		bool HiddenInEditor = false;
+		bool LockedInEditor = false;
 	};
 
 	// The rules for groups, shared by the editor, scene files and both script languages. A name is
