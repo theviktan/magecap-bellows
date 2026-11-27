@@ -2542,7 +2542,7 @@ namespace Bellows {
 			ImGui::TextWrapped("Renderer: %s (Vulkan via NVRHI)", Application::Get().GetRenderDevice().GetAdapterName().c_str());
 			ImGui::Spacing();
 			ImGui::PushFont(Theme::GetFonts().Regular, 0.0f);
-			ImGui::TextWrapped("Free and open source under the Apache License 2.0 (LICENSE and NOTICE). "
+			ImGui::TextWrapped("MageCap Bellows and MageCap ForgeScript are free and open source under the Apache License 2.0 (LICENSE and NOTICE). "
 				"The games you make with Bellows are yours, with no royalties.");
 			ImGui::Spacing();
 			ImGui::TextWrapped("Built with GLFW, NVRHI, Dear ImGui, ImGuizmo, EnTT, Jolt Physics, miniaudio, pybind11, glm, spdlog, cgltf, "

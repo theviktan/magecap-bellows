@@ -35,12 +35,12 @@ can drive end to end.
   **UI view** shows the game's screen at a chosen size (1080p, 4K, portrait, ...) with handles to move
   and resize the selected rect and drag its anchors, and the Inspector has Godot-style anchor presets.
   **Create → UI** also makes whole screens to start from: a Main Menu and a HUD.
-* **Scripting** in **ForgeScript** or **Python 3**, with the same API in both: behavior scripts
+* **Scripting** in **MageCap ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics, audio, and tweens that move any number or vector property smoothly over
   time. See [docs/ScriptingAPI.md](docs/ScriptingAPI.md).
-* **ForgeScript**: Bellows' own natural-language scripting language and its flagship way to write
-  game logic (`set speed to 5`, `when collided with other`, `wait 2 seconds`). The language, its
+* **MageCap ForgeScript**: Bellows' own natural-language scripting language and its flagship way to
+  write game logic (`set speed to 5`, `when collided with other`, `wait 2 seconds`). The language, its
   `forgescript` tool and its tests are in `ForgeScript/` (guide:
   [docs/ForgeScript/LanguageGuide.md](docs/ForgeScript/LanguageGuide.md)); what comes next is in
   [docs/Roadmap.md](docs/Roadmap.md).
@@ -201,7 +201,7 @@ MageCap Forge integration are in [docs/Roadmap.md](docs/Roadmap.md).
 
 ## License
 
-MageCap Bellows and ForgeScript are free and open source under the
+MageCap Bellows and MageCap ForgeScript are free and open source under the
 [Apache License 2.0](LICENSE). Copyright 2026 MageCap Games; see [NOTICE](NOTICE).
 
 The games you make with Bellows are yours: you can sell them under any license you choose, with
