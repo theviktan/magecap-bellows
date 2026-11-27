@@ -83,6 +83,33 @@ namespace ForgeScript {
 			size_t End = 0;
 		};
 
+		// A contract's 'needs' line: a function with Arity values, or (Arity -1) a field or property.
+		struct ContractNeed
+		{
+			std::string Name;
+			int Arity = -1;
+			std::string Shape;
+		};
+
+		// How many values a method takes: at least Fewest, at most Named unless it has a rest list.
+		struct MethodShape
+		{
+			int Fewest = 0;
+			int Named = 0;
+			bool Rest = false;
+		};
+
+		// What a kind of this script has, for its contracts' needs. Parent is the kind it extends, by name
+		// ('' for none, or for one that isn't a plain name).
+		struct KindShape
+		{
+			std::string Name;
+			std::string Parent;
+			bool ParentUnseen = false;
+			std::map<std::string, MethodShape> Functions;
+			std::set<std::string> Values;
+		};
+
 		// A 'try' with a 'finally' whose try or catch section is being compiled. Leaving it early (return,
 		// stop, skip) runs a copy of its finally code first.
 		struct FinallyContext
@@ -248,9 +275,11 @@ namespace ForgeScript {
 				m_EveryIsPhrase = m_Phrases.GetRoot()->Words.count("every") > 0;
 				m_AfterIsPhrase = m_Phrases.GetRoot()->Words.count("after") > 0;
 				m_ChoicesIsPhrase = m_Phrases.GetRoot()->Words.count("choices") > 0;
+				m_ContractIsPhrase = m_Phrases.GetRoot()->Words.count("contract") > 0;
 				m_TestIsPhrase = m_Phrases.GetRoot()->Words.count("test") > 0;
 				m_ExpectIsPhrase = m_Phrases.GetRoot()->Words.count("expect") > 0;
 				PrescanChoices();
+				PrescanContracts();
 				for (const char* verb : { "sort", "shuffle", "reverse" })
 				{
 					if (m_Phrases.GetRoot()->Words.count(verb) > 0)
@@ -691,7 +720,7 @@ namespace ForgeScript {
 					// A match with no 'is' choice is a mistake, but its 'end' still belongs to it, so the
 					// rest of the script pairs up as written.
 					return MatchOpensBlock(tokens, i) || (&tokens == &m_Tokens && m_ChoicelessMatchIsBlock && MatchWithoutChoicesAt(i)) ||
-						IsTimerAt(tokens, i) || IsTestAt(tokens, i) || PropertyOpensBlock(tokens, i);
+						IsTimerAt(tokens, i) || IsTestAt(tokens, i) || PropertyOpensBlock(tokens, i) || IsContractAt(tokens, i);
 				default:
 					return false;
 			}
@@ -873,7 +902,7 @@ namespace ForgeScript {
 					std::vector<std::string> names = UnpackNames(i + 1);
 					outNames.insert(outNames.end(), names.begin(), names.end());
 				}
-				else if (!afterMember && IsChoicesAt(m_Tokens, i))
+				else if (!afterMember && (IsChoicesAt(m_Tokens, i) || IsContractAt(m_Tokens, i)))
 				{
 					outNames.emplace_back(m_Tokens[i + 1].Lexeme);
 				}
@@ -1565,6 +1594,8 @@ namespace ForgeScript {
 						ListVerbStatement();
 					else if (IsChoicesAt(m_Tokens, m_Pos))
 						ChoicesStatement();
+					else if (IsContractAt(m_Tokens, m_Pos))
+						ContractStatement();
 					else if (IsTestAt(m_Tokens, m_Pos))
 						TestStatement();
 					else if (IsExpectAt(m_Pos))
@@ -1813,6 +1844,159 @@ namespace ForgeScript {
 			const bool startsLine = index == 0 || tokens[index - 1].Type == TokenType::Newline;
 			return startsLine && word.Type == TokenType::Identifier && word.Lexeme == "choices" &&
 				tokens[index + 1].Type == TokenType::Identifier && are.Type == TokenType::Identifier && are.Lexeme == "are";
+		}
+
+		// 'contract Damageable' alone on its line starts a contract. The words aren't reserved and the line
+		// was an error before; a script phrase starting with 'contract' wins.
+		bool IsContractAt(const std::vector<Token>& tokens, size_t index) const
+		{
+			if (m_ContractIsPhrase || index + 1 >= tokens.size())
+				return false;
+			const Token& word = tokens[index];
+			const bool startsLine = index == 0 || tokens[index - 1].Type == TokenType::Newline;
+			const TokenType after = index + 2 < tokens.size() ? tokens[index + 2].Type : TokenType::Eof;
+			return startsLine && word.Type == TokenType::Identifier && word.Lexeme == "contract" &&
+				tokens[index + 1].Type == TokenType::Identifier && (after == TokenType::Newline || after == TokenType::Eof);
+		}
+
+		// Where each contract of this script starts, so a kind above it can be told to move it up.
+		void PrescanContracts()
+		{
+			for (size_t i = 0; i < m_Tokens.size(); i++)
+			{
+				if (IsContractAt(m_Tokens, i))
+					m_ContractAt.emplace(std::string(m_Tokens[i + 1].Lexeme), i);
+			}
+		}
+
+		// contract Damageable ... needs health ... needs take_hit(amount) ... end: made here, as a value,
+		// and set as a script variable like a kind.
+		void ContractStatement()
+		{
+			const Token opener = Current();
+			Advance(); // contract
+			if (m_State->Kind != ScopeKind::Script || m_State->ScopeDepth != 0)
+				ErrorAt(opener, "Write a contract at the top level of the script, not inside a function, kind or block.");
+			const size_t nameAt = m_Pos;
+			const Token nameToken = Current();
+			const std::string name(nameToken.Lexeme);
+			WarnIfTakesBuiltinName(nameAt, name, "contract");
+			Advance();
+			if (m_KindShapes.count(name))
+				ErrorAt(nameToken, "'" + name + "' is a kind in this script already. Give the contract another name, like " + name + "Contract.");
+			if (m_Contracts.count(name))
+				ErrorAt(nameToken, "There are two contracts called '" + name + "' in this script. Keep one.");
+
+			std::vector<ContractNeed> needs;
+			SkipNewlines();
+			while (!Check(TokenType::End))
+			{
+				if (Check(TokenType::Eof))
+				{
+					FixMissingEnd(opener);
+					ErrorAt(opener, "This contract is missing its 'end'.");
+				}
+				if (!CheckWord("needs") || Peek(1).Type != TokenType::Identifier)
+					ErrorAtCurrent("Inside a contract, each line is 'needs name' for a field or property, or 'needs name(values)' for a function, like: needs take_hit(amount)");
+				Advance(); // needs
+				const Token needToken = Current();
+				ContractNeed need;
+				need.Name = std::string(needToken.Lexeme);
+				need.Shape = need.Name;
+				Advance();
+				if (Match(TokenType::LeftParen))
+				{
+					std::vector<std::string> params;
+					if (!Check(TokenType::RightParen))
+					{
+						do
+						{
+							params.push_back(ConsumeName("Expected the name of a value the function takes, like: needs take_hit(amount)"));
+						} while (Match(TokenType::Comma));
+					}
+					Consume(TokenType::RightParen, "Expected ')' after the values, like: needs take_hit(amount)");
+					need.Arity = static_cast<int>(params.size());
+					need.Shape += "(";
+					for (size_t i = 0; i < params.size(); i++)
+						need.Shape += (i ? ", " : "") + params[i];
+					need.Shape += ")";
+				}
+				for (const ContractNeed& other : needs)
+				{
+					if (other.Name == need.Name)
+						ErrorAt(needToken, "'" + need.Name + "' is in this contract twice. Keep one 'needs' line for it.");
+				}
+				needs.push_back(need);
+				EndOfStatement();
+				SkipNewlines();
+			}
+			ConsumeEnd(opener, "contract");
+
+			Contract* contract = m_VM.NewContract();
+			contract->Name = m_VM.Intern(name);
+			for (const ContractNeed& need : needs)
+				contract->Needs.push_back({ m_VM.Intern(need.Name), need.Arity, need.Shape });
+			m_Contracts[name] = needs;
+			NoteScriptName(nameAt, name, true);
+			EmitConstant(Value::FromObject(contract));
+			EmitWithName(OpCode::SetGlobal, name);
+			EmitOp(OpCode::Pop);
+		}
+
+		// The first need of a contract of this script that a kind of this script doesn't meet, as the run
+		// time would say it (VM's MissingNeed); empty when it meets them, or when the answer is in a kind
+		// this compiler doesn't see (one from another script), which the run time checks.
+		std::string MissingNeed(const std::string& kind, const std::string& contract, const std::vector<ContractNeed>& needs) const
+		{
+			const std::string promise = kind + " follows " + contract;
+			for (const ContractNeed& need : needs)
+			{
+				bool found = false;
+				bool unknown = false;
+				for (const KindShape* current = &m_KindShapes.at(kind); current && !found;)
+				{
+					if (need.Arity >= 0)
+					{
+						auto method = current->Functions.find(need.Name);
+						if (method != current->Functions.end())
+						{
+							const MethodShape& shape = method->second;
+							if (need.Arity < shape.Fewest || (!shape.Rest && need.Arity > shape.Named))
+							{
+								const int arity = shape.Named + (shape.Rest ? 1 : 0);
+								return promise + ", which needs " + need.Shape + ", but " + current->Name + "'s " + need.Name +
+									" takes " + (arity == 1 ? std::string("1 value") : std::to_string(arity) + " values") +
+									". Give it the values the contract lists.";
+							}
+							found = true;
+						}
+					}
+					else
+						found = current->Values.count(need.Name) > 0;
+					if (found)
+						break;
+					if (current->ParentUnseen)
+					{
+						unknown = true;
+						break;
+					}
+					if (current->Parent.empty())
+						break;
+					auto parent = m_KindShapes.find(current->Parent);
+					if (parent == m_KindShapes.end())
+					{
+						unknown = true;
+						break;
+					}
+					current = &parent->second;
+				}
+				if (found || unknown)
+					continue;
+				if (need.Arity >= 0)
+					return promise + " but has no function " + need.Shape + ". Add: function " + need.Shape + " ... end";
+				return promise + " but has no field or property called '" + need.Name + "'. Add: set " + need.Name + " to ...";
+			}
+			return std::string();
 		}
 
 		// Notes every choice set before compiling, so 'State.idel' is caught above the line that makes it.
@@ -3372,8 +3556,13 @@ namespace ForgeScript {
 			Token opener = Current();
 			Advance();
 			const size_t nameAt = m_Pos;
+			const Token kindNameToken = Current();
 			std::string name = ConsumeName("Expected a name for the kind, like: kind Enemy");
 			WarnIfTakesBuiltinName(nameAt, name, "kind");
+			if (m_Contracts.count(name))
+				ErrorAt(kindNameToken, "'" + name + "' is a contract in this script already. Give the kind another name.");
+			KindShape shape;
+			shape.Name = name;
 
 			EmitWithName(OpCode::Kind, name);
 			bool isGlobal = m_State->Kind == ScopeKind::Script;
@@ -3391,10 +3580,40 @@ namespace ForgeScript {
 
 			if (Match(TokenType::Extends))
 			{
-				PushStopWords(nullptr);
+				// A plain name lets the contracts' check follow it to a kind of this script.
+				const TokenType after = Peek(1).Type;
+				if (Check(TokenType::Identifier) && (after == TokenType::Newline || after == TokenType::Eof ||
+					(Peek(1).Type == TokenType::Identifier && Peek(1).Lexeme == "follows")))
+					shape.Parent = std::string(Current().Lexeme);
+				else
+					shape.ParentUnseen = true;
+				// 'follows' ends the kind it extends, unless that kind is itself called 'follows'.
+				static const std::set<std::string> s_FollowsStop = { "follows" };
+				const bool extendsFollows = CheckWord("follows") && (after == TokenType::Newline || after == TokenType::Eof);
+				PushStopWords(extendsFollows ? nullptr : &s_FollowsStop);
 				Expression();
 				PopStopWords();
 				EmitOp(OpCode::Inherit);
+			}
+
+			// 'follows Damageable, Saveable': the contracts are read and checked after the body.
+			std::vector<size_t> follows;
+			if (CheckWord("follows") && Peek(1).Type == TokenType::Identifier)
+			{
+				Advance();
+				do
+				{
+					if (!Check(TokenType::Identifier))
+						ErrorAtCurrent("Expected the name of a contract, like: kind Crate follows Damageable");
+					follows.push_back(m_Pos);
+					Advance();
+					// A contract of a script used with 'as': follows shapes.Damageable.
+					while (Check(TokenType::Dot) && Peek(1).Type == TokenType::Identifier)
+					{
+						Advance();
+						Advance();
+					}
+				} while (Match(TokenType::Comma));
 			}
 
 			// First pass: compile methods and shared values, remember where the field lines are.
@@ -3470,6 +3689,7 @@ namespace ForgeScript {
 					Advance();
 					if (!properties.emplace(property, nameToken).second)
 						ErrorAt(nameToken, "'" + property + "' has two properties in this kind. Keep one.");
+					shape.Values.insert(property);
 					ReturnTypeAfterParameters();
 					Match(TokenType::Do);
 					FunctionBody("property " + property, ScopeKind::Method, {}, propertyOpener, "'property'");
@@ -3520,7 +3740,14 @@ namespace ForgeScript {
 					Advance();
 					std::string methodName = ConsumeMemberName();
 					std::vector<DefaultValue> defaults;
-			std::vector<std::string> params = ParameterList(&defaults);
+					std::vector<std::string> params = ParameterList(&defaults);
+					MethodShape method;
+					method.Rest = m_RestParam && !params.empty();
+					method.Named = static_cast<int>(params.size()) - (method.Rest ? 1 : 0);
+					// ParameterList notes every parameter; the ones with a default have where it starts.
+					const int withDefaults = static_cast<int>(std::count_if(defaults.begin(), defaults.end(), [](const DefaultValue& value) { return value.Start != 0; }));
+					method.Fewest = method.Named - withDefaults;
+					shape.Functions[methodName] = method;
 					ReturnTypeAfterParameters();
 					FunctionBody(methodName, ScopeKind::Method, params, methodOpener, "function", {}, defaults);
 					EmitWithName(OpCode::Method, methodName);
@@ -3583,6 +3810,8 @@ namespace ForgeScript {
 				Advance(); // set
 				Match(TokenType::My);
 				std::string field = ConsumeMemberName();
+				shape.Values.insert(field);
+				fields->FieldNames.push_back(field);
 				EmitOp(OpCode::GetLocal);
 				EmitByte(0);
 				if (Match(TokenType::To))
@@ -3608,6 +3837,44 @@ namespace ForgeScript {
 			EmitOp(OpCode::FieldInit);
 
 			m_Pos = afterBody;
+			m_KindShapes[name] = shape;
+			if (!follows.empty())
+			{
+				// Mistakes a checker can show: a contract of this script written below the kind, a kind
+				// named after 'follows', or a need the kind doesn't meet. The run time checks the rest.
+				for (size_t at : follows)
+				{
+					const Token& token = m_Tokens[at];
+					if (at + 1 < m_Tokens.size() && m_Tokens[at + 1].Type == TokenType::Dot)
+						continue; // another script's contract: the run time checks it
+					const std::string contract(token.Lexeme);
+					if (m_KindShapes.count(contract) && !m_Contracts.count(contract))
+						ErrorAt(token, "'" + contract + "' is a kind, not a contract. To start from it, write: kind " + name + " extends " + contract);
+					auto written = m_ContractAt.find(contract);
+					if (!m_Contracts.count(contract) && written != m_ContractAt.end() && written->second > at)
+						ErrorAt(token, "The contract '" + contract + "' is written below this kind. Move it above the kinds that follow it.");
+					auto needs = m_Contracts.find(contract);
+					if (needs != m_Contracts.end())
+					{
+						const std::string missing = MissingNeed(name, contract, needs->second);
+						if (!missing.empty())
+							ErrorAt(token, missing);
+					}
+				}
+				for (size_t at : follows)
+				{
+					const std::string contract(m_Tokens[at].Lexeme);
+					const Target target = ResolveName(contract, at);
+					if (target.Type == TargetType::Global)
+						WarnIfNeverSet(contract, at);
+					EmitGet(target);
+					for (size_t part = at + 1; part + 1 < m_Tokens.size() && m_Tokens[part].Type == TokenType::Dot &&
+						m_Tokens[part + 1].Type == TokenType::Identifier; part += 2)
+						EmitWithName(OpCode::GetProperty, std::string(m_Tokens[part + 1].Lexeme));
+				}
+				EmitOp(OpCode::Follows);
+				EmitByte(static_cast<uint8_t>(follows.size()));
+			}
 			ConsumeEnd(opener, "kind");
 			EmitOp(OpCode::Pop);
 		}
@@ -5407,6 +5674,12 @@ namespace ForgeScript {
 		std::unordered_map<std::string, std::vector<std::string>> m_Choices;
 		std::unordered_map<std::string, std::unordered_set<std::string>> m_ChoiceSets; // the same names, to look up
 		bool m_ChoicesIsPhrase = false;
+		bool m_ContractIsPhrase = false;
+		// Contracts (Roadmap 3.0 item 4): where each starts, the needs of those compiled so far, and what
+		// each kind of this script has, for the mistakes a checker shows before the game runs.
+		std::map<std::string, size_t> m_ContractAt;
+		std::map<std::string, std::vector<ContractNeed>> m_Contracts;
+		std::map<std::string, KindShape> m_KindShapes;
 		bool m_TestIsPhrase = false;
 		bool m_ExpectIsPhrase = false;
 		// Set by ParameterList when its last name ends in '...', for the FunctionBody that follows.

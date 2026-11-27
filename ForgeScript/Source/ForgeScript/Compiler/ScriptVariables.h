@@ -13,6 +13,8 @@ namespace ForgeScript {
 	bool TokenOpensBlock(const std::vector<Token>& tokens, size_t index);
 	// Whether tokens[index] is 'property name' alone on its line directly inside a kind, which opens a block.
 	bool PropertyOpensBlock(const std::vector<Token>& tokens, size_t index);
+	// 'contract Damageable ... end' (Roadmap 3.0 item 4), for tools that pair blocks without compiling.
+	bool ContractOpensBlock(const std::vector<Token>& tokens, size_t index);
 
 	// A script variable set to a plain value at the top of a script, like
 	//     set speed to 2.5

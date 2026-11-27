@@ -37,10 +37,21 @@ namespace ForgeScript {
 			case TokenType::Function: case TokenType::Kind:
 				return !(previous == TokenType::Identifier && (tokens[i - 1].Lexeme == "a" || tokens[i - 1].Lexeme == "an"));
 			case TokenType::Identifier:
-				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i) || TestOpensBlock(tokens, i) || PropertyOpensBlock(tokens, i);
+				return MatchOpensBlock(tokens, i) || TimerOpensBlock(tokens, i) || TestOpensBlock(tokens, i) || PropertyOpensBlock(tokens, i) ||
+					ContractOpensBlock(tokens, i);
 			default:
 				return false;
 		}
+	}
+
+	bool ContractOpensBlock(const std::vector<Token>& tokens, size_t i)
+	{
+		// 'contract Name' alone on its line (the compiler's IsContractAt; tools don't see phrases).
+		if (tokens[i].Type != TokenType::Identifier || tokens[i].Lexeme != "contract" || i + 1 >= tokens.size() ||
+			tokens[i + 1].Type != TokenType::Identifier || (i > 0 && tokens[i - 1].Type != TokenType::Newline))
+			return false;
+		const TokenType after = i + 2 < tokens.size() ? tokens[i + 2].Type : TokenType::Eof;
+		return after == TokenType::Newline || after == TokenType::Eof;
 	}
 
 	bool PropertyOpensBlock(const std::vector<Token>& tokens, size_t i)

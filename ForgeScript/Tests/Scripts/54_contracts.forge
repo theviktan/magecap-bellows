@@ -1,0 +1,139 @@
+# Contracts between kinds (Roadmap 3.0 item 4): what a kind promises to have.
+function problem_of(f)
+	try
+		f()
+	catch problem
+		return problem
+	end
+	return "no problem"
+end
+
+contract Damageable
+	needs health
+	needs take_hit(amount)
+end
+
+contract Named
+	needs label
+end
+
+kind Crate follows Damageable
+	set health to 10
+	function take_hit(amount)
+		take amount from my health
+	end
+end
+
+# A property meets a 'needs' too, and more than one contract can be followed.
+kind Door follows Damageable, Named
+	set hits to 0
+	property health
+		return 5 - my hits
+	end
+	property label
+		return "door"
+	end
+	function take_hit(amount, loud is false)
+		add 1 to my hits
+	end
+end
+
+# What a kind gets from the kind it extends counts, and a kind that extends one that follows a
+# contract follows it too.
+kind Barrel extends Crate follows Named
+	set label to "barrel"
+end
+kind BigCrate extends Crate
+end
+
+kind Rock
+	set health to 100
+	function take_hit(amount)
+	end
+end
+
+set things to [new Crate(), new Door(), new Barrel(), new BigCrate(), new Rock(), 5, nothing]
+for each thing in things do
+	if thing is a Damageable then
+		thing.take_hit(3)
+	end
+end
+say things[1].health                            # expect: 7
+say things[2].health                            # expect: 4
+say things[3].health                            # expect: 7
+say things[4].health                            # expect: 7
+say things[5].health                            # expect: 100
+say things[2] is a Named                        # expect: true
+say things[1] is a Named                        # expect: false
+say things[3] is a Named and things[3] is a Damageable   # expect: true
+say things[5] is not a Damageable               # expect: true
+say 5 is a Damageable                           # expect: false
+say Damageable                                  # expect: <contract Damageable>
+say Damageable.name                             # expect: Damageable
+say things[1] is a Crate                        # expect: true
+
+# A kind made inside a function is checked when its line runs.
+function make_broken()
+	kind Broken follows Damageable
+		set health to 1
+	end
+	return Broken
+end
+say problem_of(make_broken)                     # expect: Broken follows Damageable but has no function take_hit(amount). Add: function take_hit(amount) ... end
+function make_wrong_count()
+	kind Wrong follows Damageable
+		set health to 1
+		function take_hit()
+		end
+	end
+	return Wrong
+end
+say problem_of(make_wrong_count)                # expect: Wrong follows Damageable, which needs take_hit(amount), but Wrong's take_hit takes 0 values. Give it the values the contract lists.
+function make_no_value()
+	kind Blank follows Named
+	end
+	return Blank
+end
+say problem_of(make_no_value)                   # expect: Blank follows Named but has no field or property called 'label'. Add: set label to ...
+function make_from_kind()
+	kind Odd follows Crate
+	end
+	return Odd
+end
+say problem_of(make_from_kind)                  # expect: 'Crate' is a kind, not a contract. To start from it, write: kind Odd extends Crate
+function make_from_text()
+	set plan to "Damageable"
+	kind Odd2 follows plan
+	end
+	return Odd2
+end
+say problem_of(make_from_text)                  # expect: 'follows' needs a contract (like Damageable), not a text.
+
+# A contract from a used script, by its alias, is checked when the kind line runs.
+use "shapes" as shapes
+kind Hatch follows shapes.Openable
+	set is_open to false
+	function open()
+		set my is_open to true
+	end
+end
+set hatch to new Hatch()
+say hatch is a shapes.Openable                  # expect: true
+function make_shut()
+	kind Shut follows shapes.Openable
+	end
+	return Shut
+end
+say problem_of(make_shut)                       # expect: Shut follows Openable but has no function open(). Add: function open() ... end
+
+# The words keep their old meanings everywhere else.
+set contract to 5
+set needs to 2
+set follows to 1
+say contract + needs + follows                  # expect: 8
+kind follows_kind
+	set x to 1
+end
+kind Child extends follows_kind
+end
+say new Child().x                               # expect: 1

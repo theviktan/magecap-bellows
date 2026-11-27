@@ -317,6 +317,11 @@ namespace ForgeScript {
 		return Allocate<Function>(0);
 	}
 
+	Contract* VM::NewContract()
+	{
+		return Allocate<Contract>(0);
+	}
+
 	void VM::Pin(Object* object)
 	{
 		m_Pinned[object]++;
@@ -1643,6 +1648,53 @@ namespace ForgeScript {
 		return false;
 	}
 
+	// Whether a script function can be called with 'count' values: its own, or with defaults or a rest list.
+	static bool TakesValues(const Function* fn, int count)
+	{
+		const int named = fn->HasRest ? fn->Arity - 1 : fn->Arity;
+		const int fewest = fn->DefaultIps.empty() ? named : fn->MinArity;
+		return count >= fewest && (fn->HasRest || count <= named);
+	}
+
+	// The first need of 'contract' that 'kind' (with the kinds it extends) doesn't meet, as the message
+	// to show; empty when it meets them all.
+	static std::string MissingNeed(Kind* kind, Contract* contract)
+	{
+		const std::string promise = kind->Name->Text + " follows " + contract->Name->Text;
+		for (const Contract::Need& need : contract->Needs)
+		{
+			const std::string& name = need.Name->Text;
+			bool found = false;
+			for (Kind* current = kind; current && !found; current = current->Parent)
+			{
+				auto method = current->Methods.find(need.Name);
+				if (need.Arity >= 0)
+				{
+					if (method == current->Methods.end())
+						continue;
+					if (!TakesValues(method->second->Fn, need.Arity))
+					{
+						return promise + ", which needs " + need.Shape + ", but " + current->Name->Text + "'s " + name +
+							" takes " + (method->second->Fn->Arity == 1 ? std::string("1 value") : std::to_string(method->second->Fn->Arity) + " values") +
+							". Give it the values the contract lists.";
+					}
+					found = true;
+				}
+				else
+				{
+					found = current->Properties.count(need.Name) ||
+						(current->Fields && std::find(current->Fields->Fn->FieldNames.begin(), current->Fields->Fn->FieldNames.end(), name) != current->Fields->Fn->FieldNames.end());
+				}
+			}
+			if (found)
+				continue;
+			if (need.Arity >= 0)
+				return promise + " but has no function " + need.Shape + ". Add: function " + need.Shape + " ... end";
+			return promise + " but has no field or property called '" + name + "'. Add: set " + name + " to ...";
+		}
+		return std::string();
+	}
+
 	// The name of what 'start' runs, for a task's text: a script function, a kind's or a built-in one.
 	static std::string CallableName(const Value& callee)
 	{
@@ -2256,6 +2308,16 @@ namespace ForgeScript {
 				std::vector<std::string_view> names = { "length", "size", "count" };
 				AddNames(names, TextMethods);
 				return Fail("Text has no property called '" + key + "'." + DidYouMean(key, names));
+			}
+			case ObjectType::Contract:
+			{
+				Contract* contract = As<Contract>(object);
+				if (key == "name")
+				{
+					outValue = Value::FromObject(contract->Name);
+					return true;
+				}
+				return Fail("A contract has only its name ('" + contract->Name->Text + ".name'); its needs are met by the kinds that follow it.");
 			}
 			case ObjectType::Task:
 			{
@@ -3494,8 +3556,21 @@ namespace ForgeScript {
 				{
 					Value kindValue = stack.back();
 					stack.pop_back();
+					if (IsObjectType(kindValue, ObjectType::Contract))
+					{
+						// 'x is a Damageable': an object whose kind, or a kind it extends, follows the contract.
+						Contract* contract = As<Contract>(kindValue);
+						bool follows = false;
+						if (IsObjectType(stack.back(), ObjectType::Instance))
+						{
+							for (Kind* current = As<Instance>(stack.back())->Class; current && !follows; current = current->Parent)
+								follows = std::find(current->Contracts.begin(), current->Contracts.end(), contract) != current->Contracts.end();
+						}
+						stack.back() = Value::FromBool(follows);
+						break;
+					}
 					if (!IsObjectType(kindValue, ObjectType::Kind))
-						FORGESCRIPT_FAIL("'is a' needs a kind (like Enemy) or a type (number, text, list, map, function, vector).");
+						FORGESCRIPT_FAIL("'is a' needs a kind (like Enemy), a contract (like Damageable) or a type (number, text, list, map, function, vector).");
 					Kind* kind = As<Kind>(kindValue);
 					bool result = false;
 					if (IsObjectType(stack.back(), ObjectType::Instance))
@@ -4047,6 +4122,33 @@ namespace ForgeScript {
 					kind->Fields = fields;
 					break;
 				}
+				case OpCode::Follows:
+				{
+					// 'kind Crate follows Damageable, Saveable': each contract's needs must be in the kind or
+					// a kind it extends, now that the kind's body has run.
+					const uint8_t count = FORGESCRIPT_READ_BYTE();
+					const size_t first = stack.size() - count;
+					Kind* kind = As<Kind>(stack[first - 1]);
+					for (size_t i = first; i < stack.size(); i++)
+					{
+						const Value value = stack[i];
+						if (IsObjectType(value, ObjectType::Kind))
+						{
+							const std::string other = As<Kind>(value)->Name->Text;
+							FORGESCRIPT_FAIL("'" + other + "' is a kind, not a contract. To start from it, write: kind " + kind->Name->Text + " extends " + other);
+						}
+						if (!IsObjectType(value, ObjectType::Contract))
+							FORGESCRIPT_FAIL("'follows' needs a contract (like Damageable), not " + std::string(value.IsNothing() ? "nothing" : "a " + TypeOf(value)) + ".");
+						Contract* contract = As<Contract>(value);
+						const std::string missing = MissingNeed(kind, contract);
+						if (!missing.empty())
+							FORGESCRIPT_FAIL(missing);
+						if (std::find(kind->Contracts.begin(), kind->Contracts.end(), contract) == kind->Contracts.end())
+							kind->Contracts.push_back(contract);
+					}
+					stack.resize(first);
+					break;
+				}
 				case OpCode::New:
 				{
 					uint8_t count = FORGESCRIPT_READ_BYTE();
@@ -4447,6 +4549,16 @@ namespace ForgeScript {
 						MarkObject(rule);
 					}
 				}
+				for (Contract* contract : kind->Contracts)
+					MarkObject(contract);
+				break;
+			}
+			case ObjectType::Contract:
+			{
+				Contract* contract = static_cast<Contract*>(object);
+				MarkObject(contract->Name);
+				for (const Contract::Need& need : contract->Needs)
+					MarkObject(need.Name);
 				break;
 			}
 			case ObjectType::Instance:

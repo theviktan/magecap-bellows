@@ -28,6 +28,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
 | Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
 | Change handler | `when my health changes [with now, before] ... end` inside a kind: runs right after a write that changes the field (not for its first value; not again for a write inside it) |
+| Contract | `contract Damageable  needs health  needs take_hit(amount)  end` at the top level (1.8.0); `kind Crate [extends Box] follows Damageable, Named`; `x is a Damageable`; a missing need is a mistake at the `kind` line |
 | Property | `property health_percent [as number] ... return ... end` inside a kind (1.8.0): read like a field (`hero.health_percent`), worked out by its block at each read; can't be set or `wait`; a kind that extends it can replace it, and `parent.health_percent` reads the one it replaced |
 | Keep in range | `keep my health between 0 and my max_health` inside a kind (1.8.0): every write to the field (`set`, `add`, `take`, ..., from anywhere) is clamped into the range, with the ends worked out at that write; a value that isn't a number is an error; the kind's own `set` line gives the first value as written |
 | Set handler | `when my is_open is set to wanted ... end` inside a kind (1.8.0): runs instead of each write to the field, right away (no `wait`); inside it, `set my is_open to ...` stores the value; storing nothing leaves the field as it was; `when my is_open changes` runs after a stored change |
@@ -60,7 +61,7 @@ Everything in the language on one page. For explanations and examples, see the [
 | Membership | `list contains x`, `x is in list`, `x is not in list` (also maps and text) |
 | Empty | `x is empty`, `x is not empty` |
 | Numbers | `x is even`, `x is odd`, `x is a whole number`, and each with `is not` (a name `even`/`odd` of your own keeps the comparison) |
-| Type | `x is a number` / `text` / `boolean` / `list` / `map` / `function` / `vector` / `object` / `kind`, `x is a Enemy`, `x is an Enemy` |
+| Type | `x is a number` / `text` / `boolean` / `list` / `map` / `function` / `vector` / `object` / `kind`, `x is a Enemy`, `x is an Enemy`, `x is a Damageable` (a contract) |
 | Logic | `and`, `or`, `not` |
 | Pick a value | `"big" if x > 3 otherwise "small"` (only the picked value runs; chains: `a if p otherwise b if q otherwise c`; `else` works too) |
 | Property | `player.health`, `player's health`, `my health` (= `self.health`) |

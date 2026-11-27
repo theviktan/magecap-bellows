@@ -98,7 +98,8 @@ TEST_CASE("HelpOnlyDescribesThingsThatExist")
 			case HelpEntry::Kind::Keyword:
 				CHECK((contains(keywords, entry.Name) || entry.Name == "match" || entry.Name == "every" || entry.Name == "after" ||
 					entry.Name == "choices" || entry.Name == "shared" || entry.Name == "test" || entry.Name == "expect" ||
-					entry.Name == "property" || entry.Name == "keep"));
+					entry.Name == "property" || entry.Name == "keep" || entry.Name == "contract" || entry.Name == "follows" ||
+					entry.Name == "needs"));
 				break;
 			case HelpEntry::Kind::Function: CHECK(contains(globals, entry.Name)); break;
 			case HelpEntry::Kind::Phrase: CHECK(contains(phrases, entry.Name)); break;

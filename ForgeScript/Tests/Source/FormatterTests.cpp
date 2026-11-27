@@ -176,3 +176,11 @@ TEST_CASE("FormatterIndentsProperties")
 	REQUIRE(result.Error.empty());
 	CHECK_EQ(result.Text, std::string("kind K\n\tproperty v as number\n\t\treturn 1\n\tend\n\tkeep my a between 1 and 2\n\twhen my a is set to n\n\t\tset my a to n\n\tend\nend\nproperty 7\n"));
 }
+
+TEST_CASE("FormatterIndentsContracts")
+{
+	// A contract's 'needs' lines are indented; 'contract' with a value after it isn't a contract.
+	const FormatResult result = FormatScript("contract Damageable\nneeds health\nneeds take_hit(amount)\nend\nkind Crate follows Damageable\nset health to 1\nfunction take_hit(amount)\nend\nend\nset contract to 2\n");
+	REQUIRE(result.Error.empty());
+	CHECK_EQ(result.Text, std::string("contract Damageable\n\tneeds health\n\tneeds take_hit(amount)\nend\nkind Crate follows Damageable\n\tset health to 1\n\tfunction take_hit(amount)\n\tend\nend\nset contract to 2\n"));
+}

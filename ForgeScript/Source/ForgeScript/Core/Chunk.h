@@ -89,6 +89,7 @@ namespace ForgeScript {
 		Inherit,         //                           kind parent -> kind
 		Method,          // u16 name constant         kind closure -> kind
 		FieldInit,       //                           kind closure -> kind
+		Follows,         // u8 contract count: kind, contracts -> kind (checks each contract's needs)
 		New,             // u8 argument count         kind args... -> instance
 
 		NewList,         //                           -> empty list

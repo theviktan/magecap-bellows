@@ -23,6 +23,12 @@ with new language or tool features, the patch number with fixes.
     Field (8); and properties that use each other forever now name the place the error happened once,
     not 64 times. The same fix leaves only the innermost place on an error from a callback inside a
     callback (`[1].map(outer)` where `outer` calls `map` again), which used to list every level.
+- **Contracts between kinds** (Roadmap 3.0, item 4; Ron, 3:59 PM Nov 27), like interfaces:
+  `contract Damageable` with `needs health` and `needs take_hit(amount)` lines, `kind Crate follows
+  Damageable`, and `x is a Damageable`. A missing need is a mistake at the `kind` line that says what
+  to add; with the contract in the same script, `--check` and the editor show it before the game runs.
+  No new reserved words: `contract`, `follows` and `needs` count only in their places. The outline lists
+  contracts (LSP symbol kind Interface, 11) with their needs, and the formatter indents them.
 - **Control over started tasks** (Roadmap 3.0, item 2; Ron, 3:55 AM Nov 27): `start` gives back the
   task, `set scan to start scan_bays()`, with `scan.running`, `scan.done`, `scan.failed`,
   `scan.cancelled`, `scan.result`, `scan.problem` and `scan.cancel()`. `done` is true once the task has

@@ -515,7 +515,11 @@ The built-in phrases are `say (value)`, `random number from (a) to (b)`, `random
 ## 9. Kinds and objects
 
 ```
-kind Name [extends Name]
+contract Name
+    { needs name [ ( [name { , name }] ) ] }
+end
+
+kind Name [extends Name] [follows Name { , Name }]
     { set field to expression }
     { shared name is expression }
     { when my field changes [ with name [ , name ] ]  block  end }
@@ -539,6 +543,7 @@ end
   - `when my` *field* `is set to` *name* ... `end`: each write to the field, except the kind's field lines, runs the block instead of storing the value, with *name* holding the value written. Inside the task running it, a write to the same field of the same object stores the value (and runs `when ... changes` handlers as usual). The write's expression still gives the value written. A field can't have both `keep` and a set handler in one kind, nor either on a property's name.
   - `property`, `keep` and the set handler's words are contextual: only at the start of a line inside a kind, in these shapes. Everywhere else they mean what they meant in 1.7.0.
 - Reading or calling a field or method an object doesn't have is an error that names the kind.
+- **Contracts** (1.8.0): `contract` *Name* ... `end` at the top level of a script makes a contract value, set as a script variable like a kind. Each `needs` line is a need: *name*`(`*names*`)` is a method that can be called with that many values (its own, or fewer when the rest have defaults, or more into a rest list); a bare *name* is a field (a `set` line of the kind) or a property. One name has one need. `kind` *Name* ... `follows` *A*`,` *B* checks, after the kind's body (and its `extends`) has run, that the kind or a kind it extends meets every need of each contract, and fails with a message that names the first need missing and what to write. When the contract and the kinds involved are in the same script and compiled before the kind, the compiler finds the same mistakes, and also a contract written below the kind, a kind after `follows`, two contracts or a contract and a kind with one name. `x is a` *Contract* is true when *x* is an object whose kind, or a kind it extends, follows the contract. A contract prints as `<contract Name>`, and `.name` is its name. `contract` is a contract only at the start of a line followed by a name and the line's end, with no script phrase starting with the word; `follows` only on a `kind` line; `needs` only inside a contract. Elsewhere they are ordinary names.
 
 ---
 

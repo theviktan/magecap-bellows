@@ -21,6 +21,16 @@ namespace {
 		return error;
 	}
 
+	bool Compiles(const std::string& source)
+	{
+		VM vm;
+		CompileError error;
+		const bool ok = vm.Check(source, "test.forge", error);
+		if (!ok)
+			ForgeTest::ReportFailure(__FILE__, __LINE__, "expected no compile error for:\n" + source + "\nbut got: " + error.Message);
+		return ok;
+	}
+
 	// What a script prints when it runs.
 	std::string Output(const std::string& source)
 	{
@@ -1406,6 +1416,37 @@ TEST_CASE("TypesFollowAFunctionsOwnVariables")
 	CHECK(takes("function f()\n\tset n to \"a\"\n\tfunction g()\n\t\tset n to 5\n\tend\n\theal(n)\nend\n").empty());
 	// A parameter of a kind's type is never compared: 'object' or a kind may hold many things.
 	CHECK(vm.FindWarnings("function g(e as Enemy)\nend\nfunction f()\n\tset n to \"x\"\n\tg(n)\nend\n", "t.forge", {}).empty());
+}
+
+TEST_CASE("ContractsExplainTheirMistakesBeforeTheGameRuns")
+{
+	const std::string damageable = "contract Damageable\n\tneeds health\n\tneeds take_hit(amount)\nend\n";
+	CHECK_CONTAINS(CompileFails(damageable + "kind Crate follows Damageable\n\tset health to 1\nend\n").Message,
+		"Crate follows Damageable but has no function take_hit(amount). Add: function take_hit(amount) ... end");
+	CHECK_CONTAINS(CompileFails(damageable + "kind Crate follows Damageable\n\tfunction take_hit(amount)\n\tend\nend\n").Message,
+		"Crate follows Damageable but has no field or property called 'health'. Add: set health to ...");
+	CHECK_CONTAINS(CompileFails(damageable + "kind Crate follows Damageable\n\tset health to 1\n\tfunction take_hit(a, b)\n\tend\nend\n").Message,
+		"which needs take_hit(amount), but Crate's take_hit takes 2 values");
+	// What a kind of this script it extends has counts.
+	CHECK(Compiles(damageable + "kind Box\n\tset health to 1\n\tfunction take_hit(amount)\n\tend\nend\nkind Crate extends Box follows Damageable\nend\n"));
+	CHECK(Compiles(damageable + "kind Crate follows Damageable\n\tset health to 1\n\tfunction take_hit(amount, loud is false)\n\tend\nend\n"));
+	CHECK(Compiles(damageable + "kind Crate follows Damageable\n\tset health to 1\n\tfunction take_hit(values...)\n\tend\nend\n"));
+	CHECK_CONTAINS(CompileFails("kind Crate follows Damageable\nend\n" + damageable).Message,
+		"The contract 'Damageable' is written below this kind. Move it above the kinds that follow it.");
+	CHECK_CONTAINS(CompileFails("kind Box\nend\nkind Crate follows Box\nend\n").Message,
+		"'Box' is a kind, not a contract. To start from it, write: kind Crate extends Box");
+	CHECK_CONTAINS(CompileFails(damageable + damageable).Message, "There are two contracts called 'Damageable' in this script.");
+	CHECK_CONTAINS(CompileFails("contract Named\n\tneeds label\n\tneeds label\nend\n").Message, "'label' is in this contract twice.");
+	CHECK_CONTAINS(CompileFails("contract Named\n\tset label to 1\nend\n").Message,
+		"Inside a contract, each line is 'needs name' for a field or property, or 'needs name(values)' for a function");
+	CHECK_CONTAINS(CompileFails("contract Named\n\tneeds label\n").Message, "This contract is missing its 'end'.");
+	CHECK_CONTAINS(CompileFails(damageable + "kind Damageable\nend\n").Message, "'Damageable' is a contract in this script already.");
+	CHECK_CONTAINS(CompileFails("kind Box\nend\ncontract Box\n\tneeds x\nend\n").Message, "'Box' is a kind in this script already.");
+	CHECK_CONTAINS(CompileFails("function f()\n\tcontract Inner\n\t\tneeds x\n\tend\nend\n").Message,
+		"Write a contract at the top level of the script");
+	// The words are still ordinary names everywhere else.
+	CHECK(Compiles("set contract to 1\nset needs to contract + 1\nset follows to needs\nsay contract\n"));
+	CHECK(Compiles("phrase contract (x)\n\tsay x\nend\ncontract 5\n"));
 }
 
 TEST_CASE("AnErrorFromNestedRunsSaysWhereItHappenedOnce")

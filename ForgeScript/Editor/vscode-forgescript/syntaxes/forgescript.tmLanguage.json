@@ -77,6 +77,18 @@
 					}
 				},
 				{
+					"match": "\\s(follows)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\s*,\\s*[A-Za-z_][A-Za-z0-9_]*)*)\\s*$",
+					"captures": { "1": { "name": "storage.modifier.implements.forge" }, "2": { "name": "entity.other.inherited-class.forge" } }
+				},
+				{
+					"match": "^(contract)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*$",
+					"captures": { "1": { "name": "storage.type.interface.forge" }, "2": { "name": "entity.name.type.interface.forge" } }
+				},
+				{
+					"match": "^\\s*(needs)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(\\(|$))",
+					"captures": { "1": { "name": "keyword.other.needs.forge" }, "2": { "name": "entity.name.function.forge" } }
+				},
+				{
 					"match": "^\\s*(property)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=$|\\bas\\b|\\bdo\\b)",
 					"captures": { "1": { "name": "storage.type.property.forge" }, "2": { "name": "variable.other.property.forge" } }
 				},

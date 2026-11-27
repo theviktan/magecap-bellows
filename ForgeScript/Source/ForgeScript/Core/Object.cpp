@@ -137,6 +137,7 @@ namespace ForgeScript {
 			case ObjectType::Upvalue:        return "upvalue";
 			case ObjectType::NativeFunction: return "function";
 			case ObjectType::Kind:           return "kind";
+			case ObjectType::Contract:       return "contract";
 			case ObjectType::Instance:       return "object";
 			case ObjectType::BoundMethod:    return "function";
 			case ObjectType::Vector:         return "vector";
