@@ -1,6 +1,7 @@
 #include "EditorScriptAPI.h"
 
 #include "EditorLayer.h"
+#include "Panels/SceneHierarchyPanel.h"
 #include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
@@ -428,6 +429,41 @@ namespace Bellows {
 			m.def("frame", [] { return Application::Get().GetFrameCount(); }, "Frames rendered since the editor started");
 
 			// Profiler ----------------------------------------------------------------------------
+			m.def("hierarchy_rows", []
+			{
+				py::list result;
+				Scene& scene = *Editor().GetActiveScene();
+				for (const SceneHierarchyPanel::Row& row : Editor().GetHierarchyPanel().GetRows())
+				{
+					py::dict entry;
+					const SceneGroup* group = scene.FindGroup(row.Group);
+					entry["group"] = group ? py::cast(group->Name) : py::none();
+					entry["depth"] = row.Depth;
+					switch (row.Kind)
+					{
+						case SceneHierarchyPanel::RowKind::Entity:
+							if (!row.Target)
+								continue;
+							entry["kind"] = "entity";
+							entry["name"] = row.Target.GetName();
+							break;
+						case SceneHierarchyPanel::RowKind::Group:
+							entry["kind"] = "group";
+							entry["name"] = group ? group->Name : std::string();
+							break;
+						case SceneHierarchyPanel::RowKind::Note:
+							entry["kind"] = "note";
+							entry["name"] = group ? group->Note : std::string();
+							break;
+						case SceneHierarchyPanel::RowKind::Ungrouped:
+							entry["kind"] = "ungrouped";
+							entry["name"] = "";
+							break;
+					}
+					result.append(entry);
+				}
+				return result;
+			}, "The Hierarchy panel's rows as it last drew them, top to bottom: {kind, name, depth, group}");
 			m.def("profiler_frames", [](size_t count)
 			{
 				py::list result;

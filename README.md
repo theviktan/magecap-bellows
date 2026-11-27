@@ -35,6 +35,12 @@ can drive end to end.
   **UI view** shows the game's screen at a chosen size (1080p, 4K, portrait, ...) with handles to move
   and resize the selected rect and drag its anchors, and the Inspector has Godot-style anchor presets.
   **Create → UI** also makes whole screens to start from: a Main Menu and a HUD.
+* **Hierarchy groups**: file top-level entities under groups, folders with an icon, a color and a
+  note saying what they're for (**New group** at the top of the Hierarchy, then drag entities onto
+  it or right-click → **Move to Group**). Groups never move or parent anything; children follow
+  their parent, and scripts can use the same groups (`for each bay in everything in group "Docking"`).
+  Gray badges at the end of each row show what else an entity has: a script, physics, sound, a
+  light, animation or a nav agent.
 * **Scripting** in **MageCap ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics, audio, and tweens that move any number or vector property smoothly over

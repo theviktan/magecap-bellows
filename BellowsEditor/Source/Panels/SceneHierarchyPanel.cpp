@@ -8,13 +8,18 @@
 #include "UITemplates.h"
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Scene/SceneGroups.h"
 
+#include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <stdexcept>
+#include <string_view>
+#include <unordered_map>
 
 namespace Bellows {
 
@@ -54,6 +59,61 @@ namespace Bellows {
 			return ICON_CIRCLE;
 		}
 
+		// The glyph for each of SceneGroups::GetIcons(), in the same order.
+		const char* GroupIconGlyph(const std::string& icon)
+		{
+			static const std::unordered_map<std::string, const char*> s_Glyphs = {
+				{ "folder", ICON_FOLDER }, { "mountain", ICON_MOUNTAIN }, { "anchor", ICON_ANCHOR }, { "rocket", ICON_ROCKET },
+				{ "lightbulb", ICON_LIGHTBULB }, { "layout", ICON_LAYOUT }, { "music", ICON_MUSIC }, { "camera", ICON_CAMERA },
+				{ "box", ICON_BOX }, { "user", ICON_USER }, { "users", ICON_USERS }, { "flag", ICON_FLAG },
+				{ "star", ICON_STAR }, { "swords", ICON_SWORDS }, { "trees", ICON_TREES }, { "house", ICON_HOUSE },
+			};
+			auto it = s_Glyphs.find(icon);
+			return it != s_Glyphs.end() ? it->second : ICON_FOLDER;
+		}
+
+		// The colors offered for a group's icon (MageCap's palette); scripts can set any color.
+		struct GroupColor { const char* Name; glm::vec3 Value; };
+		constexpr GroupColor c_GroupColors[] = {
+			{ "Gray", { 0.553f, 0.580f, 0.690f } }, { "Blue", { 0.431f, 0.545f, 1.0f } }, { "Green", { 0.247f, 0.812f, 0.494f } },
+			{ "Yellow", { 0.949f, 0.757f, 0.306f } }, { "Sand", { 0.949f, 0.651f, 0.353f } }, { "Purple", { 0.714f, 0.549f, 0.961f } },
+			{ "Pink", { 0.780f, 0.482f, 0.839f } }, { "Red", { 0.898f, 0.329f, 0.310f } },
+		};
+
+		ImU32 ToColor(const glm::vec3& color, float alpha = 1.0f)
+		{
+			return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, alpha));
+		}
+
+		// Small gray icons at the end of an entity's row for what it has beyond the icon it shows.
+		struct Badge { const char* Glyph; const char* Name; };
+		std::vector<Badge> EntityBadges(Entity entity)
+		{
+			std::vector<Badge> badges;
+			// Compared as text: the same literal in two places isn't always one pointer.
+			const std::string_view shown = EntityIcon(entity);
+			auto add = [&](bool has, const char* glyph, const char* name)
+			{
+				if (has && shown != glyph)
+					badges.push_back({ glyph, name });
+			};
+			add(entity.HasComponent<RigidBodyComponent>(), ICON_ATOM, "Physics body");
+			add(entity.HasComponent<AudioSourceComponent>(), ICON_VOLUME_2, "Sound");
+			// A light's own icon already says it is one.
+			const bool showsLight = shown == std::string_view(ICON_SUN) || shown == std::string_view(ICON_LIGHTBULB) || shown == std::string_view(ICON_FLASHLIGHT);
+			add(!showsLight && (entity.HasComponent<PointLightComponent>() || entity.HasComponent<SpotLightComponent>()), ICON_LIGHTBULB, "Light");
+			add(entity.HasComponent<AnimatorComponent>(), ICON_PERSON_STANDING, "Animation");
+			add(entity.HasComponent<NavAgentComponent>(), ICON_FOOTPRINTS, "Walks the navmesh");
+			return badges;
+		}
+
+		// A top-level entity's group, or 0 for none or a group the scene doesn't have.
+		UUID ShownGroup(Scene& scene, Entity root)
+		{
+			const UUID group = root.GetComponent<TagComponent>().Group;
+			return scene.FindGroup(group) ? group : UUID(0);
+		}
+
 		ImU32 EntityIconColor(Entity entity)
 		{
 			if (entity.HasComponent<CameraComponent>()) return IM_COL32(200, 205, 215, 255);
@@ -85,10 +145,13 @@ namespace Bellows {
 			return;
 		}
 
-		// Search and create
+		// Search, new group and create
 		const float buttonWidth = ImGui::GetFrameHeight();
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - buttonWidth - ImGui::GetStyle().ItemSpacing.x);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 2.0f * (buttonWidth + ImGui::GetStyle().ItemSpacing.x));
 		ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Search entities", &m_Filter);
+		ImGui::SameLine();
+		if (UI::IconButton(ICON_FOLDER_PLUS, "New group: a folder to file top-level entities under"))
+			OpenGroupSettings(CreateGroup());
 		ImGui::SameLine();
 		if (UI::IconButton(ICON_PLUS, "Create entity"))
 			ImGui::OpenPopup("##CreateEntity");
@@ -104,20 +167,23 @@ namespace Bellows {
 		// Only the rows on screen are drawn, so a scene with tens of thousands of entities stays as fast
 		// as a small one. The rows that are showing (inside open nodes, or matching the search) are
 		// listed first; that walk skips closed subtrees.
-		m_Rows.clear();
-		for (Entity root : scene->GetRootEntities())
-		{
-			if (m_Filter.empty())
-				CollectRows(root, 0);
-			else
-				CollectMatchingRows(root, 0, ToLower(m_Filter));
-		}
+		// Every row is one frame high, so the clipper can place the ones it skips.
+		CollectRows(*scene);
 		ImGuiListClipper clipper;
 		clipper.Begin(static_cast<int>(m_Rows.size()));
 		while (clipper.Step())
 		{
 			for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
-				DrawEntityRow(m_Rows[static_cast<size_t>(i)]);
+			{
+				const Row& row = m_Rows[static_cast<size_t>(i)];
+				switch (row.Kind)
+				{
+					case RowKind::Entity:		DrawEntityRow(row); break;
+					case RowKind::Group:		DrawGroupRow(row); break;
+					case RowKind::Note:			DrawNoteRow(row); break;
+					case RowKind::Ungrouped:	DrawUngroupedRow(); break;
+				}
+			}
 		}
 		clipper.End();
 
@@ -161,8 +227,9 @@ namespace Bellows {
 		}
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
+		DrawGroupSettings();
 
-		if (scene->GetEntityCount() == 0)
+		if (scene->GetEntityCount() == 0 && scene->GetGroups().empty())
 			UI::CenteredText("The scene is empty.\nRight-click to create an entity.");
 
 		ImGui::End();
@@ -178,31 +245,83 @@ namespace Bellows {
 		return nodeID;
 	}
 
-	void SceneHierarchyPanel::CollectRows(Entity entity, int depth)
+	void SceneHierarchyPanel::CollectRows(Scene& scene)
+	{
+		m_Rows.clear();
+		const std::string filter = ToLower(m_Filter);
+		auto collect = [&](Entity root, int depth, UUID group)
+		{
+			if (filter.empty())
+				CollectRows(root, depth, group);
+			else
+				CollectMatchingRows(root, depth, group, filter);
+		};
+
+		const std::vector<Entity> roots = scene.GetRootEntities();
+		if (scene.GetGroups().empty())
+		{
+			for (Entity root : roots)
+				collect(root, 0, 0);
+			return;
+		}
+
+		// Each group with its entities (while searching, only groups with a match), then those in none.
+		for (const SceneGroup& group : scene.GetGroups())
+		{
+			const size_t header = m_Rows.size();
+			m_Rows.push_back({ RowKind::Group, {}, group.ID });
+			const bool open = !filter.empty() || !m_ClosedGroups.contains(group.ID);
+			if (open && filter.empty() && !group.Note.empty())
+				m_Rows.push_back({ RowKind::Note, {}, group.ID });
+			const size_t members = m_Rows.size();
+			for (Entity root : roots)
+			{
+				if (ShownGroup(scene, root) != group.ID)
+					continue;
+				m_Rows[header].HasChildren = true;
+				if (open)
+					collect(root, 1, group.ID);
+			}
+			if (!filter.empty() && m_Rows.size() == members)
+				m_Rows.resize(header);
+		}
+		const size_t divider = m_Rows.size();
+		m_Rows.push_back({ RowKind::Ungrouped });
+		for (Entity root : roots)
+		{
+			if (!ShownGroup(scene, root).IsValid())
+				collect(root, 0, 0);
+		}
+		// The divider shows while searching only above a match.
+		if (!filter.empty() && m_Rows.size() == divider + 1)
+			m_Rows.resize(divider);
+	}
+
+	void SceneHierarchyPanel::CollectRows(Entity entity, int depth, UUID group)
 	{
 		const std::vector<Entity> children = entity.GetChildren();
-		m_Rows.push_back({ entity, depth, !children.empty() });
+		m_Rows.push_back({ RowKind::Entity, entity, group, depth, !children.empty() });
 		// The tree node keeps whether it is open in the window's storage, under its ID.
 		if (children.empty() || ImGui::GetStateStorage()->GetInt(GetNodeID(entity.GetUUID()), 0) == 0)
 			return;
 		for (Entity child : children)
 		{
 			if (child)
-				CollectRows(child, depth + 1);
+				CollectRows(child, depth + 1, group);
 		}
 	}
 
-	bool SceneHierarchyPanel::CollectMatchingRows(Entity entity, int depth, const std::string& filter)
+	bool SceneHierarchyPanel::CollectMatchingRows(Entity entity, int depth, UUID group, const std::string& filter)
 	{
 		// An entity shows when its name matches or something under it does, with every row open.
 		const size_t index = m_Rows.size();
 		const std::vector<Entity> children = entity.GetChildren();
-		m_Rows.push_back({ entity, depth, !children.empty() });
+		m_Rows.push_back({ RowKind::Entity, entity, group, depth, !children.empty() });
 		bool matched = ToLower(entity.GetName()).find(filter) != std::string::npos;
 		for (Entity child : children)
 		{
 			if (child)
-				matched |= CollectMatchingRows(child, depth + 1, filter);
+				matched |= CollectMatchingRows(child, depth + 1, group, filter);
 		}
 		if (!matched)
 			m_Rows.resize(index);
@@ -302,10 +421,24 @@ namespace Bellows {
 			ImGui::PopStyleColor();
 		}
 
-		// A script badge at the end of the row opens the entity's script in the Script Editor.
-		if (const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>(); script && !script->ScriptPath.empty())
+		// Badges at the end of the row say what else the entity has; the script badge opens its script.
+		const float badgeWidth = ImGui::GetFrameHeight();
+		const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>();
+		const bool hasScript = script && !script->ScriptPath.empty();
+		const std::vector<Badge> badges = EntityBadges(entity);
+		float badgeX = rowRight - (hasScript ? badgeWidth : 0.0f);
+		for (auto it = badges.rbegin(); it != badges.rend(); ++it)
 		{
-			const float badgeWidth = ImGui::GetFrameHeight();
+			const float glyphWidth = ImGui::CalcTextSize(it->Glyph).x;
+			badgeX -= glyphWidth + 6.0f * Theme::GetScale();
+			ImGui::SameLine(badgeX);
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Neutral));
+			ImGui::TextUnformatted(it->Glyph);
+			ImGui::PopStyleColor();
+			UI::Tooltip(it->Name);
+		}
+		if (hasScript)
+		{
 			ImGui::SameLine(rowRight - badgeWidth);
 			ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::FieldHovered));
@@ -343,12 +476,16 @@ namespace Bellows {
 				scene->Unparent(entity, true);
 				m_Editor.CommitChange("Unparent");
 			}
+			if (ImGui::BeginMenu(ICON_FOLDER "  Move to Group"))
+			{
+				DrawMoveToGroupMenu();
+				ImGui::EndMenu();
+			}
 			ImGui::Separator();
-			const ScriptComponent* script = entity.TryGetComponent<ScriptComponent>();
 			const bool editing = m_Editor.GetSceneState() == SceneState::Edit;
 			if (ImGui::MenuItem(ICON_PAPERCLIP "  Attach Script...", nullptr, false, editing))
 				m_Editor.GetScriptEditor().ShowAttachDialog(entity);
-			if (script && !script->ScriptPath.empty())
+			if (hasScript)
 			{
 				if (ImGui::MenuItem(ICON_FILE_CODE "  Open Script"))
 					m_Editor.GetScriptEditor().OpenScript(script->ScriptPath);
@@ -370,6 +507,408 @@ namespace Bellows {
 		ImGui::PopID();
 		if (indent > 0.0f)
 			ImGui::Unindent(indent);
+	}
+
+	void SceneHierarchyPanel::DrawGroupRow(const Row& row)
+	{
+		Scene& scene = *m_Editor.GetActiveScene();
+		const SceneGroup* group = scene.FindGroup(row.Group);
+		if (!group)
+			return;
+		const UUID id = group->ID;
+		const float scale = Theme::GetScale();
+
+		char label[24];
+		std::snprintf(label, sizeof(label), "g%016llx", static_cast<unsigned long long>(static_cast<uint64_t>(id)));
+		ImGui::PushID(label);
+		const float rowRight = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+		const bool open = !m_Filter.empty() || !m_ClosedGroups.contains(id);
+		ImGui::SetNextItemOpen(open);
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap
+			| ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		if (!row.HasChildren)
+			flags |= ImGuiTreeNodeFlags_Leaf;
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Theme::ToVec4(Theme::Hover));
+		ImGui::TreeNodeEx("##group", flags);
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
+		const ImVec2 rowMin = ImGui::GetItemRectMin(), rowMax = ImGui::GetItemRectMax();
+		if (ImGui::IsItemToggledOpen() && m_Filter.empty())
+		{
+			if (open)
+				m_ClosedGroups.insert(id);
+			else
+				m_ClosedGroups.erase(id);
+		}
+		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+			OpenGroupSettings(id);
+		if (open && row.HasChildren)
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, Theme::WithAlpha(Theme::PanelRaised, 150), Theme::FrameRadius * scale);
+
+		// Dropping an entity here files it under the group (a child first moves to the top).
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(UI::EntityPayload))
+			{
+				if (Entity dragged = scene.TryGetEntityByUUID(*static_cast<const uint64_t*>(payload->Data)))
+					MoveToGroup({ dragged }, id, true);
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// Icon on a tile of its color, the name, and how many top-level entities it holds.
+		ImGui::SameLine(0.0f, 2.0f);
+		const float tile = ImGui::GetFrameHeight() - 6.0f * scale;
+		const ImVec2 tileMin = ImGui::GetCursorScreenPos() + ImVec2(0.0f, (ImGui::GetFrameHeight() - tile) * 0.5f);
+		ImGui::GetWindowDrawList()->AddRectFilled(tileMin, tileMin + ImVec2(tile, tile), ToColor(group->Color, 0.18f), 5.0f * scale);
+		const char* glyph = GroupIconGlyph(group->Icon);
+		const ImVec2 glyphSize = ImGui::CalcTextSize(glyph);
+		ImGui::GetWindowDrawList()->AddText(tileMin + ImVec2((tile - glyphSize.x) * 0.5f, (tile - glyphSize.y) * 0.5f), ToColor(group->Color), glyph);
+		ImGui::Dummy(ImVec2(tile, ImGui::GetFrameHeight()));
+		ImGui::SameLine(0.0f, 7.0f * scale);
+		ImGui::AlignTextToFramePadding();
+		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::TextUnformatted(group->Name.c_str());
+		ImGui::PopFont();
+		size_t count = 0;
+		for (Entity root : scene.GetRootEntities())
+			count += ShownGroup(scene, root) == id ? 1 : 0;
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextDisabled));
+		ImGui::Text("%zu", count);
+		ImGui::PopStyleColor();
+		if (!group->Note.empty() && !open)
+			UI::Tooltip(group->Note.c_str());
+
+		ImGui::SameLine(rowRight - ImGui::GetFrameHeight());
+		if (UI::IconButton(ICON_SETTINGS, "Group settings: name, note, icon and color"))
+			OpenGroupSettings(id);
+
+		if (ImGui::BeginPopupContextItem("##GroupContext", ImGuiPopupFlags_MouseButtonRight))
+		{
+			if (ImGui::MenuItem(ICON_SETTINGS "  Settings..."))
+				OpenGroupSettings(id);
+			if (ImGui::MenuItem(ICON_SCAN "  Select Its Entities", nullptr, false, count > 0))
+			{
+				m_Editor.ClearSelection();
+				for (Entity member : scene.GetGroupEntities(id))
+					m_Editor.Select(member, true);
+			}
+			if (ImGui::MenuItem(ICON_ARROW_UP "  Move Up", nullptr, false, &scene.GetGroups().front() != group))
+			{
+				const auto& groups = scene.GetGroups();
+				const size_t index = static_cast<size_t>(group - groups.data());
+				scene.MoveGroup(id, index - 1);
+				m_Editor.CommitChange("Move group");
+			}
+			if (ImGui::MenuItem(ICON_ARROW_DOWN "  Move Down", nullptr, false, &scene.GetGroups().back() != group))
+			{
+				const auto& groups = scene.GetGroups();
+				const size_t index = static_cast<size_t>(group - groups.data());
+				scene.MoveGroup(id, index + 1);
+				m_Editor.CommitChange("Move group");
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem(ICON_TRASH_2 "  Delete Group"))
+			{
+				scene.DeleteGroup(id);
+				m_ClosedGroups.erase(id);
+				m_Editor.CommitChange("Delete group");
+			}
+			UI::TextMuted("Deleting a group keeps its entities.");
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+	}
+
+	void SceneHierarchyPanel::DrawNoteRow(const Row& row)
+	{
+		const SceneGroup* group = m_Editor.GetActiveScene()->FindGroup(row.Group);
+		if (!group)
+			return;
+		ImGui::PushID(static_cast<int>(static_cast<uint64_t>(group->ID) & 0x7FFFFFFF));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		ImGui::Indent(ImGui::GetStyle().IndentSpacing + ImGui::GetFrameHeight());
+		ImGui::AlignTextToFramePadding();
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::TextMuted));
+		ImGui::PushFont(Theme::GetFonts().Regular, ImGui::GetFontSize() * 0.9f);
+		// One line, cut at the panel's edge; the whole note shows on hover.
+		const ImVec2 position = ImGui::GetCursorScreenPos();
+		const float width = ImGui::GetContentRegionAvail().x;
+		ImGui::PushClipRect(position, position + ImVec2(width, ImGui::GetFrameHeight()), true);
+		ImGui::TextUnformatted(group->Note.c_str());
+		ImGui::PopClipRect();
+		ImGui::PopFont();
+		ImGui::PopStyleColor();
+		UI::Tooltip(group->Note.c_str());
+		ImGui::Unindent(ImGui::GetStyle().IndentSpacing + ImGui::GetFrameHeight());
+		ImGui::PopStyleVar();
+		ImGui::PopID();
+	}
+
+	void SceneHierarchyPanel::DrawUngroupedRow()
+	{
+		// A thin labeled line between the groups and the entities in none; dropping here takes an entity out.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
+		const ImVec2 start = ImGui::GetCursorScreenPos();
+		const float width = ImGui::GetContentRegionAvail().x;
+		ImGui::InvisibleButton("##ungrouped", ImVec2(width, ImGui::GetFrameHeight()));
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(UI::EntityPayload))
+			{
+				if (Entity dragged = m_Editor.GetActiveScene()->TryGetEntityByUUID(*static_cast<const uint64_t*>(payload->Data)))
+					MoveToGroup({ dragged }, 0, true);
+			}
+			ImGui::EndDragDropTarget();
+		}
+		ImFont* font = Theme::GetFonts().SemiBold;
+		const float size = ImGui::GetFontSize() * 0.8f;
+		const char* text = "NOT IN A GROUP";
+		const ImVec2 textSize = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+		const float y = start.y + ImGui::GetFrameHeight() * 0.5f;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(font, size, ImVec2(start.x + 6.0f * Theme::GetScale(), y - textSize.y * 0.5f), Theme::TextDisabled, text);
+		drawList->AddLine(ImVec2(start.x + textSize.x + 14.0f * Theme::GetScale(), y), ImVec2(start.x + width, y), Theme::Border);
+		ImGui::PopStyleVar();
+	}
+
+	void SceneHierarchyPanel::DrawMoveToGroupMenu()
+	{
+		Scene& scene = *m_Editor.GetActiveScene();
+		std::vector<Entity> selected;
+		bool anyTopLevel = false;
+		for (UUID uuid : m_Editor.GetSelection())
+		{
+			if (Entity entity = scene.TryGetEntityByUUID(uuid))
+			{
+				selected.push_back(entity);
+				anyTopLevel |= !entity.GetParent();
+			}
+		}
+		if (!anyTopLevel)
+		{
+			UI::TextMuted("A child is in its top-level parent's group.\nMove that one, or move this one to the root first.");
+			return;
+		}
+		const UUID current = selected.size() == 1 ? ShownGroup(scene, selected.front()) : UUID(0);
+		for (const SceneGroup& group : scene.GetGroups())
+		{
+			const std::string label = std::string(GroupIconGlyph(group.Icon)) + "  " + group.Name + "##" + std::to_string(static_cast<uint64_t>(group.ID));
+			if (ImGui::MenuItem(label.c_str(), nullptr, current == group.ID))
+			{
+				MoveToGroup(selected, group.ID, false);
+				return;
+			}
+		}
+		if (!scene.GetGroups().empty())
+			ImGui::Separator();
+		if (ImGui::MenuItem(ICON_X "  No Group", nullptr, false, !scene.GetGroups().empty()))
+			MoveToGroup(selected, 0, false);
+		if (ImGui::MenuItem(ICON_FOLDER_PLUS "  New Group..."))
+		{
+			if (const UUID group = CreateGroup(); group.IsValid())
+			{
+				MoveToGroup(selected, group, false);
+				OpenGroupSettings(group);
+			}
+		}
+	}
+
+	void SceneHierarchyPanel::MoveToGroup(const std::vector<Entity>& entities, UUID group, bool moveChildren)
+	{
+		Scene& scene = *m_Editor.GetActiveScene();
+		bool changed = false;
+		for (Entity entity : entities)
+		{
+			if (!entity)
+				continue;
+			if (entity.GetParent())
+			{
+				if (!moveChildren)
+					continue;
+				scene.Unparent(entity, true);
+				changed = true;
+			}
+			if (entity.GetComponent<TagComponent>().Group != group)
+			{
+				scene.SetEntityGroup(entity, group);
+				changed = true;
+			}
+		}
+		if (group.IsValid())
+			m_ClosedGroups.erase(group);
+		if (changed)
+			m_Editor.CommitChange(group.IsValid() ? "Move to group" : "Move out of group");
+	}
+
+	UUID SceneHierarchyPanel::CreateGroup()
+	{
+		Scene& scene = *m_Editor.GetActiveScene();
+		if (scene.GetGroups().size() >= SceneGroups::MaxGroups)
+		{
+			BW_WARN("A scene can have at most {} groups", SceneGroups::MaxGroups);
+			return 0;
+		}
+		std::string name = "New Group";
+		for (int number = 2; scene.FindGroup(name); number++)
+			name = "New Group " + std::to_string(number);
+		const UUID id = scene.CreateGroup(name).ID;
+		m_Editor.CommitChange("Create group");
+		return id;
+	}
+
+	void SceneHierarchyPanel::OpenGroupSettings(UUID group)
+	{
+		const SceneGroup* found = m_Editor.GetActiveScene()->FindGroup(group);
+		if (!found)
+			return;
+		m_SettingsGroup = group;
+		m_GroupNameBuffer = found->Name;
+		m_GroupNoteBuffer = found->Note;
+		m_GroupNameError.clear();
+		m_SettingsOpenPending = true;
+	}
+
+	void SceneHierarchyPanel::DrawGroupSettings()
+	{
+		if (m_SettingsOpenPending)
+		{
+			ImGui::OpenPopup("Group Settings##HierarchyGroup");
+			m_SettingsOpenPending = false;
+		}
+		const float scale = Theme::GetScale();
+		ImGui::SetNextWindowSize(ImVec2(360.0f * scale, 0.0f));
+		if (!ImGui::BeginPopup("Group Settings##HierarchyGroup"))
+			return;
+
+		Scene& scene = *m_Editor.GetActiveScene();
+		SceneGroup* group = scene.FindGroup(m_SettingsGroup);
+		if (!group)
+		{
+			// Deleted, or undone away, while the popup was open.
+			ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+			return;
+		}
+		const UUID id = group->ID;
+
+		ImGui::PushFont(Theme::GetFonts().SemiBold, 0.0f);
+		ImGui::TextUnformatted("Group");
+		ImGui::PopFont();
+		ImGui::Spacing();
+
+		const float labelWidth = 64.0f * scale;
+		auto label = [&](const char* text)
+		{
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(text);
+			ImGui::SameLine(labelWidth);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+		};
+
+		label("Name");
+		ImGui::InputText("##name", &m_GroupNameBuffer);
+		if (ImGui::IsItemDeactivatedAfterEdit())
+		{
+			try
+			{
+				scene.RenameGroup(id, m_GroupNameBuffer);
+				m_GroupNameError.clear();
+				m_GroupNameBuffer = scene.FindGroup(id)->Name;
+				m_Editor.CommitChange("Rename group");
+			}
+			catch (const std::invalid_argument& error)
+			{
+				m_GroupNameError = error.what();
+			}
+			group = scene.FindGroup(id);
+		}
+		if (!m_GroupNameError.empty())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Error));
+			ImGui::TextWrapped("%s", m_GroupNameError.c_str());
+			ImGui::PopStyleColor();
+		}
+
+		label("Note");
+		ImGui::InputTextWithHint("##note", "What this group is for", &m_GroupNoteBuffer);
+		if (ImGui::IsItemDeactivatedAfterEdit())
+		{
+			std::string note = SceneGroups::Trim(m_GroupNoteBuffer);
+			while (SceneGroups::CheckNote(note))
+				note.pop_back();
+			group->Note = note;
+			m_GroupNoteBuffer = note;
+			m_Editor.CommitChange("Edit group note");
+		}
+
+		label("Icon");
+		ImGui::NewLine();
+		ImGui::SameLine(labelWidth);
+		int column = 0;
+		for (std::string_view icon : SceneGroups::GetIcons())
+		{
+			if (column == 8)
+			{
+				ImGui::NewLine();
+				ImGui::SameLine(labelWidth);
+				column = 0;
+			}
+			else if (column > 0)
+				ImGui::SameLine();
+			const std::string name(icon);
+			ImGui::PushID(name.c_str());
+			if (UI::IconButton(GroupIconGlyph(name), name.c_str(), group->Icon == icon))
+			{
+				group->Icon = name;
+				m_Editor.CommitChange("Change group icon");
+			}
+			ImGui::PopID();
+			column++;
+		}
+
+		label("Color");
+		ImGui::NewLine();
+		ImGui::SameLine(labelWidth);
+		for (size_t i = 0; i < std::size(c_GroupColors); i++)
+		{
+			if (i > 0)
+				ImGui::SameLine();
+			const GroupColor& color = c_GroupColors[i];
+			const bool current = glm::all(glm::lessThan(glm::abs(group->Color - color.Value), glm::vec3(0.002f)));
+			const ImVec2 position = ImGui::GetCursorScreenPos();
+			ImGui::PushID(static_cast<int>(i));
+			if (ImGui::ColorButton(color.Name, ImVec4(color.Value.r, color.Value.g, color.Value.b, 1.0f),
+				ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight())))
+			{
+				group->Color = color.Value;
+				m_Editor.CommitChange("Change group color");
+			}
+			UI::Tooltip(color.Name);
+			if (current)
+				ImGui::GetWindowDrawList()->AddRect(position - ImVec2(2.0f, 2.0f) * scale,
+					position + ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()) + ImVec2(2.0f, 2.0f) * scale, Theme::Text, 6.0f * scale, 1.5f * scale);
+			ImGui::PopID();
+		}
+
+		ImGui::Spacing();
+		UI::TextMuted(("Scripts reach it as group(\"" + group->Name + "\").").c_str());
+		ImGui::Separator();
+		if (ImGui::Button(ICON_TRASH_2 "  Delete Group"))
+		{
+			scene.DeleteGroup(id);
+			m_ClosedGroups.erase(id);
+			m_Editor.CommitChange("Delete group");
+			ImGui::CloseCurrentPopup();
+		}
+		UI::Tooltip("Its entities stay where they are, in no group");
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 90.0f * scale);
+		if (ImGui::Button("Done", ImVec2(90.0f * scale, 0.0f)))
+			ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
 	}
 
 	void SceneHierarchyPanel::DrawCreateMenu(Entity parent)
