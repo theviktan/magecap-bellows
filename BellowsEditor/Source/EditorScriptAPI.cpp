@@ -1,6 +1,7 @@
 #include "EditorScriptAPI.h"
 
 #include "EditorLayer.h"
+#include "HierarchyLogic.h"
 #include "Panels/SceneHierarchyPanel.h"
 #include "UITemplates.h"
 
@@ -459,11 +460,70 @@ namespace Bellows {
 							entry["kind"] = "ungrouped";
 							entry["name"] = "";
 							break;
+						case SceneHierarchyPanel::RowKind::Section:
+							entry["kind"] = "section";
+							entry["name"] = row.Label;
+							break;
+						case SceneHierarchyPanel::RowKind::Heading:
+							entry["kind"] = "heading";
+							entry["name"] = row.Label.substr(row.Label.find(':') + 1);
+							entry["count"] = row.Count;
+							break;
+						case SceneHierarchyPanel::RowKind::Stack:
+							entry["kind"] = "stack";
+							entry["name"] = row.Label;
+							entry["count"] = row.Count;
+							break;
 					}
 					result.append(entry);
 				}
 				return result;
 			}, "The Hierarchy panel's rows as it last drew them, top to bottom: {kind, name, depth, group}");
+			m.def("set_hierarchy_view", [](const std::string& view)
+			{
+				using View = SceneHierarchyPanel::View;
+				if (view == "groups") Editor().GetHierarchyPanel().SetView(View::Groups);
+				else if (view == "type") Editor().GetHierarchyPanel().SetView(View::Type);
+				else if (view == "tag") Editor().GetHierarchyPanel().SetView(View::Tag);
+				else throw py::value_error("Unknown Hierarchy view '" + view + "'. Views: groups, type, tag");
+			}, py::arg("view"), "Shows the Hierarchy by groups and hierarchy (\"groups\"), by kind (\"type\") or by tag (\"tag\")");
+			m.def("hierarchy_view", []
+			{
+				switch (Editor().GetHierarchyPanel().GetView())
+				{
+					case SceneHierarchyPanel::View::Type:	return std::string("type");
+					case SceneHierarchyPanel::View::Tag:	return std::string("tag");
+					case SceneHierarchyPanel::View::Groups:	break;
+				}
+				return std::string("groups");
+			});
+			m.def("set_hierarchy_search", [](const std::string& text) { Editor().GetHierarchyPanel().SetSearch(text); }, py::arg("text"),
+				"Types into the Hierarchy's search box (tag:, has: and group: work as there)");
+			m.def("organize_scene", [](bool apply)
+			{
+				Scene& scene = *Editor().GetActiveScene();
+				const std::vector<HierarchyLogic::OrganizeMove> moves = HierarchyLogic::SuggestOrganize(scene);
+				py::list result;
+				for (const HierarchyLogic::OrganizeMove& move : moves)
+				{
+					py::dict entry;
+					entry["entity"] = ScriptEntity(scene.TryGetEntityByUUID(move.Entity));
+					entry["group"] = move.Group;
+					entry["new_group"] = move.NewGroup;
+					result.append(entry);
+				}
+				if (apply)
+				{
+					if (Editor().GetSceneState() != SceneState::Edit)
+						throw std::runtime_error("Stop the game to organize the scene");
+					if (HierarchyLogic::ApplyOrganize(scene, moves) > 0)
+						Editor().CommitChange("Organize scene");
+				}
+				return result;
+			}, py::arg("apply") = false, "The moves the Hierarchy's Organize suggests: [{entity, group, new_group}]; with apply=True, makes them (one undo step)");
+			m.def("set_pinned", [](const ScriptEntity& entity, bool pinned) { entity.Resolve().GetComponent<TagComponent>().Pinned = pinned; },
+				py::arg("entity"), py::arg("pinned") = true, "Pins an entity to the top of the Hierarchy, or unpins it (saved with the scene)");
+			m.def("pinned", [](const ScriptEntity& entity) { return entity.Resolve().GetComponent<TagComponent>().Pinned; }, py::arg("entity"));
 			m.def("profiler_frames", [](size_t count)
 			{
 				py::list result;

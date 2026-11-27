@@ -40,7 +40,10 @@ can drive end to end.
   it or right-click → **Move to Group**). Groups never move or parent anything; children follow
   their parent, and scripts can use the same groups (`for each bay in everything in group "Docking"`).
   Gray badges at the end of each row show what else an entity has: a script, physics, sound, a
-  light, animation or a nav agent.
+  light, animation or a nav agent. View the scene **By type** or **By tag** as well, search with
+  `tag:`, `has:` and `group:` (or the filter chips), pin entities to the top, hide or lock a group in
+  the editor, and let **Organize** suggest groups for the lights, cameras, UI and sound. Runs of
+  numbered names (`Crate 1` to `Crate 40`) fold into one row.
 * **Scripting** in **MageCap ForgeScript** or **Python 3**, with the same API in both: behavior scripts
   with lifecycle and physics events, Inspector-editable fields, entity creation/destruction,
   prefabs, input, physics, audio, and tweens that move any number or vector property smoothly over

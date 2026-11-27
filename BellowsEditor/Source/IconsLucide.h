@@ -139,3 +139,5 @@
 #define ICON_TREES                       "\xee\x8b\xb5"	// U+E2F5
 #define ICON_LAYOUT                      "\xee\x84\xac"	// U+E12C
 #define ICON_ARROW_DOWN                  "\xee\x81\x82"	// U+E042
+#define ICON_PIN                         "\xee\x89\x99"	// U+E259
+#define ICON_PIN_OFF                     "\xee\x8a\xb6"	// U+E2B6

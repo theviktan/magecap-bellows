@@ -556,6 +556,16 @@ class Group:
         """Its icon's color, red, green and blue from 0 to 1"""
     @color.setter
     def color(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def hidden_in_editor(self) -> bool:
+        """The editor's eye: its viewport doesn't draw the group's entities. The game always shows them"""
+    @hidden_in_editor.setter
+    def hidden_in_editor(self, value: bool) -> None: ...
+    @property
+    def locked_in_editor(self) -> bool:
+        """The editor's lock: clicking in its viewport doesn't select the group's entities. The game is unaffected"""
+    @locked_in_editor.setter
+    def locked_in_editor(self, value: bool) -> None: ...
     def entities(self) -> list[Entity]:
         """The top-level entities in the group, in Hierarchy order"""
     def all_entities(self) -> list[Entity]:

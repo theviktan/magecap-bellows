@@ -40,6 +40,7 @@ namespace Bellows {
 		// The Hierarchy group a top-level entity is filed under (Scene/SceneGroups.h), 0 for none. A
 		// child's is always 0: it follows its top-level ancestor (Scene::GetEntityGroup).
 		UUID Group = 0;
+		bool Pinned = false;			// Editor-only: listed at the top of the Hierarchy
 	};
 
 	// Local transform relative to the parent entity (or the world for root entities).

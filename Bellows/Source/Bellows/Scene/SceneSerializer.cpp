@@ -93,6 +93,10 @@ namespace Bellows {
 				entry["Color"] = group.Color;
 				if (!group.Note.empty())
 					entry["Note"] = group.Note;
+				if (group.HiddenInEditor)
+					entry["HiddenInEditor"] = true;
+				if (group.LockedInEditor)
+					entry["LockedInEditor"] = true;
 			}
 			return json;
 		}
@@ -120,6 +124,8 @@ namespace Bellows {
 				JsonRead(entry, "Icon", group.Icon);
 				JsonRead(entry, "Color", group.Color);
 				JsonRead(entry, "Note", group.Note);
+				JsonRead(entry, "HiddenInEditor", group.HiddenInEditor);
+				JsonRead(entry, "LockedInEditor", group.LockedInEditor);
 				WarnUnreadValues(issues, entry, "Group '" + name + "'");
 
 				const bool repeated = std::any_of(groups.begin(), groups.end(), [&](const SceneGroup& other)
@@ -148,6 +154,7 @@ namespace Bellows {
 		{
 			TagComponent& tag = entity.GetComponent<TagComponent>();
 			JsonRead(json, "KeepAcrossScenes", tag.KeepAcrossScenes);
+			JsonRead(json, "Pinned", tag.Pinned);
 			uint64_t group = 0;
 			JsonRead(json, "Group", group);
 			tag.Group = UUID(group);
@@ -515,6 +522,8 @@ namespace Bellows {
 		json["Parent"] = static_cast<uint64_t>(entity.GetComponent<RelationshipComponent>().Parent);
 		if (entity.GetComponent<TagComponent>().KeepAcrossScenes)
 			json["KeepAcrossScenes"] = true;
+		if (entity.GetComponent<TagComponent>().Pinned)
+			json["Pinned"] = true;
 		if (const std::vector<std::string>& tags = entity.GetComponent<TagComponent>().Tags; !tags.empty())
 			json["Tags"] = tags;
 		// Only a top-level entity is filed under a group, and only one the scene has.

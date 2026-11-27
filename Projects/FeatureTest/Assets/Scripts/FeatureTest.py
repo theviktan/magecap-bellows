@@ -331,6 +331,13 @@ class FeatureTest(bellows.Script):
         self.check(raises(lambda: setattr(bays, "icon", "nope"), ValueError) and raises(lambda: setattr(bays, "note", "n" * 201), ValueError),
                    "bad icons and long notes are refused")
 
+        self.check(not bays.hidden_in_editor and not bays.locked_in_editor, "groups start shown and unlocked in the editor")
+        bays.hidden_in_editor = True
+        bays.locked_in_editor = True
+        self.check(bays.hidden_in_editor and bays.locked_in_editor and bay.valid, "hidden_in_editor and locked_in_editor (the game still has the entities)")
+        bays.hidden_in_editor = False
+        bays.locked_in_editor = False
+
         spare = bellows.create_group("Test Spare")
         bay.group = spare
         self.check(spare.entities() == [bay] and bays.entities() == [], "setting entity.group moves it between groups")
