@@ -178,6 +178,7 @@ namespace Bellows {
 		void SetWorkspace(Workspace workspace);
 		Workspace GetWorkspace() const;
 		ScriptEditorPanel& GetScriptEditor() { return *m_ScriptEditorPanel; }
+		SceneHierarchyPanel& GetHierarchyPanel() { return *m_HierarchyPanel; }
 		// The app icon (Resources/Icons/Bellows.png) for logos; null when it could not be loaded.
 		const Ref<Texture2D>& GetLogo() const { return m_Logo; }
 		// ForgeScript's icon (Resources/Icons/ForgeScript.png) for .forge files; null when it could not be loaded.

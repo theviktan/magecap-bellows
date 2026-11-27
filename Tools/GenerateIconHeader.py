@@ -27,6 +27,7 @@ ICONS = [
     "moon", "circle-dot", "clapperboard", "square-function", "book-open", "paperclip", "unlink", "file-text",
     "save-all", "star", "bug", "redo-dot", "arrow-down-to-dot", "arrow-up-from-dot", "list-x", "type", "file-type",
     "mouse-pointer-click", "square-check", "chevrons-up-down", "text-cursor-input", "layout-template", "person-standing", "route", "footprints", "diamond",
+    "anchor", "user", "users", "flag", "swords", "trees", "layout", "arrow-down",
 ]
 
 def main():

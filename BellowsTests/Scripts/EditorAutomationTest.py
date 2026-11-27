@@ -56,6 +56,25 @@ check([e.name for e in editor.selection()] == ["Player"], "selection")
 editor.clear_selection()
 check(editor.selection() == [], "clear selection")
 
+# Hierarchy groups ---------------------------------------------------------------------
+heroes = bellows.create_group("Heroes", "users")
+heroes.note = "The player and friends"
+heroes.add_entity(player)
+editor.commit("Group the player")
+editor.run_frames(2)
+rows = editor.hierarchy_rows()
+kinds = [(r["kind"], r["name"]) for r in rows[:3]]
+check(kinds == [("group", "Heroes"), ("note", "The player and friends"), ("entity", "Player")], f"the Hierarchy shows the group, its note and its entity first ({kinds})")
+check(rows[2]["depth"] == 1 and rows[2]["group"] == "Heroes", "a group's entities are indented under it")
+check(any(r["kind"] == "ungrouped" for r in rows) and rows[-1]["group"] is None, "entities in no group come after the divider")
+editor.undo()
+check(bellows.group("Heroes") is None and bellows.find_entity("Player").group is None, "undo takes the group away")
+editor.redo()
+player = bellows.find_entity("Player")
+check(bellows.group("Heroes") is not None and player.group == bellows.group("Heroes"), "redo brings the group back with its entity")
+editor.run_frames(1)
+check(editor.hierarchy_rows()[0]["name"] == "Heroes", "the Hierarchy follows undo and redo")
+
 # Saving and reopening -----------------------------------------------------------------
 check(editor.save_scene(), "save scene")
 check(not editor.is_dirty(), "saved scene is clean")
@@ -63,6 +82,8 @@ check(editor.save_scene("Scenes/Copy.bscene"), "save scene as")
 check(editor.scene_path() == "Scenes/Copy.bscene", "save as switches the open scene")
 check(editor.open_scene("Scenes/Main.bscene"), "reopen scene")
 check(bellows.find_entity("Player") is not None, "saved entity loads back")
+check(bellows.find_entity("Player").is_in_group("Heroes") and bellows.group("Heroes").note == "The player and friends",
+      "groups are saved with the scene")
 
 # Navigation ---------------------------------------------------------------------------
 # The new project's ground is a static collider, so there's something to walk on.

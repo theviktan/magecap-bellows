@@ -131,3 +131,11 @@
 #define ICON_ROUTE                       "\xee\x94\xbe"	// U+E53E
 #define ICON_FOOTPRINTS                  "\xee\x8e\xb9"	// U+E3B9
 #define ICON_DIAMOND                     "\xee\x8b\x92"	// U+E2D2
+#define ICON_ANCHOR                      "\xee\x80\xbf"	// U+E03F
+#define ICON_USER                        "\xee\x86\x9f"	// U+E19F
+#define ICON_USERS                       "\xee\x86\xa4"	// U+E1A4
+#define ICON_FLAG                        "\xee\x83\x91"	// U+E0D1
+#define ICON_SWORDS                      "\xee\x8a\xb4"	// U+E2B4
+#define ICON_TREES                       "\xee\x8b\xb5"	// U+E2F5
+#define ICON_LAYOUT                      "\xee\x84\xac"	// U+E12C
+#define ICON_ARROW_DOWN                  "\xee\x81\x82"	// U+E042
