@@ -1,7 +1,8 @@
 {
 	"name": "forgescript",
-	"displayName": "ForgeScript",
-	"description": "Syntax highlighting for the ForgeScript scripting language (.forge files).",
+	"displayName": "MageCap ForgeScript",
+	"description": "Syntax highlighting for MageCap ForgeScript, the scripting language of MageCap Bellows (.forge files).",
+	"license": "Apache-2.0",
 	"version": "1.2.0",
 	"publisher": "magecap-games",
 	"icon": "icon.png",

@@ -1,4 +1,4 @@
-# ForgeScript Language Guide
+# MageCap ForgeScript Language Guide
 
 ForgeScript is a scripting language for games. It reads like plain English, it is short to type, and it was built to drive a game engine: moving entities, reacting to events, waiting for time to pass, and organizing game objects.
 

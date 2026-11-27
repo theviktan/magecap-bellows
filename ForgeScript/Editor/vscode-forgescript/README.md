@@ -1,4 +1,4 @@
-# ForgeScript for Visual Studio Code
+# MageCap ForgeScript for Visual Studio Code
 
 Colors `.forge` files and auto-indents blocks. The extension and `.forge` files show the ForgeScript icon
 (file icon themes that draw their own icon for `.forge` files keep theirs).

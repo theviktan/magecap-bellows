@@ -1,4 +1,4 @@
-# The ForgeScript C++ API
+# The MageCap ForgeScript C++ API
 
 This guide explains, step by step, how C++ code hosts ForgeScript: creating the virtual machine, exposing types, functions and phrases, running scripts and sending events. Bellows' own scripting layer is built on exactly this API. A small working host lives in [`ForgeScript/Examples/EngineIntegration/Main.cpp`](../../ForgeScript/Examples/EngineIntegration/Main.cpp); it builds and runs as the `ForgeScriptEngineExample` test, so it always matches the code.
 
