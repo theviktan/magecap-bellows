@@ -111,13 +111,18 @@ namespace Bellows::Scripting {
 			}, value);
 		}
 
+		// The Inspector field for a top-level setting: what its value looks like, unless its line says
+		// a type ('set speed as number to 5'). Then 'number' makes a field for any number, even when
+		// the starting value happens to be whole. Other types already match the value they're given
+		// (a mismatch is the checker's warning), so the value decides.
 		ScriptFieldValue VariableToField(const ForgeScript::ScriptVariable& variable)
 		{
 			using Kind = ForgeScript::ScriptVariable::ValueKind;
 			const double* c = variable.Components;
+			const std::string_view baseType = std::string_view(variable.Type).substr(0, variable.Type.find(' '));
 			switch (variable.Kind)
 			{
-				case Kind::WholeNumber: return static_cast<int64_t>(variable.Number);
+				case Kind::WholeNumber: return baseType == "number" ? ScriptFieldValue(variable.Number) : ScriptFieldValue(static_cast<int64_t>(variable.Number));
 				case Kind::Text:        return variable.Text;
 				case Kind::Boolean:     return variable.Boolean;
 				case Kind::Vector2:     return glm::vec2(static_cast<float>(c[0]), static_cast<float>(c[1]));
