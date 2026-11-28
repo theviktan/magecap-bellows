@@ -35,13 +35,25 @@ export default {
 				return await latestFile(env, path.endsWith("setup") ? "-Setup.exe" : ".zip");
 			const download = path.match(/^\/bellows\/download\/([^/]+)\/([^/]+)$/);
 			if (download)
-				return await releaseFile(env, decodeURIComponent(download[1]), decodeURIComponent(download[2]));
+			{
+				const tag = decodePart(download[1]), name = decodePart(download[2]);
+				return tag === null || name === null ? text("Not found.", 404) : await releaseFile(env, tag, name);
+			}
 			return text("Not found.", 404);
 		} catch (error) {
 			return text("The update server couldn't reach the releases. Try again later.", 502);
 		}
 	},
 };
+
+// A part of the address with its %-escapes undone, or null when they don't decode.
+function decodePart(part) {
+	try {
+		return decodeURIComponent(part);
+	} catch {
+		return null;
+	}
+}
 
 function text(body, status, headers = {}) {
 	return new Response(body + "\n", { status, headers: { "Content-Type": "text/plain; charset=utf-8", ...headers } });
@@ -59,7 +71,7 @@ async function github(env, path, accept = "application/vnd.github+json") {
 	});
 }
 
-// The newest published release (drafts and pre-releases are never offered), or one by its tag.
+// The newest published release, or one by its tag. Drafts and pre-releases are never served, even by tag.
 async function getRelease(env, tag) {
 	const response = await github(env, tag ? `/releases/tags/${encodeURIComponent(tag)}` : "/releases/latest");
 	if (response.status === 404)
@@ -67,7 +79,7 @@ async function getRelease(env, tag) {
 	if (!response.ok)
 		throw new Error(`GitHub answered ${response.status}`);
 	const release = await response.json();
-	return release.draft ? null : release;
+	return release.draft || release.prerelease ? null : release;
 }
 
 // GitHub's short-lived address for a private release file: the asset API answers with a redirect.

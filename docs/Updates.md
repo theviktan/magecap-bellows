@@ -55,7 +55,9 @@ with a read-only token and serves:
 | `/bellows/download/<tag>/<file>` | A release's setup program, zip or `update.json` |
 | `/bellows/latest/setup`, `/bellows/latest/zip` | The latest setup program or zip, for a Download link on a website |
 
-Drafts and pre-releases are never offered. `node Tools/UpdateServer/worker.test.mjs` tests it
+Drafts and pre-releases are never served, not even by their tag. The Worker gives every published
+release to anyone who asks, with no key: that matches the repository, which is public (Bellows is
+free and open source), so it shows nothing GitHub doesn't. `node Tools/UpdateServer/worker.test.mjs` tests it
 against a stand-in for GitHub (ctest runs it as `UpdateServerTests` when Node.js is installed).
 
 ### Setting it up (once)

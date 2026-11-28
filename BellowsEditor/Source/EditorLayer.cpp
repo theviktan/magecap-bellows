@@ -1461,13 +1461,20 @@ namespace Bellows {
 				return;
 			}
 		}
+		// Checked again: it may have waited in the downloads folder while the scene was saved.
+		const std::optional<UpdateManifest> expected = m_Updates.GetManifest();
+		std::string verifyError;
+		if (!expected || !UpdateLogic::VerifyFile(installer, expected->Installer, verifyError))
+		{
+			m_UpdateInstallError = "The downloaded installer changed since it was checked, so it wasn't run. Download it again.";
+			return;
+		}
 		if (!Process::StartDetached({ installer, UpdateLogic::InstallerArguments(), installer.parent_path() }))
 		{
 			m_UpdateInstallError = "The installer didn't start. It's in " + installer.parent_path().string() + " to run by hand.";
 			return;
 		}
-		const std::optional<UpdateManifest> manifest = m_Updates.GetManifest();
-		BW_CORE_INFO("Installing MageCap Bellows {}; Bellows closes now and opens again when it's done", manifest ? manifest->Version : std::string());
+		BW_CORE_INFO("Installing MageCap Bellows {}; Bellows closes now and opens again when it's done", expected->Version);
 		RequestExit(0);
 	}
 
