@@ -300,6 +300,32 @@ function test_group_phrases()
 	crane.destroy()
 end
 
+function test_particle_phrases()
+	set torch to create_entity("Forge Torch")
+	set flame to torch.add_component("ParticleEmitter")
+	set flame.play_on_start to false
+	set flame.rate to 0
+	play particles on torch
+	check(the particles on torch are playing, "play particles on (entity)")
+	pause particles on torch
+	check(not (the particles on torch are playing), "pause particles on (entity)")
+	emit 12 particles from torch
+	wait 1 frame
+	check(flame.particle_count is 12, "emit (count) particles from (entity) ({flame.particle_count})")
+	clear particles on torch
+	check(flame.particle_count is 0, "clear particles on (entity)")
+	check(fails(function() play particles on find_entity("Ground") end), "a particle phrase on an entity with no ParticleEmitter is an error")
+
+	# A mark painted where a ray meets the ground faces up, and sized marks keep their size.
+	set hit to raycast(vector(-3, 10, 6), vector(0, -1, 0), 100)
+	set mark to paint "Textures/TargetMark.png" at hit sized 0.5
+	check(near(mark.position, hit.point, 0.001) and near(mark.up, vector(0, 1, 0), 0.001), "paint (image) at (hit) sits on the surface, facing it")
+	check(mark.get_component("Decal").texture is "Textures/TargetMark.png" and near(mark.get_component("Decal").size, vector(0.5, 0.25, 0.5), 0.0001), "paint (image) at (place) sized (size)")
+	check(fails(function() paint "Textures/NoSuchMark.png" at hit end), "painting a missing image is an error")
+	mark.destroy()
+	torch.destroy()
+end
+
 function test_data_files()
 	set data to the data in "Data/FeatureData.json"
 	check(data["name"] is "FeatureTest data" and data["levels"][2]["title"] is "Caves", "the data in (path) reads a JSON data file")
@@ -507,6 +533,7 @@ function run_tests()
 		test_tags()
 		test_groups()
 		test_group_phrases()
+		test_particle_phrases()
 		test_camera_shake()
 		test_data_files()
 		test_saved_data()

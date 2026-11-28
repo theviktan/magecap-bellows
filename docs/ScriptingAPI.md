@@ -452,6 +452,11 @@ sparks.intensity, sparks.gravity_scale = 4.0, 1.0
 sparks.play()   # A burst of sparks every time it's called
 ```
 
+In ForgeScript the same can be written with the particle phrases ([engine
+phrases](#using-the-api-from-forgescript)): `play particles on sparks`, `pause particles on sparks`,
+`clear particles on sparks`, `emit 40 particles from sparks` and `the particles on sparks are
+playing`.
+
 ### `Decal`
 Projects an image, or a plain color, onto the opaque surfaces inside a box: footprints, cracks,
 scorch marks, posters, puddles, road paint. It changes the surfaces' color before lighting, so a
@@ -475,6 +480,16 @@ scorch.position = hit_point
 decal = scorch.add_component("Decal")
 decal.texture = "Textures/Scorch.png"
 decal.size = Vec3(1.2, 0.5, 1.2)
+```
+
+In ForgeScript the `paint` phrase makes the entity and its decal in one line, on a position or on a
+`raycast` hit, facing the surface it hit:
+
+```forge
+set hit to raycast(muzzle.position, aim, 50)
+if hit then
+	set scorch to paint "Textures/Scorch.png" at hit sized 1.2
+end
 ```
 
 ### Screen UI (`UICanvas`, `UIRect`, `UIImage`)
@@ -904,6 +919,13 @@ engine sends these events, which the script handles with `when`:
   | `play animation (clip) on (entity)` | `entity.get_component("Animator").play(clip)` |
   | `pause animation on (entity)` | `entity.get_component("Animator").pause()` |
   | `resume animation on (entity)` | `entity.get_component("Animator").resume()` |
+  | `play particles on (entity)` | `entity.get_component("ParticleEmitter").play()`: a new cycle, with its burst |
+  | `pause particles on (entity)` | `entity.get_component("ParticleEmitter").stop()`: no new particles; the ones in the air finish |
+  | `clear particles on (entity)` | `entity.get_component("ParticleEmitter").stop(True)`: the live ones go too |
+  | `emit (count) particles from (entity)` | `entity.get_component("ParticleEmitter").emit(count)`, a whole number from 1 to 10000 |
+  | `the particles on (entity) are playing` | `entity.get_component("ParticleEmitter").is_playing`, so `wait until not (the particles on smoke are playing)` works |
+  | `paint (image) at (place)` | a new entity, named after the image, with a `Decal` of it, given back; the place is a position, or a `raycast` hit, where the decal sits on the surface and faces it |
+  | `paint (image) at (place) sized (size)` | the same, with the decal's size: a number of meters across (half as deep), or a vector |
   | `walk (entity) to (position)` | `entity.get_component("NavAgent").set_destination(position)`, giving back true or false |
   | `halt (entity)` | `entity.get_component("NavAgent").stop()` |
   | `the path from (start) to (end)` | `find_path(start, end)`, so `for each corner in the path from a to b` works |
@@ -919,7 +941,11 @@ engine sends these events, which the script handles with `when`:
   phrases are written without brackets (`show pause_menu`): `show (pause_menu)` with brackets is still
   ForgeScript's `show` function, which prints the value. A non-entity gets "'hide' needs a UI entity,
   like: hide find_entity("Pause Menu")". The animation phrases need an entity with an Animator, and
-say so when it has none.
+say so when it has none; the particle phrases need a ParticleEmitter in the same way. `emit`
+particles are born at the emitter's next update, so `particle_count` counts them a frame later.
+`paint` checks that the image is in the Assets folder (`""` paints a plain rectangle), and a missed
+`raycast` (nothing) is an error that says so; remove a mark with `destroy(mark)`. `stop` is a
+ForgeScript word, so the particle phrase that stops new ones is `pause particles on`.
 
 ```forge
 when clicked

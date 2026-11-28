@@ -3328,6 +3328,48 @@
 			"yields_to_calls": true
 		},
 		{
+			"pattern": "play particles on (entity)",
+			"doc": "Starts a new cycle of an entity's ParticleEmitter, with its burst; same as entity.get_component(\"ParticleEmitter\").play()",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "pause particles on (entity)",
+			"doc": "Stops an entity's ParticleEmitter sending new particles; the ones in the air live out their lives; same as entity.get_component(\"ParticleEmitter\").stop()",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "clear particles on (entity)",
+			"doc": "Stops an entity's ParticleEmitter and removes its live particles now; same as entity.get_component(\"ParticleEmitter\").stop(true)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "emit (count) particles from (entity)",
+			"doc": "Sends a number of particles (1 to 10000) at once from an entity's ParticleEmitter, playing or not; same as entity.get_component(\"ParticleEmitter\").emit(count)",
+			"returns": "None",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "the particles on (entity) are playing",
+			"doc": "Whether an entity's ParticleEmitter is sending particles; same as entity.get_component(\"ParticleEmitter\").is_playing",
+			"returns": "bool",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "paint (image) at (place)",
+			"doc": "Makes a new entity with a Decal of an image (an asset path; \"\" for a plain rectangle) at a position, or on a raycast hit facing its surface, and gives it back",
+			"returns": "Entity",
+			"yields_to_calls": true
+		},
+		{
+			"pattern": "paint (image) at (place) sized (size)",
+			"doc": "Like paint (image) at (place), with the decal's size: a number of meters across (half as deep), or a vector",
+			"returns": "Entity",
+			"yields_to_calls": true
+		},
+		{
 			"pattern": "walk (entity) to (position)",
 			"doc": "Sends an entity's NavAgent walking to a position, and gives back whether there's navmesh to walk to near it; same as entity.get_component(\"NavAgent\").set_destination(position)",
 			"returns": "bool",

@@ -2,10 +2,13 @@
 
 #include "TestUtilities.h"
 
+#include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scripting/ForgeScriptBindings.h"
 #include "Bellows/Scripting/ScriptApi.h"
+
+#include <fstream>
 
 using namespace Bellows;
 
@@ -326,6 +329,94 @@ TEST_CASE("ForgeScript group phrases use Hierarchy groups and keep old meanings"
 		"true\n5\n7\n8\nr\n[1, 3]\n"));
 }
 
+TEST_CASE("ForgeScript particle and decal phrases drive emitters, paint decals and keep old meanings")
+{
+	// A real image for 'paint', and a wall for the raycast: its face toward the origin points down -X.
+	const std::filesystem::path assets = BellowsTests::GetTestOutputDirectory() / "PaintProject";
+	std::filesystem::create_directories(assets / "Textures");
+	std::filesystem::copy_file(std::filesystem::path(BELLOWS_SOURCE_DIR) / "Projects/FeatureTest/Assets/Textures/TargetMark.png",
+		assets / "Textures/Scorch.png", std::filesystem::copy_options::overwrite_existing);
+	std::ofstream(assets / "Textures/Notes.txt") << "not an image";
+	AssetManager::SetAssetDirectory(assets);
+
+	Ref<Scene> scene = CreateRef<Scene>("Particle phrases");
+	Entity fire = scene->CreateEntity("Fire");
+	ParticleEmitterComponent& emitter = fire.AddComponent<ParticleEmitterComponent>();
+	emitter.PlayOnStart = false;
+	emitter.Rate = 0.0f;
+	emitter.Burst = 0;
+	scene->CreateEntity("Rock");
+	Entity wall = scene->CreateEntity("Wall");
+	wall.GetTransform().Translation = { 5.5f, 0.0f, 0.0f };
+	wall.AddComponent<RigidBodyComponent>().Type = RigidBodyType::Static;
+	wall.AddComponent<BoxColliderComponent>().HalfExtents = { 0.5f, 5.0f, 5.0f };
+	scene->OnRuntimeStart();
+
+	ForgeScriptHarness h(*scene);
+	h.Machine.Load(
+		"set fire to find_entity(\"Fire\")\n"
+		"say the particles on fire are playing\n"
+		"play particles on fire\n"
+		"say the particles on fire are playing\n"
+		"pause particles on fire\n"
+		"say not (the particles on fire are playing)\n"
+		"emit 5 particles from fire\n"
+		"try\n\tplay particles on find_entity(\"Rock\")\ncatch problem\n\tsay problem\nend\n"
+		"try\n\temit 0 particles from fire\ncatch problem\n\tsay problem\nend\n"
+		"try\n\temit 2.5 particles from fire\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tpause particles on 5\ncatch problem\n\tsay problem\nend\n"
+		// Decals: on a position, sized, and on a raycast hit, where the mark turns to face the wall.
+		"set mark to paint \"Textures/Scorch.png\" at vector(1, 0, 2)\n"
+		"say mark.name\nsay mark.position\nsay mark.get_component(\"Decal\").texture\nsay mark.get_component(\"Decal\").size\n"
+		"set small to paint \"\" at [0, 0, 0] sized 0.4\n"
+		"say small.name\nsay small.get_component(\"Decal\").size\n"
+		"say (paint \"\" at vector(0, 0, 0) sized vector(1, 2, 3)).get_component(\"Decal\").size\n"
+		"set hit to raycast(vector(0, 0, 0), vector(1, 0, 0), 20)\n"
+		"set onwall to paint \"Textures/Scorch.png\" at hit\n"
+		"say onwall.position\nsay distance(onwall.up, vector(-1, 0, 0)) < 0.001\n"
+		"try\n\tpaint \"Textures/Missing.png\" at vector(0, 0, 0)\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tpaint \"Textures/Scorch.png\" at raycast(vector(0, 0, 0), vector(0, 1, 0), 1)\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tpaint \"Textures/Notes.txt\" at vector(0, 0, 0)\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tpaint \"\" at vector(0, 0, 0) sized 0\ncatch problem\n\tsay problem\nend\n"
+		"try\n\tpaint 3 at vector(0, 0, 0)\ncatch problem\n\tsay problem\nend\n"
+		// The words keep their old meanings: a script's own functions, variables and methods.
+		"function clear(x)\n\treturn x + 1\nend\n"
+		"say clear(1)\n"
+		"function emit(n)\n\treturn n * 3\nend\n"
+		"say emit(2)\n"
+		"set paint to {x: 7}\n"
+		"say paint.x\n"
+		"set play to 4\nsay play\n"
+		"set items to [1, 2]\nitems.clear()\nsay items\n",
+		"particle_phrases.forge");
+
+	// 'emit' sends its particles at the emitter's next update; 'clear' removes them at once.
+	CHECK_EQ(emitter.RuntimePending, 5u);
+	scene->OnUpdateRuntime(1.0f / 60.0f);
+	CHECK_EQ(emitter.RuntimeParticles.size(), static_cast<size_t>(5));
+	h.Machine.Load("clear particles on find_entity(\"Fire\")\nsay find_entity(\"Fire\").get_component(\"ParticleEmitter\").particle_count\n",
+		"particle_phrases_clear.forge");
+
+	INFO(h.AllErrors());
+	CHECK(h.Errors.empty());
+	CHECK_EQ(h.Output, std::string("false\ntrue\ntrue\n"
+		"'play particles on' needs an entity with a ParticleEmitter, and 'Rock' has none.\n"
+		"'emit' takes a whole number of particles from 1 to 10000, like: emit 30 particles from sparks. This is 0.\n"
+		"'emit' takes a whole number of particles from 1 to 10000, like: emit 30 particles from sparks. This is 2.5.\n"
+		"'pause particles on' needs an entity, like: pause particles on campfire. This is a number.\n"
+		"Scorch\n(1, 0, 2)\nTextures/Scorch.png\n(1, 1, 1)\n"
+		"Decal\n(0.4, 0.2, 0.4)\n(1, 2, 3)\n"
+		"(5, 0, 0)\ntrue\n"
+		"'paint' can't find the image 'Textures/Missing.png' in the Assets folder. Check the path, like \"Textures/Scorch.png\".\n"
+		"'paint' needs a position or a raycast hit after 'at', like: paint \"Textures/Scorch.png\" at hit. This is nothing (did the raycast miss?).\n"
+		"'paint' needs an image (.png, .jpg, .tga or .bmp), and 'Textures/Notes.txt' isn't one.\n"
+		"A decal's size is from 0.001 to 1000 meters on each side.\n"
+		"'paint' needs an image's asset path in quotes, like: paint \"Textures/Scorch.png\" at hit. This is a number.\n"
+		"2\n6\n7\n4\n[]\n0\n"));
+	scene->OnRuntimeStop();
+	AssetManager::SetAssetDirectory({});
+}
+
 TEST_CASE("Engine phrases are listed for tools")
 {
 	const std::vector<Scripting::ForgeScriptPhraseInfo> phrases = Scripting::GetForgeScriptPhrases();
@@ -340,7 +431,8 @@ TEST_CASE("Engine phrases are listed for tools")
 		"pause the game", "resume the game", "the game is paused", "keep (entity) across scenes", "show (widget)", "hide (widget)", "enable (widget)", "disable (widget)", "focus (widget)",
 		"tag (entity) as (tag)", "untag (entity) as (tag)", "everything tagged (tag)", "everything in group (name)", "everything under group (name)",
 		"group (name) has (entity)", "put (entity) in group (name)", "remove (entity) from group (name)", "the data in (path)", "shake the camera by (strength) over (seconds) seconds", "shake the camera by (strength) over (seconds) second",
-		"play animation (clip) on (entity)", "pause animation on (entity)", "resume animation on (entity)", "walk (entity) to (position)", "halt (entity)", "the path from (start) to (end)", "push (entity) by (impulse)" };
+		"play animation (clip) on (entity)", "pause animation on (entity)", "resume animation on (entity)", "play particles on (entity)", "pause particles on (entity)", "clear particles on (entity)", "emit (count) particles from (entity)", "the particles on (entity) are playing",
+		"paint (image) at (place)", "paint (image) at (place) sized (size)", "walk (entity) to (position)", "halt (entity)", "the path from (start) to (end)", "push (entity) by (impulse)" };
 	// Each tween phrase comes with "seconds" and "second", each with and without "with (style)".
 	for (const char* start : { "move (entity) to (position)", "move (entity) by (offset)", "turn (entity) to (angles)", "turn (entity) by (angles)",
 		"scale (entity) to (size)", "fade (entity) to (opacity)" })

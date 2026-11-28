@@ -5,6 +5,8 @@
 
 #include "ForgeScript/Core/Suggest.h"
 
+#include <glm/gtx/quaternion.hpp>
+
 #include <charconv>
 #include <cmath>
 #include <concepts>
@@ -796,6 +798,87 @@ namespace Bellows::Scripting {
 			return AnimatorRef { entity };
 		}
 
+		// The ParticleEmitter of the entity a phrase names (argument 'index').
+		ParticleEmitterRef PhraseEmitter(FS::CallContext& context, size_t index, const char* phrase, const std::string& example)
+		{
+			const ScriptEntity entity = PhraseEntityAt(context, index, phrase, "an entity", example);
+			Entity resolved = Guard([&] { return entity.Resolve(); });
+			if (!resolved.HasComponent<ParticleEmitterComponent>())
+				throw FS::RuntimeError(std::string("'") + phrase + "' needs an entity with a ParticleEmitter, and '" + resolved.GetName() + "' has none.");
+			return ParticleEmitterRef { entity };
+		}
+
+		// 'paint (image) at (place) [sized (size)]': a new entity with a Decal of the image, on a position or
+		// on a raycast hit, where it turns to face the surface (the decal projects down its -Y, so its +Y is
+		// the hit's normal). 'size' is nothing for the Decal's own default.
+		FS::Value PaintDecal(FS::CallContext& context, const FS::Value* size)
+		{
+			FS::VM& vm = context.GetVM();
+			const std::string example = "paint \"Textures/Scorch.png\" at hit";
+			const FS::Value image = context.Arg(0);
+			if (!FS::IsObjectType(image, FS::ObjectType::String))
+			{
+				throw FS::RuntimeError("'paint' needs an image's asset path in quotes, like: " + example + ". This is " +
+					(image.IsNothing() ? std::string("nothing") : "a " + vm.TypeOf(image)) + ".");
+			}
+			const std::string texture = context.Text(0);
+			if (!texture.empty() && !AssetManager::Exists(texture))
+				throw FS::RuntimeError("'paint' can't find the image '" + texture + "' in the Assets folder. Check the path, like \"Textures/Scorch.png\".");
+			if (!texture.empty() && !AssetManager::CanUseAs(texture, AssetType::Texture))
+				throw FS::RuntimeError("'paint' needs an image (.png, .jpg, .tga or .bmp), and '" + texture + "' isn't one.");
+
+			const FS::Value place = context.Arg(1);
+			glm::vec3 position { 0.0f };
+			std::optional<glm::vec3> normal;
+			if (FS::IsObjectType(place, FS::ObjectType::NativeObject) && FS::As<FS::NativeObject>(place)->Type == &TypeFor<RaycastHit>())
+			{
+				const RaycastHit hit = Convert<RaycastHit>::From(vm, place, "'paint'");
+				position = hit.Point;
+				if (glm::length(hit.Normal) > 0.0f)
+					normal = glm::normalize(hit.Normal);
+			}
+			else if (FS::IsObjectType(place, FS::ObjectType::Vector) || FS::IsObjectType(place, FS::ObjectType::List))
+				position = Convert<glm::vec3>::From(vm, place, "'paint'");
+			else
+			{
+				throw FS::RuntimeError("'paint' needs a position or a raycast hit after 'at', like: " + example + ". This is " +
+					(place.IsNothing() ? std::string("nothing (did the raycast miss?)") : "a " + vm.TypeOf(place)) + ".");
+			}
+
+			std::optional<glm::vec3> boxSize;
+			if (size)
+			{
+				if (size->IsNumber())
+				{
+					const float across = static_cast<float>(size->AsNumber());
+					boxSize = glm::vec3(across, across * 0.5f, across);
+				}
+				else if (FS::IsObjectType(*size, FS::ObjectType::Vector) || FS::IsObjectType(*size, FS::ObjectType::List))
+					boxSize = Convert<glm::vec3>::From(vm, *size, "'paint'");
+				else
+					throw FS::RuntimeError("'sized' takes a number of meters or a vector, like: paint \"Textures/Footprint.png\" at feet sized 0.4. This is a " + vm.TypeOf(*size) + ".");
+				if (!std::isfinite(boxSize->x) || !std::isfinite(boxSize->y) || !std::isfinite(boxSize->z) ||
+					glm::any(glm::lessThan(*boxSize, glm::vec3(DecalComponent::MinSize))) || glm::any(glm::greaterThan(*boxSize, glm::vec3(DecalComponent::MaxSize))))
+					throw FS::RuntimeError("A decal's size is from 0.001 to 1000 meters on each side.");
+			}
+
+			return Guard([&]
+			{
+				Scene& scene = RequireContextScene();
+				const std::string stem = std::filesystem::path(texture).stem().string();
+				Entity mark = scene.CreateEntity(stem.empty() ? "Decal" : stem);
+				TransformComponent& transform = mark.GetComponent<TransformComponent>();
+				transform.Translation = position;
+				if (normal)
+					transform.SetRotation(glm::rotation(glm::vec3(0.0f, 1.0f, 0.0f), *normal));
+				DecalComponent& decal = mark.AddComponent<DecalComponent>();
+				decal.TexturePath = texture;
+				if (boxSize)
+					decal.Size = *boxSize;
+				return ReturnValue(vm, ScriptEntity(mark));
+			});
+		}
+
 		// The NavAgent of the entity a phrase names (argument 0).
 		NavAgentRef PhraseNavAgent(FS::CallContext& context, const char* phrase, const std::string& example)
 		{
@@ -1077,6 +1160,60 @@ namespace Bellows::Scripting {
 						const AnimatorRef animator = PhraseAnimator(context, 0, "resume animation", "resume animation on hero");
 						Guard([&] { animator.Get().RuntimePlayer.Resume(); });
 						return FS::Value();
+					} },
+				{ { "play particles on (entity)", "Starts a new cycle of an entity's ParticleEmitter, with its burst; same as entity.get_component(\"ParticleEmitter\").play()", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ParticleEmitterRef emitter = PhraseEmitter(context, 0, "play particles on", "play particles on campfire");
+						Guard([&] { ParticleSystem::Play(emitter.Get()); });
+						return FS::Value();
+					} },
+				{ { "pause particles on (entity)", "Stops an entity's ParticleEmitter sending new particles; the ones in the air live out their lives; same as entity.get_component(\"ParticleEmitter\").stop()", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ParticleEmitterRef emitter = PhraseEmitter(context, 0, "pause particles on", "pause particles on campfire");
+						Guard([&] { ParticleSystem::Stop(emitter.Get(), false); });
+						return FS::Value();
+					} },
+				{ { "clear particles on (entity)", "Stops an entity's ParticleEmitter and removes its live particles now; same as entity.get_component(\"ParticleEmitter\").stop(true)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const ParticleEmitterRef emitter = PhraseEmitter(context, 0, "clear particles on", "clear particles on campfire");
+						Guard([&] { ParticleSystem::Stop(emitter.Get(), true); });
+						return FS::Value();
+					} },
+				{ { "emit (count) particles from (entity)", "Sends a number of particles (1 to 10000) at once from an entity's ParticleEmitter, playing or not; same as entity.get_component(\"ParticleEmitter\").emit(count)", "None", true },
+					[](FS::CallContext& context)
+					{
+						const FS::Value count = context.Arg(0);
+						const double number = count.IsNumber() ? count.AsNumber() : -1.0;
+						if (!count.IsNumber() || number != std::floor(number) || number < 1.0 || number > 10000.0)
+						{
+							throw FS::RuntimeError("'emit' takes a whole number of particles from 1 to 10000, like: emit 30 particles from sparks. This is " +
+								(count.IsNumber() ? FS::FormatNumber(number) : (count.IsNothing() ? std::string("nothing") : "a " + context.GetVM().TypeOf(count))) + ".");
+						}
+						const ParticleEmitterRef emitter = PhraseEmitter(context, 1, "emit particles from", "emit 30 particles from sparks");
+						Guard([&] { ParticleSystem::Emit(emitter.Get(), static_cast<uint32_t>(number)); });
+						return FS::Value();
+					} },
+				{ { "the particles on (entity) are playing", "Whether an entity's ParticleEmitter is sending particles; same as entity.get_component(\"ParticleEmitter\").is_playing", "bool", true },
+					[](FS::CallContext& context)
+					{
+						const ParticleEmitterRef emitter = PhraseEmitter(context, 0, "the particles on", "the particles on smoke are playing");
+						return FS::Value::FromBool(Guard([&]
+						{
+							// One that plays on start counts as playing before its first update, as is_playing says.
+							const ParticleEmitterComponent& c = emitter.Get();
+							return c.RuntimePlaying || (!c.RuntimeStarted && c.PlayOnStart);
+						}));
+					} },
+				{ { "paint (image) at (place)", "Makes a new entity with a Decal of an image (an asset path; \"\" for a plain rectangle) at a position, or on a raycast hit facing its surface, and gives it back", "Entity", true },
+					[](FS::CallContext& context) { return PaintDecal(context, nullptr); } },
+				{ { "paint (image) at (place) sized (size)", "Like paint (image) at (place), with the decal's size: a number of meters across (half as deep), or a vector", "Entity", true },
+					[](FS::CallContext& context)
+					{
+						const FS::Value size = context.Arg(2);
+						return PaintDecal(context, &size);
 					} },
 				{ { "walk (entity) to (position)", "Sends an entity's NavAgent walking to a position, and gives back whether there's navmesh to walk to near it; same as entity.get_component(\"NavAgent\").set_destination(position)", "bool", true },
 					[](FS::CallContext& context)
