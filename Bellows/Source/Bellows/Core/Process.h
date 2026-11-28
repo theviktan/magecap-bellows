@@ -28,6 +28,9 @@ namespace Bellows {
 
 		// Returns null and sets outError when the program could not be started.
 		static Scope<Process> Start(const StartInfo& info, std::string* outError = nullptr);
+		// Starts a program that keeps running after this one exits (the setup program that replaces
+		// the editor), with no pipes and no console window. False when it couldn't start.
+		static bool StartDetached(const StartInfo& info);
 
 		~Process();
 		Process(const Process&) = delete;

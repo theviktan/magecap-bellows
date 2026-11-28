@@ -44,6 +44,10 @@ namespace Bellows {
 		// 'outError' when it can't, for instance a Linux file on another drive than the Trash. When
 		// Windows can't recycle it (a network drive), Windows asks before deleting it for good.
 		static bool MoveToTrash(const std::filesystem::path& path, std::string& outError);
+		// Holds a named marker for as long as this program runs, so another program can tell that it's
+		// running (the Windows setup program waits for the editor to close). A Windows mutex; nothing
+		// elsewhere.
+		static void HoldRunningMarker(const std::string& name);
 	};
 
 }

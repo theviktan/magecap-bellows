@@ -114,6 +114,9 @@ int main(int argc, char** argv)
 	options.AgentServerPort = static_cast<uint16_t>(ParseUnsigned(args, "--agent-port", 0));
 	if (!options.StartupScript.empty())
 		options.StartupScript = std::filesystem::absolute(options.StartupScript);
+	// The setup program (MageCapBellows.iss, AppMutex) waits for every open editor to close before it updates one.
+	if (!options.Headless)
+		Platform::HoldRunningMarker("MageCapBellowsEditor");
 
 	ApplicationSpecification specification;
 	specification.Name = "MageCap Bellows Editor";

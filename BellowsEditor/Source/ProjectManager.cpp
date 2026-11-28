@@ -278,6 +278,22 @@ namespace Bellows {
 		if (ImGui::Button(ICON_SEARCH "  Scan", ImVec2(0.0f, height)))
 			ScanFolder();
 		UI::Tooltip("Find every project inside a folder and add them to the list");
+		ImGui::SameLine();
+		// Updates: the accent Update button while a new version waits, else a check (as Help, Check for Updates).
+		if (m_Editor.IsUpdateOffered())
+		{
+			if (PrimaryButton(ICON_DOWNLOAD "  Update", ImVec2(0.0f, height)))
+				m_Editor.ShowUpdateDialog();
+			UI::Tooltip("A new version of MageCap Bellows is available: see what's new and install it");
+		}
+		else
+		{
+			ImGui::BeginDisabled(m_Editor.GetUpdateChecker().IsBusy());
+			if (ImGui::Button(ICON_REFRESH_CW "  Check for Updates", ImVec2(0.0f, height)))
+				m_Editor.CheckForUpdates(true);
+			ImGui::EndDisabled();
+			UI::Tooltip("Look for a newer version of MageCap Bellows");
+		}
 
 		// Search and sort on the right.
 		const float sortWidth = 150.0f * scale;

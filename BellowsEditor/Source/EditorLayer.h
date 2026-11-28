@@ -8,6 +8,7 @@
 #include "ScriptDebugger.h"
 #include "UIRectTool.h"
 #include "UndoHistory.h"
+#include "UpdateChecker.h"
 
 #include "Bellows/Asset/MeshImporter.h"
 #include "Bellows/Core/FileWatcher.h"
@@ -215,6 +216,18 @@ namespace Bellows {
 		// Stops at the next ForgeScript line that runs (the game must be running).
 		bool PauseScripts();
 
+		// Updates -------------------------------------------------------------
+		// Looks for a newer version on a background thread (Help > Check for Updates). A manual check
+		// shows its answer even when there's nothing new; the startup one only shows a new version that
+		// wasn't skipped. 'url' replaces the update server (tests). False while one is under way.
+		bool CheckForUpdates(bool manual, const std::string& url = {});
+		const UpdateChecker& GetUpdateChecker() const { return m_Updates; }
+		// Whether a new version is waiting (the title bar shows Update).
+		bool IsUpdateOffered() const { return m_UpdateOffered; }
+		bool IsUpdateDialogOpen() const { return m_ShowUpdateDialog; }
+		void ShowUpdateDialog() { m_ShowUpdateDialog = true; }
+		void CloseUpdateDialog() { m_ShowUpdateDialog = false; }
+
 		// Build and settings -------------------------------------------------
 		ExportResult ExportGame(const std::filesystem::path& outputDirectory);
 		EditorSettings& GetSettings() { return m_Settings; }
@@ -233,7 +246,7 @@ namespace Bellows {
 		bool ExecutePython(const std::string& source, std::string& outOutput);
 	private:
 		void DrawMenuBar();
-		// The right end of the title bar: the project and scene, Play, Export game.
+		// The right end of the title bar: the project and scene, Play, Update (when one is offered), Export game.
 		// Returns its left edge, so the search box can stay clear of it.
 		float DrawTitleBarActions(float barTop, float barHeight);
 		void ShowExportDialog();
@@ -252,6 +265,11 @@ namespace Bellows {
 		void DrawUIViewSizeMenu();
 		void DrawGizmo();
 		void DrawDialogs();
+		// Notices when an update check finishes and opens the dialog when it should.
+		void PollUpdates();
+		void DrawUpdateDialog();
+		// Saves the scene, starts the downloaded installer and closes the editor so it can be replaced.
+		void InstallDownloadedUpdate();
 		void BuildDefaultLayout(unsigned int dockspaceID);
 
 		void RenderViewport();
@@ -348,12 +366,19 @@ namespace Bellows {
 		bool m_ShowOpenProjectDialog = false;
 		bool m_ShowExportDialog = false;
 		bool m_ShowAboutDialog = false;
+		bool m_ShowUpdateDialog = false;
 		bool m_ShowSaveSceneAsDialog = false;
 		bool m_ShowStatistics = false;
 		bool m_ShowProfiler = false;
 		// The floating toolbar, chips and gizmo over the viewport, as drawn last frame (min xy, max xy):
 		// a click on them isn't a click on the scene.
 		std::vector<glm::vec4> m_ViewportOverlays;
+		// Updates: the checker, what it was last frame (to notice when it finishes), and whether a new version is on offer.
+		UpdateChecker m_Updates;
+		UpdateChecker::State m_UpdateSeenState = UpdateChecker::State::Idle;
+		bool m_UpdateOffered = false;
+		bool m_UpdateInstallWhenDownloaded = false;		// The download was "Download and install", not the zip
+		std::string m_UpdateInstallError;
 		bool m_SearchOpen = false;
 		bool m_SearchJustOpened = false;
 		std::string m_SearchQuery;

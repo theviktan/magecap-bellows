@@ -25,7 +25,9 @@ set(EDITOR_LOGIC_SOURCES
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDocument.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ScriptDocument.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/UITemplates.cpp"
-	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/UITemplates.h")
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/UITemplates.h"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/UpdateChecker.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/UpdateChecker.h")
 
 add_executable(BellowsTests ${TEST_SOURCES} ${EDITOR_LOGIC_SOURCES})
 target_include_directories(BellowsTests PRIVATE "${PROJECT_SOURCE_DIR}/BellowsEditor/Source")
@@ -67,6 +69,19 @@ set_tests_properties(RepositoryNoAiStamps PROPERTIES PASS_REGULAR_EXPRESSION "NO
 add_test(NAME RepositoryNoAiStampsSelfTest
 	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckNoAiStamps.py" --self-test)
 set_tests_properties(RepositoryNoAiStampsSelfTest PROPERTIES PASS_REGULAR_EXPRESSION "SELF-TEST PASSED")
+
+# update.json, which the editor's update check reads, is written by this tool for each release.
+add_test(NAME UpdateManifestSelfTest
+	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/WriteUpdateManifest.py" --self-test)
+set_tests_properties(UpdateManifestSelfTest PROPERTIES PASS_REGULAR_EXPRESSION "SELF-TEST PASSED")
+
+# The update server (a Cloudflare Worker) against a stand-in for GitHub, when Node.js is installed.
+find_program(BELLOWS_NODE_EXECUTABLE node)
+if(BELLOWS_NODE_EXECUTABLE)
+	add_test(NAME UpdateServerTests
+		COMMAND "${BELLOWS_NODE_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/UpdateServer/worker.test.mjs")
+	set_tests_properties(UpdateServerTests PROPERTIES PASS_REGULAR_EXPRESSION "WORKER TESTS PASSED")
+endif()
 
 # A release package holds everything its programs load: package the build, then run the package.
 if(TARGET BellowsEditor AND TARGET ForgeScriptCLI)

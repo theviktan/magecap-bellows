@@ -4,6 +4,8 @@ Run by ctest as:  BellowsEditor --headless --no-agent-server --run-script <this 
 Any failed assertion raises, which makes the editor exit with code 1.
 """
 
+import hashlib
+import json
 import os
 import pathlib
 import runpy
@@ -160,6 +162,42 @@ check(editor.is_search_open(), "open_search")
 editor.close_search()
 editor.run_frames(1)
 check(not editor.is_search_open(), "close_search")
+
+# Updates, from a folder standing in for the update server: a newer version is offered with its notes.
+updates = root / "Updates"
+updates.mkdir(parents=True, exist_ok=True)
+setup = b"setup program"
+(updates / "Setup.exe").write_bytes(setup)
+(updates / "update.json").write_text(json.dumps({
+    "version": "99.0.0", "notes": "## New\n- Everything",
+    "installer": {"url": "Setup.exe", "size": len(setup), "sha256": hashlib.sha256(setup).hexdigest()},
+}), encoding="utf-8")
+
+
+def wait_for_update_check():
+    """Lets frames pass until the check ends, then one more for the editor to act on it."""
+    for _ in range(200):
+        editor.run_frames(1)
+        if editor.update_status()["state"] != "checking":
+            break
+    editor.run_frames(1)
+
+
+check(editor.update_status()["state"] == "idle", "headless runs don't check for updates on their own")
+check(editor.check_for_updates(updates.resolve().as_uri() + "/update.json"), "check_for_updates starts")
+wait_for_update_check()
+status = editor.update_status()
+check(status["state"] == "available" and status["version"] == "99.0.0" and status["offered"], f"an update is found: {status}")
+check(status["dialog_open"] and "Everything" in status["notes"], "the Updates dialog shows what's new")
+check(any(r["name"] == "Check for Updates" for r in editor.search("updates")), "the search finds Check for Updates")
+editor.close_update_dialog()
+editor.run_frames(1)
+check(not editor.update_status()["dialog_open"], "close_update_dialog")
+(updates / "update.json").write_text("{ broken", encoding="utf-8")
+check(editor.check_for_updates(updates.resolve().as_uri() + "/update.json"), "check_for_updates starts again")
+wait_for_update_check()
+check(editor.update_status()["state"] == "failed" and editor.update_status()["error"], "a broken manifest fails with a reason")
+editor.close_update_dialog()
 check(bellows.find_entity("Player").is_in_group("Heroes") and bellows.group("Heroes").note == "The player and friends",
       "groups are saved with the scene")
 

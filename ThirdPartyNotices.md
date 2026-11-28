@@ -29,6 +29,7 @@ Exported games include the runtime libraries marked with *.
 | [nlohmann/json](https://github.com/nlohmann/json) * | 3.12.0 | Scene, prefab and project files | MIT |
 | [portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs) | master | Native file dialogs in the editor | WTFPL / public domain |
 | [doctest](https://github.com/doctest/doctest) | 2.5.3 | Unit tests (not shipped) | MIT |
+| [Inno Setup](https://jrsoftware.org/isinfo.php) | 6 | Builds the Windows setup program (its setup and uninstall code is in the setup program, not in Bellows) | Inno Setup License (free, commercial use allowed) |
 
 ## Fonts and icons (editor)
 
