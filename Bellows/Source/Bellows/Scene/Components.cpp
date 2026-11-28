@@ -28,6 +28,36 @@ namespace Bellows {
 		TurnSpeed = ClampOrDefault(TurnSpeed, 0.0f, MaxTurnSpeed, defaults.TurnSpeed);
 	}
 
+	void ParticleEmitterComponent::Clamp()
+	{
+		const ParticleEmitterComponent defaults;
+		MaxParticles = std::min(MaxParticles, MaxMaxParticles);
+		Burst = std::min(Burst, MaxBurst);
+		Duration = ClampOrDefault(Duration, MinDuration, MaxDuration, defaults.Duration);
+		Rate = ClampOrDefault(Rate, 0.0f, MaxRate, defaults.Rate);
+		Lifetime = ClampOrDefault(Lifetime, MinLifetime, MaxLifetime, defaults.Lifetime);
+		LifetimeVariation = ClampOrDefault(LifetimeVariation, 0.0f, 1.0f, defaults.LifetimeVariation);
+		Speed = ClampOrDefault(Speed, 0.0f, MaxSpeed, defaults.Speed);
+		SpeedVariation = ClampOrDefault(SpeedVariation, 0.0f, 1.0f, defaults.SpeedVariation);
+		SpreadAngle = ClampOrDefault(SpreadAngle, 0.0f, 180.0f, defaults.SpreadAngle);
+		for (int axis = 0; axis < 3; axis++)
+			ShapeSize[axis] = ClampOrDefault(ShapeSize[axis], 0.0f, MaxShapeSize, defaults.ShapeSize[axis]);
+		GravityScale = ClampOrDefault(GravityScale, -MaxGravityScale, MaxGravityScale, defaults.GravityScale);
+		Drag = ClampOrDefault(Drag, 0.0f, MaxDrag, defaults.Drag);
+		StartSize = ClampOrDefault(StartSize, 0.0f, MaxSize, defaults.StartSize);
+		EndSize = ClampOrDefault(EndSize, 0.0f, MaxSize, defaults.EndSize);
+		for (int channel = 0; channel < 4; channel++)
+		{
+			StartColor[channel] = ClampOrDefault(StartColor[channel], 0.0f, 1.0f, defaults.StartColor[channel]);
+			EndColor[channel] = ClampOrDefault(EndColor[channel], 0.0f, 1.0f, defaults.EndColor[channel]);
+		}
+		Intensity = ClampOrDefault(Intensity, 0.0f, MaxIntensity, defaults.Intensity);
+		if (Shape != ParticleShape::Point && Shape != ParticleShape::Sphere && Shape != ParticleShape::Box)
+			Shape = defaults.Shape;
+		if (Blend != ParticleBlend::Additive && Blend != ParticleBlend::Alpha)
+			Blend = defaults.Blend;
+	}
+
 	const char* ScriptFieldTypeToString(ScriptFieldType type)
 	{
 		switch (type)

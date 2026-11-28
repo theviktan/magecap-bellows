@@ -418,6 +418,40 @@ label.size = 0.4
 label.outline_width = 0.04
 ```
 
+### `ParticleEmitter`
+Camera-facing particles (fire, sparks, smoke, dust, magic) sent from the entity in a cone around
+its local +Y. Emitters run in the editor too, so an effect shows while you edit; play starts each
+one afresh.
+* Emission: `play_on_start`, `looping`, `duration` (seconds one cycle lasts, 0.05 to 3600),
+  `rate` (particles per second, 0 to 10000), `burst` (sent at once when each cycle starts, 0 to
+  10000), `max_particles` (alive at once, 0 to 10000).
+* Each particle: `lifetime` (seconds, 0.01 to 600) and `lifetime_variation` (0 to 1: 1 means
+  anywhere from none to double), `speed` (m/s) and `speed_variation`, `spread_angle` (degrees from
+  +Y: 0 is a straight line, 180 every way).
+* Where they're born: `shape` (`"point"`, `"sphere"`, `"box"`) and `shape_size` (`Vec3`: a
+  sphere's radius in x, or a box's half size).
+* Forces: `gravity_scale` (how much the scene's gravity pulls; below 0 they rise), `drag` (air
+  resistance).
+* Look: `start_size` and `end_size` (meters across), `start_color` and `end_color` (`Vec4`; give
+  `end_color` an alpha of 0 to fade them out), `intensity` (brightness; above 1 they glow and
+  bloom), `blend` (`"additive"` adds light, for fire and sparks; `"alpha"` covers what's behind, for
+  smoke and dust), `texture` (an image asset; empty draws a soft round dot), `world_space` (born
+  particles stay put when the entity moves; off, they move with it).
+* `play()` starts a cycle and its burst, `stop(clear=False)` stops new ones (`clear=True` also
+  removes the live ones), `emit(count)` sends `count` at once; read-only `is_playing` and
+  `particle_count`.
+
+Values out of range, NaN, or an unknown shape or blend raise `ValueError`.
+
+```python
+sparks = entity.add_component("ParticleEmitter")
+sparks.play_on_start, sparks.rate = False, 0.0
+sparks.burst, sparks.speed, sparks.spread_angle = 40, 6.0, 180.0
+sparks.start_color, sparks.end_color = Vec4(1.0, 0.7, 0.2, 1.0), Vec4(1.0, 0.2, 0.0, 0.0)
+sparks.intensity, sparks.gravity_scale = 4.0, 1.0
+sparks.play()   # A burst of sparks every time it's called
+```
+
 ### Screen UI (`UICanvas`, `UIRect`, `UIImage`)
 A screen UI is a `UICanvas` entity with UI entities under it. It is drawn over the game at the
 screen's resolution, after tonemapping and anti-aliasing, so it is never blurred or bloomed, and

@@ -13,6 +13,7 @@
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/EntityTags.h"
+#include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIWidgets.h"
@@ -387,6 +388,64 @@ namespace Bellows {
 		});
 
 		DrawComponent<ScriptComponent>(m_Editor, entity, ICON_FILE_CODE, "Script", [&](ScriptComponent& c) { DrawScriptComponent(entity, c); });
+
+		DrawComponent<ParticleEmitterComponent>(m_Editor, entity, ICON_FLAME, "Particle Emitter", [&](ParticleEmitterComponent& c)
+		{
+			using Limits = ParticleEmitterComponent;
+			if (UI::BeginPropertyGrid("ParticleEmitter"))
+			{
+				UI::Property("Play On Start", c.PlayOnStart, "Starts by itself when the game starts (and in the editor)");
+				UI::Property("Looping", c.Looping, "Starts a new cycle when one ends; otherwise it stops after one");
+				UI::Property("Duration", c.Duration, 0.05f, Limits::MinDuration, Limits::MaxDuration, "%.2f s", "Seconds one cycle lasts");
+				UI::Property("Rate", c.Rate, 0.5f, 0.0f, Limits::MaxRate, "%.1f / s", "Particles per second while playing");
+				UI::Property("Burst", c.Burst, 0u, Limits::MaxBurst, "Particles sent at once when each cycle starts");
+				UI::Property("Max Particles", c.MaxParticles, 0u, Limits::MaxMaxParticles, "The most alive at once");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Particles");
+			if (UI::BeginPropertyGrid("ParticleEmitterMotion"))
+			{
+				UI::Property("Lifetime", c.Lifetime, 0.05f, Limits::MinLifetime, Limits::MaxLifetime, "%.2f s");
+				UI::PropertySlider("Lifetime Variation", c.LifetimeVariation, 0.0f, 1.0f, "%.2f", "How much lifetimes vary either way (1 = from none to double)");
+				UI::Property("Speed", c.Speed, 0.05f, 0.0f, Limits::MaxSpeed, "%.2f m/s");
+				UI::PropertySlider("Speed Variation", c.SpeedVariation, 0.0f, 1.0f, "%.2f", "How much speeds vary either way");
+				UI::PropertySlider("Spread", c.SpreadAngle, 0.0f, 180.0f, "%.0f deg", "Degrees from the entity's up (+Y) they may leave at: 0 a line, 180 every way");
+				static const char* const s_Shapes[] = { "Point", "Sphere", "Box" };
+				int shape = static_cast<int>(c.Shape);
+				if (UI::PropertyCombo("Shape", shape, s_Shapes, 3, "Where particles are born"))
+					c.Shape = static_cast<ParticleShape>(shape);
+				if (c.Shape == ParticleShape::Sphere)
+					UI::Property("Radius", c.ShapeSize.x, 0.01f, 0.0f, Limits::MaxShapeSize, "%.2f m");
+				else if (c.Shape == ParticleShape::Box)
+					UI::PropertyVec3("Half Size", c.ShapeSize, 0.5f, 0.01f, "Half the box's size on each axis, meters");
+				UI::Property("Gravity Scale", c.GravityScale, 0.01f, -Limits::MaxGravityScale, Limits::MaxGravityScale, "%.2f",
+					"How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise");
+				UI::Property("Drag", c.Drag, 0.01f, 0.0f, Limits::MaxDrag, "%.2f", "Air resistance: how quickly they slow down");
+				UI::Property("World Space", c.WorldSpace, "Born particles stay where they are when the entity moves; off, they move with it");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Look");
+			if (UI::BeginPropertyGrid("ParticleEmitterLook"))
+			{
+				UI::Property("Start Size", c.StartSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when born");
+				UI::Property("End Size", c.EndSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when it dies");
+				UI::PropertyColor("Start Color", c.StartColor);
+				UI::PropertyColor("End Color", c.EndColor, false, "Set its alpha to 0 to fade particles out");
+				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, Limits::MaxIntensity, "%.2f", "Brightness; above 1 they glow");
+				static const char* const s_Blends[] = { "Additive", "Alpha" };
+				int blend = static_cast<int>(c.Blend);
+				if (UI::PropertyCombo("Blend", blend, s_Blends, 2, "Additive adds light (fire, sparks); Alpha covers what's behind (smoke, dust)"))
+					c.Blend = static_cast<ParticleBlend>(blend);
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "The image each particle shows; empty draws a soft round dot");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			// The preview runs in the editor too; Restart replays it from the start.
+			if (ImGui::Button(ICON_REFRESH_CW "  Restart"))
+				ParticleSystem::Reset(c, entity.GetUUID());
+			ImGui::SameLine();
+			UI::TextMuted((std::to_string(c.RuntimeParticles.size()) + " alive").c_str());
+		});
 
 		DrawComponent<AudioSourceComponent>(m_Editor, entity, ICON_VOLUME_2, "Audio Source", [&](AudioSourceComponent& c)
 		{
@@ -1103,6 +1162,7 @@ namespace Bellows {
 		entry.operator()<SpotLightComponent>(ICON_FLASHLIGHT, "Spot Light", "Rendering");
 		entry.operator()<SkyLightComponent>(ICON_CLOUD, "Sky Light", "Rendering");
 		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
+		entry.operator()<ParticleEmitterComponent>(ICON_FLAME, "Particle Emitter", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");
 		entry.operator()<RigidBodyComponent>(ICON_ATOM, "Rigid Body", "Physics");

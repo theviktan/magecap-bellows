@@ -42,6 +42,7 @@ namespace Bellows {
 			if (entity.HasComponent<NavAgentComponent>()) return ICON_FOOTPRINTS;
 			if (entity.HasComponent<AnimatorComponent>()) return ICON_PERSON_STANDING;
 			if (entity.HasComponent<MeshRendererComponent>()) return ICON_BOX;
+			if (entity.HasComponent<ParticleEmitterComponent>()) return ICON_FLAME;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
 			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
 			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
@@ -104,6 +105,7 @@ namespace Bellows {
 			add(!showsLight && (entity.HasComponent<PointLightComponent>() || entity.HasComponent<SpotLightComponent>()), ICON_LIGHTBULB, "Light");
 			add(entity.HasComponent<AnimatorComponent>(), ICON_PERSON_STANDING, "Animation");
 			add(entity.HasComponent<NavAgentComponent>(), ICON_FOOTPRINTS, "Walks the navmesh");
+			add(entity.HasComponent<ParticleEmitterComponent>(), ICON_FLAME, "Particles");
 			return badges;
 		}
 
@@ -1435,6 +1437,12 @@ namespace Bellows {
 			if (ImGui::MenuItem(ICON_CIRCLE "  Dynamic Capsule")) createPhysics("Builtin/Capsule", "Capsule", 2, RigidBodyType::Dynamic);
 			if (ImGui::MenuItem(ICON_SQUARE "  Static Box")) createPhysics("Builtin/Cube", "Wall", 0, RigidBodyType::Static);
 			ImGui::EndMenu();
+		}
+
+		if (ImGui::MenuItem(ICON_FLAME "  Particles"))
+		{
+			create("Particles").AddComponent<ParticleEmitterComponent>();
+			m_Editor.CommitChange("Create particles");
 		}
 
 		if (ImGui::MenuItem(ICON_VOLUME_2 "  Audio Source"))

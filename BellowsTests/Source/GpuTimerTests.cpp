@@ -80,7 +80,7 @@ TEST_CASE("[gpu] A timed renderer reports each pass's GPU time to the frame that
 	const auto& history = Profiler::GetHistory();
 	REQUIRE(history.size() == frameCount);
 	const std::set<std::string> passes = { "Uploads", "Shadows", "Depth Prepass", "Ambient Occlusion", "Opaque", "Sky",
-		"Transparent", "Bloom", "Tone Mapping", "Text", "Overlays", "Game UI", "Selection Outline" };
+		"Transparent", "Particles", "Bloom", "Tone Mapping", "Text", "Overlays", "Game UI", "Selection Outline" };
 	for (size_t i = 0; i < history.size(); i++)
 	{
 		const ProfileFrame& frame = history[i];

@@ -322,6 +322,89 @@ namespace Bellows {
 		uint64_t RuntimeLayoutKey = 0;
 	};
 
+	enum class ParticleShape : uint8_t
+	{
+		Point = 0,	// Every particle starts at the entity
+		Sphere,		// Anywhere inside a sphere of radius ShapeSize.x
+		Box,		// Anywhere inside a box of half extents ShapeSize
+	};
+
+	enum class ParticleBlend : uint8_t
+	{
+		Additive = 0,	// Adds light: fire, sparks, magic. Order doesn't matter and it blooms.
+		Alpha,			// Covers what's behind: smoke, dust, leaves
+	};
+
+	// One live particle. Position and velocity are in world space, or in the emitter's local space
+	// when it isn't WorldSpace.
+	struct Particle
+	{
+		glm::vec3 Position { 0.0f };
+		glm::vec3 Velocity { 0.0f };	// m/s
+		float Age = 0.0f;				// Seconds since it was born
+		float Lifetime = 1.0f;			// Seconds it lives
+	};
+
+	// Sends out camera-facing particles from the entity (see ParticleSystem). New particles leave in
+	// a cone around the entity's local +Y.
+	struct ParticleEmitterComponent
+	{
+		bool PlayOnStart = true;
+		bool Looping = true;
+		float Duration = 5.0f;			// Seconds one cycle lasts (a burst starts each)
+		float Rate = 20.0f;				// Particles per second while playing
+		uint32_t Burst = 0;				// Particles sent at once when a cycle starts
+		uint32_t MaxParticles = 1000;	// Alive at once; more aren't born
+
+		float Lifetime = 2.0f;			// Seconds
+		float LifetimeVariation = 0.25f;	// 0-1: each particle's lifetime varies this share either way
+		float Speed = 2.0f;				// m/s
+		float SpeedVariation = 0.25f;	// 0-1, like LifetimeVariation
+		float SpreadAngle = 25.0f;		// Degrees from +Y: 0 a straight line, 180 every way
+
+		ParticleShape Shape = ParticleShape::Point;
+		glm::vec3 ShapeSize { 0.5f };	// Sphere: x is the radius; Box: half extents (meters)
+
+		float GravityScale = 0.0f;		// How much the scene's gravity pulls them (0 none, 1 full)
+		float Drag = 0.0f;				// Slows them by this share per second (air resistance)
+
+		float StartSize = 0.25f;		// Meters across, when born
+		float EndSize = 0.05f;			// Meters across, when it dies
+		glm::vec4 StartColor { 1.0f, 0.6f, 0.2f, 1.0f };
+		glm::vec4 EndColor { 1.0f, 0.2f, 0.05f, 0.0f };
+		float Intensity = 1.0f;			// Brightness; above 1 glows (blooms)
+		ParticleBlend Blend = ParticleBlend::Additive;
+		std::string TexturePath;		// Empty: a soft round dot
+		bool WorldSpace = true;			// Born particles stay where they are when the entity moves
+
+		static constexpr uint32_t MaxMaxParticles = 10000;
+		static constexpr uint32_t MaxBurst = 10000;
+		static constexpr float MaxRate = 10000.0f;
+		static constexpr float MinDuration = 0.05f, MaxDuration = 3600.0f;
+		static constexpr float MinLifetime = 0.01f, MaxLifetime = 600.0f;
+		static constexpr float MaxSpeed = 1000.0f;
+		static constexpr float MaxShapeSize = 1000.0f;
+		static constexpr float MaxGravityScale = 100.0f;
+		static constexpr float MaxDrag = 100.0f;
+		static constexpr float MaxSize = 1000.0f;
+		static constexpr float MaxIntensity = 1000.0f;
+
+		// Holds every value to its range (and a NaN to its default), as a loaded or edited emitter needs.
+		void Clamp();
+
+		// Runtime state (not serialized)
+		std::vector<Particle> RuntimeParticles;
+		bool RuntimeStarted = false;		// PlayOnStart has been applied
+		bool RuntimePlaying = false;
+		float RuntimeTime = 0.0f;			// Seconds into the current cycle
+		float RuntimeEmitCarry = 0.0f;		// The part of a particle owed by Rate
+		uint32_t RuntimePending = 0;		// Asked for (bursts, emit()) but not yet born
+		uint32_t RuntimeRandom = 0;			// Random state; 0 = not yet seeded
+		uint64_t RuntimeSeed = 0;			// What RuntimeRandom was seeded from (the entity's UUID)
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// -------------------------------------------------------------------------
 	// Game UI
 	// -------------------------------------------------------------------------
@@ -510,7 +593,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent,
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
 		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 

@@ -237,6 +237,14 @@ namespace Bellows {
 		};
 		m_TextInputLayout = device->createInputLayout(textAttributes, 6, textVS);
 
+		nvrhi::ShaderHandle particleVS = Renderer::GetShader("Particle.vert");
+		const nvrhi::VertexAttributeDesc particleAttributes[] = {
+			nvrhi::VertexAttributeDesc().setName("POSITION").setFormat(nvrhi::Format::RGB32_FLOAT).setOffset(offsetof(ParticleVertex, Position)).setElementStride(sizeof(ParticleVertex)),
+			nvrhi::VertexAttributeDesc().setName("TEXCOORD").setFormat(nvrhi::Format::RG32_FLOAT).setOffset(offsetof(ParticleVertex, TexCoord)).setElementStride(sizeof(ParticleVertex)),
+			nvrhi::VertexAttributeDesc().setName("COLOR").setFormat(nvrhi::Format::RGBA32_FLOAT).setOffset(offsetof(ParticleVertex, Color)).setElementStride(sizeof(ParticleVertex)),
+		};
+		m_ParticleInputLayout = device->createInputLayout(particleAttributes, 3, particleVS);
+
 		nvrhi::ShaderHandle uiVS = Renderer::GetShader("UI.vert");
 		const nvrhi::VertexAttributeDesc uiAttributes[] = {
 			nvrhi::VertexAttributeDesc().setName("POSITION").setFormat(nvrhi::Format::RG32_FLOAT).setOffset(offsetof(UIVertex, Position)).setElementStride(sizeof(UIVertex)),
@@ -394,6 +402,32 @@ namespace Bellows {
 			m_TextIDPipeline = device->createGraphicsPipeline(desc, nvrhi::FramebufferInfo().addColorFormat(c_EntityIDFormat).setDepthFormat(c_DepthFormat));
 		}
 
+		// Particles: into the HDR image over the transparent pass, tested against the scene's depth
+		// without writing it. The shader writes premultiplied color, so additive adds it and alpha
+		// covers by its alpha; either way the image's alpha is left alone.
+		{
+			nvrhi::GraphicsPipelineDesc desc;
+			desc.VS = particleVS;
+			desc.PS = Renderer::GetShader("Particle.frag");
+			desc.inputLayout = m_ParticleInputLayout;
+			desc.bindingLayouts = { Renderer::GetTextBindingLayout() };
+			desc.renderState.rasterState.setCullNone().setDepthClipEnable(true);
+			desc.renderState.depthStencilState.setDepthTestEnable(true).setDepthWriteEnable(false).setDepthFunc(nvrhi::ComparisonFunc::LessOrEqual);
+			nvrhi::BlendState::RenderTarget particleAdditive;
+			particleAdditive.setBlendEnable(true)
+				.setSrcBlend(nvrhi::BlendFactor::One).setDestBlend(nvrhi::BlendFactor::One)
+				.setSrcBlendAlpha(nvrhi::BlendFactor::Zero).setDestBlendAlpha(nvrhi::BlendFactor::One);
+			desc.renderState.blendState.targets[0] = particleAdditive;
+			m_ParticleAdditivePipeline = device->createGraphicsPipeline(desc, hdrDepthInfo);
+
+			nvrhi::BlendState::RenderTarget particleAlpha;
+			particleAlpha.setBlendEnable(true)
+				.setSrcBlend(nvrhi::BlendFactor::One).setDestBlend(nvrhi::BlendFactor::InvSrcAlpha)
+				.setSrcBlendAlpha(nvrhi::BlendFactor::Zero).setDestBlendAlpha(nvrhi::BlendFactor::One);
+			desc.renderState.blendState.targets[0] = particleAlpha;
+			m_ParticleAlphaPipeline = device->createGraphicsPipeline(desc, hdrDepthInfo);
+		}
+
 		// Screen UI: on top of everything, so no depth at all.
 		{
 			nvrhi::GraphicsPipelineDesc desc;
@@ -419,7 +453,7 @@ namespace Bellows {
 			&& m_PrepassPipelines.IsComplete() && m_OpaquePipelines.IsComplete() && m_TransparentPipelines.IsComplete()
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
-			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline,
+			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline && m_ParticleAdditivePipeline && m_ParticleAlphaPipeline,
 			"SceneRenderer: failed to create one or more pipelines");
 	}
 
@@ -623,6 +657,8 @@ namespace Bellows {
 		m_LineVertices.clear();
 		m_TextVertices.clear();
 		m_TextDraws.clear();
+		m_ParticleVertices.clear();
+		m_ParticleDraws.clear();
 		m_UIVertices.clear();
 		m_UIDraws.clear();
 		m_FrameMeshes.clear();
@@ -1074,6 +1110,7 @@ namespace Bellows {
 		timed("Opaque", [&] { RenderOpaque(commandList); });
 		timed("Sky", [&] { RenderSkybox(commandList); });
 		timed("Transparent", [&] { RenderTransparent(commandList); });
+		timed("Particles", [&] { RenderParticles(commandList); });
 		timed("Bloom", [&] { RenderBloom(commandList); });
 		timed("Tone Mapping", [&] { RenderTonemap(commandList); });
 		timed("Text", [&] { RenderText(commandList); });
@@ -1408,6 +1445,103 @@ namespace Bellows {
 		draw.VertexCount = static_cast<uint32_t>(m_TextVertices.size()) - draw.FirstVertex;
 		if (draw.VertexCount > 0)
 			m_TextDraws.push_back(std::move(draw));
+	}
+
+	void SceneRenderer::SubmitParticles(const ParticleQuad* quads, size_t count, bool additive, const Ref<Texture2D>& texture)
+	{
+		if (!quads || count == 0)
+			return;
+		const Ref<Texture2D>& image = texture ? texture : Renderer::GetWhiteTexture();
+		GetTextureBindingSet(image->GetHandle(), image);
+
+		// The camera's right and up in world space, from the rows of its view matrix.
+		const glm::vec3 right(m_Camera.View[0][0], m_Camera.View[1][0], m_Camera.View[2][0]);
+		const glm::vec3 up(m_Camera.View[0][1], m_Camera.View[1][1], m_Camera.View[2][1]);
+
+		m_ParticleOrder.resize(count);
+		for (size_t i = 0; i < count; i++)
+			m_ParticleOrder[i] = static_cast<uint32_t>(i);
+		if (!additive)
+		{
+			// Without depth writes, nearer particles must be drawn last to cover the ones behind.
+			const glm::vec3 camera = m_Camera.Position;
+			std::stable_sort(m_ParticleOrder.begin(), m_ParticleOrder.end(), [&](uint32_t a, uint32_t b)
+			{
+				const glm::vec3 da = quads[a].Position - camera, db = quads[b].Position - camera;
+				return glm::dot(da, da) > glm::dot(db, db);
+			});
+		}
+
+		ParticleDraw draw;
+		draw.TextureRef = image;
+		draw.Textured = static_cast<bool>(texture);
+		draw.Additive = additive;
+		draw.FirstVertex = static_cast<uint32_t>(m_ParticleVertices.size());
+		glm::vec3 center(0.0f);
+		for (uint32_t index : m_ParticleOrder)
+		{
+			const ParticleQuad& quad = quads[index];
+			if (!(quad.Size > 0.0f) || quad.Color.a <= 0.0f)
+				continue;
+			const glm::vec3 x = right * (quad.Size * 0.5f), y = up * (quad.Size * 0.5f);
+			const auto vertex = [&](const glm::vec3& position, float u, float v)
+			{
+				m_ParticleVertices.push_back({ position, glm::vec2(u, v), quad.Color });
+			};
+			// UV (0, 0) is the image's top-left, so v grows downward.
+			vertex(quad.Position - x - y, 0.0f, 1.0f);
+			vertex(quad.Position + x - y, 1.0f, 1.0f);
+			vertex(quad.Position + x + y, 1.0f, 0.0f);
+			vertex(quad.Position - x - y, 0.0f, 1.0f);
+			vertex(quad.Position + x + y, 1.0f, 0.0f);
+			vertex(quad.Position - x + y, 0.0f, 0.0f);
+			center += quad.Position;
+		}
+		draw.VertexCount = static_cast<uint32_t>(m_ParticleVertices.size()) - draw.FirstVertex;
+		if (draw.VertexCount == 0)
+			return;
+		const uint32_t drawn = draw.VertexCount / 6;
+		draw.Distance = glm::length(center / static_cast<float>(drawn) - m_Camera.Position);
+		m_Statistics.Particles += drawn;
+		m_ParticleDraws.push_back(std::move(draw));
+	}
+
+	void SceneRenderer::RenderParticles(nvrhi::ICommandList* commandList)
+	{
+		if (m_ParticleDraws.empty())
+			return;
+
+		if (m_ParticleVertices.size() > m_ParticleVertexCapacity)
+		{
+			m_ParticleVertexCapacity = std::max<size_t>(m_ParticleVertices.size() * 2, 6 * 1024);
+			m_ParticleVertexBuffer = Renderer::GetDevice()->createBuffer(nvrhi::BufferDesc()
+				.setByteSize(m_ParticleVertexCapacity * sizeof(ParticleVertex))
+				.setIsVertexBuffer(true)
+				.setInitialState(nvrhi::ResourceStates::VertexBuffer)
+				.setKeepInitialState(true)
+				.setDebugName("ParticleVertices"));
+		}
+		commandList->writeBuffer(m_ParticleVertexBuffer, m_ParticleVertices.data(), m_ParticleVertices.size() * sizeof(ParticleVertex));
+
+		// Emitters far to near, so an alpha emitter in front covers one behind it.
+		std::stable_sort(m_ParticleDraws.begin(), m_ParticleDraws.end(), [](const ParticleDraw& a, const ParticleDraw& b) { return a.Distance > b.Distance; });
+
+		ShaderInterop::TextData constants;
+		constants.ViewProjection = m_Camera.Projection * m_Camera.View;
+		for (const ParticleDraw& draw : m_ParticleDraws)
+		{
+			nvrhi::GraphicsState state;
+			state.pipeline = draw.Additive ? m_ParticleAdditivePipeline : m_ParticleAlphaPipeline;
+			state.framebuffer = m_HDRDepthFramebuffer;
+			state.viewport.addViewportAndScissorRect(nvrhi::Viewport(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight)));
+			state.bindings = { GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef) };
+			state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_ParticleVertexBuffer).setSlot(0).setOffset(0) };
+			commandList->setGraphicsState(state);
+			constants.Params = glm::vec4(draw.Textured ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+			commandList->setPushConstants(&constants, sizeof(constants));
+			commandList->draw(nvrhi::DrawArguments().setVertexCount(draw.VertexCount).setStartVertexLocation(draw.FirstVertex));
+			m_Statistics.DrawCalls++;
+		}
 	}
 
 	nvrhi::IBindingSet* SceneRenderer::GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner)

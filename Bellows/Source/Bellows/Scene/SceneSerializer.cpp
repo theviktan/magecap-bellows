@@ -5,6 +5,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/EntityTags.h"
+#include "Bellows/Scene/ParticleSystem.h"
 
 namespace Bellows {
 
@@ -364,6 +365,39 @@ namespace Bellows {
 				JsonRead(*it, "Active", component.Active);
 			}
 
+			if (auto it = json.find("ParticleEmitter"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<ParticleEmitterComponent>();
+				JsonRead(*it, "PlayOnStart", component.PlayOnStart);
+				JsonRead(*it, "Looping", component.Looping);
+				JsonRead(*it, "Duration", component.Duration);
+				JsonRead(*it, "Rate", component.Rate);
+				JsonRead(*it, "Burst", component.Burst);
+				JsonRead(*it, "MaxParticles", component.MaxParticles);
+				JsonRead(*it, "Lifetime", component.Lifetime);
+				JsonRead(*it, "LifetimeVariation", component.LifetimeVariation);
+				JsonRead(*it, "Speed", component.Speed);
+				JsonRead(*it, "SpeedVariation", component.SpeedVariation);
+				JsonRead(*it, "SpreadAngle", component.SpreadAngle);
+				std::string shape = ParticleShapeToString(component.Shape);
+				JsonRead(*it, "Shape", shape);
+				component.Shape = ParticleShapeFromString(shape).value_or(component.Shape);
+				JsonRead(*it, "ShapeSize", component.ShapeSize);
+				JsonRead(*it, "GravityScale", component.GravityScale);
+				JsonRead(*it, "Drag", component.Drag);
+				JsonRead(*it, "StartSize", component.StartSize);
+				JsonRead(*it, "EndSize", component.EndSize);
+				JsonRead(*it, "StartColor", component.StartColor);
+				JsonRead(*it, "EndColor", component.EndColor);
+				JsonRead(*it, "Intensity", component.Intensity);
+				std::string blend = ParticleBlendToString(component.Blend);
+				JsonRead(*it, "Blend", blend);
+				component.Blend = ParticleBlendFromString(blend).value_or(component.Blend);
+				JsonRead(*it, "Texture", component.TexturePath);
+				JsonRead(*it, "WorldSpace", component.WorldSpace);
+				component.Clamp();
+			}
+
 			if (auto it = json.find("Text"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<TextComponent>();
@@ -694,6 +728,34 @@ namespace Bellows {
 
 		if (const auto* c = entity.TryGetComponent<AudioListenerComponent>())
 			json["AudioListener"]["Active"] = c->Active;
+
+		if (const auto* c = entity.TryGetComponent<ParticleEmitterComponent>())
+		{
+			Json& j = json["ParticleEmitter"];
+			j["PlayOnStart"] = c->PlayOnStart;
+			j["Looping"] = c->Looping;
+			j["Duration"] = c->Duration;
+			j["Rate"] = c->Rate;
+			j["Burst"] = c->Burst;
+			j["MaxParticles"] = c->MaxParticles;
+			j["Lifetime"] = c->Lifetime;
+			j["LifetimeVariation"] = c->LifetimeVariation;
+			j["Speed"] = c->Speed;
+			j["SpeedVariation"] = c->SpeedVariation;
+			j["SpreadAngle"] = c->SpreadAngle;
+			j["Shape"] = ParticleShapeToString(c->Shape);
+			j["ShapeSize"] = c->ShapeSize;
+			j["GravityScale"] = c->GravityScale;
+			j["Drag"] = c->Drag;
+			j["StartSize"] = c->StartSize;
+			j["EndSize"] = c->EndSize;
+			j["StartColor"] = c->StartColor;
+			j["EndColor"] = c->EndColor;
+			j["Intensity"] = c->Intensity;
+			j["Blend"] = ParticleBlendToString(c->Blend);
+			j["Texture"] = c->TexturePath;
+			j["WorldSpace"] = c->WorldSpace;
+		}
 
 		if (const auto* c = entity.TryGetComponent<TextComponent>())
 		{

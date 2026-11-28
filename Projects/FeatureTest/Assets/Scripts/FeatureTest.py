@@ -460,6 +460,37 @@ class FeatureTest(bellows.Script):
         listener = entity.add_component(bellows.AudioListener)
         listener.active = False
         self.check(not listener.active, "AudioListener properties")
+        emitter = entity.add_component(bellows.ParticleEmitter)
+        self.check(emitter.play_on_start and emitter.looping and close(emitter.rate, 20.0) and emitter.burst == 0 and emitter.max_particles == 1000
+                   and emitter.shape == "point" and emitter.blend == "additive" and emitter.texture == "" and emitter.world_space,
+                   "ParticleEmitter defaults")
+        self.check(emitter.is_playing, "a ParticleEmitter that plays on start counts as playing before its first frame")
+        emitter.duration, emitter.rate, emitter.burst, emitter.max_particles = 2.0, 50.0, 12, 300
+        emitter.lifetime, emitter.lifetime_variation, emitter.speed, emitter.speed_variation = 1.5, 0.1, 4.0, 0.5
+        emitter.spread_angle, emitter.shape, emitter.shape_size = 90.0, "box", Vec3(1.0, 0.5, 2.0)
+        emitter.gravity_scale, emitter.drag, emitter.start_size, emitter.end_size = -0.5, 0.25, 0.4, 0.1
+        emitter.start_color, emitter.end_color = Vec4(0.2, 0.4, 0.6, 1.0), Vec4(0.1, 0.1, 0.1, 0.0)
+        emitter.intensity, emitter.blend, emitter.texture, emitter.world_space = 3.0, "alpha", "Textures/GroundTiles.png", False
+        emitter.play_on_start, emitter.looping = False, False
+        self.check(close(emitter.duration, 2.0) and close(emitter.rate, 50.0) and emitter.burst == 12 and emitter.max_particles == 300
+                   and close(emitter.lifetime, 1.5) and close(emitter.lifetime_variation, 0.1) and close(emitter.speed, 4.0)
+                   and close(emitter.speed_variation, 0.5) and close(emitter.spread_angle, 90.0) and emitter.shape == "box"
+                   and close(emitter.shape_size, (1.0, 0.5, 2.0)) and close(emitter.gravity_scale, -0.5) and close(emitter.drag, 0.25)
+                   and close(emitter.start_size, 0.4) and close(emitter.end_size, 0.1) and close(emitter.start_color, (0.2, 0.4, 0.6, 1.0))
+                   and close(emitter.end_color, (0.1, 0.1, 0.1, 0.0)) and close(emitter.intensity, 3.0) and emitter.blend == "alpha"
+                   and emitter.texture == "Textures/GroundTiles.png" and not emitter.world_space and not emitter.play_on_start and not emitter.looping,
+                   "ParticleEmitter properties")
+        self.check(raises(lambda: setattr(emitter, "rate", -1.0), ValueError) and raises(lambda: setattr(emitter, "spread_angle", 181.0), ValueError)
+                   and raises(lambda: setattr(emitter, "max_particles", 10001), ValueError) and raises(lambda: setattr(emitter, "shape", "donut"), ValueError)
+                   and raises(lambda: setattr(emitter, "blend", "glow"), ValueError) and raises(lambda: setattr(emitter, "lifetime", float("nan")), ValueError)
+                   and raises(lambda: emitter.emit(-1), ValueError),
+                   "ParticleEmitter limits")
+        self.check(not emitter.is_playing and emitter.particle_count == 0, "a ParticleEmitter that doesn't play on start waits")
+        emitter.play()
+        self.check(emitter.is_playing, "ParticleEmitter.play")
+        emitter.emit(5)
+        emitter.stop(clear=True)
+        self.check(not emitter.is_playing and emitter.particle_count == 0, "ParticleEmitter.stop")
 
         text = entity.add_component(bellows.Text)
         self.check(text.text == "Text" and text.font == "" and text.alignment == "center", "Text defaults")
@@ -583,7 +614,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
