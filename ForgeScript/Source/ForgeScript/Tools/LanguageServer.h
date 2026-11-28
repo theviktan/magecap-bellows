@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iosfwd>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -145,6 +146,12 @@ namespace ForgeScript {
 		// Why the name under the request's position can't be renamed, or "" (then outUses and outUse are
 		// that document's uses and the one under the cursor).
 		std::string CheckRenamable(const Document& document, const Json& params, std::vector<NameUse>& outUses, NameUse& outUse) const;
+		// 'trigger door opend' where no script that can hear it has 'when door opend' or 'wait for door
+		// opend' (Roadmap 3.0 item 6). In a project that is every script in its asset folder, Python ones
+		// included; elsewhere, this script and the ones it uses. None when that can't all be read.
+		std::vector<CompileError> FindEventWarnings(const std::filesystem::path& path, const std::string& text) const;
+		// The events a script file listens for, read again only when its time or size changes.
+		const std::set<std::string>* ListenedInFile(const std::filesystem::path& path, bool python) const;
 		// Why renaming a script-level name could break another script of the game, or "".
 		std::string CheckNoOtherScriptNeeds(const Document& document, const std::string& oldName) const;
 
@@ -169,6 +176,15 @@ namespace ForgeScript {
 		std::vector<ApiFunction> m_ApiFunctions;
 		std::vector<ApiType> m_ApiTypes;
 		std::vector<ApiPhrase> m_ApiPhrases;
+		// FindEventWarnings' memory of each script file's listened events. The server answers one
+		// request at a time, so the checks that fill it never overlap.
+		struct ListenedFile
+		{
+			std::filesystem::file_time_type Time;
+			uintmax_t Size = 0;
+			std::set<std::string> Names;
+		};
+		mutable std::map<std::string, ListenedFile> m_ListenedFiles;
 		std::string m_ApiError;
 		bool m_Initialized = false;
 		bool m_Strict = false; // initializationOptions.strict: warnings are sent as mistakes

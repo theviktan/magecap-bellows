@@ -2,10 +2,12 @@
 
 #include "ForgeScript/Compiler/Lexer.h"
 #include "ForgeScript/Compiler/ScriptVariables.h"
+#include "ForgeScript/Core/Suggest.h"
 #include "ForgeScript/ForgeScript.h"
 #include "ForgeScript/Tools/Formatter.h"
 #include "ForgeScript/Tools/Help.h"
 #include "ForgeScript/Tools/ProjectPaths.h"
+#include "ForgeScript/Tools/ScriptEvents.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1156,7 +1158,207 @@ namespace ForgeScript {
 			engineNames.push_back(function.Name);
 		for (const ApiType& type : m_ApiTypes)
 			engineNames.push_back(type.Name);
-		return vm.FindWarnings(text, PathToUtf8(path.filename()), engineNames);
+		std::vector<CompileError> warnings = vm.FindWarnings(text, PathToUtf8(path.filename()), engineNames);
+		std::vector<CompileError> events = FindEventWarnings(path, text);
+		if (!events.empty())
+		{
+			warnings.insert(warnings.end(), events.begin(), events.end());
+			std::stable_sort(warnings.begin(), warnings.end(), [](const CompileError& a, const CompileError& b)
+			{
+				return a.Line != b.Line ? a.Line < b.Line : a.Column < b.Column;
+			});
+		}
+		return warnings;
+	}
+
+	const std::set<std::string>* LanguageServer::ListenedInFile(const std::filesystem::path& path, bool python) const
+	{
+		std::error_code error;
+		const std::filesystem::file_time_type time = std::filesystem::last_write_time(path, error);
+		if (error)
+			return nullptr;
+		const uintmax_t size = std::filesystem::file_size(path, error);
+		if (error)
+			return nullptr;
+		const std::string key = PathToUtf8(path);
+		auto found = m_ListenedFiles.find(key);
+		if (found != m_ListenedFiles.end() && found->second.Time == time && found->second.Size == size)
+			return &found->second.Names;
+		std::string text;
+		if (!ReadTextFile(path, text))
+			return nullptr;
+		ListenedFile& file = m_ListenedFiles[key];
+		file.Time = time;
+		file.Size = size;
+		file.Names = python ? FindPythonTexts(text) : FindScriptEvents(text).Listened;
+		return &file.Names;
+	}
+
+	std::vector<CompileError> LanguageServer::FindEventWarnings(const std::filesystem::path& path, const std::string& text) const
+	{
+		const ScriptEvents own = FindScriptEvents(text);
+		if (own.Triggers.empty())
+			return {};
+		// A script that isn't a file (an unsaved editor tab, standard input without --name) has no place,
+		// so the scripts that may hear it can't be found: no warning.
+		std::error_code error;
+		if (path.empty())
+			return {};
+		const std::filesystem::path self = std::filesystem::absolute(path, error).lexically_normal();
+		bool isOpen = false;
+		for (const auto& [uri, document] : m_Documents)
+			isOpen = isOpen || (document.Path.is_absolute() && document.Path.lexically_normal() == self);
+		if (error || (!isOpen && !std::filesystem::is_regular_file(self, error)))
+			return {};
+
+		std::set<std::string> listened = own.Listened;
+		// Quoted text in Python scripts: an on_event may compare names with any of it. It counts as
+		// listening, but isn't offered as a 'Did you mean', since most of it isn't event names.
+		std::set<std::string> pythonTexts;
+		auto addAll = [&listened](const std::set<std::string>& names) { listened.insert(names.begin(), names.end()); };
+		// Open scripts count with the text the user sees; the rest are read from their files.
+		std::set<std::filesystem::path> open;
+		for (const auto& [uri, document] : m_Documents)
+		{
+			if (document.Path.is_absolute())
+				open.insert(document.Path.lexically_normal());
+		}
+		auto addScript = [&](const std::filesystem::path& file) -> bool
+		{
+			if (file == self)
+				return true;
+			if (open.count(file) > 0)
+			{
+				std::string source;
+				ReadScriptForUse(file, source);
+				addAll(FindScriptEvents(source).Listened);
+				return true;
+			}
+			const std::set<std::string>* names = ListenedInFile(file, false);
+			if (names)
+				addAll(*names);
+			return names != nullptr;
+		};
+
+		const std::filesystem::path assets = FindProjectAssetFolder(self);
+		if (!assets.empty())
+		{
+			// A project: every script in it hears every event, Python's on_event included. The limits are
+			// rename's, so a huge folder can't stall the editor; past them there's no warning.
+			constexpr size_t c_MaxEntries = 200'000;
+			constexpr uintmax_t c_MaxTotalBytes = 64'000'000;
+			size_t entries = 0;
+			uintmax_t totalBytes = 0;
+			for (std::filesystem::recursive_directory_iterator it(assets, std::filesystem::directory_options::skip_permission_denied, error), end;
+				!error && it != end; it.increment(error))
+			{
+				if (++entries > c_MaxEntries)
+					return {};
+				std::error_code fileError;
+				const std::filesystem::path extension = it->path().extension();
+				const bool python = extension == ".py";
+				if ((extension != ".forge" && !python) || !it->is_regular_file(fileError))
+					continue;
+				totalBytes += it->file_size(fileError);
+				if (totalBytes > c_MaxTotalBytes)
+					return {};
+				const std::filesystem::path file = it->path().lexically_normal();
+				if (python)
+				{
+					const std::set<std::string>* texts = ListenedInFile(file, true);
+					if (!texts)
+						return {};
+					pythonTexts.insert(texts->begin(), texts->end());
+				}
+				else if (!addScript(file))
+					return {};
+			}
+			if (error)
+				return {};
+			// Open scripts not saved into the folder yet still count.
+			for (const std::filesystem::path& file : open)
+			{
+				if (file.extension() == ".forge" && IsInsideFolder(assets, file))
+					addScript(file);
+			}
+		}
+		else
+		{
+			// Not in a project: 'forgescript' runs this script and the ones it uses, so only they can hear.
+			const std::filesystem::path useFolder = FindUseFolder(self);
+			std::set<std::filesystem::path> seen { self };
+			std::vector<std::string> waiting { text };
+			while (!waiting.empty())
+			{
+				const std::string source = std::move(waiting.back());
+				waiting.pop_back();
+				for (const Symbol& symbol : FindScriptSymbols(source))
+				{
+					if (symbol.SymbolKind != Symbol::Kind::Module)
+						continue;
+					const std::filesystem::path file = ResolveUsePath(useFolder, symbol.File).lexically_normal();
+					if (file.empty() || !seen.insert(file).second)
+						continue;
+					std::string used;
+					if (!ReadScriptForUse(file, used))
+						return {};
+					addAll(FindScriptEvents(used).Listened);
+					waiting.push_back(std::move(used));
+				}
+			}
+		}
+
+		std::vector<CompileError> warnings;
+		const std::vector<std::string_view> candidates(listened.begin(), listened.end());
+		for (const EventTrigger& trigger : own.Triggers)
+		{
+			if (listened.count(trigger.Name) > 0 || pythonTexts.count(trigger.Name) > 0)
+				continue;
+			CompileError warning;
+			warning.File = PathToUtf8(path.filename());
+			warning.Line = trigger.Line;
+			warning.Column = trigger.Column;
+			warning.Message = "Nothing listens for '" + trigger.Name + "'. " + (assets.empty() ?
+				std::string("This script and the scripts it uses have no 'when ") + trigger.Name + "' or 'wait for " + trigger.Name + "'." :
+				std::string("No script in this project has 'when ") + trigger.Name + "' or 'wait for " + trigger.Name + "'.");
+			// A name is suggested only when it is the one close name, as for "isn't set anywhere".
+			const std::string closest = ClosestName(trigger.Name, candidates);
+			std::vector<std::string_view> others;
+			for (std::string_view candidate : candidates)
+			{
+				if (candidate != closest)
+					others.push_back(candidate);
+			}
+			if (!closest.empty() && ClosestName(trigger.Name, others).empty())
+			{
+				warning.Message += " Did you mean '" + closest + "'?";
+				// Words stay words when the name reads back as the same words ('with', 'by', 'then' and 'do'
+				// would end it early); otherwise it goes in quotes.
+				bool words = !trigger.Quoted;
+				Lexer lexer(closest);
+				for (const Token& token : lexer.Tokenize())
+				{
+					if (token.Type != TokenType::Eof && token.Type != TokenType::Newline && (!token.IsWord() || token.Type == TokenType::With || token.Type == TokenType::By ||
+						token.Type == TokenType::Then || token.Type == TokenType::Do))
+						words = false;
+				}
+				std::string quoted = "\"";
+				for (const char c : closest)
+				{
+					if (c == '"' || c == '\\')
+						quoted += '\\';
+					quoted += c;
+				}
+				quoted += '"';
+				warning.FixTitle = "Change to '" + closest + "'";
+				warning.FixLine = warning.FixEndLine = trigger.Line;
+				warning.FixColumn = trigger.Column;
+				warning.FixEndColumn = trigger.EndColumn;
+				warning.FixText = words ? closest : quoted;
+			}
+			warnings.push_back(std::move(warning));
+		}
+		return warnings;
 	}
 
 	Json LanguageServer::PublishDiagnostics(const std::string& uri)
@@ -1212,11 +1414,19 @@ namespace ForgeScript {
 	void LanguageServer::PublishDependents(const std::filesystem::path& changed, const std::string& skipUri, std::vector<Json>& replies)
 	{
 		const std::filesystem::path wanted = changed.lexically_normal();
+		// In a project, a script's events are heard by all of its scripts, so one that triggers events
+		// may lose or gain a "Nothing listens for" warning when any of them changes.
+		const std::filesystem::path changedProject = FindProjectAssetFolder(wanted);
 		std::vector<std::string> dependents;
 		for (const auto& [uri, document] : m_Documents)
 		{
 			if (uri == skipUri)
 				continue;
+			if (!changedProject.empty() && FindProjectAssetFolder(document.Path) == changedProject && !FindScriptEvents(document.Text).Triggers.empty())
+			{
+				dependents.push_back(uri);
+				continue;
+			}
 			const std::filesystem::path useFolder = FindUseFolder(document.Path);
 			for (const Symbol& symbol : FindScriptSymbols(document.Text))
 			{

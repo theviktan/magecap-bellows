@@ -7,6 +7,16 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.8.0 (not released yet)
 
+- **A warning for events nothing listens for** (Roadmap 3.0, item 6; Ron, 11:21 PM Nov 27): `trigger
+  door opend` warns "Nothing listens for 'door opend'. No script in this project has 'when door opend'
+  or 'wait for door opend'. Did you mean 'door opened'?", with a quick fix. Event names must match
+  exactly, letter case included, so this also catches `trigger Door Opened`. In a MageCap Bellows
+  project the listeners are every script in its asset folder, and a Python script with the name in
+  quotes; outside one, the script and the scripts it uses. No warning when a script isn't a file or
+  the project is too big to read. It comes from the language server's `FindWarningsIn`, so
+  `--check`, `--lsp` and the Bellows editor all show it, and an open script that triggers events is
+  checked again when another script in its project changes. The Cookbook's recipes may have this one
+  warning (the doc examples test allows it), since the scripts that hear them are the reader's.
 - **Types on variables, fields and lists** (Roadmap 3.0, item 5; Ron, 8:32 PM Nov 27), for the checker
   only: `set score as number to 0`, `set names as list of text to []`, `set loot as map of number to
   {}`, and on a kind's field lines, `set health as number to 100` and `shared count as number is 0`.

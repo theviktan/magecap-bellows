@@ -23,12 +23,11 @@ namespace ForgeScript {
 
 	}
 
-	std::filesystem::path FindUseFolder(const std::filesystem::path& scriptPath)
+	std::filesystem::path FindProjectAssetFolder(const std::filesystem::path& scriptPath)
 	{
 		std::error_code error;
 		const std::filesystem::path script = std::filesystem::absolute(scriptPath, error).lexically_normal();
-		const std::filesystem::path scriptFolder = script.parent_path();
-		for (std::filesystem::path folder = scriptFolder; !folder.empty(); folder = folder.parent_path())
+		for (std::filesystem::path folder = script.parent_path(); !folder.empty(); folder = folder.parent_path())
 		{
 			for (const auto& entry : std::filesystem::directory_iterator(folder, error))
 			{
@@ -38,6 +37,16 @@ namespace ForgeScript {
 			if (folder == folder.parent_path())
 				break;
 		}
+		return {};
+	}
+
+	std::filesystem::path FindUseFolder(const std::filesystem::path& scriptPath)
+	{
+		const std::filesystem::path assets = FindProjectAssetFolder(scriptPath);
+		if (!assets.empty())
+			return assets;
+		std::error_code error;
+		const std::filesystem::path scriptFolder = std::filesystem::absolute(scriptPath, error).lexically_normal().parent_path();
 		return scriptFolder.empty() ? std::filesystem::path(".") : scriptFolder;
 	}
 
