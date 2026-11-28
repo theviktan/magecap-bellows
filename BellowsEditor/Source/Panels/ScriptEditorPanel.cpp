@@ -1407,6 +1407,7 @@ namespace Bellows {
 		}
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		UI::PrepareDockedBackground(WindowName);
 		m_Visible = ImGui::Begin(WindowName, nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
 			| ImGuiWindowFlags_NoFocusOnAppearing);
 		ImGui::PopStyleVar();

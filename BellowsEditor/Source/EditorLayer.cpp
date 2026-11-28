@@ -1598,17 +1598,35 @@ namespace Bellows {
 			BuildDefaultLayout(dockspaceID);
 			m_LayoutInitialized = true;
 		}
-		// The rail of workspaces at the left, then the panels.
+		// The rail of workspaces at the left, then the panels: rounded cards with gaps between them and
+		// around them.
 		const float railWidth = 56.0f * Theme::GetScale();
+		const float panelGap = Theme::PanelGap * Theme::GetScale();
 		const float areaHeight = ImGui::GetContentRegionAvail().y - statusHeight;
 		ImGui::SetCursorPosX(0.0f);
+		const float areaTop = ImGui::GetCursorScreenPos().y;
 		ImGui::BeginChild("##Rail", ImVec2(railWidth, areaHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		DrawRail();
 		ImGui::EndChild();
 		ImGui::SameLine(0.0f, 0.0f);
-		const ImVec2 dockSize(ImGui::GetContentRegionAvail().x, areaHeight);
-		ImGui::DockSpace(dockspaceID, dockSize, ImGuiDockNodeFlags_None);
+		const ImVec2 dockPos(ImGui::GetCursorScreenPos().x, areaTop + panelGap);
+		const ImVec2 dockSize(std::max(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - dockPos.x - panelGap, 1.0f), std::max(areaHeight - panelGap * 2.0f, 1.0f));
+		ImGui::SetCursorScreenPos(dockPos);
 
+		// The dock space draws its tab bars into this window; the cards go under them (channel 0) and
+		// the cards' corners and outlines over them (channel 2). The splitters fill the gaps with the
+		// window background, so that is the app's background here.
+		ImDrawList* rootDrawList = ImGui::GetWindowDrawList();
+		ImDrawListSplitter cardLayers;
+		cardLayers.Split(rootDrawList, 3);
+		cardLayers.SetCurrentChannel(rootDrawList, 1);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::ToVec4(Theme::Background));
+		ImGui::DockSpace(dockspaceID, dockSize, ImGuiDockNodeFlags_None);
+		ImGui::PopStyleColor();
+		DrawPanelCards(rootDrawList, cardLayers, dockspaceID);
+		cardLayers.Merge(rootDrawList);
+
+		ImGui::SetCursorScreenPos(ImVec2(ImGui::GetWindowPos().x, areaTop + areaHeight));
 		DrawStatusBar();
 		ImGui::End();
 		DrawSearch();
@@ -2105,6 +2123,66 @@ namespace Bellows {
 		}
 	}
 
+	void EditorLayer::DrawPanelCards(ImDrawList* drawList, ImDrawListSplitter& layers, unsigned int dockspaceID)
+	{
+		const float scale = Theme::GetScale();
+		const float radius = Theme::PanelRadius * scale;
+
+		// The visible panels (leaf nodes holding windows) and the gaps between neighbors.
+		std::vector<ImRect> cards;
+		struct Gap { ImRect Rect; ImGuiAxis Axis; };
+		std::vector<Gap> gaps;
+		const std::function<void(ImGuiDockNode*)> visit = [&](ImGuiDockNode* node)
+		{
+			if (!node || !node->IsVisible)
+				return;
+			if (node->IsLeafNode())
+			{
+				if (node->Windows.Size > 0)
+					cards.emplace_back(node->Pos, node->Pos + node->Size);
+				return;
+			}
+			ImGuiDockNode* first = node->ChildNodes[0];
+			ImGuiDockNode* second = node->ChildNodes[1];
+			visit(first);
+			visit(second);
+			if (first && second && first->IsVisible && second->IsVisible)
+			{
+				const ImGuiAxis axis = node->SplitAxis;
+				ImRect gap(node->Pos, node->Pos + node->Size);
+				gap.Min[axis] = first->Pos[axis] + first->Size[axis];
+				gap.Max[axis] = second->Pos[axis];
+				gaps.push_back({ gap, axis });
+			}
+		};
+		visit(ImGui::DockBuilderGetNode(dockspaceID));
+
+		layers.SetCurrentChannel(drawList, 0);
+		for (const ImRect& card : cards)
+			drawList->AddRectFilled(card.Min, card.Max, Theme::Panel, radius);
+
+		layers.SetCurrentChannel(drawList, 2);
+		for (const ImRect& card : cards)
+		{
+			// The tab bar is drawn square over the card's top corners: cut them back to round.
+			drawList->PathLineTo(card.Min);
+			drawList->PathArcTo(ImVec2(card.Min.x + radius, card.Min.y + radius), radius, IM_PI, IM_PI * 1.5f, 8);
+			drawList->PathFillConcave(Theme::Background);
+			drawList->PathLineTo(ImVec2(card.Max.x, card.Min.y));
+			drawList->PathArcTo(ImVec2(card.Max.x - radius, card.Min.y + radius), radius, IM_PI * 1.5f, IM_PI * 2.0f, 8);
+			drawList->PathFillConcave(Theme::Background);
+			drawList->AddRect(card.Min, card.Max, Theme::Border, radius);
+		}
+		// A small grip in the middle of each gap shows it can be dragged.
+		for (const Gap& gap : gaps)
+		{
+			const ImVec2 center = gap.Rect.GetCenter();
+			const float length = 14.0f * scale, width = 1.5f * scale;
+			const ImVec2 half = gap.Axis == ImGuiAxis_X ? ImVec2(width, length) : ImVec2(length, width);
+			drawList->AddRectFilled(center - half, center + half, Theme::BorderStrong, width);
+		}
+	}
+
 	void EditorLayer::OpenSearch(const std::string& query)
 	{
 		m_SearchEntries = CollectSearchEntries();
@@ -2415,6 +2493,7 @@ namespace Bellows {
 			ImGui::SetNextWindowFocus();
 			m_FocusViewport = false;
 		}
+		UI::PrepareDockedBackground("Viewport");
 		const bool visible = ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		ImGui::PopStyleVar();
 		m_ViewportVisible = visible;
@@ -2446,14 +2525,21 @@ namespace Bellows {
 			const float fit = std::min(m_ViewportSize.x / rendered.x, m_ViewportSize.y / rendered.y);
 			imageSize = ImVec2(std::max(std::floor(rendered.x * fit), 1.0f), std::max(std::floor(rendered.y * fit), 1.0f));
 			m_ViewportImageOrigin = glm::floor(m_ViewportPosition + (m_ViewportSize - glm::vec2(imageSize.x, imageSize.y)) * 0.5f);
-			ImGui::GetWindowDrawList()->AddRectFilled(cursor, ImVec2(cursor.x + available.x, cursor.y + available.y), Theme::Background);
+			ImGui::GetWindowDrawList()->AddRectFilled(cursor, ImVec2(cursor.x + available.x, cursor.y + available.y), Theme::Background,
+				Theme::PanelRadius * Theme::GetScale(), ImDrawFlags_RoundBottom);
 			ImGui::SetCursorScreenPos(ImVec2(m_ViewportImageOrigin.x, m_ViewportImageOrigin.y));
 		}
 		m_ViewportImageScale = glm::vec2(imageSize.x, imageSize.y) / rendered;
+		// Filling its card, the image's bottom corners are rounded like the card's.
+		const ImVec2 imageMin = ImGui::GetCursorScreenPos();
+		const ImVec2 imageMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+		ImGui::Dummy(imageSize);
 		if (nvrhi::ITexture* image = m_ViewportRenderer->GetFinalImage())
-			ImGui::Image(ImTextureRef(reinterpret_cast<ImTextureID>(image)), imageSize);
-		else
-			ImGui::Dummy(imageSize);
+		{
+			const float rounding = IsInUIView() ? 0.0f : Theme::PanelRadius * Theme::GetScale();
+			ImGui::GetWindowDrawList()->AddImageRounded(ImTextureRef(reinterpret_cast<ImTextureID>(image)), imageMin, imageMax,
+				ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, rounding, ImDrawFlags_RoundBottom);
+		}
 
 		if (ImGui::BeginDragDropTarget())
 		{

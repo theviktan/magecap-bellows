@@ -284,6 +284,8 @@ namespace Bellows {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
 		const bool open = ImGui::TreeNodeEx("##folder", flags);
 		ImGui::PopStyleVar();
+		if (current)
+			ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), Theme::SelectionRing, ImGui::GetStyle().FrameRounding);
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 			SetCurrentDirectory(folder);
 
@@ -315,7 +317,9 @@ namespace Bellows {
 		ImGui::TextUnformatted(open && !children.empty() ? ICON_FOLDER_OPEN : ICON_FOLDER);
 		ImGui::PopStyleColor();
 		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(current ? Theme::SelectionText : Theme::Text));
 		ImGui::TextUnformatted(label.c_str());
+		ImGui::PopStyleColor();
 
 		if (open)
 		{
@@ -386,7 +390,9 @@ namespace Bellows {
 
 		const ImVec2 max(position.x + size, position.y + size + labelHeight);
 		if (selected || hovered)
-			drawList->AddRectFilled(position, max, selected ? Theme::AccentMuted : Theme::FieldHovered, 6.0f * scale);
+			drawList->AddRectFilled(position, max, selected ? Theme::Selection : Theme::FieldHovered, 6.0f * scale);
+		if (selected)
+			drawList->AddRect(position, max, Theme::SelectionRing, 6.0f * scale);
 
 		// Thumbnail: textures show themselves, everything else gets a typed icon tile.
 		const ImVec2 tileMin(position.x + 6.0f * scale, position.y + 6.0f * scale);
@@ -441,8 +447,8 @@ namespace Bellows {
 
 		// Label: up to two lines, clipped.
 		const ImVec4 clip(position.x + 4.0f * scale, position.y + size, max.x - 4.0f * scale, max.y);
-		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(position.x + 6.0f * scale, position.y + size), Theme::Text,
-			item.Name.c_str(), nullptr, size - 12.0f * scale, &clip);
+		drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(position.x + 6.0f * scale, position.y + size),
+			selected ? Theme::SelectionText : Theme::Text, item.Name.c_str(), nullptr, size - 12.0f * scale, &clip);
 
 		if (hovered)
 			UI::Tooltip(item.IsDirectory ? item.Name.c_str() : item.AssetPath.c_str());

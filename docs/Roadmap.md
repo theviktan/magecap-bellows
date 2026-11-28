@@ -241,7 +241,7 @@ tested and shown to Ron against the design:
    scripts, the project and scene with the unsaved dot, the ember Play button (it moves into the
    viewport toolbar in step 4), Export game; Scene, Script, Profiler and Content on a rail at the
    left, Settings at its foot. Animation joins the rail when the editor has an Animation workspace.
-3. **Panels:** rounded panels with gaps and grips between them, the panel headers, the warm
+3. **Panels** (0.7): rounded panels with gaps and grips between them, the panel headers, the warm
    selection in the Hierarchy and Content panels.
 4. **Viewport:** one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the
    CPU/GPU readout, a faint selection glow with an off switch in the View menu; it also moves the

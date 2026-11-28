@@ -146,9 +146,11 @@ namespace Bellows::Theme {
 		style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 		style.WindowMenuButtonPosition = ImGuiDir_None;
 		style.SeparatorTextBorderSize = 1.0f;
-		style.DockingSeparatorSize = 2.0f;
+		// Docked panels are rounded cards with gaps between them (the editor draws the cards; see
+		// EditorLayer::DrawPanelCards), so the splitters are as wide as the gaps.
+		style.DockingSeparatorSize = PanelGap;
 		style.TabBarOverlineSize = 0.0f;
-		style.TabBarBorderSize = 1.0f;
+		style.TabBarBorderSize = 0.0f;
 
 		ImVec4* colors = style.Colors;
 		colors[ImGuiCol_Text] = ToVec4(Text);
@@ -161,9 +163,10 @@ namespace Bellows::Theme {
 		colors[ImGuiCol_FrameBg] = ToVec4(Field);
 		colors[ImGuiCol_FrameBgHovered] = ToVec4(FieldHovered);
 		colors[ImGuiCol_FrameBgActive] = ToVec4(FieldActive);
-		colors[ImGuiCol_TitleBg] = ToVec4(Background);
-		colors[ImGuiCol_TitleBgActive] = ToVec4(Background);
-		colors[ImGuiCol_TitleBgCollapsed] = ToVec4(Background);
+		// A docked panel's header is part of its card.
+		colors[ImGuiCol_TitleBg] = ToVec4(Panel);
+		colors[ImGuiCol_TitleBgActive] = ToVec4(Panel);
+		colors[ImGuiCol_TitleBgCollapsed] = ToVec4(Panel);
 		colors[ImGuiCol_MenuBarBg] = ToVec4(Background);
 		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_ScrollbarGrab] = ToVec4(BorderStrong);
@@ -180,19 +183,20 @@ namespace Bellows::Theme {
 		colors[ImGuiCol_HeaderHovered] = ToVec4(Hover);
 		colors[ImGuiCol_HeaderActive] = ToVec4(SelectionStrong);
 		colors[ImGuiCol_Separator] = ToVec4(Separator);
-		colors[ImGuiCol_SeparatorHovered] = ToVec4(BorderStrong);
+		colors[ImGuiCol_SeparatorHovered] = ToVec4(WithAlpha(BorderStrong, 150));
 		colors[ImGuiCol_SeparatorActive] = ToVec4(Neutral);
 		colors[ImGuiCol_ResizeGrip] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_ResizeGripHovered] = ToVec4(BorderStrong);
 		colors[ImGuiCol_ResizeGripActive] = ToVec4(Neutral);
 		colors[ImGuiCol_InputTextCursor] = ToVec4(Text);
-		colors[ImGuiCol_Tab] = ToVec4(Background);
+		// Panel tabs are pills on the card: the open one raised, the rest flat until hovered.
+		colors[ImGuiCol_Tab] = ToVec4(Panel);
 		colors[ImGuiCol_TabHovered] = ToVec4(Hover);
-		colors[ImGuiCol_TabSelected] = ToVec4(Panel);
-		colors[ImGuiCol_TabSelectedOverline] = ToVec4(BorderStrong);
-		colors[ImGuiCol_TabDimmed] = ToVec4(Background);
-		colors[ImGuiCol_TabDimmedSelected] = ToVec4(Panel);
-		colors[ImGuiCol_TabDimmedSelectedOverline] = ToVec4(Border);
+		colors[ImGuiCol_TabSelected] = ToVec4(PanelRaised);
+		colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+		colors[ImGuiCol_TabDimmed] = ToVec4(Panel);
+		colors[ImGuiCol_TabDimmedSelected] = ToVec4(WithAlpha(PanelRaised, 170));
+		colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_DockingPreview] = ToVec4(WithAlpha(NeutralBright, 70));
 		colors[ImGuiCol_DockingEmptyBg] = ToVec4(Background);
 		colors[ImGuiCol_PlotLines] = ToVec4(Neutral);

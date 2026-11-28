@@ -56,6 +56,9 @@ namespace Bellows::UI {
 	// Begins a dockable panel the user can close from its tab (View > Panels shows it again).
 	// The dock area's own close button is hidden, so one click never closes several panels at once.
 	bool BeginPanel(const char* name, bool* open, ImGuiWindowFlags flags = 0);
+	// Call right before ImGui::Begin of a dockable window that doesn't use BeginPanel: docked, its
+	// background is the editor's rounded card.
+	void PrepareDockedBackground(const char* name);
 
 	// Centered text inside the current window (empty states).
 	void CenteredText(const char* text, float verticalOffset = 0.0f);
