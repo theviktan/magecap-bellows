@@ -1131,7 +1131,7 @@ namespace Bellows {
 				UI::EndPropertyGrid();
 			}
 			UI::SectionHeader("Dissolve");
-			DrawOptionalCurveEditor({ "EffectShapeDissolve", "Dissolve Over Cycle", "Steady at Amount, or a curve over each cycle (0 whole, 1 gone)",
+			DrawOptionalCurveEditor({ "EffectShapeDissolve", "Over Cycle", "Steady at Amount, or a curve over each cycle (0 whole, 1 gone)",
 				"When, from 0 (the cycle's start) to 1 (its end)" }, c.DissolveCurve, c.Dissolve, "How dissolved then: 0 whole, 1 gone", DissolvePresets(), 1.0f);
 			if (UI::BeginPropertyGrid("EffectShapeDissolveLook"))
 			{
