@@ -1,7 +1,8 @@
 """Checks that nothing we push or share carries an AI label, an AI tool's notice or a content-credentials
 stamp (Sync rule 16, from Ron, Nov 25, 2026).
 
-Checks every file git tracks (outside vendor/), and with --commits, the messages of a range of commits:
+Checks every file git tracks (outside vendor/), and with --commits, a range of commits: their messages, and
+the names and email addresses of their authors and committers:
 
     python Tools/CheckNoAiStamps.py
     python Tools/CheckNoAiStamps.py --commits origin/main..HEAD
@@ -11,6 +12,8 @@ Checks every file git tracks (outside vendor/), and with --commits, the messages
   Claude's coding tool, or a co-author or session trailer naming Claude.
 - PNG files: a caBX chunk (C2PA content credentials), or a text chunk that names C2PA.
 - JPEG files: an APP11 segment holding a JUMBF box (where C2PA keeps its manifest).
+- Commits: an author or committer named for an AI tool or its maker, or with an address at an AI company
+  (Ron's board review 2, Nov 28, 2026). A finding names the commit and the name, never the email address.
 
 Prints each problem and exits 1 when there is one; prints "NO AI STAMPS FOUND" and exits 0 otherwise.
 """
@@ -32,6 +35,12 @@ TEXT_PATTERNS = [
     re.compile(r"(made|created|generated)\s+(with|by)\s+(an\s+)?A" + r"I\b", re.IGNORECASE),
     re.compile(r"\bA" + r"I-generated\b", re.IGNORECASE),
 ]
+# Who may not appear as a commit's author or committer: names of AI tools and their makers, matched as
+# whole words in a name, and their companies' domains in an address.
+IDENTITY_NAME_PATTERN = re.compile(
+    r"\b(" + _CLAUDE.lower() + r"|anthropic|openai|chatgpt|gpt-\d\w*|copilot|gemini|codex|cursor\s*agent|devin)\b(\[bot\])?",
+    re.IGNORECASE)
+IDENTITY_EMAIL_PATTERN = re.compile(r"@([\w-]+\.)*(anthropic\.com|openai\.com|" + _CLAUDE.lower() + r"\.ai)\b", re.IGNORECASE)
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
 SKIPPED_DIRECTORIES = ("vendor/",)
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -98,13 +107,25 @@ def tracked_files(root):
                 yield name, path
 
 
+def identity_problems(role, name, email):
+    """What's wrong with a commit's author or committer ('role'), without repeating the address."""
+    problems = []
+    if IDENTITY_NAME_PATTERN.search(name):
+        problems.append(f"the {role} is named \"{name}\"")
+    if IDENTITY_EMAIL_PATTERN.search(email):
+        problems.append(f"the {role}'s email address is at an AI company")
+    return problems
+
+
 def commit_problems(root, commits):
-    output = subprocess.run(["git", "log", "--format=%H%x00%B%x01", commits], cwd=root,
+    output = subprocess.run(["git", "log", "--format=%H%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x01", commits], cwd=root,
                             capture_output=True, check=True, text=True).stdout
     for entry in output.split("\x01"):
-        if "\0" not in entry:
+        if entry.count("\0") < 5:
             continue
-        sha, message = entry.strip().split("\0", 1)
+        sha, author, author_email, committer, committer_email, message = entry.strip().split("\0", 5)
+        for problem in identity_problems("author", author, author_email) + identity_problems("committer", committer, committer_email):
+            yield sha[:7], problem
         for problem in text_problems(message):
             yield sha[:7], problem
 
@@ -132,6 +153,13 @@ def self_test():
         ("a plain PNG", bool(png_problems(png((b"IHDR", b"x" * 13), (b"IDAT", b"c2pa"), (b"IEND", b"")))), False),
         ("a JPEG with JUMBF", bool(jpeg_problems(b"\xff\xd8\xff\xeb\x00\x08jumbc2\xff\xda")), True),
         ("a plain JPEG", bool(jpeg_problems(b"\xff\xd8\xff\xe0\x00\x06JFIF\xff\xdac2pa")), False),
+        ("an AI-named committer", bool(identity_problems("committer", _CLAUDE, "someone@example.com")), True),
+        ("an AI bot author", bool(identity_problems("author", "copilot[bot]", "1+Copilot@users.noreply.github.com")), True),
+        ("an AI company address", bool(identity_problems("author", "Ron", "noreply@anthropic.com")), True),
+        ("an AI company subdomain", bool(identity_problems("author", "Ron", "x@mail.openai.com")), True),
+        ("Ron's identity", bool(identity_problems("author", "Ron", "theviktan@users.noreply.github.com")), False),
+        ("a name that only contains a tool's letters", bool(identity_problems("author", "Claudette Geminiani", "c@example.com")), False),
+        ("the finding hides the address", "anthropic.com" in " ".join(identity_problems("author", "Ron", "noreply@anthropic.com")), False),
     ]
     failed = [name for name, found, expected in cases if found != expected]
     for name in failed:
@@ -144,7 +172,7 @@ def self_test():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--commits", help="also check the messages of these commits, such as origin/main..HEAD")
+    parser.add_argument("--commits", help="also check these commits' messages, authors and committers, such as origin/main..HEAD")
     parser.add_argument("--self-test", action="store_true", help="check the checker itself on made-up files")
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent.parent), help="the repository")
     args = parser.parse_args()

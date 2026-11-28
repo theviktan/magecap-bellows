@@ -20,10 +20,30 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           submodules: recursive
+          fetch-depth: 0  # The commit check below reads the pushed range's history
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.13"
+
+      # Rule 16 (Sync rule 16, Ron's board review 2): no pushed commit may carry an AI label in its
+      # message or an AI name or address as its author or committer. Only the new commits are checked;
+      # older history stays as it is, by Ron's decision.
+      - name: Check the new commits for AI stamps
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        env:
+          BEFORE: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
+          AFTER: ${{ github.event_name == 'push' && github.sha || github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            # A new branch or tag, or a forced push: check what the push added beyond main.
+            BEFORE="$(git merge-base origin/main "$AFTER" 2>/dev/null || true)"
+          fi
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "$AFTER" ]; then
+            python Tools/CheckNoAiStamps.py --commits "$BEFORE..$AFTER"
+          else
+            echo "No new commits to check."
+          fi
 
       - name: Install dependencies
         run: |

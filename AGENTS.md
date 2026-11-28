@@ -21,7 +21,7 @@ fully scriptable so agents can build games through it.
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows), `CheckNoAiStamps.py` (rule 7: no AI labels in tracked files or commit messages, no C2PA stamps in images), `Installer/MageCapBellows.iss` (the Windows setup program, Inno Setup 6), `WriteUpdateManifest.py` (writes a release's `update.json`), `UpdateServer/` (the Cloudflare Worker at updates.magecapgames.com that serves updates from the GitHub releases; see `docs/Updates.md`), `CheckRoadmap.py` (checks `docs/Roadmap.md`'s feature checklist, and at a release that every row planned for it is Done). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows), `CheckNoAiStamps.py` (rule 7: no AI labels in tracked files or commit messages, no AI names or addresses on commits, no C2PA stamps in images), `Installer/MageCapBellows.iss` (the Windows setup program, Inno Setup 6), `WriteUpdateManifest.py` (writes a release's `update.json`), `UpdateServer/` (the Cloudflare Worker at updates.magecapgames.com that serves updates from the GitHub releases; see `docs/Updates.md`), `CheckRoadmap.py` (checks `docs/Roadmap.md`'s feature checklist, and at a release that every row planned for it is Done). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -145,9 +145,13 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
    such as a PNG's `caBX` chunk) and other AI metadata in images; AI-made labels in files, pages,
    release notes and PR text (generated-with footers, made-with-AI notes); `Co-Authored-By` and
    session trailers for an AI in commit messages; notices an AI tool leaves inside files; and
-   secrets. Strip them before every push, release or send. `RepositoryNoAiStamps` checks every
-   tracked file; before pushing, also run `python Tools/CheckNoAiStamps.py --commits origin/main..HEAD`
-   for the new commits' messages. Old history stays as it is.
+   secrets; and an AI's name or address as a commit's author or committer. Strip them before every
+   push, release or send. Commit as Ron: set `git config user.name Ron` and
+   `git config user.email theviktan@users.noreply.github.com` in every clone (or pass both with `-c`),
+   so a session's own identity never reaches a commit. `RepositoryNoAiStamps` checks every tracked
+   file; before pushing, also run `python Tools/CheckNoAiStamps.py --commits origin/main..HEAD`, which
+   checks the new commits' messages, authors and committers. CI runs the same commit check on every
+   push and pull request. Old history stays as it is.
 
 ## Code style (Hazel-style C++)
 
