@@ -190,6 +190,10 @@ namespace Bellows {
 		JsonRead(json, "ShowContentFolderTree", settings.ShowContentFolderTree);
 		JsonRead(json, "LastProjectLocation", settings.LastProjectLocation);
 		JsonRead(json, "PlayInGameWindow", settings.PlayInGameWindow);
+		JsonRead(json, "CheckForUpdates", settings.CheckForUpdates);
+		JsonRead(json, "LastUpdateCheck", settings.LastUpdateCheck);
+		JsonRead(json, "SkippedVersion", settings.SkippedVersion);
+		JsonRead(json, "UpdateUrl", settings.UpdateUrl);
 		if (auto panels = json.find("Panels"); panels != json.end())
 		{
 			JsonRead(*panels, "Hierarchy", settings.Panels.Hierarchy);
@@ -226,6 +230,10 @@ namespace Bellows {
 		json["ShowContentFolderTree"] = ShowContentFolderTree;
 		json["LastProjectLocation"] = LastProjectLocation;
 		json["PlayInGameWindow"] = PlayInGameWindow;
+		json["CheckForUpdates"] = CheckForUpdates;
+		json["LastUpdateCheck"] = LastUpdateCheck;
+		json["SkippedVersion"] = SkippedVersion;
+		json["UpdateUrl"] = UpdateUrl;
 		json["Panels"] = {
 			{ "Hierarchy", Panels.Hierarchy },
 			{ "Inspector", Panels.Inspector },

@@ -125,6 +125,52 @@ jobs:
           "PACKAGE_NAME=$($package.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "package_name=$($package.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
+      # The setup program (Tools/Installer/MageCapBellows.iss): a per-user install the editor can update.
+      - name: Build the installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          $version = (Select-String -Path CMakeLists.txt -Pattern '^\s+VERSION\s+([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          & $iscc /Q "/DAppVersion=$version" "/DSourceDir=$PWD\dist\$env:PACKAGE_NAME" "/DOutputDir=$PWD\dist" "/DOutputName=$env:PACKAGE_NAME-Setup" Tools\Installer\MageCapBellows.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          "ENGINE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # Installs silently into a scratch folder (no shortcuts on the desktop, no file association, the
+      # editor left closed), checks the installed programs run, then uninstalls.
+      - name: Test the installer
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "BellowsInstall"
+          $setup = Start-Process "dist\$env:PACKAGE_NAME-Setup.exe" -Wait -PassThru -ArgumentList @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/NOLAUNCH", "/TASKS=""""", "/DIR=""$dir""", "/LOG=""$env:RUNNER_TEMP\setup.log""")
+          if ($setup.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; Write-Output "::error::Setup failed ($($setup.ExitCode))"; exit 1 }
+          foreach ($file in "BellowsEditor.exe", "BellowsRuntime.exe", "forgescript.exe", "unins000.exe", "Projects\FeatureTest\FeatureTest.bproject") {
+            if (-not (Test-Path (Join-Path $dir $file))) { Write-Output "::error::The install has no $file"; exit 1 }
+          }
+          $forge = Start-Process (Join-Path $dir "forgescript.exe") -ArgumentList "--version" -Wait -PassThru -NoNewWindow
+          if ($forge.ExitCode -ne 0) { Write-Output "::error::The installed forgescript doesn't run"; exit 1 }
+          Start-Process (Join-Path $dir "unins000.exe") -Wait -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+          # The uninstaller finishes from a copy of itself, so give it a moment.
+          for ($i = 0; $i -lt 60 -and (Test-Path (Join-Path $dir "BellowsEditor.exe")); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path (Join-Path $dir "BellowsEditor.exe")) { Write-Output "::error::Uninstalling left the editor behind"; exit 1 }
+
+      # What the editor's update check reads (Tools/WriteUpdateManifest.py), served by the update server.
+      - name: Write update.json
+        run: |
+          python Tools/WriteUpdateManifest.py --version $env:ENGINE_VERSION --installer "dist/$env:PACKAGE_NAME-Setup.exe" --portable "dist/$env:PACKAGE_NAME.zip" --notes "docs/ReleaseNotes/$env:ENGINE_VERSION.md" --output dist/update.json
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-Setup
+          path: |
+            dist/${{ env.PACKAGE_NAME }}-Setup.exe
+            dist/update.json
+          retention-days: 30
+
       - name: Upload the editor
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
@@ -145,13 +191,16 @@ jobs:
           if (Select-String -Path ForgeScript/CHANGELOG.md -SimpleMatch -Quiet "(not released yet)") { Write-Output "::error::ForgeScript/CHANGELOG.md still has a version '(not released yet)'; date it before the release"; exit 1 }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      # The zip itself, for the release job.
-      - name: Upload the release zip
+      # The zip, the setup program and update.json, for the release job.
+      - name: Upload the release files
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: release-zip
-          path: dist/${{ env.PACKAGE_NAME }}.zip
+          name: release-files
+          path: |
+            dist/${{ env.PACKAGE_NAME }}.zip
+            dist/${{ env.PACKAGE_NAME }}-Setup.exe
+            dist/update.json
           retention-days: 1
 
   # Publishing is its own job, the only one that can write to the repository.
@@ -162,18 +211,21 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write    # Creating or updating the GitHub Release
-      actions: read      # Downloading the zip the Windows job made
+      actions: read      # Downloading the files the Windows job made
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
 
-      - name: Download the release zip
+      - name: Download the release files
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-zip --dir dist
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-files --dir dist
 
       - name: Publish the release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
-          files: dist/${{ needs.windows.outputs.package_name }}.zip
+          files: |
+            dist/${{ needs.windows.outputs.package_name }}.zip
+            dist/${{ needs.windows.outputs.package_name }}-Setup.exe
+            dist/update.json
           body_path: docs/ReleaseNotes/${{ needs.windows.outputs.version }}.md
           generate_release_notes: true

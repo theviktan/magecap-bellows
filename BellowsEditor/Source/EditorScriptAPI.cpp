@@ -518,6 +518,24 @@ namespace Bellows {
 				"Opens the title bar's search (as Ctrl+K does), with 'query' typed in it");
 			m.def("close_search", [] { Editor().CloseSearch(); }, "Closes the title bar's search");
 			m.def("is_search_open", [] { return Editor().IsSearchOpen(); }, "Whether the title bar's search is open");
+			m.def("check_for_updates", [](const std::string& url) { return Editor().CheckForUpdates(true, url); }, py::arg("url") = "",
+				"Looks for a new version as Help > Check for Updates does, in the background; 'url' replaces the update server "
+				"(an https:// or file:// update.json). False while a check or download is under way");
+			m.def("update_status", []
+			{
+				const UpdateChecker& checker = Editor().GetUpdateChecker();
+				static constexpr const char* c_States[] = { "idle", "checking", "up_to_date", "available", "failed", "downloading", "downloaded" };
+				py::dict status;
+				status["state"] = c_States[static_cast<int>(checker.GetState())];
+				const std::optional<UpdateManifest> manifest = checker.GetManifest();
+				status["version"] = manifest ? manifest->Version : std::string();
+				status["notes"] = manifest ? manifest->Notes : std::string();
+				status["offered"] = Editor().IsUpdateOffered();
+				status["error"] = checker.GetError();
+				status["dialog_open"] = Editor().IsUpdateDialogOpen();
+				return status;
+			}, "Where the update check stands: {state, version, notes, offered, error, dialog_open}");
+			m.def("close_update_dialog", [] { Editor().CloseUpdateDialog(); }, "Closes the Updates dialog");
 			m.def("set_hierarchy_view", [](const std::string& view)
 			{
 				using View = SceneHierarchyPanel::View;

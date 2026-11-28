@@ -102,13 +102,21 @@ You don't need to build the engine to use it. Releases are on the
 [Releases page](https://github.com/theviktan/magecap-bellows/releases):
 
 1. Open https://github.com/theviktan/magecap-bellows/releases and find the newest release
-   (for example **MageCap Bellows 0.3.0**).
-2. Under **Assets**, click **MageCap-Bellows-<version>-Windows.zip** to download it.
-3. Right-click the downloaded zip, choose **Extract All...**, and extract it anywhere (for example
-   `C:\MageCapBellows`).
-4. Open the extracted folder and double-click **BellowsEditor.exe**. If Windows SmartScreen says
-   "Windows protected your PC", click **More info** and then **Run anyway** (the editor is not
-   code-signed yet).
+   (for example **MageCap Bellows 0.7.0**).
+2. Under **Assets**, click **MageCap-Bellows-<version>-Windows-Setup.exe** to download the setup
+   program.
+3. Double-click it. If Windows SmartScreen says "Windows protected your PC", click **More info** and
+   then **Run anyway** (Bellows is not code-signed yet). It needs no administrator rights: click
+   through the pages and **Install**, and Bellows opens at the end. It's in the Start menu as
+   **MageCap Bellows** from then on.
+4. Installed this way, Bellows updates itself: when a new version is out it shows what's new and
+   installs it with one click (**Help → Check for Updates...** looks right away). See
+   [docs/Updates.md](docs/Updates.md).
+
+Prefer no installer? Download **MageCap-Bellows-<version>-Windows.zip** instead, right-click it,
+choose **Extract All...**, extract it anywhere (for example `C:\MageCapBellows`) and double-click
+**BellowsEditor.exe** in it. That copy tells you about new versions too, and you unzip each one
+yourself.
 
 To try changes made since the last release, take a build of `main`: open
 https://github.com/theviktan/magecap-bellows/actions/workflows/ci.yml, click the newest run on

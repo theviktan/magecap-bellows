@@ -51,6 +51,11 @@ namespace Bellows {
 		bool ShowContentFolderTree = true;
 		std::string LastProjectLocation;			// Where the last new project was created
 		bool PlayInGameWindow = true;				// Play runs the game in its own window (false: in the viewport)
+		// Updates: look for a new version at startup (at most once a day). Help > Check for Updates works either way.
+		bool CheckForUpdates = true;
+		int64_t LastUpdateCheck = 0;				// Seconds since the Unix epoch; 0 = never
+		std::string SkippedVersion;					// "Skip this version": not offered again at startup
+		std::string UpdateUrl;						// Where the update manifest is; empty = the MageCap Games server
 
 		static constexpr size_t MaxProjects = 200;
 

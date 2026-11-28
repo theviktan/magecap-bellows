@@ -73,6 +73,68 @@ namespace Bellows {
 
 	}
 
+	bool Process::StartDetached(const StartInfo& info)
+	{
+#if defined(BW_PLATFORM_WINDOWS)
+		std::wstring commandLine;
+		AppendQuotedArgument(commandLine, info.Program.wstring());
+		for (const std::string& argument : info.Arguments)
+			AppendQuotedArgument(commandLine, Widen(argument));
+		const std::wstring workingDirectory = info.WorkingDirectory.wstring();
+		STARTUPINFOW startup {};
+		startup.cb = sizeof(startup);
+		PROCESS_INFORMATION process {};
+		// Outside any job the editor runs in, so closing the editor doesn't end it.
+		const DWORD flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB;
+		auto create = [&](DWORD creationFlags)
+		{
+			return ::CreateProcessW(info.Program.wstring().c_str(), commandLine.data(), nullptr, nullptr, FALSE, creationFlags, nullptr,
+				workingDirectory.empty() ? nullptr : workingDirectory.c_str(), &startup, &process) != 0;
+		};
+		// Some launchers' jobs don't allow leaving them: then it starts inside the job.
+		if (!create(flags) && !create(flags & ~static_cast<DWORD>(CREATE_BREAKAWAY_FROM_JOB)))
+			return false;
+		::CloseHandle(process.hThread);
+		::CloseHandle(process.hProcess);
+		return true;
+#else
+		// A grandchild's failed exec can't be reported back, so check what can be checked first.
+		if (access(info.Program.c_str(), X_OK) != 0)
+			return false;
+		std::vector<std::string> argv { info.Program.string() };
+		argv.insert(argv.end(), info.Arguments.begin(), info.Arguments.end());
+		std::vector<char*> pointers;
+		for (std::string& argument : argv)
+			pointers.push_back(argument.data());
+		pointers.push_back(nullptr);
+		const std::string workingDirectory = info.WorkingDirectory.string();
+		// A double fork: the grandchild belongs to init, in its own session, and no one waits for it.
+		const pid_t child = fork();
+		if (child < 0)
+			return false;
+		if (child == 0)
+		{
+			setsid();
+			if (fork() != 0)
+				_exit(0);
+			const int devNull = open("/dev/null", O_RDWR);
+			if (devNull >= 0)
+			{
+				dup2(devNull, STDIN_FILENO);
+				dup2(devNull, STDOUT_FILENO);
+				dup2(devNull, STDERR_FILENO);
+			}
+			if (!workingDirectory.empty() && chdir(workingDirectory.c_str()) != 0)
+				_exit(127);
+			execv(pointers[0], pointers.data());
+			_exit(127);
+		}
+		int status = 0;
+		waitpid(child, &status, 0);
+		return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+#endif
+	}
+
 	Scope<Process> Process::Start(const StartInfo& info, std::string* outError)
 	{
 		if (!std::filesystem::is_regular_file(info.Program))

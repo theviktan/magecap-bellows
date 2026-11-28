@@ -21,6 +21,7 @@
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Core/Process.h"
 #include "Bellows/Core/Profiler.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Navigation/SceneNavigation.h"
@@ -122,6 +123,11 @@ namespace Bellows {
 		if (FileSystem::Exists(iconFolder / "ForgeScript.png"))
 			m_ForgeScriptIcon = Texture2D::LoadFromFile(iconFolder / "ForgeScript.png", TextureColorSpace::Linear);
 		m_ProjectManager = CreateScope<ProjectManager>(*this);
+
+		// The daily look for a new version; never in automation or headless runs, which must not reach the network.
+		if (!m_Options.Headless && m_Options.StartupScript.empty()
+			&& UpdateLogic::IsCheckDue(m_Settings.CheckForUpdates, m_Settings.LastUpdateCheck, EditorSettings::Now()))
+			CheckForUpdates(false);
 
 		// A script stops inside the game's update; the game pauses once that update has finished. A stop
 		// with a message (a condition or log message that couldn't be worked out) also goes to the Console.
@@ -940,6 +946,7 @@ namespace Bellows {
 		m_LastFrameTime = timestep.GetSeconds();
 		// The game window's log lines reach the Console every frame.
 		m_GameWindow.Update();
+		PollUpdates();
 
 		// Agent requests run at the next frame boundary, once per frame, and never nested
 		// inside one another (a request calling run_frames must not run other requests meanwhile).
@@ -1363,6 +1370,105 @@ namespace Bellows {
 	void EditorLayer::RequestExit(int exitCode)
 	{
 		Application::Get().Close(exitCode);
+	}
+
+	// -------------------------------------------------------------------------
+	// Updates
+
+	bool EditorLayer::CheckForUpdates(bool manual, const std::string& url)
+	{
+		const std::string address = !url.empty() ? url
+			: !m_Settings.UpdateUrl.empty() ? m_Settings.UpdateUrl : std::string(UpdateLogic::c_DefaultUpdateUrl);
+		if (manual)
+			m_ShowUpdateDialog = true;
+		if (!m_Updates.StartCheck(address, BuildInfo::GetVersionText(), manual))
+			return false;
+		// A quick check can end before the next poll sees it running.
+		m_UpdateSeenState = UpdateChecker::State::Checking;
+		m_UpdateInstallError.clear();
+		m_UpdateInstallWhenDownloaded = false;
+		m_Settings.LastUpdateCheck = EditorSettings::Now();
+		m_Settings.Save();
+		return true;
+	}
+
+	void EditorLayer::PollUpdates()
+	{
+		using State = UpdateChecker::State;
+		const State state = m_Updates.GetState();
+		if (state == m_UpdateSeenState)
+			return;
+		const State previous = m_UpdateSeenState;
+		m_UpdateSeenState = state;
+
+		const std::optional<UpdateManifest> manifest = m_Updates.GetManifest();
+		if (previous == State::Checking)
+		{
+			// Only the end of a check decides whether a version is on offer.
+			m_UpdateOffered = state == State::Available && manifest
+				&& UpdateLogic::ShouldOffer(*manifest, BuildInfo::GetVersionText(), m_Settings.SkippedVersion, m_Updates.IsManual());
+			if (m_UpdateOffered)
+			{
+				BW_CORE_INFO("MageCap Bellows {} is available (this is {})", manifest->Version, BuildInfo::GetVersionText());
+				m_ShowUpdateDialog = true;
+			}
+			else if (state == State::Failed)
+			{
+				BW_CORE_INFO("Couldn't check for updates: {}", m_Updates.GetError());
+			}
+			return;
+		}
+		if (previous == State::Downloading && state == State::Downloaded)
+		{
+			if (m_UpdateInstallWhenDownloaded)
+			{
+				InstallDownloadedUpdate();
+			}
+			else
+			{
+				// The zip: show it where it was saved, to unpack by hand.
+				const std::filesystem::path file = m_Updates.GetDownloadedFile();
+				BW_CORE_INFO("Downloaded {}", file.string());
+				Platform::OpenWithDefaultApplication(file.parent_path());
+			}
+		}
+	}
+
+	void EditorLayer::InstallDownloadedUpdate()
+	{
+		m_UpdateInstallWhenDownloaded = false;
+		const std::filesystem::path installer = m_Updates.GetDownloadedFile();
+		if (installer.empty())
+			return;
+		if (m_SceneState != SceneState::Edit)
+			Stop();
+		// Nothing is lost when the editor closes: the scripts and the scene are saved first.
+		if (m_ScriptEditorPanel->HasUnsavedChanges() && !m_ScriptEditorPanel->SaveAll())
+		{
+			m_UpdateInstallError = "A script couldn't be saved, so the update waited. Save or close it, then try again.";
+			return;
+		}
+		if (m_Project && IsSceneDirty())
+		{
+			if (m_ScenePath.empty())
+			{
+				m_UpdateInstallError = "Save the scene first (File, Save Scene As), then install the update.";
+				return;
+			}
+			if (!SaveScene())
+			{
+				m_UpdateInstallError = "The scene couldn't be saved, so the update waited.";
+				return;
+			}
+		}
+		if (!Process::StartDetached({ installer, UpdateLogic::InstallerArguments(), installer.parent_path() }))
+		{
+			m_UpdateInstallError = "The installer didn't start. It's in " + installer.parent_path().string() + " to run by hand.";
+			return;
+		}
+		const std::optional<UpdateManifest> manifest = m_Updates.GetManifest();
+		BW_CORE_INFO("Installing MageCap Bellows {}; Bellows closes now and opens again when it's done", manifest ? manifest->Version : std::string());
+		RequestExit(0);
 	}
 
 	bool EditorLayer::ExecutePython(const std::string& source, std::string& outOutput)
@@ -1880,6 +1986,8 @@ namespace Bellows {
 		{
 			m_ScriptEditorPanel->DrawHelpMenuItems();
 			ImGui::Separator();
+			if (ImGui::MenuItem(ICON_REFRESH_CW "  Check for Updates...", nullptr, false, !m_Updates.IsBusy()))
+				CheckForUpdates(true);
 			if (ImGui::MenuItem(ICON_INFO "  About MageCap Bellows"))
 				m_ShowAboutDialog = true;
 			ImGui::EndMenu();
@@ -1961,7 +2069,10 @@ namespace Bellows {
 		const bool showPlay = !m_ViewportVisible;
 		const char* exportLabel = "Export game";
 		const float exportWidth = ImGui::CalcTextSize(exportLabel).x + 26.0f * scale;
-		const float total = crumbsWidth + 16.0f * scale + (showPlay ? GetPlayControlsWidth(height) + 10.0f * scale : 0.0f) + exportWidth + 12.0f * scale;
+		const char* updateLabel = ICON_DOWNLOAD "  Update";
+		const float updateWidth = m_UpdateOffered ? ImGui::CalcTextSize(updateLabel).x + 26.0f * scale : 0.0f;
+		const float total = crumbsWidth + 16.0f * scale + (showPlay ? GetPlayControlsWidth(height) + 10.0f * scale : 0.0f)
+			+ (m_UpdateOffered ? updateWidth + 8.0f * scale : 0.0f) + exportWidth + 12.0f * scale;
 		const float left = barWindow->Pos.x + barWindow->Size.x - total;
 		float x = left;
 
@@ -1991,6 +2102,21 @@ namespace Bellows {
 		// Play sits in the viewport's toolbar; here only while the viewport is hidden (the Script workspace).
 		if (showPlay)
 			x += DrawPlayControls(ImVec2(x, y), height) + 10.0f * scale;
+
+		// Update: an accent button while a new version waits; it opens what's new.
+		if (m_UpdateOffered)
+		{
+			ImGui::SetCursorScreenPos(ImVec2(x, y));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * scale);
+			UI::PushPrimaryButtonColors();
+			if (ImGui::Button(updateLabel, ImVec2(updateWidth, height)))
+				m_ShowUpdateDialog = true;
+			UI::PopPrimaryButtonColors();
+			ImGui::PopStyleVar();
+			if (const std::optional<UpdateManifest> manifest = m_Updates.GetManifest())
+				ImGui::SetItemTooltip("MageCap Bellows %s is available", manifest->Version.c_str());
+			x += updateWidth + 8.0f * scale;
+		}
 
 		// Export game: a plain raised button.
 		ImGui::SetCursorScreenPos(ImVec2(x, y));
@@ -2302,6 +2428,7 @@ namespace Bellows {
 				Application::Get().SubmitToMainThread([this] { CloseProject(); });
 		});
 		command("About MageCap Bellows", "Help", true, [this] { m_ShowAboutDialog = true; });
+		command("Check for Updates", "Help", !m_Updates.IsBusy(), [this] { CheckForUpdates(true); });
 
 		// Entities of the scene being edited or played: picking one selects it and frames it.
 		if (const Ref<Scene>& scene = GetActiveScene())
@@ -3262,6 +3389,8 @@ namespace Bellows {
 			ImGui::EndPopup();
 		}
 
+		DrawUpdateDialog();
+
 		if (beginModal("About MageCap Bellows", m_ShowAboutDialog, 480.0f))
 		{
 			DrawLogo(56.0f * scale);
@@ -3309,6 +3438,211 @@ namespace Bellows {
 		}
 		if (!showMessage)
 			m_DialogMessage.clear();
+	}
+
+	void EditorLayer::DrawUpdateDialog()
+	{
+		using State = UpdateChecker::State;
+		const char* title = "Updates";
+		if (!m_ShowUpdateDialog)
+			return;
+		const float scale = Theme::GetScale();
+		if (!ImGui::IsPopupOpen(title))
+			ImGui::OpenPopup(title);
+		ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+		ImGui::SetNextWindowSize(ImVec2(540.0f * scale, 0.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f * scale, 16.0f * scale));
+		const bool visible = ImGui::BeginPopupModal(title, &m_ShowUpdateDialog, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+		ImGui::PopStyleVar();
+		if (!visible)
+			return;
+
+		const State state = m_Updates.GetState();
+		const std::optional<UpdateManifest> manifest = m_Updates.GetManifest();
+		const std::string running = BuildInfo::GetVersionText();
+		const ImVec2 buttonSize(0.0f, ImGui::GetFrameHeight() + 4.0f * scale);
+		bool close = ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !ImGui::IsAnyItemActive() && state != State::Downloading;
+
+		auto heading = [&](const std::string& text)
+		{
+			ImGui::PushFont(Theme::GetFonts().Bold, Theme::BaseFontSize * scale * 1.25f);
+			ImGui::TextUnformatted(text.c_str());
+			ImGui::PopFont();
+		};
+
+		if (state == State::Idle || state == State::Checking)
+		{
+			heading("Looking for a new version...");
+			UI::TextMuted(("This is MageCap Bellows " + running + ".").c_str());
+		}
+		else if (state == State::UpToDate)
+		{
+			heading(ICON_CIRCLE_CHECK "  MageCap Bellows is up to date");
+			UI::TextMuted(("This is " + running + (manifest ? ", and the newest release is " + manifest->Version : std::string()) + ".").c_str());
+		}
+		else if (!manifest)
+		{
+			heading("Couldn't check for updates");
+			ImGui::TextWrapped("%s.", m_Updates.GetError().c_str());
+			UI::TextMuted("Check the internet connection, or try again later.");
+		}
+		else
+		{
+			heading(ICON_SPARKLES "  MageCap Bellows " + manifest->Version + " is available");
+			UI::TextMuted(("You have " + running + (manifest->Published.empty() ? std::string() : ". Released " + manifest->Published) + ".").c_str());
+			ImGui::Spacing();
+
+			// What's new: the release notes' headings, bullets and paragraphs, without the rest of Markdown.
+			ImGui::BeginChild("##UpdateNotes", ImVec2(0.0f, 240.0f * scale), ImGuiChildFlags_Borders);
+			std::string_view notes = manifest->Notes;
+			if (notes.empty())
+				UI::TextMuted("No notes came with this release.");
+			while (!notes.empty())
+			{
+				const size_t end = notes.find('\n');
+				std::string line(notes.substr(0, end));
+				notes = end == std::string_view::npos ? std::string_view() : notes.substr(end + 1);
+				if (!line.empty() && line.back() == '\r')
+					line.pop_back();
+				std::erase(line, '`');
+				for (size_t bold; (bold = line.find("**")) != std::string::npos;)
+					line.erase(bold, 2);
+				if (line.empty())
+				{
+					ImGui::Spacing();
+				}
+				else if (line[0] == '#')
+				{
+					line.erase(0, line.find_first_not_of("# "));
+					ImGui::PushFont(Theme::GetFonts().Bold, 0.0f);
+					ImGui::TextWrapped("%s", line.c_str());
+					ImGui::PopFont();
+				}
+				else if (line.starts_with("- ") || line.starts_with("* "))
+				{
+					ImGui::Bullet();
+					ImGui::TextWrapped("%s", line.c_str() + 2);
+				}
+				else
+				{
+					ImGui::TextWrapped("%s", line.c_str());
+				}
+			}
+			ImGui::EndChild();
+			ImGui::Spacing();
+
+			const std::string error = !m_UpdateInstallError.empty() ? m_UpdateInstallError : state == State::Failed ? m_Updates.GetError() : std::string();
+			if (!error.empty())
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Warning));
+				ImGui::TextWrapped(ICON_TRIANGLE_ALERT "  %s", error.c_str());
+				ImGui::PopStyleColor();
+			}
+
+#if defined(BW_PLATFORM_WINDOWS)
+			const bool installed = UpdateLogic::IsInstalledCopy(Platform::GetExecutableDirectory());
+#else
+			const bool installed = false;		// The installer is for Windows; other systems unpack the release by hand
+#endif
+			const std::filesystem::path downloads = EditorSettings::GetConfigDirectory() / "Updates";
+			if (state == State::Downloading)
+			{
+				const auto [done, total] = m_Updates.GetProgress();
+				const float fraction = total > 0 ? static_cast<float>(static_cast<double>(done) / static_cast<double>(total)) : 0.0f;
+				const std::string label = std::to_string(done / (1024 * 1024)) + " of " + std::to_string(total / (1024 * 1024)) + " MB";
+				ImGui::ProgressBar(fraction, ImVec2(-1.0f, 0.0f), label.c_str());
+				if (ImGui::Button("Cancel", buttonSize))
+					m_Updates.CancelDownload();
+			}
+			else if (state == State::Downloaded)
+			{
+				const std::filesystem::path file = m_Updates.GetDownloadedFile();
+				if (file.extension() == ".zip")
+				{
+					ImGui::TextWrapped("Saved %s. Close Bellows, then unpack it over this copy or in a new folder.", file.filename().string().c_str());
+					if (ImGui::Button(ICON_EXTERNAL_LINK "  Show the zip", buttonSize))
+						Platform::OpenWithDefaultApplication(file.parent_path());
+				}
+				else
+				{
+					// The installer is here and checked; the install waited for something (an unsaved scene).
+					UI::PushPrimaryButtonColors();
+					if (ImGui::Button(ICON_DOWNLOAD "  Install and restart", buttonSize))
+						InstallDownloadedUpdate();
+					UI::PopPrimaryButtonColors();
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Later", buttonSize))
+					close = true;
+			}
+			else
+			{
+				if (installed)
+				{
+					UI::PushPrimaryButtonColors();
+					if (ImGui::Button(ICON_DOWNLOAD "  Download and install", buttonSize) && m_Updates.StartDownload(downloads, false))
+					{
+						m_UpdateSeenState = State::Downloading;
+						m_UpdateInstallError.clear();
+						m_UpdateInstallWhenDownloaded = true;
+					}
+					UI::PopPrimaryButtonColors();
+					ImGui::SetItemTooltip("Downloads the setup program, checks it, saves your work, then installs and reopens Bellows");
+					ImGui::SameLine();
+				}
+				else if (manifest->Portable)
+				{
+					UI::PushPrimaryButtonColors();
+					if (ImGui::Button(ICON_DOWNLOAD "  Download the zip", buttonSize) && m_Updates.StartDownload(downloads, true))
+					{
+						m_UpdateSeenState = State::Downloading;
+						m_UpdateInstallError.clear();
+					}
+					UI::PopPrimaryButtonColors();
+					ImGui::SetItemTooltip("This copy wasn't installed: the new one comes as a zip to unpack, and the folder opens when it's done");
+					ImGui::SameLine();
+				}
+				if (!manifest->ReleaseUrl.empty())
+				{
+					if (ImGui::Button(ICON_EXTERNAL_LINK "  Release page", buttonSize))
+						Platform::OpenWithDefaultApplication(manifest->ReleaseUrl);
+					ImGui::SameLine();
+				}
+				if (ImGui::Button("Skip this version", buttonSize))
+				{
+					m_Settings.SkippedVersion = manifest->Version;
+					m_Settings.Save();
+					m_UpdateOffered = false;
+					close = true;
+				}
+				ImGui::SetItemTooltip("Don't offer %s again when Bellows starts (Help, Check for Updates still finds it)", manifest->Version.c_str());
+				ImGui::SameLine();
+				if (ImGui::Button("Later", buttonSize))
+					close = true;
+				if (!installed)
+					UI::TextMuted("This copy was unzipped by hand. To have updates install themselves, use the setup program once.");
+			}
+		}
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+		if (ImGui::Checkbox("Look for updates when Bellows starts", &m_Settings.CheckForUpdates))
+			m_Settings.Save();
+		if (!manifest || state == State::UpToDate)
+		{
+			ImGui::SameLine();
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, ImGui::GetContentRegionAvail().x - 120.0f * scale));
+			if (ImGui::Button("Close", ImVec2(120.0f * scale, 0.0f)))
+				close = true;
+		}
+
+		if (close)
+		{
+			m_ShowUpdateDialog = false;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
 	}
 
 }

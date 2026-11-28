@@ -169,6 +169,16 @@ namespace Bellows {
 #endif
 	}
 
+	void Platform::HoldRunningMarker(const std::string& name)
+	{
+#if defined(BW_PLATFORM_WINDOWS)
+		// Never closed: Windows lets go of it when the process ends, however it ends.
+		::CreateMutexW(nullptr, FALSE, std::filesystem::path(name).wstring().c_str());
+#else
+		(void)name;
+#endif
+	}
+
 	bool Platform::OpenForEditing(const std::filesystem::path& path)
 	{
 #if defined(BW_PLATFORM_WINDOWS)
