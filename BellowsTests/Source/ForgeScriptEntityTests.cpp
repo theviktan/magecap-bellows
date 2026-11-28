@@ -172,13 +172,16 @@ TEST_CASE("ForgeScript script info lists top-level settings as Inspector fields"
 			"set spawn to vector(1, 2, 3)\n"
 			"set tint to [1, 0, 0]\n"
 			"set _hidden to 1\n"
+			"set jump as number to 2\n"
+			"set coins as list of number to 0\n"
+			"set name as text to \"Ace\"\n"
 			"when update with delta\n\tset local to 1\nend\n" },
 		{ "Scripts/Broken.forge", "set to 5\n" } });
 
 	ScriptClassInfo info;
 	REQUIRE(ScriptEngine::GetClassInfo("Scripts/Player.forge", "", info));
 	CHECK_EQ(info.ClassName, std::string("Player"));
-	REQUIRE_EQ(info.Fields.size(), static_cast<size_t>(6));
+	REQUIRE_EQ(info.Fields.size(), static_cast<size_t>(9));
 	CHECK_EQ(info.Fields[0].Name, std::string("speed"));
 	CHECK_EQ(std::get<double>(info.Fields[0].DefaultValue), 4.5);
 	CHECK_EQ(std::get<int64_t>(info.Fields[1].DefaultValue), 3);
@@ -186,6 +189,11 @@ TEST_CASE("ForgeScript script info lists top-level settings as Inspector fields"
 	CHECK_FALSE(std::get<bool>(info.Fields[3].DefaultValue));
 	CHECK_EQ(std::get<glm::vec3>(info.Fields[4].DefaultValue), glm::vec3(1.0f, 2.0f, 3.0f));
 	CHECK_EQ(std::get<glm::vec4>(info.Fields[5].DefaultValue), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	// A line's type decides the field: 'as number' is any number, though it starts whole. A type that
+	// doesn't match its value ('list of number' set to 0, the checker's warning) leaves the value to decide.
+	CHECK_EQ(std::get<double>(info.Fields[6].DefaultValue), 2.0);
+	CHECK_EQ(std::get<int64_t>(info.Fields[7].DefaultValue), 0);
+	CHECK_EQ(std::get<std::string>(info.Fields[8].DefaultValue), std::string("Ace"));
 
 	CHECK_FALSE(ScriptEngine::GetClassInfo("Scripts/Broken.forge", "", info));
 	CHECK(ScriptEngine::GetLastError().find("line 1") != std::string::npos);

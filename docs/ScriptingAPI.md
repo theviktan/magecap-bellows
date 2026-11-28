@@ -845,7 +845,8 @@ engine sends these events, which the script handles with `when`:
   changed only when it's set to another list or map, not when what's in it changes.
 - **Decimal or whole number?** How you write the starting value decides the Inspector field:
   `set speed to 4.0` makes a decimal field (you can type 4.5), while `set lives to 4` makes a
-  whole-number field (4, 5, 6...). Write `.0` when a setting should take decimals.
+  whole-number field (4, 5, 6...). Write `.0` when a setting should take decimals, or give the line
+  a type: `set speed as number to 4` makes a decimal field too.
 - **Waiting.** `wait` and `start` work in every handler (`wait 2 seconds`, `wait until ready`);
   waiting tasks continue each frame.
 - **Talking to other scripts.** `trigger door opened with self` reaches the matching `when` handlers
