@@ -2025,13 +2025,19 @@
 					"name": "shape",
 					"kind": "property",
 					"type": "str",
-					"doc": "Where particles are born: 'point' (the entity), 'sphere' or 'box'"
+					"doc": "Where particles are born: 'point' (the entity), 'sphere', 'box', 'ring' (a circle around +Y) or 'line' (along X)"
 				},
 				{
 					"name": "shape_size",
 					"kind": "property",
 					"type": "Vec3",
-					"doc": "A sphere's radius (x) or a box's half size, in meters"
+					"doc": "A sphere's or ring's radius (x), a line's length (x) or a box's half size, in meters"
+				},
+				{
+					"name": "outward",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Particles leave away from the center (bursts, rings that expand) instead of up +Y; spread_angle tilts them"
 				},
 				{
 					"name": "gravity_scale",
@@ -2046,6 +2052,24 @@
 					"doc": "Air resistance, from 0 to 100: how quickly they slow down"
 				},
 				{
+					"name": "noise_strength",
+					"kind": "property",
+					"type": "float",
+					"doc": "A swirling push, in m/s² (wisps, embers, curling smoke); 0 is none"
+				},
+				{
+					"name": "noise_frequency",
+					"kind": "property",
+					"type": "float",
+					"doc": "How tight the swirls are: swirls per meter, from 0 to 100"
+				},
+				{
+					"name": "noise_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "How fast the swirls change, from 0 (still) to 100"
+				},
+				{
 					"name": "start_size",
 					"kind": "property",
 					"type": "float",
@@ -2058,6 +2082,12 @@
 					"doc": "Meters across when it dies"
 				},
 				{
+					"name": "size_curve",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Size over life as up to 8 [time, size] keys (time 0 born to 1 dies; size multiplies start_size), straight between keys, like [[0, 0], [0.2, 1], [1, 0]] to grow then shrink. [] goes from start_size to end_size"
+				},
+				{
 					"name": "start_color",
 					"kind": "property",
 					"type": "Vec4 | list[float]",
@@ -2068,6 +2098,12 @@
 					"kind": "property",
 					"type": "Vec4 | list[float]",
 					"doc": "Color and alpha when it dies; set alpha to 0 to fade out"
+				},
+				{
+					"name": "color_gradient",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Color over life as up to 8 [time, red, green, blue, alpha] keys (each 0 to 1), like [[0, 1, 1, 1, 1], [0.3, 0.3, 0.6, 1, 1], [1, 0, 0, 1, 0]] for a white flash fading to blue. [] goes from start_color to end_color"
 				},
 				{
 					"name": "intensity",
@@ -2086,6 +2122,66 @@
 					"kind": "property",
 					"type": "str",
 					"doc": "The image each particle shows (an asset path); empty for a soft round dot"
+				},
+				{
+					"name": "flipbook_columns",
+					"kind": "property",
+					"type": "int",
+					"doc": "A flipbook texture's columns of frames, from 1 to 16 (frames go left to right, then top to bottom)"
+				},
+				{
+					"name": "flipbook_rows",
+					"kind": "property",
+					"type": "int",
+					"doc": "A flipbook texture's rows of frames, from 1 to 16"
+				},
+				{
+					"name": "flipbook_fps",
+					"kind": "property",
+					"type": "float",
+					"doc": "Flipbook frames per second, from 0 to 240; 0 plays the whole sheet once over each particle's life"
+				},
+				{
+					"name": "flipbook_random_start",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Each particle starts on a random frame"
+				},
+				{
+					"name": "facing",
+					"kind": "property",
+					"type": "str",
+					"doc": "'camera' faces the camera; 'stretched' stretches along the way each moves (streaks, rain); 'flat' lies across the entity's +Y (ground rings, shockwaves)"
+				},
+				{
+					"name": "stretch_amount",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'stretched': seconds of motion its length shows (length = speed × this + size), from 0 to 10"
+				},
+				{
+					"name": "start_rotation",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees each particle is turned when born"
+				},
+				{
+					"name": "rotation_variation",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees the start rotation varies either way, from 0 to 180 (180: any angle)"
+				},
+				{
+					"name": "spin_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees per second each particle turns (below 0 the other way)"
+				},
+				{
+					"name": "spin_variation",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees per second the spin varies either way"
 				},
 				{
 					"name": "world_space",

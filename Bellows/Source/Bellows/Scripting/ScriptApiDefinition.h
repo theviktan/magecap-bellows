@@ -98,7 +98,7 @@ namespace Bellows::Scripting {
 		{
 			const std::optional<ParticleShape> shape = ParticleShapeFromString(name);
 			if (!shape)
-				throw ScriptValueError("Unknown particle shape '" + name + "'. Shapes: point, sphere, box");
+				throw ScriptValueError("Unknown particle shape '" + name + "'. Shapes: point, sphere, box, ring, line");
 			return *shape;
 		}
 
@@ -108,6 +108,92 @@ namespace Bellows::Scripting {
 			if (!blend)
 				throw ScriptValueError("Unknown particle blend '" + name + "'. Blends: additive, alpha");
 			return *blend;
+		}
+
+		inline ParticleFacing RequireParticleFacing(const std::string& name)
+		{
+			const std::optional<ParticleFacing> facing = ParticleFacingFromString(name);
+			if (!facing)
+				throw ScriptValueError("Unknown particle facing '" + name + "'. Facings: camera, stretched, flat");
+			return *facing;
+		}
+
+		// The numbers of one curve key, a list of 'count' (or, with 'optionalLast', count - 1) numbers.
+		inline bool CurveKeyNumbers(const ScriptValue& key, size_t count, bool optionalLast, float* out)
+		{
+			const ScriptValueList* list = std::get_if<ScriptValueList>(&key.Data);
+			if (!list || (list->size() != count && !(optionalLast && list->size() == count - 1)))
+				return false;
+			for (size_t i = 0; i < list->size(); i++)
+			{
+				const double* number = std::get_if<double>(&(*list)[i].Data);
+				if (!number || !std::isfinite(*number))
+					return false;
+				out[i] = static_cast<float>(*number);
+			}
+			if (list->size() == count - 1)
+				out[count - 1] = 1.0f;
+			return true;
+		}
+
+		inline const ScriptValueList& RequireCurveList(const ScriptValue& value, const char* property, const char* example)
+		{
+			const ScriptValueList* keys = std::get_if<ScriptValueList>(&value.Data);
+			if (!keys)
+				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is a list of keys, like " + example + ". [] turns it off");
+			if (keys->size() > ParticleEmitterComponent::MaxCurveKeys)
+				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " has at most 8 keys");
+			return *keys;
+		}
+
+		// [[time, value], ...]: times 0 (born) to 1 (dies), values multiplying start_size.
+		inline std::vector<ParticleCurveKey> ToSizeCurve(const ScriptValue& value)
+		{
+			const ScriptValueList& keys = RequireCurveList(value, "size_curve", "[[0, 0], [0.2, 1], [1, 0]]");
+			std::vector<ParticleCurveKey> curve;
+			for (const ScriptValue& key : keys)
+			{
+				float numbers[2];
+				if (!CurveKeyNumbers(key, 2, false, numbers) || numbers[0] < 0.0f || numbers[0] > 1.0f || numbers[1] < 0.0f
+					|| numbers[1] > ParticleEmitterComponent::MaxSize)
+					throw ScriptValueError("Each size_curve key is [time, size]: a time from 0 to 1 and a size from 0 to 1000, like [0.5, 2]");
+				curve.push_back({ numbers[0], numbers[1] });
+			}
+			std::stable_sort(curve.begin(), curve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
+			return curve;
+		}
+
+		inline ScriptValue FromSizeCurve(const std::vector<ParticleCurveKey>& curve)
+		{
+			ScriptValueList keys;
+			for (const ParticleCurveKey& key : curve)
+				keys.push_back(ScriptValueList { static_cast<double>(key.Time), static_cast<double>(key.Value) });
+			return keys;
+		}
+
+		// [[time, red, green, blue, alpha], ...], each 0 to 1 (alpha may be left out: 1).
+		inline std::vector<ParticleColorKey> ToColorGradient(const ScriptValue& value)
+		{
+			const ScriptValueList& keys = RequireCurveList(value, "color_gradient", "[[0, 1, 1, 1, 1], [1, 1, 0.3, 0, 0]]");
+			std::vector<ParticleColorKey> gradient;
+			for (const ScriptValue& key : keys)
+			{
+				float numbers[5];
+				if (!CurveKeyNumbers(key, 5, true, numbers) || std::any_of(numbers, numbers + 5, [](float n) { return n < 0.0f || n > 1.0f; }))
+					throw ScriptValueError("Each color_gradient key is [time, red, green, blue, alpha], each from 0 to 1, like [0.5, 1, 0.4, 0, 1]");
+				gradient.push_back({ numbers[0], glm::vec4(numbers[1], numbers[2], numbers[3], numbers[4]) });
+			}
+			std::stable_sort(gradient.begin(), gradient.end(), [](const ParticleColorKey& a, const ParticleColorKey& b) { return a.Time < b.Time; });
+			return gradient;
+		}
+
+		inline ScriptValue FromColorGradient(const std::vector<ParticleColorKey>& gradient)
+		{
+			ScriptValueList keys;
+			for (const ParticleColorKey& key : gradient)
+				keys.push_back(ScriptValueList { static_cast<double>(key.Time), static_cast<double>(key.Color.r), static_cast<double>(key.Color.g),
+					static_cast<double>(key.Color.b), static_cast<double>(key.Color.a) });
+			return keys;
 		}
 
 		// A ParticleEmitter number, checked against its range ('range' says it the way people read it).
@@ -124,6 +210,13 @@ namespace Bellows::Scripting {
 		{
 			if (value < 0 || static_cast<uint32_t>(value) > maximum)
 				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is from 0 to " + std::to_string(maximum));
+			return static_cast<uint32_t>(value);
+		}
+
+		inline uint32_t FlipbookCount(const char* property, int value)
+		{
+			if (value < 1 || static_cast<uint32_t>(value) > ParticleEmitterComponent::MaxFlipbookFrames)
+				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is from 1 to 16");
 			return static_cast<uint32_t>(value);
 		}
 
@@ -1110,32 +1203,52 @@ namespace Bellows::Scripting {
 			"Degrees from the entity's +Y they may leave at: 0 a straight line, 180 every way");
 		particles.Property("shape", [](const ParticleEmitterRef& r) { return std::string(ParticleShapeToString(r.Get().Shape)); },
 			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().Shape = Detail::RequireParticleShape(v); },
-			"Where particles are born: 'point' (the entity), 'sphere' or 'box'");
+			"Where particles are born: 'point' (the entity), 'sphere', 'box', 'ring' (a circle around +Y) or 'line' (along X)");
 		particles.Property("shape_size", [](const ParticleEmitterRef& r) { return r.Get().ShapeSize; },
 			[](const ParticleEmitterRef& r, const glm::vec3& v)
 			{
 				for (int axis = 0; axis < 3; axis++)
 					Detail::ParticleValue("shape_size", v[axis], 0.0f, Limits::MaxShapeSize, "0 to 1000 on each axis");
 				r.Get().ShapeSize = v;
-			}, "A sphere's radius (x) or a box's half size, in meters");
+			}, "A sphere's or ring's radius (x), a line's length (x) or a box's half size, in meters");
+		particles.Property("outward", [](const ParticleEmitterRef& r) { return r.Get().Outward; },
+			[](const ParticleEmitterRef& r, bool v) { r.Get().Outward = v; },
+			"Particles leave away from the center (bursts, rings that expand) instead of up +Y; spread_angle tilts them");
 		particles.Property("gravity_scale", [](const ParticleEmitterRef& r) { return r.Get().GravityScale; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().GravityScale = Detail::ParticleValue("gravity_scale", v, -Limits::MaxGravityScale, Limits::MaxGravityScale, "-100 to 100"); },
 			"How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise");
 		particles.Property("drag", [](const ParticleEmitterRef& r) { return r.Get().Drag; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().Drag = Detail::ParticleValue("drag", v, 0.0f, Limits::MaxDrag, "0 to 100"); },
 			"Air resistance, from 0 to 100: how quickly they slow down");
+		particles.Property("noise_strength", [](const ParticleEmitterRef& r) { return r.Get().NoiseStrength; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().NoiseStrength = Detail::ParticleValue("noise_strength", v, 0.0f, Limits::MaxNoise, "0 to 1000"); },
+			"A swirling push, in m/s² (wisps, embers, curling smoke); 0 is none");
+		particles.Property("noise_frequency", [](const ParticleEmitterRef& r) { return r.Get().NoiseFrequency; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().NoiseFrequency = Detail::ParticleValue("noise_frequency", v, 0.0f, Limits::MaxNoiseFrequency, "0 to 100"); },
+			"How tight the swirls are: swirls per meter, from 0 to 100");
+		particles.Property("noise_speed", [](const ParticleEmitterRef& r) { return r.Get().NoiseSpeed; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().NoiseSpeed = Detail::ParticleValue("noise_speed", v, 0.0f, Limits::MaxNoiseSpeed, "0 to 100"); },
+			"How fast the swirls change, from 0 (still) to 100");
 		particles.Property("start_size", [](const ParticleEmitterRef& r) { return r.Get().StartSize; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().StartSize = Detail::ParticleValue("start_size", v, 0.0f, Limits::MaxSize, "0 to 1000"); },
 			"Meters across when born");
 		particles.Property("end_size", [](const ParticleEmitterRef& r) { return r.Get().EndSize; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().EndSize = Detail::ParticleValue("end_size", v, 0.0f, Limits::MaxSize, "0 to 1000"); },
 			"Meters across when it dies");
+		particles.Property("size_curve", [](const ParticleEmitterRef& r) { return Detail::FromSizeCurve(r.Get().SizeCurve); },
+			[](const ParticleEmitterRef& r, const ScriptValue& v) { r.Get().SizeCurve = Detail::ToSizeCurve(v); },
+			"Size over life as up to 8 [time, size] keys (time 0 born to 1 dies; size multiplies start_size), straight between keys, "
+			"like [[0, 0], [0.2, 1], [1, 0]] to grow then shrink. [] goes from start_size to end_size");
 		particles.Property("start_color", [](const ParticleEmitterRef& r) { return ColorValue { r.Get().StartColor }; },
 			[](const ParticleEmitterRef& r, const ColorValue& v) { r.Get().StartColor = Detail::ParticleColor("start_color", v); },
 			"Color and alpha when born (each 0 to 1)");
 		particles.Property("end_color", [](const ParticleEmitterRef& r) { return ColorValue { r.Get().EndColor }; },
 			[](const ParticleEmitterRef& r, const ColorValue& v) { r.Get().EndColor = Detail::ParticleColor("end_color", v); },
 			"Color and alpha when it dies; set alpha to 0 to fade out");
+		particles.Property("color_gradient", [](const ParticleEmitterRef& r) { return Detail::FromColorGradient(r.Get().ColorGradient); },
+			[](const ParticleEmitterRef& r, const ScriptValue& v) { r.Get().ColorGradient = Detail::ToColorGradient(v); },
+			"Color over life as up to 8 [time, red, green, blue, alpha] keys (each 0 to 1), like [[0, 1, 1, 1, 1], [0.3, 0.3, 0.6, 1, 1], "
+			"[1, 0, 0, 1, 0]] for a white flash fading to blue. [] goes from start_color to end_color");
 		particles.Property("intensity", [](const ParticleEmitterRef& r) { return r.Get().Intensity; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().Intensity = Detail::ParticleValue("intensity", v, 0.0f, Limits::MaxIntensity, "0 to 1000"); },
 			"Brightness, from 0 to 1000; above 1 they glow");
@@ -1145,6 +1258,35 @@ namespace Bellows::Scripting {
 		particles.Property("texture", [](const ParticleEmitterRef& r) { return r.Get().TexturePath; },
 			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().TexturePath = v; },
 			"The image each particle shows (an asset path); empty for a soft round dot");
+		particles.Property("flipbook_columns", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().FlipbookColumns); },
+			[](const ParticleEmitterRef& r, int v) { r.Get().FlipbookColumns = Detail::FlipbookCount("flipbook_columns", v); },
+			"A flipbook texture's columns of frames, from 1 to 16 (frames go left to right, then top to bottom)");
+		particles.Property("flipbook_rows", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().FlipbookRows); },
+			[](const ParticleEmitterRef& r, int v) { r.Get().FlipbookRows = Detail::FlipbookCount("flipbook_rows", v); },
+			"A flipbook texture's rows of frames, from 1 to 16");
+		particles.Property("flipbook_fps", [](const ParticleEmitterRef& r) { return r.Get().FlipbookFps; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().FlipbookFps = Detail::ParticleValue("flipbook_fps", v, 0.0f, Limits::MaxFlipbookFps, "0 to 240"); },
+			"Flipbook frames per second, from 0 to 240; 0 plays the whole sheet once over each particle's life");
+		particles.Property("flipbook_random_start", [](const ParticleEmitterRef& r) { return r.Get().FlipbookRandomStart; },
+			[](const ParticleEmitterRef& r, bool v) { r.Get().FlipbookRandomStart = v; }, "Each particle starts on a random frame");
+		particles.Property("facing", [](const ParticleEmitterRef& r) { return std::string(ParticleFacingToString(r.Get().Facing)); },
+			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().Facing = Detail::RequireParticleFacing(v); },
+			"'camera' faces the camera; 'stretched' stretches along the way each moves (streaks, rain); 'flat' lies across the entity's +Y (ground rings, shockwaves)");
+		particles.Property("stretch_amount", [](const ParticleEmitterRef& r) { return r.Get().StretchAmount; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().StretchAmount = Detail::ParticleValue("stretch_amount", v, 0.0f, Limits::MaxStretch, "0 to 10"); },
+			"For 'stretched': seconds of motion its length shows (length = speed × this + size), from 0 to 10");
+		particles.Property("start_rotation", [](const ParticleEmitterRef& r) { return r.Get().StartRotation; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().StartRotation = Detail::ParticleValue("start_rotation", v, -360.0f, 360.0f, "-360 to 360"); },
+			"Degrees each particle is turned when born");
+		particles.Property("rotation_variation", [](const ParticleEmitterRef& r) { return r.Get().RotationVariation; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().RotationVariation = Detail::ParticleValue("rotation_variation", v, 0.0f, 180.0f, "0 to 180"); },
+			"Degrees the start rotation varies either way, from 0 to 180 (180: any angle)");
+		particles.Property("spin_speed", [](const ParticleEmitterRef& r) { return r.Get().SpinSpeed; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().SpinSpeed = Detail::ParticleValue("spin_speed", v, -Limits::MaxSpin, Limits::MaxSpin, "-7200 to 7200"); },
+			"Degrees per second each particle turns (below 0 the other way)");
+		particles.Property("spin_variation", [](const ParticleEmitterRef& r) { return r.Get().SpinVariation; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().SpinVariation = Detail::ParticleValue("spin_variation", v, 0.0f, Limits::MaxSpin, "0 to 7200"); },
+			"Degrees per second the spin varies either way");
 		particles.Property("world_space", [](const ParticleEmitterRef& r) { return r.Get().WorldSpace; },
 			[](const ParticleEmitterRef& r, bool v) { r.Get().WorldSpace = v; },
 			"Born particles stay where they are when the entity moves; off, they move with it");

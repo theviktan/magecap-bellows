@@ -327,6 +327,34 @@ namespace Bellows {
 		Point = 0,	// Every particle starts at the entity
 		Sphere,		// Anywhere inside a sphere of radius ShapeSize.x
 		Box,		// Anywhere inside a box of half extents ShapeSize
+		Ring,		// On a circle of radius ShapeSize.x around the entity's +Y (a portal's rim, a shockwave)
+		Line,		// Anywhere on a line ShapeSize.x long along the entity's X (a slash, a beam's length)
+	};
+
+	// Which way a particle's quad faces.
+	enum class ParticleFacing : uint8_t
+	{
+		Camera = 0,	// Toward the camera, turned by its rotation (sparks, smoke, glows)
+		Stretched,	// Stretched along the way it moves, longer the faster it goes (streaks, rain, sparks that trail)
+		Flat,		// Lying flat across the emitter's +Y, turned by its rotation (ground rings, shockwaves, ripples)
+	};
+
+	// A key on a curve over a particle's life: at 'Time' (0 when born, 1 when it dies), 'Value'.
+	struct ParticleCurveKey
+	{
+		float Time = 0.0f;
+		float Value = 1.0f;
+
+		bool operator==(const ParticleCurveKey&) const = default;
+	};
+
+	// A key on a color gradient over a particle's life.
+	struct ParticleColorKey
+	{
+		float Time = 0.0f;
+		glm::vec4 Color { 1.0f };
+
+		bool operator==(const ParticleColorKey&) const = default;
 	};
 
 	enum class ParticleBlend : uint8_t
@@ -343,10 +371,13 @@ namespace Bellows {
 		glm::vec3 Velocity { 0.0f };	// m/s
 		float Age = 0.0f;				// Seconds since it was born
 		float Lifetime = 1.0f;			// Seconds it lives
+		float Rotation = 0.0f;			// Radians, around the way the quad faces
+		float Spin = 0.0f;				// Radians per second
+		float Random = 0.0f;			// 0-1, its own: picks its flipbook start frame
 	};
 
-	// Sends out camera-facing particles from the entity (see ParticleSystem). New particles leave in
-	// a cone around the entity's local +Y.
+	// Sends out particles from the entity (see ParticleSystem). New particles leave in a cone around
+	// the entity's local +Y, or away from its center (Outward).
 	struct ParticleEmitterComponent
 	{
 		bool PlayOnStart = true;
@@ -361,20 +392,40 @@ namespace Bellows {
 		float Speed = 2.0f;				// m/s
 		float SpeedVariation = 0.25f;	// 0-1, like LifetimeVariation
 		float SpreadAngle = 25.0f;		// Degrees from +Y: 0 a straight line, 180 every way
+		bool Outward = false;			// Leave away from the entity's center instead (bursts, rings that expand); SpreadAngle tilts it
 
 		ParticleShape Shape = ParticleShape::Point;
 		glm::vec3 ShapeSize { 0.5f };	// Sphere: x is the radius; Box: half extents (meters)
 
 		float GravityScale = 0.0f;		// How much the scene's gravity pulls them (0 none, 1 full)
 		float Drag = 0.0f;				// Slows them by this share per second (air resistance)
+		float NoiseStrength = 0.0f;		// m/s² of swirling push (magic wisps, embers, smoke that curls)
+		float NoiseFrequency = 1.0f;	// How tight the swirls are: swirls per meter
+		float NoiseSpeed = 0.5f;		// How fast the swirls change over time
 
 		float StartSize = 0.25f;		// Meters across, when born
 		float EndSize = 0.05f;			// Meters across, when it dies
+		// Size over life, multiplying StartSize. Empty: from StartSize to EndSize in a straight line.
+		std::vector<ParticleCurveKey> SizeCurve;
 		glm::vec4 StartColor { 1.0f, 0.6f, 0.2f, 1.0f };
 		glm::vec4 EndColor { 1.0f, 0.2f, 0.05f, 0.0f };
+		// Color and alpha over life. Empty: from StartColor to EndColor in a straight line.
+		std::vector<ParticleColorKey> ColorGradient;
 		float Intensity = 1.0f;			// Brightness; above 1 glows (blooms)
 		ParticleBlend Blend = ParticleBlend::Additive;
 		std::string TexturePath;		// Empty: a soft round dot
+		// A flipbook: the texture is a grid of frames, left to right then top to bottom.
+		uint32_t FlipbookColumns = 1;
+		uint32_t FlipbookRows = 1;
+		float FlipbookFps = 0.0f;		// Frames per second; 0 plays the whole sheet once over each particle's life
+		bool FlipbookRandomStart = false;	// Each particle starts on a random frame (fire, varied smoke puffs)
+
+		ParticleFacing Facing = ParticleFacing::Camera;
+		float StretchAmount = 0.1f;		// Stretched: seconds of motion its length shows (length = speed × this + size)
+		float StartRotation = 0.0f;		// Degrees
+		float RotationVariation = 0.0f;	// Degrees either way, 0-180 (180: any angle)
+		float SpinSpeed = 0.0f;			// Degrees per second
+		float SpinVariation = 0.0f;		// Degrees per second either way
 		bool WorldSpace = true;			// Born particles stay where they are when the entity moves
 
 		static constexpr uint32_t MaxMaxParticles = 10000;
@@ -388,6 +439,14 @@ namespace Bellows {
 		static constexpr float MaxDrag = 100.0f;
 		static constexpr float MaxSize = 1000.0f;
 		static constexpr float MaxIntensity = 1000.0f;
+		static constexpr size_t MaxCurveKeys = 8;
+		static constexpr uint32_t MaxFlipbookFrames = 16;	// Columns and rows each
+		static constexpr float MaxFlipbookFps = 240.0f;
+		static constexpr float MaxStretch = 10.0f;
+		static constexpr float MaxSpin = 7200.0f;
+		static constexpr float MaxNoise = 1000.0f;
+		static constexpr float MaxNoiseFrequency = 100.0f;
+		static constexpr float MaxNoiseSpeed = 100.0f;
 
 		// Holds every value to its range (and a NaN to its default), as a loaded or edited emitter needs.
 		void Clamp();
@@ -401,6 +460,7 @@ namespace Bellows {
 		uint32_t RuntimePending = 0;		// Asked for (bursts, emit()) but not yet born
 		uint32_t RuntimeRandom = 0;			// Random state; 0 = not yet seeded
 		uint64_t RuntimeSeed = 0;			// What RuntimeRandom was seeded from (the entity's UUID)
+		float RuntimeClock = 0.0f;			// Where the swirls are in time (NoiseSpeed)
 		Ref<Texture2D> RuntimeTexture;
 		std::string LoadedTexturePath;
 	};

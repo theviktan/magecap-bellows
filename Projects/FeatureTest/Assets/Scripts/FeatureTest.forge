@@ -166,6 +166,13 @@ function test_components()
 	set sparks.start_color to [1, 0.5, 0, 1]
 	check(sparks.shape is "sphere" and sparks.blend is "alpha" and sparks.burst is 30 and sparks.is_playing, "ParticleEmitter properties")
 	check(fails(function() set sparks.shape to "donut" end) and fails(function() set sparks.rate to -1 end), "a ParticleEmitter's values are checked")
+	set sparks.size_curve to [[0, 0], [0.25, 1.5], [1, 0]]
+	set sparks.color_gradient to [[0, 1, 1, 1, 1], [1, 0.2, 0.4, 1, 0]]
+	set sparks.facing to "flat"
+	set sparks.shape to "ring"
+	check(length(sparks.size_curve) is 3 and sparks.size_curve[2][2] is 1.5 and sparks.color_gradient[2][5] is 0, "ParticleEmitter curves from lists")
+	check(sparks.facing is "flat" and sparks.shape is "ring", "ParticleEmitter facing and ring")
+	check(fails(function() set sparks.size_curve to [[2, 1]] end) and fails(function() set sparks.facing to "sideways" end), "a ParticleEmitter's curves are checked")
 	sparks.stop(true)
 	check(not sparks.is_playing and sparks.particle_count is 0, "ParticleEmitter stop")
 	sparks.play()

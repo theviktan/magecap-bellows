@@ -485,6 +485,37 @@ class FeatureTest(bellows.Script):
                    and raises(lambda: setattr(emitter, "blend", "glow"), ValueError) and raises(lambda: setattr(emitter, "lifetime", float("nan")), ValueError)
                    and raises(lambda: emitter.emit(-1), ValueError),
                    "ParticleEmitter limits")
+        self.check(not emitter.outward and emitter.facing == "camera" and emitter.size_curve == [] and emitter.color_gradient == []
+                   and emitter.flipbook_columns == 1 and emitter.flipbook_rows == 1 and close(emitter.flipbook_fps, 0.0)
+                   and not emitter.flipbook_random_start and close(emitter.noise_strength, 0.0) and close(emitter.spin_speed, 0.0),
+                   "ParticleEmitter effect defaults")
+        emitter.shape, emitter.outward, emitter.facing, emitter.stretch_amount = "ring", True, "stretched", 0.3
+        emitter.noise_strength, emitter.noise_frequency, emitter.noise_speed = 2.5, 0.75, 1.25
+        emitter.start_rotation, emitter.rotation_variation, emitter.spin_speed, emitter.spin_variation = 30.0, 15.0, -120.0, 40.0
+        emitter.flipbook_columns, emitter.flipbook_rows, emitter.flipbook_fps, emitter.flipbook_random_start = 4, 2, 12.0, True
+        emitter.size_curve = [[0.5, 2.0], [0.0, 0.0], [1.0, 0.0]]
+        emitter.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.5, 1.0]]
+        self.check(emitter.shape == "ring" and emitter.outward and emitter.facing == "stretched" and close(emitter.stretch_amount, 0.3)
+                   and close(emitter.noise_strength, 2.5) and close(emitter.noise_frequency, 0.75) and close(emitter.noise_speed, 1.25)
+                   and close(emitter.start_rotation, 30.0) and close(emitter.rotation_variation, 15.0) and close(emitter.spin_speed, -120.0)
+                   and close(emitter.spin_variation, 40.0) and emitter.flipbook_columns == 4 and emitter.flipbook_rows == 2
+                   and close(emitter.flipbook_fps, 12.0) and emitter.flipbook_random_start,
+                   "ParticleEmitter effect properties")
+        self.check([[round(n, 3) for n in key] for key in emitter.size_curve] == [[0.0, 0.0], [0.5, 2.0], [1.0, 0.0]],
+                   "a size_curve's keys are put in time order")
+        self.check([[round(n, 3) for n in key] for key in emitter.color_gradient] == [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.0, 0.5, 1.0, 1.0]],
+                   "a color_gradient key without alpha gets alpha 1")
+        self.check(raises(lambda: setattr(emitter, "facing", "sideways"), ValueError) and raises(lambda: setattr(emitter, "shape", "cube"), ValueError)
+                   and raises(lambda: setattr(emitter, "size_curve", [[1.5, 1.0]]), ValueError)
+                   and raises(lambda: setattr(emitter, "size_curve", [[0.0, 1.0]] * 9), ValueError)
+                   and raises(lambda: setattr(emitter, "size_curve", 3.0), ValueError)
+                   and raises(lambda: setattr(emitter, "color_gradient", [[0.0, 2.0, 0.0, 0.0, 1.0]]), ValueError)
+                   and raises(lambda: setattr(emitter, "color_gradient", [[0.0, 1.0]]), ValueError)
+                   and raises(lambda: setattr(emitter, "flipbook_columns", 0), ValueError) and raises(lambda: setattr(emitter, "flipbook_rows", 17), ValueError)
+                   and raises(lambda: setattr(emitter, "rotation_variation", 181.0), ValueError),
+                   "ParticleEmitter effect limits")
+        emitter.size_curve, emitter.color_gradient = [], []
+        self.check(emitter.size_curve == [] and emitter.color_gradient == [], "an empty list turns a curve off")
         self.check(not emitter.is_playing and emitter.particle_count == 0, "a ParticleEmitter that doesn't play on start waits")
         emitter.play()
         self.check(emitter.is_playing, "ParticleEmitter.play")

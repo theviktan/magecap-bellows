@@ -886,14 +886,19 @@ class ParticleEmitter:
     def spread_angle(self, value: float) -> None: ...
     @property
     def shape(self) -> str:
-        """Where particles are born: 'point' (the entity), 'sphere' or 'box'"""
+        """Where particles are born: 'point' (the entity), 'sphere', 'box', 'ring' (a circle around +Y) or 'line' (along X)"""
     @shape.setter
     def shape(self, value: str) -> None: ...
     @property
     def shape_size(self) -> Vec3:
-        """A sphere's radius (x) or a box's half size, in meters"""
+        """A sphere's or ring's radius (x), a line's length (x) or a box's half size, in meters"""
     @shape_size.setter
     def shape_size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def outward(self) -> bool:
+        """Particles leave away from the center (bursts, rings that expand) instead of up +Y; spread_angle tilts them"""
+    @outward.setter
+    def outward(self, value: bool) -> None: ...
     @property
     def gravity_scale(self) -> float:
         """How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise"""
@@ -905,6 +910,21 @@ class ParticleEmitter:
     @drag.setter
     def drag(self, value: float) -> None: ...
     @property
+    def noise_strength(self) -> float:
+        """A swirling push, in m/s² (wisps, embers, curling smoke); 0 is none"""
+    @noise_strength.setter
+    def noise_strength(self, value: float) -> None: ...
+    @property
+    def noise_frequency(self) -> float:
+        """How tight the swirls are: swirls per meter, from 0 to 100"""
+    @noise_frequency.setter
+    def noise_frequency(self, value: float) -> None: ...
+    @property
+    def noise_speed(self) -> float:
+        """How fast the swirls change, from 0 (still) to 100"""
+    @noise_speed.setter
+    def noise_speed(self, value: float) -> None: ...
+    @property
     def start_size(self) -> float:
         """Meters across when born"""
     @start_size.setter
@@ -915,6 +935,11 @@ class ParticleEmitter:
     @end_size.setter
     def end_size(self, value: float) -> None: ...
     @property
+    def size_curve(self) -> typing.Any:
+        """Size over life as up to 8 [time, size] keys (time 0 born to 1 dies; size multiplies start_size), straight between keys, like [[0, 0], [0.2, 1], [1, 0]] to grow then shrink. [] goes from start_size to end_size"""
+    @size_curve.setter
+    def size_curve(self, value: typing.Any) -> None: ...
+    @property
     def start_color(self) -> Vec4 | typing.Sequence[float]:
         """Color and alpha when born (each 0 to 1)"""
     @start_color.setter
@@ -924,6 +949,11 @@ class ParticleEmitter:
         """Color and alpha when it dies; set alpha to 0 to fade out"""
     @end_color.setter
     def end_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def color_gradient(self) -> typing.Any:
+        """Color over life as up to 8 [time, red, green, blue, alpha] keys (each 0 to 1), like [[0, 1, 1, 1, 1], [0.3, 0.3, 0.6, 1, 1], [1, 0, 0, 1, 0]] for a white flash fading to blue. [] goes from start_color to end_color"""
+    @color_gradient.setter
+    def color_gradient(self, value: typing.Any) -> None: ...
     @property
     def intensity(self) -> float:
         """Brightness, from 0 to 1000; above 1 they glow"""
@@ -939,6 +969,56 @@ class ParticleEmitter:
         """The image each particle shows (an asset path); empty for a soft round dot"""
     @texture.setter
     def texture(self, value: str) -> None: ...
+    @property
+    def flipbook_columns(self) -> int:
+        """A flipbook texture's columns of frames, from 1 to 16 (frames go left to right, then top to bottom)"""
+    @flipbook_columns.setter
+    def flipbook_columns(self, value: int) -> None: ...
+    @property
+    def flipbook_rows(self) -> int:
+        """A flipbook texture's rows of frames, from 1 to 16"""
+    @flipbook_rows.setter
+    def flipbook_rows(self, value: int) -> None: ...
+    @property
+    def flipbook_fps(self) -> float:
+        """Flipbook frames per second, from 0 to 240; 0 plays the whole sheet once over each particle's life"""
+    @flipbook_fps.setter
+    def flipbook_fps(self, value: float) -> None: ...
+    @property
+    def flipbook_random_start(self) -> bool:
+        """Each particle starts on a random frame"""
+    @flipbook_random_start.setter
+    def flipbook_random_start(self, value: bool) -> None: ...
+    @property
+    def facing(self) -> str:
+        """'camera' faces the camera; 'stretched' stretches along the way each moves (streaks, rain); 'flat' lies across the entity's +Y (ground rings, shockwaves)"""
+    @facing.setter
+    def facing(self, value: str) -> None: ...
+    @property
+    def stretch_amount(self) -> float:
+        """For 'stretched': seconds of motion its length shows (length = speed × this + size), from 0 to 10"""
+    @stretch_amount.setter
+    def stretch_amount(self, value: float) -> None: ...
+    @property
+    def start_rotation(self) -> float:
+        """Degrees each particle is turned when born"""
+    @start_rotation.setter
+    def start_rotation(self, value: float) -> None: ...
+    @property
+    def rotation_variation(self) -> float:
+        """Degrees the start rotation varies either way, from 0 to 180 (180: any angle)"""
+    @rotation_variation.setter
+    def rotation_variation(self, value: float) -> None: ...
+    @property
+    def spin_speed(self) -> float:
+        """Degrees per second each particle turns (below 0 the other way)"""
+    @spin_speed.setter
+    def spin_speed(self, value: float) -> None: ...
+    @property
+    def spin_variation(self) -> float:
+        """Degrees per second the spin varies either way"""
+    @spin_variation.setter
+    def spin_variation(self, value: float) -> None: ...
     @property
     def world_space(self) -> bool:
         """Born particles stay where they are when the entity moves; off, they move with it"""

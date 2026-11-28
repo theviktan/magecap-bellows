@@ -52,10 +52,42 @@ namespace Bellows {
 			EndColor[channel] = ClampOrDefault(EndColor[channel], 0.0f, 1.0f, defaults.EndColor[channel]);
 		}
 		Intensity = ClampOrDefault(Intensity, 0.0f, MaxIntensity, defaults.Intensity);
-		if (Shape != ParticleShape::Point && Shape != ParticleShape::Sphere && Shape != ParticleShape::Box)
+		if (static_cast<uint8_t>(Shape) > static_cast<uint8_t>(ParticleShape::Line))
 			Shape = defaults.Shape;
 		if (Blend != ParticleBlend::Additive && Blend != ParticleBlend::Alpha)
 			Blend = defaults.Blend;
+		if (static_cast<uint8_t>(Facing) > static_cast<uint8_t>(ParticleFacing::Flat))
+			Facing = defaults.Facing;
+		NoiseStrength = ClampOrDefault(NoiseStrength, 0.0f, MaxNoise, defaults.NoiseStrength);
+		NoiseFrequency = ClampOrDefault(NoiseFrequency, 0.0f, MaxNoiseFrequency, defaults.NoiseFrequency);
+		NoiseSpeed = ClampOrDefault(NoiseSpeed, 0.0f, MaxNoiseSpeed, defaults.NoiseSpeed);
+		FlipbookColumns = std::clamp<uint32_t>(FlipbookColumns, 1, MaxFlipbookFrames);
+		FlipbookRows = std::clamp<uint32_t>(FlipbookRows, 1, MaxFlipbookFrames);
+		FlipbookFps = ClampOrDefault(FlipbookFps, 0.0f, MaxFlipbookFps, defaults.FlipbookFps);
+		StretchAmount = ClampOrDefault(StretchAmount, 0.0f, MaxStretch, defaults.StretchAmount);
+		StartRotation = ClampOrDefault(StartRotation, -360.0f, 360.0f, defaults.StartRotation);
+		RotationVariation = ClampOrDefault(RotationVariation, 0.0f, 180.0f, defaults.RotationVariation);
+		SpinSpeed = ClampOrDefault(SpinSpeed, -MaxSpin, MaxSpin, defaults.SpinSpeed);
+		SpinVariation = ClampOrDefault(SpinVariation, 0.0f, MaxSpin, defaults.SpinVariation);
+
+		// Curves: at most MaxCurveKeys, times 0 to 1 in order, sizes 0 to MaxSize, colors 0 to 1.
+		if (SizeCurve.size() > MaxCurveKeys)
+			SizeCurve.resize(MaxCurveKeys);
+		for (ParticleCurveKey& key : SizeCurve)
+		{
+			key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
+			key.Value = ClampOrDefault(key.Value, 0.0f, MaxSize, 1.0f);
+		}
+		std::stable_sort(SizeCurve.begin(), SizeCurve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
+		if (ColorGradient.size() > MaxCurveKeys)
+			ColorGradient.resize(MaxCurveKeys);
+		for (ParticleColorKey& key : ColorGradient)
+		{
+			key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
+			for (int channel = 0; channel < 4; channel++)
+				key.Color[channel] = ClampOrDefault(key.Color[channel], 0.0f, 1.0f, 1.0f);
+		}
+		std::stable_sort(ColorGradient.begin(), ColorGradient.end(), [](const ParticleColorKey& a, const ParticleColorKey& b) { return a.Time < b.Time; });
 	}
 
 	void DecalComponent::Clamp()
