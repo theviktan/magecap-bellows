@@ -8,7 +8,7 @@ layout(set = 0, binding = 1) uniform sampler s_Texture;
 layout(push_constant) uniform ParticleBlock
 {
 	mat4 ViewProjection;
-	vec4 Params;	// x: 1 = sample the texture, 0 = a soft round dot
+	vec4 Params;	// x: 1 = sample the texture; y: 1 = a strip (soft across V), 0 = a soft round dot
 } u_Particle;
 
 layout(location = 0) in vec2 v_TexCoord;
@@ -22,6 +22,12 @@ void main()
 	if (u_Particle.Params.x > 0.5)
 	{
 		shape = texture(sampler2D(u_Texture, s_Texture), v_TexCoord);
+	}
+	else if (u_Particle.Params.y > 0.5)
+	{
+		// A strip: full along its middle, fading smoothly to nothing at both edges.
+		float distanceFromMiddle = abs(v_TexCoord.y * 2.0 - 1.0);
+		shape = vec4(1.0, 1.0, 1.0, 1.0 - smoothstep(0.0, 1.0, distanceFromMiddle));
 	}
 	else
 	{

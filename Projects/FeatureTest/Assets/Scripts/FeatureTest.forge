@@ -179,13 +179,22 @@ function test_components()
 	sparks.emit(3)
 	check(sparks.is_playing, "ParticleEmitter play")
 
+	set streak to thing.add_component("Trail")
+	set streak.width_curve to [[0, 1], [1, 0]]
+	set streak.texture_mode to "tile"
+	set streak.start_color to [1, 0.5, 0, 1]
+	check(length(streak.width_curve) is 2 and streak.texture_mode is "tile" and streak.emitting, "Trail properties")
+	check(fails(function() set streak.texture_mode to "wrap" end) and fails(function() set streak.lifetime to 0 end), "a Trail's values are checked")
+	streak.clear()
+	check(streak.point_count is 0, "Trail clear")
+
 	set mark to thing.add_component("Decal")
 	set mark.size to vector(2, 0.5, 1)
 	set mark.sort_order to 2
 	check(close(mark.size, vector(2, 0.5, 1)) and mark.sort_order is 2 and mark.max_angle is 60, "Decal properties")
 	check(fails(function() set mark.max_angle to 120 end), "a Decal's max angle is held to its range")
 
-	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent, ParticleEmitter, Decal", "components list ({thing.components})")
+	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent, ParticleEmitter, Trail, Decal", "components list ({thing.components})")
 	thing.remove_component("PointLight")
 	check(not thing.has_component("PointLight") and thing.get_component("PointLight") is nothing, "remove_component")
 	thing.destroy()

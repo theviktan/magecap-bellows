@@ -11,6 +11,7 @@
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/ParticleSystem.h"
+#include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
 #include "Bellows/Scripting/ScriptApi.h"
@@ -569,6 +570,8 @@ namespace Bellows {
 		// Likewise every emitter: the editor's preview particles don't carry into play.
 		for (entt::entity handle : m_Registry.view<ParticleEmitterComponent>())
 			ParticleSystem::Reset(m_Registry.get<ParticleEmitterComponent>(handle), Entity(handle, this).GetUUID());
+		for (entt::entity handle : m_Registry.view<TrailComponent>())
+			TrailSystem::Clear(m_Registry.get<TrailComponent>(handle));
 		for (entt::entity handle : m_Registry.view<NavAgentComponent>())
 		{
 			NavAgentComponent& agent = m_Registry.get<NavAgentComponent>(handle);
@@ -798,9 +801,12 @@ namespace Bellows {
 			m_PhysicsAccumulator -= fixedTimestep;
 		}
 
-		// Particles after physics, so they leave from where their entity ended up this frame.
+		// Particles and trails after physics, so they leave from where their entity ended up this frame.
 		if (!m_GamePaused)
+		{
 			UpdateParticles(deltaTime);
+			UpdateTrails(deltaTime);
+		}
 
 		if (m_Audio)
 		{
@@ -896,6 +902,15 @@ namespace Bellows {
 		UpdateRuntimeCaches();
 		UpdateAnimators(timestep.GetSeconds());
 		UpdateParticles(timestep.GetSeconds());
+		UpdateTrails(timestep.GetSeconds());
+	}
+
+	void Scene::UpdateTrails(float seconds)
+	{
+		BW_PROFILE_SCOPE("Trails");
+		auto trails = m_Registry.view<TrailComponent>();
+		for (entt::entity handle : trails)
+			TrailSystem::Update(trails.get<TrailComponent>(handle), glm::vec3(GetWorldTransform(Entity(handle, this))[3]), seconds);
 	}
 
 	void Scene::UpdateParticles(float seconds)
@@ -1305,6 +1320,24 @@ namespace Bellows {
 				quads.push_back(quad);
 			}
 			renderer.SubmitParticles(quads.data(), quads.size(), emitter.Blend == ParticleBlend::Additive, emitter.RuntimeTexture);
+		}
+
+		// Trails, each as one strip from its entity back along where it has been.
+		std::vector<StripPoint> strip;
+		auto trails = m_Registry.view<TrailComponent>();
+		for (entt::entity handle : trails)
+		{
+			TrailComponent& trail = trails.get<TrailComponent>(handle);
+			if (trail.LoadedTexturePath != trail.TexturePath)
+			{
+				trail.RuntimeTexture = trail.TexturePath.empty() ? nullptr : AssetManager::GetTexture(trail.TexturePath, TextureColorSpace::SRGB);
+				trail.LoadedTexturePath = trail.TexturePath;
+			}
+			if (trail.RuntimePoints.empty() || hidden.contains(handle))
+				continue;
+			TrailSystem::BuildStrip(trail, glm::vec3(GetWorldTransform(Entity(handle, this))[3]), strip);
+			renderer.SubmitStrip(strip.data(), strip.size(), trail.Blend == ParticleBlend::Additive, trail.RuntimeTexture,
+				trail.TextureMode == TrailTextureMode::Tile);
 		}
 
 		SubmitUI(renderer);

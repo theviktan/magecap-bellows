@@ -6,10 +6,58 @@
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/ParticleSystem.h"
+#include "Bellows/Scene/TrailSystem.h"
 
 namespace Bellows {
 
 	namespace {
+
+		// Curves are lists of [time, value] keys and gradients lists of [time, r, g, b, a]; a malformed
+		// key is skipped, and the component's Clamp holds the rest to their ranges.
+		void ReadCurve(const Json& json, const char* key, std::vector<ParticleCurveKey>& out)
+		{
+			const auto it = json.find(key);
+			if (it == json.end() || !it->is_array())
+				return;
+			for (const Json& item : *it)
+			{
+				if (out.size() < ParticleEmitterComponent::MaxCurveKeys && item.is_array() && item.size() == 2 && item[0].is_number() && item[1].is_number())
+					out.push_back({ item[0].get<float>(), item[1].get<float>() });
+			}
+		}
+
+		void ReadGradient(const Json& json, const char* key, std::vector<ParticleColorKey>& out)
+		{
+			const auto it = json.find(key);
+			if (it == json.end() || !it->is_array())
+				return;
+			for (const Json& item : *it)
+			{
+				if (out.size() >= ParticleEmitterComponent::MaxCurveKeys || !item.is_array() || item.size() != 5)
+					continue;
+				if (std::all_of(item.begin(), item.end(), [](const Json& value) { return value.is_number(); }))
+					out.push_back({ item[0].get<float>(), glm::vec4(item[1].get<float>(), item[2].get<float>(), item[3].get<float>(), item[4].get<float>()) });
+			}
+		}
+
+		// Written only when there are keys, so files without curves stay as they were.
+		void WriteCurve(Json& json, const char* key, const std::vector<ParticleCurveKey>& keys)
+		{
+			if (keys.empty())
+				return;
+			Json& curve = json[key] = Json::array();
+			for (const ParticleCurveKey& item : keys)
+				curve.push_back(Json::array({ item.Time, item.Value }));
+		}
+
+		void WriteGradient(Json& json, const char* key, const std::vector<ParticleColorKey>& keys)
+		{
+			if (keys.empty())
+				return;
+			Json& gradient = json[key] = Json::array();
+			for (const ParticleColorKey& item : keys)
+				gradient.push_back(Json::array({ item.Time, item.Color.r, item.Color.g, item.Color.b, item.Color.a }));
+		}
 
 		Json SerializeScriptField(const ScriptFieldValue& value)
 		{
@@ -422,27 +470,33 @@ namespace Bellows {
 				JsonRead(*it, "RotationVariation", component.RotationVariation);
 				JsonRead(*it, "SpinSpeed", component.SpinSpeed);
 				JsonRead(*it, "SpinVariation", component.SpinVariation);
-				// Curves are lists of [time, value] and [time, r, g, b, a]; a malformed key is skipped.
-				if (auto curve = it->find("SizeCurve"); curve != it->end() && curve->is_array())
-				{
-					for (const Json& key : *curve)
-					{
-						if (component.SizeCurve.size() < ParticleEmitterComponent::MaxCurveKeys && key.is_array() && key.size() == 2
-							&& key[0].is_number() && key[1].is_number())
-							component.SizeCurve.push_back({ key[0].get<float>(), key[1].get<float>() });
-					}
-				}
-				if (auto gradient = it->find("ColorGradient"); gradient != it->end() && gradient->is_array())
-				{
-					for (const Json& key : *gradient)
-					{
-						if (component.ColorGradient.size() >= ParticleEmitterComponent::MaxCurveKeys || !key.is_array() || key.size() != 5)
-							continue;
-						if (std::all_of(key.begin(), key.end(), [](const Json& value) { return value.is_number(); }))
-							component.ColorGradient.push_back({ key[0].get<float>(),
-								glm::vec4(key[1].get<float>(), key[2].get<float>(), key[3].get<float>(), key[4].get<float>()) });
-					}
-				}
+				ReadCurve(*it, "SizeCurve", component.SizeCurve);
+				ReadGradient(*it, "ColorGradient", component.ColorGradient);
+				component.Clamp();
+			}
+
+			if (auto it = json.find("Trail"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<TrailComponent>();
+				JsonRead(*it, "Emitting", component.Emitting);
+				JsonRead(*it, "Lifetime", component.Lifetime);
+				JsonRead(*it, "MinDistance", component.MinDistance);
+				JsonRead(*it, "MaxPoints", component.MaxPoints);
+				JsonRead(*it, "StartWidth", component.StartWidth);
+				JsonRead(*it, "EndWidth", component.EndWidth);
+				ReadCurve(*it, "WidthCurve", component.WidthCurve);
+				JsonRead(*it, "StartColor", component.StartColor);
+				JsonRead(*it, "EndColor", component.EndColor);
+				ReadGradient(*it, "ColorGradient", component.ColorGradient);
+				JsonRead(*it, "Intensity", component.Intensity);
+				std::string blend = ParticleBlendToString(component.Blend);
+				JsonRead(*it, "Blend", blend);
+				component.Blend = ParticleBlendFromString(blend).value_or(component.Blend);
+				JsonRead(*it, "Texture", component.TexturePath);
+				std::string textureMode = TrailTextureModeToString(component.TextureMode);
+				JsonRead(*it, "TextureMode", textureMode);
+				component.TextureMode = TrailTextureModeFromString(textureMode).value_or(component.TextureMode);
+				JsonRead(*it, "TileLength", component.TileLength);
 				component.Clamp();
 			}
 
@@ -827,18 +881,28 @@ namespace Bellows {
 			j["RotationVariation"] = c->RotationVariation;
 			j["SpinSpeed"] = c->SpinSpeed;
 			j["SpinVariation"] = c->SpinVariation;
-			if (!c->SizeCurve.empty())
-			{
-				Json& curve = j["SizeCurve"] = Json::array();
-				for (const ParticleCurveKey& key : c->SizeCurve)
-					curve.push_back(Json::array({ key.Time, key.Value }));
-			}
-			if (!c->ColorGradient.empty())
-			{
-				Json& gradient = j["ColorGradient"] = Json::array();
-				for (const ParticleColorKey& key : c->ColorGradient)
-					gradient.push_back(Json::array({ key.Time, key.Color.r, key.Color.g, key.Color.b, key.Color.a }));
-			}
+			WriteCurve(j, "SizeCurve", c->SizeCurve);
+			WriteGradient(j, "ColorGradient", c->ColorGradient);
+		}
+
+		if (const auto* c = entity.TryGetComponent<TrailComponent>())
+		{
+			Json& j = json["Trail"];
+			j["Emitting"] = c->Emitting;
+			j["Lifetime"] = c->Lifetime;
+			j["MinDistance"] = c->MinDistance;
+			j["MaxPoints"] = c->MaxPoints;
+			j["StartWidth"] = c->StartWidth;
+			j["EndWidth"] = c->EndWidth;
+			WriteCurve(j, "WidthCurve", c->WidthCurve);
+			j["StartColor"] = c->StartColor;
+			j["EndColor"] = c->EndColor;
+			WriteGradient(j, "ColorGradient", c->ColorGradient);
+			j["Intensity"] = c->Intensity;
+			j["Blend"] = ParticleBlendToString(c->Blend);
+			j["Texture"] = c->TexturePath;
+			j["TextureMode"] = TrailTextureModeToString(c->TextureMode);
+			j["TileLength"] = c->TileLength;
 		}
 
 		if (const auto* c = entity.TryGetComponent<TextComponent>())

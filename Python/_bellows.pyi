@@ -455,6 +455,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['Trail']) -> Trail | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['Decal']) -> Decal | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
@@ -520,6 +522,8 @@ class Entity:
     def add_component(self, component: typing.Literal['Text']) -> Text: ...
     @typing.overload
     def add_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['Trail']) -> Trail: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Decal']) -> Decal: ...
     @typing.overload
@@ -1330,6 +1334,90 @@ class Text:
     @property
     def measured_size(self) -> Vec3:
         """The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it"""
+
+
+class Trail:
+    """A ribbon that follows the entity, left behind where it has been and fading out: sword slashes, comet tails, spell streaks. It faces the camera along its length, and shows in the editor too when you move the entity"""
+    @property
+    def emitting(self) -> bool:
+        """Leaves new points while the entity moves; off, the trail lets go of the entity and shrinks away"""
+    @emitting.setter
+    def emitting(self, value: bool) -> None: ...
+    @property
+    def lifetime(self) -> float:
+        """Seconds each point lasts: how long the trail is, in time"""
+    @lifetime.setter
+    def lifetime(self, value: float) -> None: ...
+    @property
+    def min_distance(self) -> float:
+        """Meters the entity moves before the trail leaves another point (smaller is smoother)"""
+    @min_distance.setter
+    def min_distance(self, value: float) -> None: ...
+    @property
+    def max_points(self) -> int:
+        """The most points it keeps; the oldest go first"""
+    @max_points.setter
+    def max_points(self, value: int) -> None: ...
+    @property
+    def start_width(self) -> float:
+        """Meters across at the entity"""
+    @start_width.setter
+    def start_width(self, value: float) -> None: ...
+    @property
+    def end_width(self) -> float:
+        """Meters across at its tail"""
+    @end_width.setter
+    def end_width(self, value: float) -> None: ...
+    @property
+    def width_curve(self) -> typing.Any:
+        """Width along the trail as up to 8 [time, width] keys (0 at the entity, 1 at the tail; width multiplies start_width). [] goes from start_width to end_width"""
+    @width_curve.setter
+    def width_curve(self, value: typing.Any) -> None: ...
+    @property
+    def start_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha at the entity"""
+    @start_color.setter
+    def start_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def end_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha at the tail"""
+    @end_color.setter
+    def end_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def color_gradient(self) -> typing.Any:
+        """Color along the trail as up to 8 [time, red, green, blue, alpha] keys (0 at the entity, 1 at the tail). [] goes from start_color to end_color"""
+    @color_gradient.setter
+    def color_gradient(self, value: typing.Any) -> None: ...
+    @property
+    def intensity(self) -> float:
+        """Brightness, from 0 to 1000; above 1 it glows"""
+    @intensity.setter
+    def intensity(self, value: float) -> None: ...
+    @property
+    def blend(self) -> str:
+        """'additive' adds light (glows, magic); 'alpha' covers what's behind (smoke, tire marks)"""
+    @blend.setter
+    def blend(self, value: str) -> None: ...
+    @property
+    def texture(self) -> str:
+        """An image along the trail (an asset path); empty is soft toward its edges"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def texture_mode(self) -> str:
+        """'stretch' lays the texture once along the whole trail; 'tile' repeats it every tile_length meters"""
+    @texture_mode.setter
+    def texture_mode(self, value: str) -> None: ...
+    @property
+    def tile_length(self) -> float:
+        """For 'tile': meters one copy of the texture covers"""
+    @tile_length.setter
+    def tile_length(self, value: float) -> None: ...
+    def clear(self) -> None:
+        """Forgets every point at once (after a teleport, say)"""
+    @property
+    def point_count(self) -> int:
+        """How many points it has now"""
 
 
 class Transform:

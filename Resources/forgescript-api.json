@@ -2238,6 +2238,116 @@
 			]
 		},
 		{
+			"name": "Trail",
+			"doc": "A ribbon that follows the entity, left behind where it has been and fading out: sword slashes, comet tails, spell streaks. It faces the camera along its length, and shows in the editor too when you move the entity",
+			"members": [
+				{
+					"name": "emitting",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Leaves new points while the entity moves; off, the trail lets go of the entity and shrinks away"
+				},
+				{
+					"name": "lifetime",
+					"kind": "property",
+					"type": "float",
+					"doc": "Seconds each point lasts: how long the trail is, in time"
+				},
+				{
+					"name": "min_distance",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters the entity moves before the trail leaves another point (smaller is smoother)"
+				},
+				{
+					"name": "max_points",
+					"kind": "property",
+					"type": "int",
+					"doc": "The most points it keeps; the oldest go first"
+				},
+				{
+					"name": "start_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across at the entity"
+				},
+				{
+					"name": "end_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across at its tail"
+				},
+				{
+					"name": "width_curve",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Width along the trail as up to 8 [time, width] keys (0 at the entity, 1 at the tail; width multiplies start_width). [] goes from start_width to end_width"
+				},
+				{
+					"name": "start_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha at the entity"
+				},
+				{
+					"name": "end_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha at the tail"
+				},
+				{
+					"name": "color_gradient",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Color along the trail as up to 8 [time, red, green, blue, alpha] keys (0 at the entity, 1 at the tail). [] goes from start_color to end_color"
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": "Brightness, from 0 to 1000; above 1 it glows"
+				},
+				{
+					"name": "blend",
+					"kind": "property",
+					"type": "str",
+					"doc": "'additive' adds light (glows, magic); 'alpha' covers what's behind (smoke, tire marks)"
+				},
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "An image along the trail (an asset path); empty is soft toward its edges"
+				},
+				{
+					"name": "texture_mode",
+					"kind": "property",
+					"type": "str",
+					"doc": "'stretch' lays the texture once along the whole trail; 'tile' repeats it every tile_length meters"
+				},
+				{
+					"name": "tile_length",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'tile': meters one copy of the texture covers"
+				},
+				{
+					"name": "clear",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Forgets every point at once (after a teleport, say)"
+				},
+				{
+					"name": "point_count",
+					"kind": "property",
+					"type": "int",
+					"readonly": true,
+					"doc": "How many points it has now"
+				}
+			]
+		},
+		{
 			"name": "Decal",
 			"doc": "Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles",
 			"members": [

@@ -31,6 +31,8 @@ can drive end to end.
   particles that face the camera, stretch along their motion or lie flat; rotation and spin;
   flipbook textures; additive or alpha blending. Bright ones bloom, and they play in the editor
   while you tune them.
+* **Trails**: a **Trail** leaves a glowing or textured ribbon behind a moving entity (sword slashes,
+  comet tails, spell streaks, tire marks), with width and color along it.
 * **Decals**: project an image (footprints, cracks, posters, road paint) onto the surfaces inside a
   box, lit and shadowed with them, with a fade on surfaces turned away and a sort order.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and

@@ -14,6 +14,33 @@ namespace Bellows {
 			return std::isfinite(value) ? std::clamp(value, minimum, maximum) : fallback;
 		}
 
+		// Curves and gradients over a life or a length: at most MaxCurveKeys, times 0 to 1 in order,
+		// values 0 to 'maximum', colors 0 to 1.
+		void ClampCurve(std::vector<ParticleCurveKey>& keys, float maximum)
+		{
+			if (keys.size() > ParticleEmitterComponent::MaxCurveKeys)
+				keys.resize(ParticleEmitterComponent::MaxCurveKeys);
+			for (ParticleCurveKey& key : keys)
+			{
+				key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
+				key.Value = ClampOrDefault(key.Value, 0.0f, maximum, 1.0f);
+			}
+			std::stable_sort(keys.begin(), keys.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
+		}
+
+		void ClampGradient(std::vector<ParticleColorKey>& keys)
+		{
+			if (keys.size() > ParticleEmitterComponent::MaxCurveKeys)
+				keys.resize(ParticleEmitterComponent::MaxCurveKeys);
+			for (ParticleColorKey& key : keys)
+			{
+				key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
+				for (int channel = 0; channel < 4; channel++)
+					key.Color[channel] = ClampOrDefault(key.Color[channel], 0.0f, 1.0f, 1.0f);
+			}
+			std::stable_sort(keys.begin(), keys.end(), [](const ParticleColorKey& a, const ParticleColorKey& b) { return a.Time < b.Time; });
+		}
+
 	}
 
 	void NavAgentComponent::Clamp()
@@ -70,24 +97,31 @@ namespace Bellows {
 		SpinSpeed = ClampOrDefault(SpinSpeed, -MaxSpin, MaxSpin, defaults.SpinSpeed);
 		SpinVariation = ClampOrDefault(SpinVariation, 0.0f, MaxSpin, defaults.SpinVariation);
 
-		// Curves: at most MaxCurveKeys, times 0 to 1 in order, sizes 0 to MaxSize, colors 0 to 1.
-		if (SizeCurve.size() > MaxCurveKeys)
-			SizeCurve.resize(MaxCurveKeys);
-		for (ParticleCurveKey& key : SizeCurve)
+		ClampCurve(SizeCurve, MaxSize);
+		ClampGradient(ColorGradient);
+	}
+
+	void TrailComponent::Clamp()
+	{
+		const TrailComponent defaults;
+		Lifetime = ClampOrDefault(Lifetime, MinLifetime, MaxLifetime, defaults.Lifetime);
+		MinDistance = ClampOrDefault(MinDistance, MinMinDistance, MaxMinDistance, defaults.MinDistance);
+		MaxPoints = std::clamp<uint32_t>(MaxPoints, 2, MaxMaxPoints);
+		StartWidth = ClampOrDefault(StartWidth, 0.0f, MaxWidth, defaults.StartWidth);
+		EndWidth = ClampOrDefault(EndWidth, 0.0f, MaxWidth, defaults.EndWidth);
+		for (int channel = 0; channel < 4; channel++)
 		{
-			key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
-			key.Value = ClampOrDefault(key.Value, 0.0f, MaxSize, 1.0f);
+			StartColor[channel] = ClampOrDefault(StartColor[channel], 0.0f, 1.0f, defaults.StartColor[channel]);
+			EndColor[channel] = ClampOrDefault(EndColor[channel], 0.0f, 1.0f, defaults.EndColor[channel]);
 		}
-		std::stable_sort(SizeCurve.begin(), SizeCurve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
-		if (ColorGradient.size() > MaxCurveKeys)
-			ColorGradient.resize(MaxCurveKeys);
-		for (ParticleColorKey& key : ColorGradient)
-		{
-			key.Time = ClampOrDefault(key.Time, 0.0f, 1.0f, 0.0f);
-			for (int channel = 0; channel < 4; channel++)
-				key.Color[channel] = ClampOrDefault(key.Color[channel], 0.0f, 1.0f, 1.0f);
-		}
-		std::stable_sort(ColorGradient.begin(), ColorGradient.end(), [](const ParticleColorKey& a, const ParticleColorKey& b) { return a.Time < b.Time; });
+		Intensity = ClampOrDefault(Intensity, 0.0f, ParticleEmitterComponent::MaxIntensity, defaults.Intensity);
+		if (Blend != ParticleBlend::Additive && Blend != ParticleBlend::Alpha)
+			Blend = defaults.Blend;
+		if (TextureMode != TrailTextureMode::Stretch && TextureMode != TrailTextureMode::Tile)
+			TextureMode = defaults.TextureMode;
+		TileLength = ClampOrDefault(TileLength, MinTileLength, MaxTileLength, defaults.TileLength);
+		ClampCurve(WidthCurve, MaxWidth);
+		ClampGradient(ColorGradient);
 	}
 
 	void DecalComponent::Clamp()
