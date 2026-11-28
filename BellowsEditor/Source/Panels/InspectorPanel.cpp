@@ -460,7 +460,10 @@ namespace Bellows {
 				c.Clamp();
 				UI::EndPropertyGrid();
 			}
+			// Wrapped, so it fits a narrow Inspector.
+			ImGui::PushTextWrapPos(0.0f);
 			UI::TextMuted("Projects onto opaque surfaces inside the green box, down the entity's -Y.");
+			ImGui::PopTextWrapPos();
 		});
 
 		DrawComponent<AudioSourceComponent>(m_Editor, entity, ICON_VOLUME_2, "Audio Source", [&](AudioSourceComponent& c)
