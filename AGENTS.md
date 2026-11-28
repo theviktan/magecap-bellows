@@ -21,7 +21,7 @@ fully scriptable so agents can build games through it.
 | `Python/` | The Python package games import (`bellows/__init__.py`, `bellows/editor.py`) and `_bellows.pyi`, the generated type stub of the native module (for editors and type checkers). |
 | `Projects/FeatureTest/` | Sample project using every component; `Assets/Scripts/FeatureTest.py` tests the whole scripting API, after `FeatureTest.forge` tests it from ForgeScript. Rebuilt by `Tools/BuildFeatureTest.py`. |
 | `Resources/` | Editor fonts and icons; the app icon (`Icons/Bellows.svg`, its source, and the generated `Bellows.png` and `Bellows.ico`; the build adds ForgeScript's `Icons/ForgeScript.png` from `ForgeScript/Icons`, shown on `.forge` files); `forgescript-api.json`, the generated script API description `forgescript --lsp` reads (copied next to the programs). |
-| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows), `CheckNoAiStamps.py` (rule 7: no AI labels in tracked files or commit messages, no C2PA stamps in images), `Installer/MageCapBellows.iss` (the Windows setup program, Inno Setup 6), `WriteUpdateManifest.py` (writes a release's `update.json`), `UpdateServer/` (the Cloudflare Worker at updates.magecapgames.com that serves updates from the private releases; see `docs/Updates.md`). |
+| `Tools/` | `bellows_cli.py` (agent client), `BuildFeatureTest.py`, `GenerateIconHeader.py`, `GenerateTestFonts.py` (writes the CFF test font), `GenerateTestModels.py` (writes the skinned, animated test model), `GenerateAppIcon.py` (rebuilds an app icon's PNG and ICO from its SVG; by default `Resources/Icons/Bellows.svg`), `GeneratePythonStubs.py` (writes `Python/_bellows.pyi`), `PackageRelease.py` (ready-to-run package with bundled Python; CI uploads it for Windows), `CheckNoAiStamps.py` (rule 7: no AI labels in tracked files or commit messages, no C2PA stamps in images), `Installer/MageCapBellows.iss` (the Windows setup program, Inno Setup 6), `WriteUpdateManifest.py` (writes a release's `update.json`), `UpdateServer/` (the Cloudflare Worker at updates.magecapgames.com that serves updates from the GitHub releases; see `docs/Updates.md`), `CheckRoadmap.py` (checks `docs/Roadmap.md`'s feature checklist, and at a release that every row planned for it is Done). |
 | `docs/` | `ScriptingAPI.md`, `EditorAutomation.md`, `ForgeScript/` (language guide, reference, C++ API), `ReleaseNotes/<version>.md` (the text of each GitHub Release), images. |
 | `vendor/` | Third-party code as git submodules plus `vendor/CMakeLists.txt`. Never edit submodule contents. |
 
@@ -64,6 +64,7 @@ The tests:
 | `BellowsFeatureTest` | The runtime plays FeatureTest; `FeatureTest.forge` and `FeatureTest.py` check the entire API from both languages. |
 | `BellowsEditorFeatureTest` | The same, in editor play mode. |
 | `UpdateManifestSelfTest`, `UpdateServerTests` | `Tools/WriteUpdateManifest.py --self-test`, and the update server Worker against a stand-in for GitHub (`Tools/UpdateServer/worker.test.mjs`, only when Node.js is installed). The editor's side of updating is in `BellowsUnitTests` (`UpdateTests.cpp`) and `BellowsEditorAutomationTests`. |
+| `RoadmapChecklist`, `RoadmapChecklistSelfTest` | `Tools/CheckRoadmap.py` on `docs/Roadmap.md`'s feature checklist (section 8): every row has a feature, a release and a status, Done rows name their commit; and the checker on made-up tables. At a version tag, CI runs it with `--release`. |
 | `RepositoryNoAiStamps` | `Tools/CheckNoAiStamps.py` over every tracked file outside `vendor/`: no AI-made labels in text, no content-credentials stamps in PNG or JPEG images (rule 7). `RepositoryNoAiStampsSelfTest` checks the checker on made-up files. |
 | `BellowsPackageTest` | `BellowsTests/Scripts/PackageTest.py`: packages the build with `Tools/PackageRelease.py`, checks that everything the programs load is in the package, then runs the packaged programs (check tools, FeatureTest, a game exported by the packaged editor). Add a file the programs load to its list. |
 
@@ -106,6 +107,8 @@ GPU tests run with Vulkan validation enabled and fail on any validation message.
   and `bellows.VERSION`. Only a build of the commit tagged `v<version>`, or one configured with
   `-DBELLOWS_RELEASE_BUILD=ON` (CI does that for version tags), reports plain `0.4.0`.
 * To release:
+  0. Every row of `docs/Roadmap.md`'s feature checklist (section 8) planned for this version must
+     be Done, or moved to a later release by Ron's decision. CI checks it (`Tools/CheckRoadmap.py`).
   1. Finish `docs/ReleaseNotes/<version>.md` (started with the cycle): remove its "These notes
      grow" line, and have FSC date ForgeScript's "(not released yet)" heading in
      `ForgeScript/CHANGELOG.md` if it has one.

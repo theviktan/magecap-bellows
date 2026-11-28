@@ -70,6 +70,14 @@ add_test(NAME RepositoryNoAiStampsSelfTest
 	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckNoAiStamps.py" --self-test)
 set_tests_properties(RepositoryNoAiStampsSelfTest PROPERTIES PASS_REGULAR_EXPRESSION "SELF-TEST PASSED")
 
+# docs/Roadmap.md's feature checklist: every planned feature has a release and a status.
+add_test(NAME RoadmapChecklist
+	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckRoadmap.py")
+set_tests_properties(RoadmapChecklist PROPERTIES PASS_REGULAR_EXPRESSION "ROADMAP CHECKLIST OK")
+add_test(NAME RoadmapChecklistSelfTest
+	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/CheckRoadmap.py" --self-test)
+set_tests_properties(RoadmapChecklistSelfTest PROPERTIES PASS_REGULAR_EXPRESSION "SELF-TEST PASSED")
+
 # update.json, which the editor's update check reads, is written by this tool for each release.
 add_test(NAME UpdateManifestSelfTest
 	COMMAND "${Python_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/Tools/WriteUpdateManifest.py" --self-test)
