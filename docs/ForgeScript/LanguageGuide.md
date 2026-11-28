@@ -964,6 +964,9 @@ say average of 4 and 8     # 6
 - A phrase can be used anywhere in the script, even before the line that defines it.
 - Phrases must start with a word, cannot have two slots in a row, and cannot use the block words (`if`, `for`, `end`, ...).
 - The game engine can add its own phrases (for example `move (thing) toward (target) by (amount)`), and they work exactly the same way.
+  MageCap Bellows has phrases for its effects, for example `play particles on campfire`, `emit 30 particles from sparks` and
+  `paint "Textures/Scorch.png" at hit` (a decal where a raycast hit). Its [Scripting API](../ScriptingAPI.md#using-the-api-from-forgescript)
+  lists them all.
 
 **Built-in phrases:**
 
