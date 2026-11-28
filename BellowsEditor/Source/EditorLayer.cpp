@@ -21,6 +21,7 @@
 #include "Bellows/Core/Input.h"
 #include "Bellows/Core/InputMap.h"
 #include "Bellows/Core/Platform.h"
+#include "Bellows/Core/Profiler.h"
 #include "Bellows/Math/Math.h"
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Physics/PhysicsWorld.h"
@@ -1073,6 +1074,7 @@ namespace Bellows {
 		SceneRendererSettings& settings = m_ViewportRenderer->GetSettings();
 		settings.ShowGrid = m_Settings.ShowGrid && m_SceneState == SceneState::Edit && !uiView;
 		settings.ShowSelectionOutline = !m_ViewportShowsGameView && !uiView;
+		settings.ShowSelectionGlow = m_Settings.SelectionGlow;
 		settings.ShowUI = m_ViewportShowsGameView || uiView || m_Settings.ShowUI;
 
 		std::vector<uint32_t> selectedIDs;
@@ -1822,6 +1824,11 @@ namespace Bellows {
 				ImGui::EndMenu();
 			}
 			ImGui::MenuItem(ICON_BOX "  Collider Outlines", nullptr, &m_ShowColliders);
+			if (ImGui::MenuItem(ICON_SPARKLES "  Selection Glow", nullptr, m_Settings.SelectionGlow))
+			{
+				m_Settings.SelectionGlow = !m_Settings.SelectionGlow;
+				m_Settings.Save();
+			}
 			ImGui::MenuItem(ICON_ACTIVITY "  Statistics", nullptr, &m_ShowStatistics);
 			ImGui::MenuItem(ICON_GAUGE "  Profiler", nullptr, &m_ShowProfiler);
 			ImGui::Separator();
@@ -1945,23 +1952,16 @@ namespace Bellows {
 		const ImGuiWindow* barWindow = ImGui::GetCurrentWindow();
 		const float height = 30.0f * scale;
 		const float y = barTop + (barHeight - height) * 0.5f;
-		const float gap = 6.0f * scale;
-		const bool editing = m_SceneState == SceneState::Edit;
-		const bool gameWindowRunning = m_GameWindow.IsRunning();
-		const bool running = !editing || gameWindowRunning;
-
 		// Widths first, so the group can sit flush with the right edge.
 		const std::string project = m_Project->GetConfig().Name;
 		const std::string scene = m_ScenePath.empty() ? std::string("Untitled") : std::filesystem::path(m_ScenePath).stem().string();
 		const bool dirty = IsSceneDirty();
 		const float slashWidth = ImGui::CalcTextSize(" / ").x;
 		const float crumbsWidth = ImGui::CalcTextSize(project.c_str()).x + slashWidth + ImGui::CalcTextSize(scene.c_str()).x + (dirty ? 14.0f * scale : 0.0f);
-		const char* playLabel = running ? ICON_SQUARE "  Stop" : ICON_PLAY "  Play";
-		const float playWidth = std::max(ImGui::CalcTextSize(ICON_PLAY "  Play").x, ImGui::CalcTextSize(ICON_SQUARE "  Stop").x) + 26.0f * scale;
-		const float chevronWidth = 22.0f * scale;
+		const bool showPlay = !m_ViewportVisible;
 		const char* exportLabel = "Export game";
 		const float exportWidth = ImGui::CalcTextSize(exportLabel).x + 26.0f * scale;
-		const float total = crumbsWidth + 16.0f * scale + playWidth + chevronWidth + gap + height * 2.0f + gap * 2.0f + 10.0f * scale + exportWidth + 12.0f * scale;
+		const float total = crumbsWidth + 16.0f * scale + (showPlay ? GetPlayControlsWidth(height) + 10.0f * scale : 0.0f) + exportWidth + 12.0f * scale;
 		const float left = barWindow->Pos.x + barWindow->Size.x - total;
 		float x = left;
 
@@ -1986,6 +1986,45 @@ namespace Bellows {
 		x += 16.0f * scale;
 
 		// The bar's tall padding would push button labels down; these center them in their height.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f * scale, (height - ImGui::GetFontSize()) * 0.5f));
+
+		// Play sits in the viewport's toolbar; here only while the viewport is hidden (the Script workspace).
+		if (showPlay)
+			x += DrawPlayControls(ImVec2(x, y), height) + 10.0f * scale;
+
+		// Export game: a plain raised button.
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * scale);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::PanelRaised));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::BorderStrong));
+		ImGui::PushStyleColor(ImGuiCol_Border, Theme::ToVec4(Theme::BorderStrong));
+		if (ImGui::Button(exportLabel, ImVec2(exportWidth, height)))
+			ShowExportDialog();
+		ImGui::SetItemTooltip("Build the game for players to run (File, Export Game)");
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(3);
+		return left;
+	}
+
+	float EditorLayer::GetPlayControlsWidth(float height) const
+	{
+		const float scale = Theme::GetScale();
+		const float playWidth = std::max(ImGui::CalcTextSize(ICON_PLAY "  Play").x, ImGui::CalcTextSize(ICON_SQUARE "  Stop").x) + 26.0f * scale;
+		return playWidth + 1.0f * scale + 22.0f * scale + (6.0f * scale + height) * 2.0f;
+	}
+
+	float EditorLayer::DrawPlayControls(ImVec2 position, float height)
+	{
+		const float scale = Theme::GetScale();
+		const float gap = 6.0f * scale;
+		const bool editing = m_SceneState == SceneState::Edit;
+		const bool running = !editing || m_GameWindow.IsRunning();
+		const char* playLabel = running ? ICON_SQUARE "  Stop" : ICON_PLAY "  Play";
+		const float playWidth = std::max(ImGui::CalcTextSize(ICON_PLAY "  Play").x, ImGui::CalcTextSize(ICON_SQUARE "  Stop").x) + 26.0f * scale;
+		const float chevronWidth = 22.0f * scale;
+		const float y = position.y;
+		float x = position.x;
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f * scale, (height - ImGui::GetFontSize()) * 0.5f));
 
 		// Play (ember: the one warm button), where it plays, Pause and Step.
@@ -2040,19 +2079,8 @@ namespace Bellows {
 		ImGui::EndDisabled();
 		x += height + gap + 10.0f * scale;
 
-		// Export game: a plain raised button.
-		ImGui::SetCursorScreenPos(ImVec2(x, y));
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * scale);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::PanelRaised));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::BorderStrong));
-		ImGui::PushStyleColor(ImGuiCol_Border, Theme::ToVec4(Theme::BorderStrong));
-		if (ImGui::Button(exportLabel, ImVec2(exportWidth, height)))
-			ShowExportDialog();
-		ImGui::SetItemTooltip("Build the game for players to run (File, Export Game)");
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar(3);
-		return left;
+		ImGui::PopStyleVar();
+		return x - gap - 10.0f * scale - position.x;
 	}
 
 	void EditorLayer::ShowExportDialog()
@@ -2253,6 +2281,11 @@ namespace Bellows {
 		toggle("Game UI", m_Settings.ShowUI);
 		toggle("UI View", m_Settings.UIView);
 		toggle("Collider Outlines", m_ShowColliders);
+		command(m_Settings.SelectionGlow ? "Hide Selection Glow" : "Show Selection Glow", "View", true, [this]
+		{
+			m_Settings.SelectionGlow = !m_Settings.SelectionGlow;
+			m_Settings.Save();
+		});
 		toggle("Statistics", m_ShowStatistics);
 		toggle("Profiler", m_ShowProfiler);
 		command("Reset Layout", "View", true, [this]
@@ -2566,7 +2599,12 @@ namespace Bellows {
 		}
 
 		const bool canPick = m_SceneState == SceneState::Edit || !IsUsingGameCamera();
-		if (canPick && !rectToolHasMouse && m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyAlt
+		const ImVec2 pointer = ImGui::GetMousePos();
+		const bool overOverlay = std::any_of(m_ViewportOverlays.begin(), m_ViewportOverlays.end(), [&](const glm::vec4& rect)
+		{
+			return pointer.x >= rect.x && pointer.y >= rect.y && pointer.x <= rect.z && pointer.y <= rect.w;
+		});
+		if (canPick && !rectToolHasMouse && !overOverlay && m_ViewportHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyAlt
 			&& !ImGuizmo::IsOver() && !ImGuizmo::IsUsing() && !m_CameraControlActive)
 		{
 			const ImVec2 mouse = ImGui::GetMousePos();
@@ -2587,73 +2625,201 @@ namespace Bellows {
 
 	void EditorLayer::DrawViewportToolbar()
 	{
+		// Design F: one floating toolbar at the top center (tools, snapping, space, Play), the view
+		// switches and the orientation gizmo at the top right, the camera speed and the frame's times
+		// along the bottom. Centered, the toolbar keeps clear of a game UI anchored to a corner.
 		const float scale = Theme::GetScale();
-		const ImVec2 origin = ImVec2(m_ViewportPosition.x + 10.0f * scale, m_ViewportPosition.y + 10.0f * scale);
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const float buttonSize = ImGui::GetFrameHeight();
 		const float padding = 4.0f * scale;
-
-		auto beginOverlay = [&](const char* id, ImVec2 position, int buttons)
+		const float margin = 10.0f * scale;
+		const ImU32 floatFill = Theme::WithAlpha(Theme::Panel, 235);
+		m_ViewportOverlays.clear();
+		const auto floatingBox = [&](ImVec2 min, ImVec2 max)
 		{
-			const ImVec2 size(buttonSize * static_cast<float>(buttons) + padding * static_cast<float>(buttons + 1), buttonSize + padding * 2.0f);
-			drawList->AddRectFilled(position, ImVec2(position.x + size.x, position.y + size.y), Theme::WithAlpha(Theme::Background, 210), 6.0f * scale);
-			drawList->AddRect(position, ImVec2(position.x + size.x, position.y + size.y), Theme::Border, 6.0f * scale);
-			ImGui::SetCursorScreenPos(ImVec2(position.x + padding, position.y + padding));
-			ImGui::PushID(id);
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(padding, padding));
-			return size;
-		};
-		auto endOverlay = []()
-		{
-			ImGui::PopStyleVar();
-			ImGui::PopID();
+			m_ViewportOverlays.emplace_back(min.x, min.y, max.x, max.y);
+			drawList->AddRectFilled(min, max, floatFill, 12.0f * scale);
+			drawList->AddRect(min, max, Theme::BorderStrong, 12.0f * scale);
 		};
 
-		// Gizmo tools
-		const ImVec2 toolsSize = beginOverlay("Tools", origin, 5);
-		if (UI::IconButton(ICON_MOUSE_POINTER_2, "Select (Q)", m_GizmoMode == GizmoMode::None)) m_GizmoMode = GizmoMode::None;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_MOVE, "Move (W)", m_GizmoMode == GizmoMode::Translate)) m_GizmoMode = GizmoMode::Translate;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_ROTATE_3D, "Rotate (E)", m_GizmoMode == GizmoMode::Rotate)) m_GizmoMode = GizmoMode::Rotate;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_SCALE_3D, "Scale (R)", m_GizmoMode == GizmoMode::Scale)) m_GizmoMode = GizmoMode::Scale;
-		ImGui::SameLine();
-		if (UI::IconButton(m_GizmoLocal ? ICON_BOX : ICON_GLOBE, m_GizmoLocal ? "Local space" : "World space", false))
+		// Widths first, so the toolbar can be centered.
+		const char* snapUnit = m_GizmoMode == GizmoMode::Rotate ? "%.0f deg" : (m_GizmoMode == GizmoMode::Scale ? "x %.2g" : "%.2g m");
+		const float snapValue = m_GizmoMode == GizmoMode::Rotate ? m_Settings.RotateSnap : (m_GizmoMode == GizmoMode::Scale ? m_Settings.ScaleSnap : m_Settings.TranslateSnap);
+		char snapText[32];
+		std::snprintf(snapText, sizeof(snapText), snapUnit, static_cast<double>(snapValue));
+		const std::string snapLabel = std::string(ICON_MAGNET "  ") + snapText;
+		const bool localSpace = m_GizmoLocal || m_GizmoMode == GizmoMode::Scale;
+		const char* spaceLabel = localSpace ? "Local" : "World";
+		const float toolsWidth = buttonSize * 4.0f + padding * 5.0f;
+		const float snapWidth = ImGui::CalcTextSize(snapLabel.c_str()).x + 18.0f * scale;
+		const float spaceWidth = std::max(ImGui::CalcTextSize("World").x, ImGui::CalcTextSize("Local").x) + 18.0f * scale;
+		const float playWidth = GetPlayControlsWidth(buttonSize);
+		const float barWidth = padding + toolsWidth + padding + snapWidth + padding + spaceWidth + 9.0f * scale + playWidth + padding;
+		const float barHeight = buttonSize + padding * 4.0f;
+		const ImVec2 barMin(std::floor(m_ViewportPosition.x + (m_ViewportSize.x - barWidth) * 0.5f), m_ViewportPosition.y + margin);
+		floatingBox(barMin, ImVec2(barMin.x + barWidth, barMin.y + barHeight));
+
+		ImGui::PushID("ViewportToolbar");
+		float x = barMin.x + padding;
+		const float y = barMin.y + padding * 2.0f;
+
+		// The tools, on a darker tray.
+		drawList->AddRectFilled(ImVec2(x, barMin.y + padding), ImVec2(x + toolsWidth, barMin.y + barHeight - padding), Theme::Field, 9.0f * scale);
+		x += padding;
+		struct Tool { const char* Icon; const char* Tooltip; GizmoMode Mode; };
+		const Tool tools[] = {
+			{ ICON_MOUSE_POINTER_2, "Select (Q)", GizmoMode::None }, { ICON_MOVE, "Move (W)", GizmoMode::Translate },
+			{ ICON_ROTATE_3D, "Rotate (E)", GizmoMode::Rotate }, { ICON_SCALE_3D, "Scale (R)", GizmoMode::Scale },
+		};
+		for (const Tool& tool : tools)
+		{
+			ImGui::SetCursorScreenPos(ImVec2(x, y));
+			if (UI::IconButton(tool.Icon, tool.Tooltip, m_GizmoMode == tool.Mode, ImVec2(buttonSize, buttonSize)))
+				m_GizmoMode = tool.Mode;
+			x += buttonSize + padding;
+		}
+		x += padding;
+
+		// Snapping: click to turn it on or off; right-click to set its steps.
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		ImGui::PushStyleColor(ImGuiCol_Button, m_Settings.Snap ? Theme::ToVec4(Theme::PanelRaised) : ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(m_Settings.Snap ? Theme::Text : Theme::TextMuted));
+		if (ImGui::Button(snapLabel.c_str(), ImVec2(snapWidth, buttonSize)))
+		{
+			m_Settings.Snap = !m_Settings.Snap;
+			m_Settings.Save();
+		}
+		ImGui::PopStyleColor(2);
+		ImGui::SetItemTooltip(m_Settings.Snap ? "Snapping is on (hold Ctrl to move freely). Right-click to set the steps."
+			: "Snapping is off (hold Ctrl to snap). Right-click to set the steps.");
+		if (ImGui::BeginPopupContextItem("##SnapSteps"))
+		{
+			UI::TextMuted("Snap steps");
+			bool changed = false;
+			ImGui::SetNextItemWidth(140.0f * scale);
+			changed |= ImGui::DragFloat("Move (m)", &m_Settings.TranslateSnap, 0.01f, 0.001f, 1000.0f, "%.3g", ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetNextItemWidth(140.0f * scale);
+			changed |= ImGui::DragFloat("Rotate (deg)", &m_Settings.RotateSnap, 0.5f, 0.1f, 180.0f, "%.3g", ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetNextItemWidth(140.0f * scale);
+			changed |= ImGui::DragFloat("Scale", &m_Settings.ScaleSnap, 0.01f, 0.001f, 100.0f, "%.3g", ImGuiSliderFlags_AlwaysClamp);
+			if (changed && ImGui::IsItemDeactivatedAfterEdit())
+				m_Settings.Save();
+			if (ImGui::MenuItem("Always snap", "Ctrl flips it", m_Settings.Snap))
+			{
+				m_Settings.Snap = !m_Settings.Snap;
+				m_Settings.Save();
+			}
+			ImGui::EndPopup();
+		}
+		x += snapWidth + padding;
+
+		// World or local space (scaling is always local).
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::BeginDisabled(m_GizmoMode == GizmoMode::Scale);
+		if (ImGui::Button(spaceLabel, ImVec2(spaceWidth, buttonSize)))
 			m_GizmoLocal = !m_GizmoLocal;
-		endOverlay();
+		ImGui::EndDisabled();
+		ImGui::PopStyleColor();
+		ImGui::SetItemTooltip("Move and rotate along the world's axes or the entity's own (scaling is always the entity's own)");
+		x += spaceWidth + padding;
 
-		// View options, right aligned
+		drawList->AddLine(ImVec2(x + 2.0f * scale, y + 6.0f * scale), ImVec2(x + 2.0f * scale, y + buttonSize - 6.0f * scale), Theme::BorderStrong);
+		x += 9.0f * scale - padding;
+		DrawPlayControls(ImVec2(x, y), buttonSize);
+		ImGui::PopID();
+
+		// View switches, at the top right.
 		const int viewButtons = 5;
 		const float viewWidth = buttonSize * static_cast<float>(viewButtons) + padding * static_cast<float>(viewButtons + 1);
-		const ImVec2 viewOrigin(m_ViewportPosition.x + m_ViewportSize.x - viewWidth - 10.0f * scale, origin.y);
-		beginOverlay("View", viewOrigin, viewButtons);
-		if (UI::IconButton(ICON_GRID_3X3, "Grid", m_Settings.ShowGrid))
-			m_Settings.ShowGrid = !m_Settings.ShowGrid;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_MONITOR, "Game UI (always shown through the game camera)", m_Settings.ShowUI))
-			m_Settings.ShowUI = !m_Settings.ShowUI;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_BOX, "Collider outlines", m_ShowColliders))
-			m_ShowColliders = !m_ShowColliders;
-		ImGui::SameLine();
-		if (UI::IconButton(ICON_ACTIVITY, "Statistics", m_ShowStatistics))
-			m_ShowStatistics = !m_ShowStatistics;
-		ImGui::SameLine();
-		if (m_SceneState == SceneState::Edit)
+		const ImVec2 viewMin(m_ViewportPosition.x + m_ViewportSize.x - viewWidth - margin, barMin.y);
+		const float viewHeight = buttonSize + padding * 2.0f;
+		if (viewMin.x > barMin.x + barWidth + padding)
 		{
-			const std::string tooltip = fmt::format("UI view: the game's screen at {} x {}, for laying out UI (View > UI View Size)",
-				m_Settings.UIViewWidth, m_Settings.UIViewHeight);
-			if (UI::IconButton(ICON_LAYOUT_TEMPLATE, tooltip.c_str(), m_Settings.UIView))
-				m_Settings.UIView = !m_Settings.UIView;
+			floatingBox(viewMin, ImVec2(viewMin.x + viewWidth, viewMin.y + viewHeight));
+			ImGui::SetCursorScreenPos(ImVec2(viewMin.x + padding, viewMin.y + padding));
+			ImGui::PushID("View");
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(padding, padding));
+			if (UI::IconButton(ICON_GRID_3X3, "Grid", m_Settings.ShowGrid))
+				m_Settings.ShowGrid = !m_Settings.ShowGrid;
+			ImGui::SameLine();
+			if (UI::IconButton(ICON_MONITOR, "Game UI (always shown through the game camera)", m_Settings.ShowUI))
+				m_Settings.ShowUI = !m_Settings.ShowUI;
+			ImGui::SameLine();
+			if (UI::IconButton(ICON_BOX, "Collider outlines", m_ShowColliders))
+				m_ShowColliders = !m_ShowColliders;
+			ImGui::SameLine();
+			if (UI::IconButton(ICON_ACTIVITY, "Statistics", m_ShowStatistics))
+				m_ShowStatistics = !m_ShowStatistics;
+			ImGui::SameLine();
+			if (m_SceneState == SceneState::Edit)
+			{
+				const std::string tooltip = fmt::format("UI view: the game's screen at {} x {}, for laying out UI (View > UI View Size)",
+					m_Settings.UIViewWidth, m_Settings.UIViewHeight);
+				if (UI::IconButton(ICON_LAYOUT_TEMPLATE, tooltip.c_str(), m_Settings.UIView))
+					m_Settings.UIView = !m_Settings.UIView;
+			}
+			else
+			{
+				if (UI::IconButton(ICON_CAMERA, m_FreeCameraInPlay ? "Free camera (click for game camera)" : "Game camera (click for free camera)", m_FreeCameraInPlay))
+					m_FreeCameraInPlay = !m_FreeCameraInPlay;
+			}
+			ImGui::PopStyleVar();
+			ImGui::PopID();
 		}
-		else
+
+		// The orientation gizmo under them, for the editor's camera (not the game's, nor the UI view).
+		if (!IsUsingGameCamera() && !IsInUIView())
 		{
-			if (UI::IconButton(ICON_CAMERA, m_FreeCameraInPlay ? "Free camera (click for game camera)" : "Game camera (click for free camera)", m_FreeCameraInPlay))
-				m_FreeCameraInPlay = !m_FreeCameraInPlay;
+			const float radius = 32.0f * scale;
+			const ImVec2 center(m_ViewportPosition.x + m_ViewportSize.x - margin - radius, viewMin.y + viewHeight + 8.0f * scale + radius);
+			m_ViewportOverlays.emplace_back(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+			DrawOrientationGizmo(center, radius);
 		}
-		endOverlay();
-		(void)toolsSize;
+
+		// Along the bottom: the camera's speed, and the frame rate with the CPU and GPU times.
+		const float chipHeight = ImGui::GetTextLineHeight() + 8.0f * scale;
+		const float chipY = m_ViewportPosition.y + m_ViewportSize.y - chipHeight - margin;
+		if (!IsUsingGameCamera() && !IsInUIView())
+		{
+			const std::string speed = fmt::format("Camera speed  {:.1f}", m_Camera.GetFlySpeed());
+			const ImVec2 min(m_ViewportPosition.x + margin, chipY);
+			const ImVec2 max(min.x + ImGui::CalcTextSize(speed.c_str()).x + 18.0f * scale, chipY + chipHeight);
+			floatingBox(min, max);
+			drawList->AddText(ImVec2(min.x + 9.0f * scale, min.y + 4.0f * scale), m_Camera.IsFlying() ? Theme::Text : Theme::TextMuted, speed.c_str());
+			ImGui::SetCursorScreenPos(min);
+			ImGui::InvisibleButton("##CameraSpeed", ImVec2(max.x - min.x, max.y - min.y));
+			ImGui::SetItemTooltip("Meters per second when flying (right mouse button and W A S D); the mouse wheel changes it while flying");
+		}
+		if (!IsInUIView())
+		{
+			const std::vector<ProfileFrame> frames = Profiler::GetRecentFrames(30);
+			double cpu = 0.0, gpu = 0.0;
+			int gpuFrames = 0;
+			for (const ProfileFrame& frame : frames)
+			{
+				cpu += frame.CpuMs;
+				if (frame.GpuTimed)
+				{
+					gpu += frame.GpuMs;
+					gpuFrames++;
+				}
+			}
+			const float fps = ImGui::GetIO().Framerate;
+			const std::string rate = fmt::format("{:.0f} FPS", fps);
+			std::string times = frames.empty() ? std::string() : fmt::format("  CPU {:.1f} ms", cpu / static_cast<double>(frames.size()));
+			if (gpuFrames > 0)
+				times += fmt::format("  GPU {:.1f} ms", gpu / static_cast<double>(gpuFrames));
+			const float width = ImGui::CalcTextSize(rate.c_str()).x + ImGui::CalcTextSize(times.c_str()).x + 18.0f * scale;
+			const ImVec2 min(m_ViewportPosition.x + m_ViewportSize.x - margin - width, chipY);
+			floatingBox(min, ImVec2(min.x + width, chipY + chipHeight));
+			const ImU32 rateColor = fps >= 55.0f ? Theme::Success : (fps >= 30.0f ? Theme::Warning : Theme::Error);
+			drawList->AddText(ImVec2(min.x + 9.0f * scale, min.y + 4.0f * scale), rateColor, rate.c_str());
+			drawList->AddText(ImVec2(min.x + 9.0f * scale + ImGui::CalcTextSize(rate.c_str()).x, min.y + 4.0f * scale), Theme::TextMuted, times.c_str());
+			ImGui::SetCursorScreenPos(min);
+			ImGui::InvisibleButton("##FrameTimes", ImVec2(width, chipHeight));
+			ImGui::SetItemTooltip("Frames per second, and the average time the CPU and GPU spent on each of the last 30 frames (View > Profiler has the details)");
+		}
 
 		// The UI view's size, under the image, opens the size menu.
 		if (IsInUIView())
@@ -2672,12 +2838,69 @@ namespace Bellows {
 			}
 		}
 
-		// Camera speed hint while flying
-		if (m_Camera.IsFlying())
+	}
+
+	void EditorLayer::DrawOrientationGizmo(ImVec2 center, float radius)
+	{
+		const float scale = Theme::GetScale();
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddCircleFilled(center, radius, Theme::WithAlpha(Theme::Panel, 200));
+		drawList->AddCircle(center, radius, Theme::BorderStrong);
+
+		struct Axis { glm::vec3 Direction; ImU32 Color; const char* Label; ImVec2 Tip; float Depth; };
+		Axis axes[6] = {
+			{ { 1.0f, 0.0f, 0.0f }, Theme::AxisX, "X" }, { { 0.0f, 1.0f, 0.0f }, Theme::AxisY, "Y" }, { { 0.0f, 0.0f, 1.0f }, Theme::AxisZ, "Z" },
+			{ { -1.0f, 0.0f, 0.0f }, Theme::AxisX, nullptr }, { { 0.0f, -1.0f, 0.0f }, Theme::AxisY, nullptr }, { { 0.0f, 0.0f, -1.0f }, Theme::AxisZ, nullptr },
+		};
+		const glm::mat3 view(m_Camera.GetViewMatrix());
+		const float reach = radius - 10.0f * scale;
+		for (Axis& axis : axes)
 		{
-			const std::string text = fmt::format(ICON_GAUGE "  {:.1f} m/s", m_Camera.GetFlySpeed());
-			const ImVec2 position(m_ViewportPosition.x + 12.0f * scale, m_ViewportPosition.y + m_ViewportSize.y - 30.0f * scale);
-			drawList->AddText(position, Theme::TextMuted, text.c_str());
+			const glm::vec3 seen = view * axis.Direction;
+			axis.Tip = ImVec2(center.x + seen.x * reach, center.y - seen.y * reach);
+			axis.Depth = seen.z;		// Toward the camera is +z in view space
+		}
+		// Far axes first, so the near ones are drawn over them.
+		std::sort(std::begin(axes), std::end(axes), [](const Axis& a, const Axis& b) { return a.Depth < b.Depth; });
+
+		// Clicking an axis looks along it, from that side, at the same distance from the focus point.
+		const ImVec2 mouse = ImGui::GetIO().MousePos;
+		const bool clicked = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered();
+		const Axis* hovered = nullptr;
+		for (const Axis& axis : axes)
+		{
+			const float dx = mouse.x - axis.Tip.x, dy = mouse.y - axis.Tip.y;
+			if (dx * dx + dy * dy <= (9.0f * scale) * (9.0f * scale))
+				hovered = &axis;	// The nearest of overlapping tips wins, as it's drawn on top
+		}
+		for (const Axis& axis : axes)
+		{
+			const bool lit = &axis == hovered;
+			if (axis.Label)
+			{
+				drawList->AddLine(center, axis.Tip, axis.Color, 2.0f * scale);
+				drawList->AddCircleFilled(axis.Tip, (lit ? 8.0f : 7.0f) * scale, axis.Color);
+				const ImVec2 size = ImGui::CalcTextSize(axis.Label);
+				drawList->AddText(ImVec2(axis.Tip.x - size.x * 0.5f, axis.Tip.y - size.y * 0.5f), Theme::Background, axis.Label);
+			}
+			else
+			{
+				drawList->AddCircleFilled(axis.Tip, (lit ? 6.0f : 5.0f) * scale, Theme::WithAlpha(axis.Color, lit ? 200 : 110));
+			}
+		}
+		if (hovered)
+		{
+			ImGui::SetTooltip("Look along %s%s", hovered->Label ? "+" : "-", hovered->Direction.x != 0.0f ? "X" : (hovered->Direction.y != 0.0f ? "Y" : "Z"));
+			if (clicked)
+			{
+				const glm::vec3 focus = m_Camera.GetFocusPoint();
+				const float distance = std::max(glm::length(m_Camera.GetPosition() - focus), 1.0f);
+				// Straight up or down would leave the camera no "up"; a hair off it keeps the view steady.
+				glm::vec3 side = hovered->Direction;
+				if (side.y != 0.0f)
+					side = glm::normalize(side + glm::vec3(0.0f, 0.0f, 0.02f));
+				m_Camera.SetPose(focus + side * distance, focus);
+			}
 		}
 	}
 
@@ -2740,18 +2963,19 @@ namespace Bellows {
 		glm::mat4 world = scene->GetWorldTransform(entity);
 
 		ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
-		float snapValue = m_TranslateSnap;
+		float snapValue = m_Settings.TranslateSnap;
 		if (m_GizmoMode == GizmoMode::Rotate)
 		{
 			operation = ImGuizmo::ROTATE;
-			snapValue = m_RotateSnap;
+			snapValue = m_Settings.RotateSnap;
 		}
 		else if (m_GizmoMode == GizmoMode::Scale)
 		{
 			operation = ImGuizmo::SCALE;
-			snapValue = m_ScaleSnap;
+			snapValue = m_Settings.ScaleSnap;
 		}
-		const bool snap = ImGui::GetIO().KeyCtrl;
+		// Ctrl flips snapping for as long as it's held: on when it's off, off when it's on.
+		const bool snap = m_Settings.Snap != ImGui::GetIO().KeyCtrl;
 		const float snapValues[3] = { snapValue, snapValue, snapValue };
 
 		ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection), operation,

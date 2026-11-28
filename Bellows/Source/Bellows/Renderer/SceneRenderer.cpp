@@ -1812,7 +1812,9 @@ namespace Bellows {
 			OutlineConstants outline {};
 			outline.Color = m_Settings.OutlineColor;
 			const uint32_t count = static_cast<uint32_t>(std::min<size_t>(m_SelectedEntities.size(), 32));
-			outline.Params = glm::vec4(2.0f, static_cast<float>(count), 0.0f, 0.0f);
+			// The glow reaches about 12 pixels at 1080p and scales with the image, so it looks alike at any size.
+			const float glow = m_Settings.ShowSelectionGlow ? std::max(std::round(12.0f * static_cast<float>(m_ViewportHeight) / 1080.0f), 4.0f) : 0.0f;
+			outline.Params = glm::vec4(2.0f, static_cast<float>(count), glow, 0.0f);
 			for (uint32_t i = 0; i < count; i++)
 				outline.SelectedIDs[i / 4][static_cast<int>(i % 4)] = m_SelectedEntities[i];
 			commandList->writeBuffer(m_OutlineConstants, &outline, sizeof(outline));

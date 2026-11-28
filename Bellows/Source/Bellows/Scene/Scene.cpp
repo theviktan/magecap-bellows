@@ -1119,12 +1119,14 @@ namespace Bellows {
 		SceneRendererSettings& settings = renderer.GetSettings();
 		const bool showGrid = settings.ShowGrid;
 		const bool showOutline = settings.ShowSelectionOutline;
+		const bool showGlow = settings.ShowSelectionGlow;
 		const bool showUI = settings.ShowUI;
 		const float gridCellSize = settings.GridCellSize;
 		const glm::vec4 outlineColor = settings.OutlineColor;
 		settings = m_Settings.Rendering;
 		settings.ShowGrid = showGrid;
 		settings.ShowSelectionOutline = showOutline;
+		settings.ShowSelectionGlow = showGlow;
 		settings.ShowUI = showUI;
 		settings.GridCellSize = gridCellSize;
 		settings.OutlineColor = outlineColor;

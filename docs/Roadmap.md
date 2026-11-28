@@ -243,7 +243,7 @@ tested and shown to Ron against the design:
    left, Settings at its foot. Animation joins the rail when the editor has an Animation workspace.
 3. **Panels** (0.7): rounded panels with gaps and grips between them, the panel headers, the warm
    selection in the Hierarchy and Content panels.
-4. **Viewport:** one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the
+4. **Viewport** (0.7): one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the
    CPU/GPU readout, a faint selection glow with an off switch in the View menu; it also moves the
    toolbar off the game's own UI.
 5. **Inspector:** compact X/Y/Z drag fields, the uniform-scale lock, switches, and the ForgeScript
