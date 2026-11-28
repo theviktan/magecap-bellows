@@ -233,6 +233,13 @@ speaker = create("Speaker", "Builtin/Cone", IRON, position=(0.0, 0.35, 4.5), sca
 source = speaker.add_component(bellows.AudioSource)
 source.clip, source.spatial, source.volume = "Audio/Chime.wav", True, 0.8
 
+# Particles: a campfire's sparks rising beside the speaker
+campfire = create("Campfire", position=(1.5, 0.1, 4.5))
+sparks = campfire.add_component(bellows.ParticleEmitter)
+sparks.rate, sparks.lifetime, sparks.speed, sparks.spread_angle = 30.0, 1.2, 1.5, 20.0
+sparks.shape, sparks.shape_size = "sphere", Vec3(0.2, 0.2, 0.2)
+sparks.start_size, sparks.end_size, sparks.intensity = 0.15, 0.02, 3.0
+
 # Text: a title over the PBR showcase and a camera-facing label over the speaker
 title = create("Title", position=(0.0, 3.2, -3.0))
 title_text = title.add_component(bellows.Text)

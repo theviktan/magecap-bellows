@@ -424,6 +424,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['Text']) -> Text | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['UIRect']) -> UIRect | None: ...
@@ -485,6 +487,8 @@ class Entity:
     def add_component(self, component: typing.Literal['AudioListener']) -> AudioListener: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Text']) -> Text: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter: ...
     @typing.overload
     def add_component(self, component: typing.Literal['UICanvas']) -> UICanvas: ...
     @typing.overload
@@ -788,6 +792,137 @@ class NavAgent:
         """Walks to the point (the nearest spot on the navmesh within 2 meters of it). It sends 'destination reached' when it gets there, or when it can't and stops as close as it could. False, and nothing changes, when no agent can stand near the point"""
     def stop(self) -> None:
         """Stops walking: it slows to a stop where it is, and sends no 'destination reached'"""
+
+
+class ParticleEmitter:
+    """Sends out camera-facing particles (fire, sparks, smoke, dust) in a cone around the entity's local +Y. It plays in the editor too, so the effect shows while you edit"""
+    @property
+    def play_on_start(self) -> bool:
+        """Starts playing by itself when the game starts"""
+    @play_on_start.setter
+    def play_on_start(self, value: bool) -> None: ...
+    @property
+    def looping(self) -> bool:
+        """Starts a new cycle when one ends; otherwise it stops after one"""
+    @looping.setter
+    def looping(self, value: bool) -> None: ...
+    @property
+    def duration(self) -> float:
+        """Seconds one cycle lasts, from 0.05 to 3600"""
+    @duration.setter
+    def duration(self, value: float) -> None: ...
+    @property
+    def rate(self) -> float:
+        """Particles per second while playing, from 0 to 10000"""
+    @rate.setter
+    def rate(self, value: float) -> None: ...
+    @property
+    def burst(self) -> int:
+        """Particles sent at once when each cycle starts, from 0 to 10000"""
+    @burst.setter
+    def burst(self, value: int) -> None: ...
+    @property
+    def max_particles(self) -> int:
+        """The most alive at once, from 0 to 10000; past it no more are born"""
+    @max_particles.setter
+    def max_particles(self, value: int) -> None: ...
+    @property
+    def lifetime(self) -> float:
+        """Seconds each particle lives, from 0.01 to 600"""
+    @lifetime.setter
+    def lifetime(self, value: float) -> None: ...
+    @property
+    def lifetime_variation(self) -> float:
+        """How much lifetimes vary, from 0 (all the same) to 1 (anywhere from none to double)"""
+    @lifetime_variation.setter
+    def lifetime_variation(self, value: float) -> None: ...
+    @property
+    def speed(self) -> float:
+        """Meters per second particles leave at, from 0 to 1000"""
+    @speed.setter
+    def speed(self, value: float) -> None: ...
+    @property
+    def speed_variation(self) -> float:
+        """How much speeds vary, from 0 to 1, like lifetime_variation"""
+    @speed_variation.setter
+    def speed_variation(self, value: float) -> None: ...
+    @property
+    def spread_angle(self) -> float:
+        """Degrees from the entity's +Y they may leave at: 0 a straight line, 180 every way"""
+    @spread_angle.setter
+    def spread_angle(self, value: float) -> None: ...
+    @property
+    def shape(self) -> str:
+        """Where particles are born: 'point' (the entity), 'sphere' or 'box'"""
+    @shape.setter
+    def shape(self, value: str) -> None: ...
+    @property
+    def shape_size(self) -> Vec3:
+        """A sphere's radius (x) or a box's half size, in meters"""
+    @shape_size.setter
+    def shape_size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def gravity_scale(self) -> float:
+        """How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise"""
+    @gravity_scale.setter
+    def gravity_scale(self, value: float) -> None: ...
+    @property
+    def drag(self) -> float:
+        """Air resistance, from 0 to 100: how quickly they slow down"""
+    @drag.setter
+    def drag(self, value: float) -> None: ...
+    @property
+    def start_size(self) -> float:
+        """Meters across when born"""
+    @start_size.setter
+    def start_size(self, value: float) -> None: ...
+    @property
+    def end_size(self) -> float:
+        """Meters across when it dies"""
+    @end_size.setter
+    def end_size(self, value: float) -> None: ...
+    @property
+    def start_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha when born (each 0 to 1)"""
+    @start_color.setter
+    def start_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def end_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha when it dies; set alpha to 0 to fade out"""
+    @end_color.setter
+    def end_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def intensity(self) -> float:
+        """Brightness, from 0 to 1000; above 1 they glow"""
+    @intensity.setter
+    def intensity(self, value: float) -> None: ...
+    @property
+    def blend(self) -> str:
+        """'additive' adds light (fire, sparks); 'alpha' covers what's behind (smoke, dust)"""
+    @blend.setter
+    def blend(self, value: str) -> None: ...
+    @property
+    def texture(self) -> str:
+        """The image each particle shows (an asset path); empty for a soft round dot"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def world_space(self) -> bool:
+        """Born particles stay where they are when the entity moves; off, they move with it"""
+    @world_space.setter
+    def world_space(self, value: bool) -> None: ...
+    def play(self) -> None:
+        """Starts a cycle (sending its burst), whether or not it was playing"""
+    def stop(self, clear: bool = False) -> None:
+        """Stops sending particles. The live ones live out their lives, unless 'clear' removes them now"""
+    def emit(self, count: int) -> None:
+        """Sends 'count' particles at once (up to 10000), playing or not"""
+    @property
+    def is_playing(self) -> bool:
+        """Whether it's sending particles"""
+    @property
+    def particle_count(self) -> int:
+        """How many are alive now"""
 
 
 class PointLight:

@@ -10,6 +10,7 @@
 #include "Bellows/Physics/PhysicsWorld.h"
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
 #include "Bellows/Scripting/ScriptApi.h"
@@ -565,6 +566,9 @@ namespace Bellows {
 			animator.RuntimePreview = false;
 		}
 		UpdateAnimators(0.0f);
+		// Likewise every emitter: the editor's preview particles don't carry into play.
+		for (entt::entity handle : m_Registry.view<ParticleEmitterComponent>())
+			ParticleSystem::Reset(m_Registry.get<ParticleEmitterComponent>(handle), Entity(handle, this).GetUUID());
 		for (entt::entity handle : m_Registry.view<NavAgentComponent>())
 		{
 			NavAgentComponent& agent = m_Registry.get<NavAgentComponent>(handle);
@@ -794,6 +798,10 @@ namespace Bellows {
 			m_PhysicsAccumulator -= fixedTimestep;
 		}
 
+		// Particles after physics, so they leave from where their entity ended up this frame.
+		if (!m_GamePaused)
+			UpdateParticles(deltaTime);
+
 		if (m_Audio)
 		{
 			BW_PROFILE_SCOPE("Audio");
@@ -887,6 +895,24 @@ namespace Bellows {
 	{
 		UpdateRuntimeCaches();
 		UpdateAnimators(timestep.GetSeconds());
+		UpdateParticles(timestep.GetSeconds());
+	}
+
+	void Scene::UpdateParticles(float seconds)
+	{
+		BW_PROFILE_SCOPE("Particles");
+		auto emitters = m_Registry.view<ParticleEmitterComponent>();
+		for (entt::entity handle : emitters)
+		{
+			Entity entity(handle, this);
+			ParticleEmitterComponent& emitter = emitters.get<ParticleEmitterComponent>(handle);
+			// A new emitter, or a copy of another (a duplicate), gets its own entity's random sequence
+			// the first time it updates, keeping whatever a script already asked of it.
+			const UUID id = entity.GetUUID();
+			if (emitter.RuntimeRandom == 0 || emitter.RuntimeSeed != static_cast<uint64_t>(id))
+				ParticleSystem::Seed(emitter, id);
+			ParticleSystem::Update(emitter, GetWorldTransform(entity), m_Settings.Gravity, seconds);
+		}
 	}
 
 	namespace {
@@ -1214,6 +1240,34 @@ namespace Bellows {
 			const glm::vec4 clip(0.0f, 0.0f, box.x, box.y);
 			const bool clipped = text.Overflow == TextOverflow::Clip && text.BoxSize.x > 0.0f && text.BoxSize.y > 0.0f;
 			renderer.SubmitText(text.RuntimeFont, *layout, world * boxToLocal, style, entity.GetRenderID(), clipped ? &clip : nullptr);
+		}
+
+		// Particles, each emitter as one batch.
+		std::vector<ParticleQuad> quads;
+		auto emitters = m_Registry.view<ParticleEmitterComponent>();
+		for (entt::entity handle : emitters)
+		{
+			ParticleEmitterComponent& emitter = emitters.get<ParticleEmitterComponent>(handle);
+			if (emitter.LoadedTexturePath != emitter.TexturePath)
+			{
+				emitter.RuntimeTexture = emitter.TexturePath.empty() ? nullptr : AssetManager::GetTexture(emitter.TexturePath, TextureColorSpace::SRGB);
+				emitter.LoadedTexturePath = emitter.TexturePath;
+			}
+			if (emitter.RuntimeParticles.empty() || hidden.contains(handle))
+				continue;
+
+			const glm::mat4 toWorld = emitter.WorldSpace ? glm::mat4(1.0f) : GetWorldTransform(Entity(handle, this));
+			quads.clear();
+			quads.reserve(emitter.RuntimeParticles.size());
+			for (const Particle& particle : emitter.RuntimeParticles)
+			{
+				ParticleQuad quad;
+				quad.Position = emitter.WorldSpace ? particle.Position : glm::vec3(toWorld * glm::vec4(particle.Position, 1.0f));
+				quad.Size = ParticleSystem::GetSize(emitter, particle);
+				quad.Color = ParticleSystem::GetColor(emitter, particle);
+				quads.push_back(quad);
+			}
+			renderer.SubmitParticles(quads.data(), quads.size(), emitter.Blend == ParticleBlend::Additive, emitter.RuntimeTexture);
 		}
 
 		SubmitUI(renderer);

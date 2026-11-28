@@ -256,6 +256,8 @@ namespace Bellows {
 		// Moves every Animator on by 'seconds' and poses its mesh. During play they all run; otherwise only
 		// those the editor previews do, and the rest go back to their rest pose.
 		void UpdateAnimators(float seconds);
+		// Moves every particle emitter on by 'seconds' (in the editor too, so effects show while editing).
+		void UpdateParticles(float seconds);
 		static const TextLayout* LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize);
 		void SubmitUI(SceneRenderer& renderer);
 

@@ -25,6 +25,10 @@ can drive end to end.
   Settings**, and **Nav Agent** characters walk it, steering around walls and each other
   (`walk guard to gate.position`, then `when destination reached`). Scripts can also find paths
   (`find_path`) and check where agents can stand.
+* **Particles**: a **Particle Emitter** sends camera-facing particles (fire, sparks, smoke, dust) at a
+  rate or in bursts, from a point, sphere or box, with gravity, drag, size and color over each
+  particle's life, additive or alpha blending and an optional image. Bright ones bloom, and they
+  play in the editor while you tune them.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.

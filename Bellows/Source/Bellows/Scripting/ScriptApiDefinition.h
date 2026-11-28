@@ -24,6 +24,7 @@
 #include "Bellows/Math/Math.h"
 #include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Scene/EntityTags.h"
+#include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
@@ -91,6 +92,45 @@ namespace Bellows::Scripting {
 			if (name != "visible" && name != "clip" && name != "ellipsis")
 				throw ScriptValueError("Unknown text overflow '" + name + "'. Overflows: visible, clip, ellipsis");
 			return TextOverflowFromString(name);
+		}
+
+		inline ParticleShape RequireParticleShape(const std::string& name)
+		{
+			const std::optional<ParticleShape> shape = ParticleShapeFromString(name);
+			if (!shape)
+				throw ScriptValueError("Unknown particle shape '" + name + "'. Shapes: point, sphere, box");
+			return *shape;
+		}
+
+		inline ParticleBlend RequireParticleBlend(const std::string& name)
+		{
+			const std::optional<ParticleBlend> blend = ParticleBlendFromString(name);
+			if (!blend)
+				throw ScriptValueError("Unknown particle blend '" + name + "'. Blends: additive, alpha");
+			return *blend;
+		}
+
+		// A ParticleEmitter number, checked against its range ('range' says it the way people read it).
+		inline float ParticleValue(const char* property, float value, float minimum, float maximum, const char* range)
+		{
+			if (!std::isfinite(value))
+				throw ScriptValueError(std::string("ParticleEmitter.") + property + " needs ordinary numbers, not NaN or infinity");
+			if (value < minimum || value > maximum)
+				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is from " + range);
+			return value;
+		}
+
+		inline uint32_t ParticleCount(const char* property, int value, uint32_t maximum)
+		{
+			if (value < 0 || static_cast<uint32_t>(value) > maximum)
+				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is from 0 to " + std::to_string(maximum));
+			return static_cast<uint32_t>(value);
+		}
+
+		inline glm::vec4 ParticleColor(const char* property, const ColorValue& color)
+		{
+			RequireFiniteNumbers(color, std::string("ParticleEmitter.") + property);
+			return glm::clamp(color.Value, glm::vec4(0.0f), glm::vec4(1.0f));
 		}
 
 		inline UIScaleMode RequireUIScaleMode(const std::string& name)
@@ -1033,6 +1073,96 @@ namespace Bellows::Scripting {
 			"The size the text takes up (x width, y height; meters, or reference pixels on a UI), for fitting boxes and backgrounds to it");
 
 		// --- UI -----------------------------------------------------------------
+		using Limits = ParticleEmitterComponent;
+		auto particles = api.template Class<ParticleEmitterRef>("ParticleEmitter",
+			"Sends out camera-facing particles (fire, sparks, smoke, dust) in a cone around the entity's local +Y. It plays in the "
+			"editor too, so the effect shows while you edit");
+		particles.Property("play_on_start", [](const ParticleEmitterRef& r) { return r.Get().PlayOnStart; },
+			[](const ParticleEmitterRef& r, bool v) { r.Get().PlayOnStart = v; }, "Starts playing by itself when the game starts");
+		particles.Property("looping", [](const ParticleEmitterRef& r) { return r.Get().Looping; },
+			[](const ParticleEmitterRef& r, bool v) { r.Get().Looping = v; }, "Starts a new cycle when one ends; otherwise it stops after one");
+		particles.Property("duration", [](const ParticleEmitterRef& r) { return r.Get().Duration; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Duration = Detail::ParticleValue("duration", v, Limits::MinDuration, Limits::MaxDuration, "0.05 to 3600"); },
+			"Seconds one cycle lasts, from 0.05 to 3600");
+		particles.Property("rate", [](const ParticleEmitterRef& r) { return r.Get().Rate; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Rate = Detail::ParticleValue("rate", v, 0.0f, Limits::MaxRate, "0 to 10000"); },
+			"Particles per second while playing, from 0 to 10000");
+		particles.Property("burst", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().Burst); },
+			[](const ParticleEmitterRef& r, int v) { r.Get().Burst = Detail::ParticleCount("burst", v, Limits::MaxBurst); },
+			"Particles sent at once when each cycle starts, from 0 to 10000");
+		particles.Property("max_particles", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().MaxParticles); },
+			[](const ParticleEmitterRef& r, int v) { r.Get().MaxParticles = Detail::ParticleCount("max_particles", v, Limits::MaxMaxParticles); },
+			"The most alive at once, from 0 to 10000; past it no more are born");
+		particles.Property("lifetime", [](const ParticleEmitterRef& r) { return r.Get().Lifetime; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Lifetime = Detail::ParticleValue("lifetime", v, Limits::MinLifetime, Limits::MaxLifetime, "0.01 to 600"); },
+			"Seconds each particle lives, from 0.01 to 600");
+		particles.Property("lifetime_variation", [](const ParticleEmitterRef& r) { return r.Get().LifetimeVariation; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().LifetimeVariation = Detail::ParticleValue("lifetime_variation", v, 0.0f, 1.0f, "0 to 1"); },
+			"How much lifetimes vary, from 0 (all the same) to 1 (anywhere from none to double)");
+		particles.Property("speed", [](const ParticleEmitterRef& r) { return r.Get().Speed; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Speed = Detail::ParticleValue("speed", v, 0.0f, Limits::MaxSpeed, "0 to 1000"); },
+			"Meters per second particles leave at, from 0 to 1000");
+		particles.Property("speed_variation", [](const ParticleEmitterRef& r) { return r.Get().SpeedVariation; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().SpeedVariation = Detail::ParticleValue("speed_variation", v, 0.0f, 1.0f, "0 to 1"); },
+			"How much speeds vary, from 0 to 1, like lifetime_variation");
+		particles.Property("spread_angle", [](const ParticleEmitterRef& r) { return r.Get().SpreadAngle; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().SpreadAngle = Detail::ParticleValue("spread_angle", v, 0.0f, 180.0f, "0 to 180"); },
+			"Degrees from the entity's +Y they may leave at: 0 a straight line, 180 every way");
+		particles.Property("shape", [](const ParticleEmitterRef& r) { return std::string(ParticleShapeToString(r.Get().Shape)); },
+			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().Shape = Detail::RequireParticleShape(v); },
+			"Where particles are born: 'point' (the entity), 'sphere' or 'box'");
+		particles.Property("shape_size", [](const ParticleEmitterRef& r) { return r.Get().ShapeSize; },
+			[](const ParticleEmitterRef& r, const glm::vec3& v)
+			{
+				for (int axis = 0; axis < 3; axis++)
+					Detail::ParticleValue("shape_size", v[axis], 0.0f, Limits::MaxShapeSize, "0 to 1000 on each axis");
+				r.Get().ShapeSize = v;
+			}, "A sphere's radius (x) or a box's half size, in meters");
+		particles.Property("gravity_scale", [](const ParticleEmitterRef& r) { return r.Get().GravityScale; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().GravityScale = Detail::ParticleValue("gravity_scale", v, -Limits::MaxGravityScale, Limits::MaxGravityScale, "-100 to 100"); },
+			"How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise");
+		particles.Property("drag", [](const ParticleEmitterRef& r) { return r.Get().Drag; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Drag = Detail::ParticleValue("drag", v, 0.0f, Limits::MaxDrag, "0 to 100"); },
+			"Air resistance, from 0 to 100: how quickly they slow down");
+		particles.Property("start_size", [](const ParticleEmitterRef& r) { return r.Get().StartSize; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().StartSize = Detail::ParticleValue("start_size", v, 0.0f, Limits::MaxSize, "0 to 1000"); },
+			"Meters across when born");
+		particles.Property("end_size", [](const ParticleEmitterRef& r) { return r.Get().EndSize; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().EndSize = Detail::ParticleValue("end_size", v, 0.0f, Limits::MaxSize, "0 to 1000"); },
+			"Meters across when it dies");
+		particles.Property("start_color", [](const ParticleEmitterRef& r) { return ColorValue { r.Get().StartColor }; },
+			[](const ParticleEmitterRef& r, const ColorValue& v) { r.Get().StartColor = Detail::ParticleColor("start_color", v); },
+			"Color and alpha when born (each 0 to 1)");
+		particles.Property("end_color", [](const ParticleEmitterRef& r) { return ColorValue { r.Get().EndColor }; },
+			[](const ParticleEmitterRef& r, const ColorValue& v) { r.Get().EndColor = Detail::ParticleColor("end_color", v); },
+			"Color and alpha when it dies; set alpha to 0 to fade out");
+		particles.Property("intensity", [](const ParticleEmitterRef& r) { return r.Get().Intensity; },
+			[](const ParticleEmitterRef& r, float v) { r.Get().Intensity = Detail::ParticleValue("intensity", v, 0.0f, Limits::MaxIntensity, "0 to 1000"); },
+			"Brightness, from 0 to 1000; above 1 they glow");
+		particles.Property("blend", [](const ParticleEmitterRef& r) { return std::string(ParticleBlendToString(r.Get().Blend)); },
+			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().Blend = Detail::RequireParticleBlend(v); },
+			"'additive' adds light (fire, sparks); 'alpha' covers what's behind (smoke, dust)");
+		particles.Property("texture", [](const ParticleEmitterRef& r) { return r.Get().TexturePath; },
+			[](const ParticleEmitterRef& r, const std::string& v) { r.Get().TexturePath = v; },
+			"The image each particle shows (an asset path); empty for a soft round dot");
+		particles.Property("world_space", [](const ParticleEmitterRef& r) { return r.Get().WorldSpace; },
+			[](const ParticleEmitterRef& r, bool v) { r.Get().WorldSpace = v; },
+			"Born particles stay where they are when the entity moves; off, they move with it");
+		particles.Method("play", [](const ParticleEmitterRef& r) { ParticleSystem::Play(r.Get()); },
+			"Starts a cycle (sending its burst), whether or not it was playing");
+		particles.Method("stop", [](const ParticleEmitterRef& r, bool clear) { ParticleSystem::Stop(r.Get(), clear); },
+			"Stops sending particles. The live ones live out their lives, unless 'clear' removes them now", Arg("clear", false));
+		particles.Method("emit", [](const ParticleEmitterRef& r, int count) { ParticleSystem::Emit(r.Get(), Detail::ParticleCount("emit count", count, Limits::MaxMaxParticles)); },
+			"Sends 'count' particles at once (up to 10000), playing or not", Arg("count"));
+		particles.ReadOnly("is_playing", [](const ParticleEmitterRef& r)
+			{
+				// One that plays on start counts as playing before its first update.
+				const ParticleEmitterComponent& c = r.Get();
+				return c.RuntimePlaying || (!c.RuntimeStarted && c.PlayOnStart);
+			}, "Whether it's sending particles");
+		particles.ReadOnly("particle_count", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().RuntimeParticles.size()); },
+			"How many are alive now");
+
 		auto canvas = api.template Class<UICanvasRef>("UICanvas",
 			"The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game");
 		canvas.Property("reference_size", [](const UICanvasRef& r) { return Detail::ToScriptVector(r.Get().ReferenceSize); },

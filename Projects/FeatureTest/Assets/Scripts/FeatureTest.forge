@@ -159,7 +159,20 @@ function test_components()
 	check(agent.speed is 2 and agent.base_offset is 0.5 and agent.avoid_others, "NavAgent properties")
 	check(fails(function() set agent.speed to 500 end), "a NavAgent's speed is held to its range")
 
-	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent", "components list ({thing.components})")
+	set sparks to thing.add_component("ParticleEmitter")
+	set sparks.shape to "sphere"
+	set sparks.blend to "alpha"
+	set sparks.burst to 30
+	set sparks.start_color to [1, 0.5, 0, 1]
+	check(sparks.shape is "sphere" and sparks.blend is "alpha" and sparks.burst is 30 and sparks.is_playing, "ParticleEmitter properties")
+	check(fails(function() set sparks.shape to "donut" end) and fails(function() set sparks.rate to -1 end), "a ParticleEmitter's values are checked")
+	sparks.stop(true)
+	check(not sparks.is_playing and sparks.particle_count is 0, "ParticleEmitter stop")
+	sparks.play()
+	sparks.emit(3)
+	check(sparks.is_playing, "ParticleEmitter play")
+
+	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent, ParticleEmitter", "components list ({thing.components})")
 	thing.remove_component("PointLight")
 	check(not thing.has_component("PointLight") and thing.get_component("PointLight") is nothing, "remove_component")
 	thing.destroy()

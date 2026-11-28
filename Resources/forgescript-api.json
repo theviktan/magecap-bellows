@@ -1952,6 +1952,196 @@
 			]
 		},
 		{
+			"name": "ParticleEmitter",
+			"doc": "Sends out camera-facing particles (fire, sparks, smoke, dust) in a cone around the entity's local +Y. It plays in the editor too, so the effect shows while you edit",
+			"members": [
+				{
+					"name": "play_on_start",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Starts playing by itself when the game starts"
+				},
+				{
+					"name": "looping",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Starts a new cycle when one ends; otherwise it stops after one"
+				},
+				{
+					"name": "duration",
+					"kind": "property",
+					"type": "float",
+					"doc": "Seconds one cycle lasts, from 0.05 to 3600"
+				},
+				{
+					"name": "rate",
+					"kind": "property",
+					"type": "float",
+					"doc": "Particles per second while playing, from 0 to 10000"
+				},
+				{
+					"name": "burst",
+					"kind": "property",
+					"type": "int",
+					"doc": "Particles sent at once when each cycle starts, from 0 to 10000"
+				},
+				{
+					"name": "max_particles",
+					"kind": "property",
+					"type": "int",
+					"doc": "The most alive at once, from 0 to 10000; past it no more are born"
+				},
+				{
+					"name": "lifetime",
+					"kind": "property",
+					"type": "float",
+					"doc": "Seconds each particle lives, from 0.01 to 600"
+				},
+				{
+					"name": "lifetime_variation",
+					"kind": "property",
+					"type": "float",
+					"doc": "How much lifetimes vary, from 0 (all the same) to 1 (anywhere from none to double)"
+				},
+				{
+					"name": "speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters per second particles leave at, from 0 to 1000"
+				},
+				{
+					"name": "speed_variation",
+					"kind": "property",
+					"type": "float",
+					"doc": "How much speeds vary, from 0 to 1, like lifetime_variation"
+				},
+				{
+					"name": "spread_angle",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees from the entity's +Y they may leave at: 0 a straight line, 180 every way"
+				},
+				{
+					"name": "shape",
+					"kind": "property",
+					"type": "str",
+					"doc": "Where particles are born: 'point' (the entity), 'sphere' or 'box'"
+				},
+				{
+					"name": "shape_size",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "A sphere's radius (x) or a box's half size, in meters"
+				},
+				{
+					"name": "gravity_scale",
+					"kind": "property",
+					"type": "float",
+					"doc": "How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise"
+				},
+				{
+					"name": "drag",
+					"kind": "property",
+					"type": "float",
+					"doc": "Air resistance, from 0 to 100: how quickly they slow down"
+				},
+				{
+					"name": "start_size",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across when born"
+				},
+				{
+					"name": "end_size",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across when it dies"
+				},
+				{
+					"name": "start_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha when born (each 0 to 1)"
+				},
+				{
+					"name": "end_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha when it dies; set alpha to 0 to fade out"
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": "Brightness, from 0 to 1000; above 1 they glow"
+				},
+				{
+					"name": "blend",
+					"kind": "property",
+					"type": "str",
+					"doc": "'additive' adds light (fire, sparks); 'alpha' covers what's behind (smoke, dust)"
+				},
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "The image each particle shows (an asset path); empty for a soft round dot"
+				},
+				{
+					"name": "world_space",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Born particles stay where they are when the entity moves; off, they move with it"
+				},
+				{
+					"name": "play",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Starts a cycle (sending its burst), whether or not it was playing"
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [
+						{
+							"name": "clear",
+							"type": "bool",
+							"default": false
+						}
+					],
+					"returns": "None",
+					"doc": "Stops sending particles. The live ones live out their lives, unless 'clear' removes them now"
+				},
+				{
+					"name": "emit",
+					"kind": "method",
+					"params": [
+						{
+							"name": "count",
+							"type": "int"
+						}
+					],
+					"returns": "None",
+					"doc": "Sends 'count' particles at once (up to 10000), playing or not"
+				},
+				{
+					"name": "is_playing",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "Whether it's sending particles"
+				},
+				{
+					"name": "particle_count",
+					"kind": "property",
+					"type": "int",
+					"readonly": true,
+					"doc": "How many are alive now"
+				}
+			]
+		},
+		{
 			"name": "UICanvas",
 			"doc": "The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game",
 			"members": [

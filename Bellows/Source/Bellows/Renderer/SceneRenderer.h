@@ -6,6 +6,7 @@
 #include "Bellows/Renderer/Material.h"
 #include "Bellows/Renderer/Mesh.h"
 #include "Bellows/Renderer/ShaderInterop.h"
+#include "Bellows/Renderer/Texture.h"
 #include "Bellows/Text/Font.h"
 #include "Bellows/Text/TextLayout.h"
 
@@ -147,6 +148,15 @@ namespace Bellows {
 		uint32_t SkinnedMeshes = 0;		// Meshes drawn in a pose (each also counts in Meshes)
 		uint32_t PointLights = 0;
 		uint32_t SpotLights = 0;
+		uint32_t Particles = 0;
+	};
+
+	// One camera-facing particle for SubmitParticles.
+	struct ParticleQuad
+	{
+		glm::vec3 Position { 0.0f };	// World space, the quad's center
+		float Size = 0.1f;				// Meters across
+		glm::vec4 Color { 1.0f };		// Linear RGB (may be above 1 to glow) and alpha
 	};
 
 	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.
@@ -213,6 +223,12 @@ namespace Bellows {
 		// 'origin' is where the layout's box (0, 0) lands; the layout's units must be output pixels.
 		void SubmitUIText(const Ref<Font>& font, const TextLayout& layout, const glm::vec2& origin, const TextStyle& style,
 			uint32_t entityID = 0, const glm::vec4* clipRect = nullptr);
+
+		// Particles: camera-facing quads lit by nothing, drawn into the HDR image after the transparent
+		// pass (so they're tonemapped and bloom), depth-tested against the scene without writing depth.
+		// Additive ones add light; alpha ones are sorted far to near. Without a texture, each quad is
+		// a soft round dot; a texture's color and alpha are multiplied by the particle's color.
+		void SubmitParticles(const ParticleQuad* quads, size_t count, bool additive, const Ref<Texture2D>& texture = nullptr);
 
 		void SetSelectedEntities(const std::vector<uint32_t>& entityIDs);
 
@@ -290,6 +306,24 @@ namespace Bellows {
 			uint32_t VertexCount = 0;
 		};
 
+		struct ParticleVertex
+		{
+			glm::vec3 Position;
+			glm::vec2 TexCoord;
+			glm::vec4 Color;
+		};
+
+		// One emitter's particles: a run of vertices sharing a texture and a blend.
+		struct ParticleDraw
+		{
+			Ref<Texture2D> TextureRef;
+			bool Textured = false;
+			bool Additive = true;
+			uint32_t FirstVertex = 0;
+			uint32_t VertexCount = 0;
+			float Distance = 0.0f;
+		};
+
 		// One block of text: a run of vertices sharing a font, drawn far to near.
 		struct TextDraw
 		{
@@ -313,6 +347,7 @@ namespace Bellows {
 		void RenderOpaque(nvrhi::ICommandList* commandList);
 		void RenderSkybox(nvrhi::ICommandList* commandList);
 		void RenderTransparent(nvrhi::ICommandList* commandList);
+		void RenderParticles(nvrhi::ICommandList* commandList);
 		void RenderBloom(nvrhi::ICommandList* commandList);
 		void RenderTonemap(nvrhi::ICommandList* commandList);
 		void RenderText(nvrhi::ICommandList* commandList);
@@ -358,6 +393,9 @@ namespace Bellows {
 		std::vector<LineVertex> m_LineVertices;
 		std::vector<TextVertex> m_TextVertices;
 		std::vector<TextDraw> m_TextDraws;
+		std::vector<ParticleVertex> m_ParticleVertices;
+		std::vector<ParticleDraw> m_ParticleDraws;
+		std::vector<uint32_t> m_ParticleOrder;		// Scratch: an alpha emitter's quads far to near
 		std::vector<UIVertex> m_UIVertices;
 		std::vector<UIDraw> m_UIDraws;
 		std::vector<uint32_t> m_SelectedEntities;
@@ -376,6 +414,7 @@ namespace Bellows {
 		nvrhi::InputLayoutHandle m_LineInputLayout;
 		nvrhi::InputLayoutHandle m_TextInputLayout;
 		nvrhi::InputLayoutHandle m_UIInputLayout;
+		nvrhi::InputLayoutHandle m_ParticleInputLayout;
 
 		// Render targets
 		nvrhi::TextureHandle m_DepthTexture;
@@ -414,6 +453,7 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
 		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
 		nvrhi::GraphicsPipelineHandle m_UIPipeline, m_UIIDPipeline;
+		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline;
 
 		// Constant buffers
 		nvrhi::BufferHandle m_FrameBuffer;
@@ -429,6 +469,8 @@ namespace Bellows {
 		size_t m_TextVertexCapacity = 0;
 		nvrhi::BufferHandle m_UIVertexBuffer;
 		size_t m_UIVertexCapacity = 0;
+		nvrhi::BufferHandle m_ParticleVertexBuffer;
+		size_t m_ParticleVertexCapacity = 0;
 
 		// Binding sets
 		nvrhi::BindingSetHandle m_SceneSet;
