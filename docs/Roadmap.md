@@ -3,7 +3,8 @@
 Where the engine stands today, what it needs to compete with Godot, and how 2D games, the
 ForgeScript language and MageCap Forge fit in. Written November 2026 against Godot 4.7.2 (current
 stable) and Godot 4.8 (beta); updated November 24, 2026, after 0.6.0 shipped, with Ron's
-priorities (section 2). This is a planning document: update it as milestones land.
+priorities (section 2), and November 28, 2026, with the feature checklist (section 8). This is a
+planning document: update it as milestones land.
 
 ## 1. Where Bellows stands against Godot
 
@@ -219,12 +220,14 @@ Planned, from Ron's priorities (section 2). Ron confirmed this order, with iOS w
 | Release | Contents |
 |---------|----------|
 | 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals; the Windows installer and updates from inside the editor. **Visual effects made in Bellows** (Ron, November 28, 2026: building blocks first, as part of 0.7): richer particles (done), then trails and ribbons, beams, effect shapes with effect materials, mesh debris with physics, and an Effects editor with `.beffect` assets that combines them |
-| 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3) |
-| 0.9 | **Lighting and quality:** fog, screen-space reflections, area lights, TAA and upscaling, HDR output, then global illumination; plus LOD and occlusion culling |
-| 0.10 | **Android** on Vulkan, with touch input and Android export |
-| 0.11 | **Web** through a WebGPU backend, with Web export |
-| 1.0 | Stable API, migration guides, LTS policy; then the ecosystem (documentation site, tutorials, community) |
-| Later | macOS and iOS (Metal through MoltenVK), consoles, multiplayer, editor plugin API, multiple open scenes |
+| 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3). **Gameplay essentials:** a character controller, physics joints, shape casts and overlap queries, an animation state machine, entity fields for scripts |
+| 0.9 | **Lighting and quality:** fog, screen-space reflections, area lights, TAA and upscaling, HDR output, then global illumination; plus LOD and occlusion culling. **Performance and animation:** a job system, GPU particles, navigation links and runtime rebaking; blend spaces, IK, an animation timeline, ragdolls |
+| 0.10 | **Android** on Vulkan, with touch input and Android export. **Shipping a game:** localization, audio bus effects |
+| 0.11 | **Web** through a WebGPU backend, with Web export. **Game UI:** themes, rich text, accessibility |
+| 1.0 | Stable API, migration guides, LTS policy, nested prefabs and prefab variants, the editor plugin API; then the ecosystem (documentation site, tutorials, community) |
+| Later | macOS and iOS (Metal through MoltenVK), consoles, multiplayer, multiple open scenes |
+
+Each row's features are listed one by one in section 8, which CI holds every release to.
 
 ### Editor redesign
 
@@ -250,6 +253,68 @@ tested and shown to Ron against the design:
    card with the script inline (Open in Script, Debug).
 6. **Content and status bar:** asset previews with type badges; the frame-time graph and plain
    status text.
+
+## 8. Feature checklist
+
+Every feature Bellows still needs, with the release it's planned for and where it stands. Ron asked
+on November 28, 2026 for the features no release had picked up to be added "so it's never forgotten
+again and worked through correctly and professionally". The rules:
+
+* A feature found missing gets a row here before any work on it, with the release Ron agrees to.
+* A row moves to another release only by Ron's decision, written in its Notes with the date.
+* A row is **Done** only when the feature is merged with its tests and docs; its Notes name the
+  commit.
+* `Tools/CheckRoadmap.py` reads this table: the `RoadmapChecklist` test checks every row is well
+  formed, and when a version is tagged, CI refuses to publish the release while any row planned
+  for that version isn't Done.
+
+Statuses: Planned, In progress, Done. Releases: a version (0.8, 1.0) or Later.
+
+<!-- checklist:start -->
+| Feature | What it means | Release | Status | Notes |
+|---------|---------------|---------|--------|-------|
+| CPU and GPU profiler | View → Profiler: frame times and each render pass's GPU time | 0.7 | Done | 0.7 profiler parts 1 and 2 |
+| Particles | Particle Emitter on the CPU | 0.7 | Done | 50b2b52 |
+| Decals | Images projected onto surfaces | 0.7 | Done | 1e0354e |
+| Installer and updates | Per-user setup program; updates from inside the editor | 0.7 | Done | a3c81a0, Audit 21 fixes 7516f8a |
+| VFX 1: richer particles | Curves, gradients, facings, spin, flipbooks, swirl, ring and line shapes | 0.7 | Done | ab98bc3 |
+| VFX 2: trails and ribbons | Strips that follow a moving point: slashes, comet tails, spell streaks | 0.7 | Planned | |
+| VFX 3: beams | A strip between two points or along a raycast, scrolling and glowing: lasers, lightning, tethers | 0.7 | Planned | |
+| VFX 4: effect shapes and materials | Rings, cones, domes, slash arcs and swirls with scrolling, edge fade, dissolve and distortion: portals, shockwaves, shields | 0.7 | Planned | |
+| VFX 5: mesh debris | Mesh particles with physics, and dust where they land: rock smashes | 0.7 | Planned | |
+| VFX 6: Effects editor | `.beffect` assets: layers on a timeline, a looping preview, starter effects, `play effect` from scripts | 0.7 | Planned | |
+| Redesign step 5: Inspector | Compact X/Y/Z fields, uniform-scale lock, switches, the ForgeScript card | 0.7 | Planned | |
+| Redesign step 6: Content and status bar | Asset previews with type badges, the frame-time graph, plain status text | 0.7 | Planned | |
+| 2D | Sprites, Camera2D, Box2D physics, tilemaps, sprite animation, 2D editor mode, 2D templates (section 3) | 0.8 | Planned | |
+| Character controller | A capsule that walks, climbs steps and slopes and slides along walls, for players and NPCs | 0.8 | Planned | |
+| Physics joints | Fixed, hinge, slider, spring, distance and rope joints between bodies, with limits and motors | 0.8 | Planned | |
+| Shape casts and overlaps | Sweeping a sphere, box or capsule through the world, and finding what overlaps a shape | 0.8 | Planned | |
+| Animation state machine | States, transitions on parameters and crossfades, edited in the editor and driven from scripts | 0.8 | Planned | |
+| Entity fields for scripts | Script settings that hold an entity (or a ForgeScript kind or contract), picked in the Inspector | 0.8 | Planned | Needs a design with FSC |
+| Lighting and quality | Fog, screen-space reflections, area lights, TAA and upscaling, HDR output, global illumination | 0.9 | Planned | |
+| LOD and occlusion culling | Fewer triangles far away; nothing drawn that's hidden | 0.9 | Planned | |
+| Job system | Scene update, culling and asset loading on many threads | 0.9 | Planned | |
+| GPU particles | Particles simulated on the GPU, for hundreds of thousands | 0.9 | Planned | |
+| Navigation links and rebaking | Jumps and ladders between navmesh areas; rebaking while the game runs | 0.9 | Planned | |
+| Blend spaces | Blending clips by one or two parameters (walk to run by speed and direction) | 0.9 | Planned | |
+| IK | Two-bone IK, look-at and foot placement | 0.9 | Planned | |
+| Animation timeline | Keyframing any property, with events, in an Animation workspace | 0.9 | Planned | |
+| Ragdolls | Skeletons that fall with physics, using the joints | 0.9 | Planned | |
+| Android | Vulkan on Android, touch input, Android export | 0.10 | Planned | |
+| Localization | String tables, switching language at run time, per-language fonts, pseudolocalization | 0.10 | Planned | |
+| Audio bus effects | Reverb, low-pass and high-pass filters, delay, compressor and limiter on mixer buses | 0.10 | Planned | |
+| Web | A WebGPU backend and Web export | 0.11 | Planned | |
+| Game UI themes | One look for every widget, switchable at run time | 0.11 | Planned | |
+| Rich text | Bold, italic, colors, sizes and inline icons in a text | 0.11 | Planned | |
+| Accessibility | Screen readers (AccessKit), text scaling, color-blind modes | 0.11 | Planned | |
+| Nested prefabs and variants | Prefabs inside prefabs, and variants that override a base prefab | 1.0 | Planned | |
+| Editor plugin API | Custom panels, inspectors, importers and gizmos | 1.0 | Planned | Was Later; scheduled November 28, 2026 |
+| Stable API and LTS | Migration guides, a long-term-support policy | 1.0 | Planned | |
+| macOS and iOS | Metal through MoltenVK | Later | Planned | |
+| Consoles | Partner-only branch under the console makers' agreements | Later | Planned | |
+| Multiplayer | Networking and replication | Later | Planned | |
+| Multiple open scenes | Several scenes open in the editor at once | Later | Planned | |
+<!-- checklist:end -->
 
 ## Sources
 

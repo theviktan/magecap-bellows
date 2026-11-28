@@ -189,6 +189,9 @@ jobs:
           # The notes become the release text, so the line kept in them while the work lands must be gone.
           if (Select-String -Path "docs/ReleaseNotes/$version.md" -SimpleMatch -Quiet "These notes grow") { Write-Output "::error::docs/ReleaseNotes/$version.md still says 'These notes grow'; remove that line before the release"; exit 1 }
           if (Select-String -Path ForgeScript/CHANGELOG.md -SimpleMatch -Quiet "(not released yet)") { Write-Output "::error::ForgeScript/CHANGELOG.md still has a version '(not released yet)'; date it before the release"; exit 1 }
+          # Every feature docs/Roadmap.md plans for this version is Done (or Ron moved it to a later release).
+          python Tools/CheckRoadmap.py --release $version
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error::docs/Roadmap.md's checklist has features planned for $version that aren't Done"; exit 1 }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       # The zip, the setup program and update.json, for the release job.
