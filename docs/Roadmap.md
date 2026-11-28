@@ -218,7 +218,7 @@ Planned, from Ron's priorities (section 2). Ron confirmed this order, with iOS w
 
 | Release | Contents |
 |---------|----------|
-| 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals |
+| 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals; the Windows installer and updates from inside the editor. **Visual effects made in Bellows** (Ron, November 28, 2026: building blocks first, as part of 0.7): richer particles (done), then trails and ribbons, beams, effect shapes with effect materials, mesh debris with physics, and an Effects editor with `.beffect` assets that combines them |
 | 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3) |
 | 0.9 | **Lighting and quality:** fog, screen-space reflections, area lights, TAA and upscaling, HDR output, then global illumination; plus LOD and occlusion culling |
 | 0.10 | **Android** on Vulkan, with touch input and Android export |

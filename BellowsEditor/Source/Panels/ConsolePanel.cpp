@@ -157,11 +157,13 @@ namespace Bellows {
 				else if (entry.Level == LogLevel::Trace) color = Theme::TextDisabled;
 				else if (entry.Source == LogSource::Core) color = Theme::TextMuted;
 
-				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(color));
 				ImGui::PushID(i);
+				ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(color));
 				ImGui::TextUnformatted(icon);
 				ImGui::SameLine();
 				ImGui::TextUnformatted(entry.Text.c_str());
+				// The line's color stops here: its menu is drawn in the ordinary text color.
+				ImGui::PopStyleColor();
 				if (ImGui::BeginPopupContextItem("##line"))
 				{
 					if (ImGui::MenuItem(ICON_COPY "  Copy"))
@@ -169,7 +171,6 @@ namespace Bellows {
 					ImGui::EndPopup();
 				}
 				ImGui::PopID();
-				ImGui::PopStyleColor();
 			}
 		}
 		ImGui::PopStyleVar();
