@@ -11,6 +11,10 @@ namespace ForgeScript {
 	// "Assets" when it is missing). Anywhere else they start next to the script.
 	std::filesystem::path FindUseFolder(const std::filesystem::path& scriptPath);
 
+	// The asset folder of the project a script is in (as FindUseFolder finds it), or an empty path when
+	// the script isn't in a project. In a project every script shares the engine's events.
+	std::filesystem::path FindProjectAssetFolder(const std::filesystem::path& scriptPath);
+
 	// The file 'use "name"' means, from 'useFolder': ".forge" is added when the name has no extension.
 	// Empty when 'use' may not load it (CheckUsePath), or when the file it reaches, following links, is
 	// outside useFolder.

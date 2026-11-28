@@ -73,14 +73,21 @@ foreach(doc IN LISTS DOCS)
 		endif()
 		# A Cookbook recipe is code to copy into a game, so it must have no warning at all: a new warning
 		# that fires on one (a checker change, or a new engine name) shows up in the change that causes it.
-		# The other guides show some warnings on purpose, to teach them.
+		# The other guides show some warnings on purpose, to teach them. One warning is expected: "Nothing
+		# listens for" an event a recipe triggers for the game's other scripts, which, like the scripts
+		# a 'use' example reads, exist only in the reader's project.
 		if(docName STREQUAL "Cookbook.md")
 			execute_process(COMMAND "${FORGESCRIPT}" --check --strict --api "${API}" "${file}"
 				RESULT_VARIABLE exitCode OUTPUT_VARIABLE out ERROR_VARIABLE err)
 			if(NOT exitCode EQUAL 0)
-				string(STRIP "${out}${err}" said)
-				list(APPEND failures "${docName}:${line}: a recipe must have no warnings:\n${said}")
-				continue()
+				string(REGEX REPLACE "[^\n]*: warning: Nothing listens for '[^\n]*\n?" "" others "${out}${err}")
+				string(REGEX REPLACE "[^\n]*: no mistakes found[^\n]*\n?" "" others "${others}")
+				string(STRIP "${others}" others)
+				if(NOT others STREQUAL "")
+					string(STRIP "${out}${err}" said)
+					list(APPEND failures "${docName}:${line}: a recipe must have no warnings:\n${said}")
+					continue()
+				endif()
 			endif()
 		endif()
 		# Each example is laid out the way 'forgescript --format' lays it out, so the docs teach one style.

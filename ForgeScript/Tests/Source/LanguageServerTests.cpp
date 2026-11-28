@@ -1543,3 +1543,79 @@ TEST_CASE("OutlineAndHoverShowTypesOnVariablesAndFields")
 	session.Open(uri, source);
 	CHECK(HoverText(session.At("textDocument/hover", uri, 5, 5)).find("set names as list of text to") != std::string::npos);
 }
+
+TEST_CASE("WarnsWhenNothingInTheProjectListensForAnEvent")
+{
+	// A Bellows project: every script in its asset folder hears every event, Python's too.
+	TempFolder folder("events");
+	folder.Write("Game.bproject", "{ \"Name\": \"Game\" }");
+	folder.Write("Assets/Scripts/door.forge", "when door opened\n\tsay 1\nend\nwhen \"Start\" is clicked\nend\nwait for \"level done\"\n");
+	folder.Write("Assets/Scripts/boss.py", "def on_event(self, name, *values):\n    if name == 'boss died':  # 'only a comment'\n        pass\n");
+	const std::filesystem::path main = folder.Path / "Assets/Scripts/main.forge";
+	const std::string text = "trigger door opened\ntrigger clicked\ntrigger level done\ntrigger boss died\n"
+		"trigger door opend\ntrigger Door Opened\ntrigger \"only a comment\"\ntrigger with_nobody\n";
+	folder.Write("Assets/Scripts/main.forge", text);
+
+	const LanguageServer server(LanguageServer::Options {});
+	std::vector<CompileError> found = server.FindWarningsIn(main, text);
+	REQUIRE_EQ(found.size(), static_cast<size_t>(4));
+	CHECK_EQ(found[0].Line, 5);
+	CHECK_EQ(found[0].Column, 9);
+	CHECK_EQ(found[0].Message, std::string("Nothing listens for 'door opend'. No script in this project has 'when door opend' or 'wait for door opend'. "
+		"Did you mean 'door opened'?"));
+	// The quick fix keeps the words as words.
+	CHECK_EQ(found[0].FixTitle, std::string("Change to 'door opened'"));
+	CHECK_EQ(found[0].FixColumn, 9);
+	CHECK_EQ(found[0].FixEndColumn, 19);
+	CHECK_EQ(found[0].FixText, std::string("door opened"));
+	// Letters must match exactly, so a case slip is caught too.
+	CHECK_CONTAINS(found[1].Message, "Nothing listens for 'Door Opened'.");
+	CHECK_CONTAINS(found[1].Message, "Did you mean 'door opened'?");
+	// Quoted text in a Python comment isn't a listener, and Python's texts are never suggested.
+	CHECK_CONTAINS(found[2].Message, "Nothing listens for 'only a comment'.");
+	CHECK_EQ(found[3].Message.find("Did you mean"), std::string::npos);
+
+	// An open script's unsaved text counts instead of its file.
+	Session session(false);
+	session.Open(LanguageServer::PathToUri(folder.Path / "Assets/Scripts/door.forge"), "when door opend\nend\n");
+	found = session.Server.FindWarningsIn(main, "trigger door opend\ntrigger door opened\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Line, 2);
+
+	// Fixing the listener in its tab sends the triggering tab's diagnostics again, now with no warning.
+	const std::string mainUri = LanguageServer::PathToUri(main);
+	session.Open(mainUri, "trigger door opened\n");
+	session.Change(LanguageServer::PathToUri(folder.Path / "Assets/Scripts/door.forge"), "when door opened\nend\n", 2);
+	REQUIRE_EQ(session.Dependents.size(), static_cast<size_t>(1));
+	CHECK_EQ(session.Dependents[0].Get("params").GetString("uri"), mainUri);
+	CHECK(session.Dependents[0].Get("params").Get("diagnostics").AsArray().empty());
+
+	// A name that can't be written as words is suggested in quotes.
+	folder.Write("Assets/Scripts/hatch.forge", "when \"hatch-open\"\nend\n");
+	found = server.FindWarningsIn(main, "trigger hatch open\n");
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].FixText, std::string("\"hatch-open\""));
+}
+
+TEST_CASE("EventWarningsOutsideAProjectAndWhereTheyCantBeSure")
+{
+	// Not in a project: 'forgescript' runs a script and the ones it uses, so only they can hear it.
+	TempFolder folder("events-plain");
+	folder.Write("helper.forge", "when ping\nend\n");
+	folder.Write("other.forge", "when pong\nend\n");
+	const std::string text = "use \"helper\"\ntrigger ping\ntrigger pong\n";
+	folder.Write("main.forge", text);
+	const LanguageServer server(LanguageServer::Options {});
+	std::vector<CompileError> found = server.FindWarningsIn(folder.Path / "main.forge", text);
+	REQUIRE_EQ(found.size(), static_cast<size_t>(1));
+	CHECK_EQ(found[0].Message, std::string("Nothing listens for 'pong'. This script and the scripts it uses have no 'when pong' or 'wait for pong'. "
+		"Did you mean 'ping'?"));
+	// The script's own handlers and 'wait for' count.
+	CHECK(server.FindWarningsIn(folder.Path / "main.forge", "when tick\nend\ntrigger tick\nwait for tock\ntrigger tock\n").empty());
+	// No place, no warning: an unsaved script, or a path that isn't a file.
+	CHECK(server.FindWarningsIn(std::filesystem::path(), "trigger zzz\n").empty());
+	CHECK(server.FindWarningsIn(folder.Path / "never-saved.forge", "trigger zzz\n").empty());
+	// A field handler inside a kind isn't an event someone triggers.
+	CHECK_EQ(server.FindWarningsIn(folder.Path / "main.forge", "kind Door\n\tset open to false\n\twhen my open changes\n\tend\nend\ntrigger my open changes\n").size(),
+		static_cast<size_t>(1));
+}

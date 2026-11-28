@@ -1293,6 +1293,20 @@ trigger score changed with 100, "bonus"
 
 Every matching `when` block runs, right away, before the line after `trigger`. Missing values arrive as `nothing`; extra values are ignored.
 
+Event names must match exactly, capital letters too: `trigger Door Opened` doesn't reach `when door opened`. So the editor (and `forgescript --check`) warns when nothing listens for an event a script triggers:
+
+```forge
+when door opened
+	say "Creak..."
+end
+
+trigger door opend      # the editor warns: Nothing listens for 'door opend'. ... Did you mean 'door opened'?
+```
+
+- **What counts as listening:** a `when` block or a `wait for` with that name. In a MageCap Bellows project, that's in any script in the project's Assets folder, because every script there hears every event; a Python script counts when it has the name in quotes (its `on_event` compares names). Outside a project, it's this script and the scripts it uses, since only those run together.
+- It's a warning only, and it never guesses: a script that isn't saved yet, or a project too big to read through, gets none.
+- An event that another part of your game will listen for later is fine to leave: the warning goes away once the `when` is written.
+
 A `when` block may trigger events too, but one that keeps triggering itself (or two that trigger each other forever) is stopped after 64 levels, with an error on the `trigger` line of the deepest one:
 
 ```forge
