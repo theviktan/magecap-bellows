@@ -190,6 +190,18 @@ lightning.start_width, lightning.end_width, lightning.intensity = 0.08, 0.08, 4.
 lightning.start_color, lightning.end_color = Vec4(0.7, 0.85, 1.0, 1.0), Vec4(0.75, 0.6, 1.0, 1.0)
 lightning.noise_amplitude, lightning.noise_frequency, lightning.noise_speed, lightning.segments = 0.25, 1.5, 14.0, 48
 
+# Effect shapes: a shield with a glowing rim around the first sphere, and a light pillar over the second
+shield = create("Shield", position=(-5.0, 1.2, -3.0))
+bubble = shield.add_component(bellows.EffectShape)
+bubble.shape, bubble.radius, bubble.segments = "sphere", 0.85, 48
+bubble.color, bubble.intensity, bubble.rim, bubble.edge_fade = Vec4(0.35, 0.75, 1.0, 1.0), 2.5, 3.0, 0.0
+bubble.duration, bubble.size_curve = 2.0, [[0.0, 0.98], [0.5, 1.03], [1.0, 0.98]]
+pillar = create("Light Pillar", position=(-2.5, 0.6, -3.0))
+beam_of_light = pillar.add_component(bellows.EffectShape)
+beam_of_light.shape, beam_of_light.radius, beam_of_light.top_radius, beam_of_light.height = "cylinder", 0.55, 0.75, 2.5
+beam_of_light.color, beam_of_light.intensity, beam_of_light.edge_fade, beam_of_light.rim = Vec4(1.0, 0.85, 0.5, 1.0), 2.0, 0.5, 1.0
+beam_of_light.duration, beam_of_light.color_gradient = 1.5, [[0.0, 1.0, 1.0, 1.0, 0.6], [0.5, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 0.6]]
+
 # glTF models
 plinth = create("Bottle Plinth", "Builtin/Cube", STONE, position=(-3.5, 0.4, 2.0), scale=(1.2, 0.8, 1.2))
 add_body(plinth, "Static", bellows.BoxCollider)
@@ -270,6 +282,12 @@ sparks.start_size, sparks.end_size, sparks.intensity = 0.15, 0.02, 3.0
 # Effects: a magic ring on the landing mark, its sparks swirling up from a flat glow, white
 # flashing to blue as they grow and fade
 portal = create("Magic Ring", position=(-1.5, 0.05, 4.0))
+shockwave = create("Magic Ring Shockwave", parent=portal, position=(0.0, 0.03, 0.0))
+wave = shockwave.add_component(bellows.EffectShape)
+wave.radius, wave.inner_radius, wave.duration, wave.edge_fade = 1.6, 1.35, 1.6, 0.5
+wave.color, wave.intensity = Vec4(0.55, 0.8, 1.0, 1.0), 2.5
+wave.size_curve = [[0.0, 0.1], [0.4, 0.8], [1.0, 1.0]]
+wave.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 0.0]]
 glow = portal.add_component(bellows.ParticleEmitter)
 glow.shape, glow.shape_size, glow.facing = "ring", Vec3(0.6, 0.6, 0.6), "flat"
 glow.rate, glow.lifetime, glow.speed, glow.spin_speed, glow.rotation_variation = 12.0, 1.0, 0.0, 90.0, 180.0

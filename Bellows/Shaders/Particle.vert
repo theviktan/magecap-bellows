@@ -1,5 +1,6 @@
 #version 460
-// Particle quads and strips, already turned toward the camera on the CPU (SceneRenderer::SubmitParticles, SubmitStrip).
+// Particle quads, strips and effect surfaces, already placed in the world on the CPU
+// (SceneRenderer::SubmitParticles, SubmitStrip, SubmitEffectMesh).
 
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec2 a_TexCoord;
@@ -8,7 +9,10 @@ layout(location = 2) in vec4 a_Color;
 layout(push_constant) uniform ParticleBlock
 {
 	mat4 ViewProjection;
-	vec4 Params;	// x: 1 = sample the texture; y: 1 = a strip (soft across V), 0 = a soft round dot
+	vec4 Params;	// See Particle.frag
+	vec4 Params2;
+	vec4 Params3;
+	vec4 Params4;
 } u_Particle;
 
 layout(location = 0) out vec2 v_TexCoord;

@@ -1490,7 +1490,7 @@ namespace Bellows {
 
 		ParticleDraw draw;
 		draw.TextureRef = image;
-		draw.Textured = static_cast<bool>(texture);
+		draw.Params[0] = glm::vec4(texture ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
 		draw.Additive = additive;
 		draw.FirstVertex = static_cast<uint32_t>(m_ParticleVertices.size());
 		glm::vec3 center(0.0f);
@@ -1567,9 +1567,8 @@ namespace Bellows {
 
 		ParticleDraw draw;
 		draw.TextureRef = image;
-		draw.Textured = static_cast<bool>(texture);
+		draw.Params[0] = glm::vec4(texture ? 1.0f : 0.0f, 1.0f, 0.0f, 0.0f);
 		draw.Additive = additive;
-		draw.Strip = true;
 		draw.RepeatTexture = repeatTexture;
 		draw.FirstVertex = static_cast<uint32_t>(m_ParticleVertices.size());
 
@@ -1629,6 +1628,49 @@ namespace Bellows {
 		const uint32_t segments = draw.VertexCount / 6;
 		draw.Distance = glm::length(center / static_cast<float>(segments) - m_Camera.Position);
 		m_Statistics.Particles += segments;
+		m_ParticleDraws.push_back(std::move(draw));
+	}
+
+	void SceneRenderer::SubmitEffectMesh(const EffectVertex* vertices, size_t count, const EffectMaterial& material)
+	{
+		count -= count % 3;
+		if (!vertices || count == 0 || material.Color.a <= 0.0f)
+			return;
+		const Ref<Texture2D>& image = material.Texture ? material.Texture : Renderer::GetWhiteTexture();
+		GetTextureBindingSet(image->GetHandle(), image, true);
+
+		ParticleDraw draw;
+		draw.TextureRef = image;
+		draw.Additive = material.Additive;
+		draw.RepeatTexture = true;
+		draw.Params[0] = glm::vec4(material.Texture ? 1.0f : 0.0f, 2.0f, material.Offset);
+		draw.Params[1] = glm::vec4(material.Tiling, material.EdgeFade, material.Dissolve);
+		draw.Params[2] = glm::vec4(glm::vec3(material.DissolveEdgeColor), material.DissolveEdgeWidth);
+		draw.Params[3] = glm::vec4(std::max(1.0f, std::round(material.NoiseCells.x)), std::max(material.NoiseCells.y, 0.0f), material.DissolveEdgeColor.a, 0.0f);
+		draw.FirstVertex = static_cast<uint32_t>(m_ParticleVertices.size());
+
+		// The rim fade is worked out per corner here, where the camera is known: faces seen edge-on keep
+		// their color, faces turned toward the camera fade.
+		glm::vec3 center(0.0f);
+		for (size_t i = 0; i < count; i++)
+		{
+			const EffectVertex& vertex = vertices[i];
+			glm::vec4 color = material.Color;
+			if (material.Rim > 0.0f)
+			{
+				const glm::vec3 toCamera = m_Camera.Position - vertex.Position;
+				const float distance = glm::length(toCamera);
+				const float normalLength = glm::length(vertex.Normal);
+				const float facing = distance > 1e-6f && normalLength > 1e-6f
+					? std::abs(glm::dot(vertex.Normal / normalLength, toCamera / distance)) : 0.0f;
+				color.a *= std::pow(std::clamp(1.0f - facing, 0.0f, 1.0f), material.Rim);
+			}
+			m_ParticleVertices.push_back({ vertex.Position, vertex.UV, color });
+			center += vertex.Position;
+		}
+		draw.VertexCount = static_cast<uint32_t>(count);
+		draw.Distance = glm::length(center / static_cast<float>(count) - m_Camera.Position);
+		m_Statistics.Particles += static_cast<uint32_t>(count / 3);
 		m_ParticleDraws.push_back(std::move(draw));
 	}
 
@@ -1804,7 +1846,10 @@ namespace Bellows {
 			state.bindings = { GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef, draw.RepeatTexture) };
 			state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_ParticleVertexBuffer).setSlot(0).setOffset(0) };
 			commandList->setGraphicsState(state);
-			constants.Params = glm::vec4(draw.Textured ? 1.0f : 0.0f, draw.Strip ? 1.0f : 0.0f, 0.0f, 0.0f);
+			constants.Params = draw.Params[0];
+			constants.Params2 = draw.Params[1];
+			constants.Params3 = draw.Params[2];
+			constants.Params4 = draw.Params[3];
 			commandList->setPushConstants(&constants, sizeof(constants));
 			commandList->draw(nvrhi::DrawArguments().setVertexCount(draw.VertexCount).setStartVertexLocation(draw.FirstVertex));
 			m_Statistics.DrawCalls++;

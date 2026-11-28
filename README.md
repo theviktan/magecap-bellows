@@ -35,6 +35,9 @@ can drive end to end.
   comet tails, spell streaks, tire marks), with width and color along it.
 * **Beams**: a **Beam** draws a glowing line to a point, to another entity, or until it hits a
   collider (lasers, tractor beams, lightning arcs), with a scrolling texture and a lightning wobble.
+* **Effect shapes**: an **EffectShape** draws a ring, disc, cylinder, cone, sphere or dome (or a
+  slice of one) that plays a cycle of size, color and dissolve, spins, scrolls its texture and fades at
+  its edges and rim: shockwaves, magic circles, shields, light pillars, portals. Presets start you off.
 * **Decals**: project an image (footprints, cracks, posters, road paint) onto the surfaces inside a
   box, lit and shadowed with them, with a fade on surfaces turned away and a sort order.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and

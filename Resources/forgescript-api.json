@@ -2490,6 +2490,196 @@
 			]
 		},
 		{
+			"name": "EffectShape",
+			"doc": "A glowing or textured surface for effects: shockwave rings, magic circles, shields, light pillars, portals. It plays a cycle that changes its size, color and dissolve, and can spin, scroll its texture, fade at its edges and rim, and dissolve away",
+			"members": [
+				{
+					"name": "shape",
+					"kind": "property",
+					"type": "str",
+					"doc": "'ring' (flat; an inner_radius of 0 makes a disc), 'cylinder', 'cone', 'sphere' or 'dome', around the entity's up"
+				},
+				{
+					"name": "radius",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters (a cylinder's and a cone's at the bottom)"
+				},
+				{
+					"name": "inner_radius",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'ring': the hole's radius; 0 is a disc"
+				},
+				{
+					"name": "top_radius",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'cylinder': the radius at its top"
+				},
+				{
+					"name": "height",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'cylinder' and 'cone': meters tall, up from the entity"
+				},
+				{
+					"name": "arc",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees drawn around its axis, centered on the entity's forward; below 360 it's a slice (a slash arc, a fan)"
+				},
+				{
+					"name": "segments",
+					"kind": "property",
+					"type": "int",
+					"doc": "Pieces around a full turn: more is rounder"
+				},
+				{
+					"name": "playing",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Its cycle, spin and scroll run; off, it holds where it is"
+				},
+				{
+					"name": "loop",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Repeats its cycle; off, it plays once and hides at the end"
+				},
+				{
+					"name": "duration",
+					"kind": "property",
+					"type": "float",
+					"doc": "Seconds per cycle"
+				},
+				{
+					"name": "size_curve",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Size over a cycle as up to 8 [time, size] keys (0 at its start, 1 at its end; size multiplies the shape). [] is size 1"
+				},
+				{
+					"name": "color_gradient",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Color over a cycle as up to 8 [time, red, green, blue, alpha] keys, multiplying color. [] is white"
+				},
+				{
+					"name": "dissolve_curve",
+					"kind": "property",
+					"type": "Value",
+					"doc": "Dissolve over a cycle as up to 8 [time, dissolve] keys (0 whole to 1 gone). [] keeps dissolve throughout"
+				},
+				{
+					"name": "spin_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees per second it turns around its axis"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha"
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": "Brightness, from 0 to 1000; above 1 it glows"
+				},
+				{
+					"name": "blend",
+					"kind": "property",
+					"type": "str",
+					"doc": "'additive' adds light (energy, magic); 'alpha' covers what's behind (smoke, dark magic)"
+				},
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "An image over the surface (an asset path); empty is plain color"
+				},
+				{
+					"name": "tiling",
+					"kind": "property",
+					"type": "Vec2",
+					"doc": "Copies of the texture around (x) and across (y)"
+				},
+				{
+					"name": "scroll",
+					"kind": "property",
+					"type": "Vec2",
+					"doc": "Texture copies per second it scrolls around (x) and across (y)"
+				},
+				{
+					"name": "edge_fade",
+					"kind": "property",
+					"type": "float",
+					"doc": "How much of each edge across the surface fades out softly (a ring's inside and outside, a pillar's bottom and top)"
+				},
+				{
+					"name": "rim",
+					"kind": "property",
+					"type": "float",
+					"doc": "Fades the faces turned toward the camera, so a shield glows at its outline; higher is a thinner rim. 0 is off"
+				},
+				{
+					"name": "dissolve",
+					"kind": "property",
+					"type": "float",
+					"doc": "0 whole to 1 gone, eaten away in a noisy pattern"
+				},
+				{
+					"name": "dissolve_edge_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "How wide the glowing edge of the dissolve is"
+				},
+				{
+					"name": "dissolve_edge_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "The dissolve edge's color (brightened by intensity)"
+				},
+				{
+					"name": "dissolve_scale",
+					"kind": "property",
+					"type": "float",
+					"doc": "Dissolve blobs per meter"
+				},
+				{
+					"name": "play",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Starts its cycle over, shown and playing"
+				},
+				{
+					"name": "stop",
+					"kind": "method",
+					"params": [],
+					"returns": "None",
+					"doc": "Hides it until play() is called"
+				},
+				{
+					"name": "time",
+					"kind": "property",
+					"type": "float",
+					"readonly": true,
+					"doc": "Seconds into its cycle"
+				},
+				{
+					"name": "finished",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "True once it has played through without looping, or was stopped: hidden until play()"
+				}
+			]
+		},
+		{
 			"name": "Decal",
 			"doc": "Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles",
 			"members": [

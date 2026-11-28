@@ -45,6 +45,7 @@ namespace Bellows {
 			if (entity.HasComponent<ParticleEmitterComponent>()) return ICON_FLAME;
 			if (entity.HasComponent<TrailComponent>()) return ICON_SPLINE;
 			if (entity.HasComponent<BeamComponent>()) return ICON_ZAP;
+			if (entity.HasComponent<EffectShapeComponent>()) return ICON_CIRCLE_DASHED;
 			if (entity.HasComponent<DecalComponent>()) return ICON_STICKER;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
 			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
@@ -111,6 +112,7 @@ namespace Bellows {
 			add(entity.HasComponent<ParticleEmitterComponent>(), ICON_FLAME, "Particles");
 			add(entity.HasComponent<TrailComponent>(), ICON_SPLINE, "Trail");
 			add(entity.HasComponent<BeamComponent>(), ICON_ZAP, "Beam");
+			add(entity.HasComponent<EffectShapeComponent>(), ICON_CIRCLE_DASHED, "Effect shape");
 			add(entity.HasComponent<DecalComponent>(), ICON_STICKER, "Decal");
 			return badges;
 		}
@@ -1463,6 +1465,12 @@ namespace Bellows {
 		{
 			create("Beam").AddComponent<BeamComponent>();
 			m_Editor.CommitChange("Create beam");
+		}
+
+		if (ImGui::MenuItem(ICON_CIRCLE_DASHED "  Effect Shape"))
+		{
+			create("Effect Shape").AddComponent<EffectShapeComponent>();
+			m_Editor.CommitChange("Create effect shape");
 		}
 
 		if (ImGui::MenuItem(ICON_STICKER "  Decal"))

@@ -572,6 +572,73 @@ namespace Bellows {
 		std::string LoadedTexturePath;
 	};
 
+	// The surface an effect shape draws, centered on its entity, around its Y axis.
+	enum class EffectShapeType : uint8_t
+	{
+		Ring = 0,	// A flat band on the entity's XZ plane from InnerRadius to Radius (0 inside: a disc)
+		Cylinder,	// An open tube Height tall, Radius at the bottom and TopRadius at the top
+		Cone,		// From Radius at the bottom to a point Height above
+		Sphere,		// A ball of Radius
+		Dome,		// The top half of a ball of Radius
+	};
+
+	// A glowing or textured surface for effects: shockwave rings, magic circles, shields, light
+	// pillars, portals, auras. It plays a cycle (its size, color and dissolve change over Duration),
+	// can spin, scroll its texture, fade at its edges and rim, and dissolve away. It is unlit and
+	// drawn with the particles (see EffectShapeSystem).
+	struct EffectShapeComponent
+	{
+		EffectShapeType Shape = EffectShapeType::Ring;
+		float Radius = 1.0f;			// Meters
+		float InnerRadius = 0.8f;		// Ring: the hole's radius
+		float TopRadius = 1.0f;			// Cylinder: the radius at its top
+		float Height = 1.0f;			// Cylinder and Cone: meters tall, upward from the entity
+		float Arc = 360.0f;				// Degrees of the shape drawn around its axis (a slice below 360)
+		uint32_t Segments = 48;			// Pieces around: more is rounder
+
+		bool Playing = true;			// The cycle runs; off, it holds where it is
+		bool Loop = true;				// Off, it plays once and hides at the end
+		float Duration = 1.0f;			// Seconds per cycle
+		// Over a cycle (0 at its start, 1 at its end). Empty curve: size 1; empty gradient: white;
+		// empty dissolve curve: Dissolve throughout.
+		std::vector<ParticleCurveKey> SizeCurve;
+		std::vector<ParticleColorKey> ColorGradient;
+		std::vector<ParticleCurveKey> DissolveCurve;
+		float SpinSpeed = 0.0f;			// Degrees per second around its axis
+
+		glm::vec4 Color { 0.5f, 0.8f, 1.0f, 1.0f };
+		float Intensity = 2.0f;			// Brightness; above 1 it glows
+		ParticleBlend Blend = ParticleBlend::Additive;
+		std::string TexturePath;		// Empty: plain color
+		glm::vec2 Tiling { 1.0f, 1.0f };	// Copies of the texture around (U) and across (V)
+		glm::vec2 Scroll { 0.0f, 0.0f };	// Texture copies per second it scrolls, around and across
+		float EdgeFade = 0.25f;			// How much of each edge (across, 0 to 0.5) fades out softly
+		float Rim = 0.0f;				// Fades the faces turned toward the camera (a shield's glow at its rim); 0 is off
+		float Dissolve = 0.0f;			// 0 whole to 1 gone, in a noisy pattern
+		float DissolveEdgeWidth = 0.05f;	// How wide the glowing edge of the dissolve is
+		glm::vec4 DissolveEdgeColor { 1.0f, 0.55f, 0.2f, 1.0f };
+		float DissolveScale = 4.0f;		// Noise blobs per meter
+
+		static constexpr float MaxSize = 1000.0f;
+		static constexpr float MinArc = 1.0f, MaxArc = 360.0f;
+		static constexpr uint32_t MinSegments = 3, MaxSegments = 256;
+		static constexpr float MinDuration = 0.01f, MaxDuration = 3600.0f;
+		static constexpr float MaxSpinSpeed = 36000.0f;
+		static constexpr float MaxTiling = 1000.0f, MaxScroll = 1000.0f;
+		static constexpr float MaxRim = 16.0f;
+		static constexpr float MinDissolveScale = 0.01f, MaxDissolveScale = 1000.0f;
+
+		void Clamp();
+
+		// Runtime state (not serialized)
+		float RuntimeTime = 0.0f;		// Seconds into the cycle
+		float RuntimeSpin = 0.0f;		// Degrees turned
+		glm::vec2 RuntimeOffset { 0.0f };	// The texture's scroll, wrapped to one copy
+		bool RuntimeFinished = false;	// Played once without looping, or stopped: hidden until played
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// Projects an image (or a plain color) onto the opaque surfaces inside its box: down the entity's
 	// -Y, with the image's top toward its -Z. It changes the surfaces' color before lighting, so
 	// it's lit and shadowed like them (a footprint, a crack, a poster, a puddle, graffiti).
@@ -783,7 +850,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, TrailComponent, BeamComponent, DecalComponent,
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, TrailComponent, BeamComponent, EffectShapeComponent, DecalComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
 		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 

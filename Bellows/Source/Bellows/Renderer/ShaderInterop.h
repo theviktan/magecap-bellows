@@ -112,7 +112,10 @@ namespace Bellows::ShaderInterop {
 	struct TextData
 	{
 		glm::mat4 ViewProjection;
-		glm::vec4 Params;		// distance range in atlas pixels, unused, unused, unused
+		glm::vec4 Params;		// Text: distance range in atlas pixels. Particles: see Particle.frag
+		glm::vec4 Params2;		// Particles only (effect surfaces), as are the next two
+		glm::vec4 Params3;
+		glm::vec4 Params4;
 	};
 
 	enum MaterialTextureBits : uint32_t
@@ -135,6 +138,6 @@ namespace Bellows::ShaderInterop {
 	static_assert(sizeof(ShadowObjectData) == 128, "ShadowObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(ShadowSkinnedData) == sizeof(ShadowObjectData), "ShadowSkinnedData shares the shadow pass's push constants");
 	static_assert(sizeof(MaterialData) == 80, "MaterialData layout mismatch");
-	static_assert(sizeof(TextData) == 80, "TextData layout mismatch");
+	static_assert(sizeof(TextData) == 128, "TextData layout mismatch");	// The most push constants every GPU takes
 
 }

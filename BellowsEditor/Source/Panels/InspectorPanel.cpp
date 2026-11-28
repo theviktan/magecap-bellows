@@ -12,6 +12,7 @@
 #include "Bellows/Asset/AssetManager.h"
 #include "Bellows/Audio/AudioEngine.h"
 #include "Bellows/Core/FileSystem.h"
+#include "Bellows/Scene/EffectShapeSystem.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
@@ -136,6 +137,10 @@ namespace Bellows {
 			std::vector<ParticleColorKey> Keys;
 		};
 
+		void DrawCurveKeys(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, const char* valueTooltip,
+			const std::vector<CurvePreset>& presets, float maximum = ParticleEmitterComponent::MaxSize);
+		void DrawGradientKeys(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, const std::vector<GradientPreset>& presets);
+
 		// A size-like curve, multiplying 'start': its mode (a straight line to 'end', or the curve), and
 		// the curve's presets, plot and keys. 'endLabel' names the line's end value when there's no curve.
 		void DrawCurveEditor(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, float start, float& end,
@@ -157,8 +162,36 @@ namespace Bellows {
 					UI::Property(endLabel, end, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", endTooltip);
 				UI::EndPropertyGrid();
 			}
-			if (curve.empty())
-				return;
+			if (!curve.empty())
+				DrawCurveKeys(text, curve, valueTooltip, presets);
+		}
+
+		// A curve that is either steady (no keys: 'steadyValue' throughout) or keyed, from 0 to 'maximum'.
+		void DrawOptionalCurveEditor(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, float steadyValue, const char* valueTooltip,
+			const std::vector<CurvePreset>& presets, float maximum = ParticleEmitterComponent::MaxSize)
+		{
+			int mode = curve.empty() ? 0 : 1;
+			static const char* const s_Modes[] = { "Steady", "Curve" };
+			if (UI::BeginPropertyGrid(text.Id))
+			{
+				if (UI::PropertyCombo(text.Label, mode, s_Modes, 2, text.ModeTooltip))
+				{
+					if (mode == 1)
+						curve = { { 0.0f, steadyValue }, { 1.0f, steadyValue } };
+					else
+						curve.clear();
+				}
+				UI::EndPropertyGrid();
+			}
+			if (!curve.empty())
+				DrawCurveKeys(text, curve, valueTooltip, presets, maximum);
+		}
+
+		// A curve's presets, plot and keys (each value 0 to 'maximum').
+		void DrawCurveKeys(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, const char* valueTooltip,
+			const std::vector<CurvePreset>& presets, float maximum)
+		{
+			using Limits = ParticleEmitterComponent;
 			ImGui::PushID(text.Id);
 			if (const int preset = PresetButtons(presets); preset >= 0)
 				curve = presets[static_cast<size_t>(preset)].Keys;
@@ -180,7 +213,7 @@ namespace Bellows {
 				ImGui::SetItemTooltip("%s", text.TimeTooltip);
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(width);
-				ImGui::DragFloat("##Value", &curve[i].Value, 0.01f, 0.0f, Limits::MaxSize, "x %.2f");
+				ImGui::DragFloat("##Value", &curve[i].Value, 0.01f, 0.0f, maximum, "x %.2f");
 				ImGui::SetItemTooltip("%s", valueTooltip);
 				ImGui::SameLine();
 				ImGui::BeginDisabled(curve.size() <= 1);
@@ -219,7 +252,6 @@ namespace Bellows {
 		void DrawGradientEditor(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, glm::vec4& startColor, glm::vec4& endColor,
 			const std::vector<GradientPreset>& presets)
 		{
-			using Limits = ParticleEmitterComponent;
 			int mode = gradient.empty() ? 0 : 1;
 			static const char* const s_Modes[] = { "Start to End", "Gradient" };
 			if (UI::BeginPropertyGrid(text.Id))
@@ -238,8 +270,34 @@ namespace Bellows {
 				}
 				UI::EndPropertyGrid();
 			}
-			if (gradient.empty())
-				return;
+			if (!gradient.empty())
+				DrawGradientKeys(text, gradient, presets);
+		}
+
+		// A gradient that is either off (no keys: white throughout) or keyed.
+		void DrawOptionalGradientEditor(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, const std::vector<GradientPreset>& presets)
+		{
+			int mode = gradient.empty() ? 0 : 1;
+			static const char* const s_Modes[] = { "Steady", "Gradient" };
+			if (UI::BeginPropertyGrid(text.Id))
+			{
+				if (UI::PropertyCombo(text.Label, mode, s_Modes, 2, text.ModeTooltip))
+				{
+					if (mode == 1)
+						gradient = { { 0.0f, glm::vec4(1.0f) }, { 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 0.0f) } };
+					else
+						gradient.clear();
+				}
+				UI::EndPropertyGrid();
+			}
+			if (!gradient.empty())
+				DrawGradientKeys(text, gradient, presets);
+		}
+
+		// A gradient's presets, bar and keys.
+		void DrawGradientKeys(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, const std::vector<GradientPreset>& presets)
+		{
+			using Limits = ParticleEmitterComponent;
 			ImGui::PushID(text.Id);
 			if (const int preset = PresetButtons(presets); preset >= 0)
 				gradient = presets[static_cast<size_t>(preset)].Keys;
@@ -319,6 +377,108 @@ namespace Bellows {
 				{ "Poison", { { 0.0f, { 0.8f, 1.0f, 0.5f, 1.0f } }, { 0.5f, { 0.3f, 0.9f, 0.2f, 0.8f } }, { 1.0f, { 0.1f, 0.4f, 0.05f, 0.0f } } } },
 				{ "Smoke", { { 0.0f, { 0.6f, 0.6f, 0.6f, 0.0f } }, { 0.15f, { 0.5f, 0.5f, 0.5f, 0.6f } }, { 1.0f, { 0.3f, 0.3f, 0.3f, 0.0f } } } },
 				{ "Fade", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
+			};
+			return s_Presets;
+		}
+
+		const std::vector<CurvePreset>& CycleSizePresets()
+		{
+			static const std::vector<CurvePreset> s_Presets = {
+				{ "Expand", { { 0.0f, 0.0f }, { 0.4f, 0.85f }, { 1.0f, 1.0f } } },
+				{ "Pulse", { { 0.0f, 0.9f }, { 0.5f, 1.1f }, { 1.0f, 0.9f } } },
+				{ "Pop", { { 0.0f, 0.0f }, { 0.15f, 1.2f }, { 0.3f, 1.0f }, { 1.0f, 1.0f } } },
+				{ "Shrink", { { 0.0f, 1.0f }, { 1.0f, 0.0f } } },
+			};
+			return s_Presets;
+		}
+
+		const std::vector<GradientPreset>& CycleColorPresets()
+		{
+			static const std::vector<GradientPreset> s_Presets = {
+				{ "Fade out", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
+				{ "Fade in and out", { { 0.0f, { 1.0f, 1.0f, 1.0f, 0.0f } }, { 0.2f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 0.8f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
+				{ "Flash", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 0.1f, { 1.0f, 1.0f, 1.0f, 0.6f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
+				{ "Pulse", { { 0.0f, { 1.0f, 1.0f, 1.0f, 0.5f } }, { 0.5f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.5f } } } },
+			};
+			return s_Presets;
+		}
+
+		const std::vector<CurvePreset>& DissolvePresets()
+		{
+			static const std::vector<CurvePreset> s_Presets = {
+				{ "Dissolve away", { { 0.0f, 0.0f }, { 0.4f, 0.0f }, { 1.0f, 1.0f } } },
+				{ "Appear", { { 0.0f, 1.0f }, { 0.5f, 0.0f }, { 1.0f, 0.0f } } },
+				{ "In and out", { { 0.0f, 1.0f }, { 0.3f, 0.0f }, { 0.7f, 0.0f }, { 1.0f, 1.0f } } },
+			};
+			return s_Presets;
+		}
+
+		// Whole looks to start from: each sets the shape, its cycle and its material (not the texture).
+		struct EffectShapePreset
+		{
+			const char* Name;
+			void (*Apply)(EffectShapeComponent&);
+		};
+
+		const std::vector<EffectShapePreset>& EffectShapePresets()
+		{
+			static const std::vector<EffectShapePreset> s_Presets = {
+				{ "Shockwave", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Ring; c.Radius = 3.0f; c.InnerRadius = 2.6f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 0.8f; c.SpinSpeed = 0.0f;
+					c.SizeCurve = { { 0.0f, 0.05f }, { 0.35f, 0.75f }, { 1.0f, 1.0f } };
+					c.ColorGradient = { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } };
+					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
+					c.Color = { 0.55f, 0.8f, 1.0f, 1.0f }; c.Intensity = 3.0f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.5f; c.Rim = 0.0f; c.Scroll = { 0.0f, 0.0f };
+				} },
+				{ "Magic Circle", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Ring; c.Radius = 1.5f; c.InnerRadius = 1.2f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 2.0f; c.SpinSpeed = 45.0f;
+					c.SizeCurve.clear();
+					c.ColorGradient = { { 0.0f, { 1.0f, 1.0f, 1.0f, 0.6f } }, { 0.5f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.6f } } };
+					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
+					c.Color = { 1.0f, 0.75f, 0.3f, 1.0f }; c.Intensity = 2.5f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.3f; c.Rim = 0.0f; c.Tiling = { 8.0f, 1.0f }; c.Scroll = { 0.0f, 0.0f };
+				} },
+				{ "Shield", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Sphere; c.Radius = 1.2f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 2.0f; c.SpinSpeed = 10.0f;
+					c.SizeCurve = { { 0.0f, 0.98f }, { 0.5f, 1.02f }, { 1.0f, 0.98f } };
+					c.ColorGradient.clear();
+					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
+					c.Color = { 0.35f, 0.75f, 1.0f, 1.0f }; c.Intensity = 2.0f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.0f; c.Rim = 3.0f; c.Tiling = { 6.0f, 3.0f }; c.Scroll = { 0.0f, 0.15f };
+				} },
+				{ "Light Pillar", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Cylinder; c.Radius = 0.6f; c.TopRadius = 0.8f; c.Height = 4.0f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 1.5f; c.SpinSpeed = 0.0f;
+					c.SizeCurve.clear();
+					c.ColorGradient = { { 0.0f, { 1.0f, 1.0f, 1.0f, 0.7f } }, { 0.5f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.7f } } };
+					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
+					c.Color = { 1.0f, 0.9f, 0.55f, 1.0f }; c.Intensity = 3.0f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.5f; c.Rim = 1.5f; c.Tiling = { 4.0f, 1.0f }; c.Scroll = { 0.0f, 0.5f };
+				} },
+				{ "Portal", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Ring; c.Radius = 1.5f; c.InnerRadius = 0.0f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 3.0f; c.SpinSpeed = -90.0f;
+					c.SizeCurve.clear(); c.ColorGradient.clear();
+					c.DissolveCurve.clear(); c.Dissolve = 0.3f; c.DissolveEdgeWidth = 0.08f; c.DissolveEdgeColor = { 1.0f, 0.4f, 1.0f, 1.0f };
+					c.DissolveScale = 3.0f;
+					c.Color = { 0.4f, 0.2f, 1.0f, 1.0f }; c.Intensity = 2.0f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.15f; c.Rim = 0.0f; c.Scroll = { 0.0f, -0.3f };
+				} },
+				{ "Burn Away", [](EffectShapeComponent& c)
+				{
+					c.Loop = false; c.Duration = 1.5f;
+					c.DissolveCurve = { { 0.0f, 0.0f }, { 0.2f, 0.0f }, { 1.0f, 1.0f } };
+					c.DissolveEdgeWidth = 0.08f; c.DissolveEdgeColor = { 1.0f, 0.55f, 0.15f, 1.0f };
+				} },
 			};
 			return s_Presets;
 		}
@@ -888,6 +1048,93 @@ namespace Bellows {
 				c.Clamp();
 				UI::EndPropertyGrid();
 			}
+		});
+
+		DrawComponent<EffectShapeComponent>(m_Editor, entity, ICON_CIRCLE_DASHED, "Effect Shape", [&](EffectShapeComponent& c)
+		{
+			using Limits = EffectShapeComponent;
+			{
+				ImGui::PushID("EffectShapePresets");
+				UI::TextMuted("Start from:");
+				if (const int chosen = PresetButtons(EffectShapePresets()); chosen >= 0)
+				{
+					EffectShapePresets()[static_cast<size_t>(chosen)].Apply(c);
+					EffectShapeSystem::Play(c);
+				}
+				ImGui::PopID();
+			}
+			if (UI::BeginPropertyGrid("EffectShape"))
+			{
+				static const char* const s_Shapes[] = { "Ring", "Cylinder", "Cone", "Sphere", "Dome" };
+				int shape = static_cast<int>(c.Shape);
+				if (UI::PropertyCombo("Shape", shape, s_Shapes, 5,
+					"Ring: flat (an inner radius of 0 makes a disc). Cylinder and Cone: up from the entity. Sphere and Dome: around it"))
+					c.Shape = static_cast<EffectShapeType>(shape);
+				UI::Property("Radius", c.Radius, 0.01f, 0.0f, Limits::MaxSize, "%.2f m",
+					c.Shape == EffectShapeType::Cylinder || c.Shape == EffectShapeType::Cone ? "Meters, at the bottom" : "Meters");
+				if (c.Shape == EffectShapeType::Ring)
+					UI::Property("Inner Radius", c.InnerRadius, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "The hole's radius; 0 is a disc");
+				if (c.Shape == EffectShapeType::Cylinder)
+					UI::Property("Top Radius", c.TopRadius, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters, at the top");
+				if (c.Shape == EffectShapeType::Cylinder || c.Shape == EffectShapeType::Cone)
+					UI::Property("Height", c.Height, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters tall, up from the entity");
+				UI::PropertySlider("Arc", c.Arc, Limits::MinArc, Limits::MaxArc, "%.0f deg",
+					"Degrees drawn around its axis, centered on the entity's forward (-Z); below 360 it's a slice: a slash arc, a fan");
+				UI::Property("Segments", c.Segments, Limits::MinSegments, Limits::MaxSegments, "Pieces around a full turn: more is rounder");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Cycle");
+			if (UI::BeginPropertyGrid("EffectShapeCycle"))
+			{
+				UI::Property("Playing", c.Playing, "Its cycle, spin and scroll run; off, it holds where it is");
+				UI::Property("Loop", c.Loop, "Repeats its cycle; off, it plays once and hides at the end (Restart shows it again)");
+				UI::Property("Duration", c.Duration, 0.01f, Limits::MinDuration, Limits::MaxDuration, "%.2f s", "Seconds per cycle");
+				UI::Property("Spin Speed", c.SpinSpeed, 1.0f, -Limits::MaxSpinSpeed, Limits::MaxSpinSpeed, "%.0f deg/s", "Degrees per second it turns around its axis");
+				UI::EndPropertyGrid();
+			}
+			DrawOptionalCurveEditor({ "EffectShapeSize", "Size Over Cycle", "Steady at its set size, or a curve over each cycle",
+				"When, from 0 (the cycle's start) to 1 (its end)" }, c.SizeCurve, 1.0f, "The size then, times the shape", CycleSizePresets());
+			DrawOptionalGradientEditor({ "EffectShapeColor", "Color Over Cycle", "Steady at its color, or a gradient over each cycle that multiplies it",
+				"When, from 0 (the cycle's start) to 1 (its end)" }, c.ColorGradient, CycleColorPresets());
+			UI::SectionHeader("Look");
+			if (UI::BeginPropertyGrid("EffectShapeLook"))
+			{
+				UI::PropertyColor("Color", c.Color);
+				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, ParticleEmitterComponent::MaxIntensity, "%.2f", "Brightness; above 1 it glows");
+				static const char* const s_Blends[] = { "Additive", "Alpha" };
+				int blend = static_cast<int>(c.Blend);
+				if (UI::PropertyCombo("Blend", blend, s_Blends, 2, "Additive adds light (energy, magic); Alpha covers what's behind (smoke, dark magic)"))
+					c.Blend = static_cast<ParticleBlend>(blend);
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "An image over the surface; empty is plain color");
+				if (!c.TexturePath.empty())
+				{
+					UI::PropertyVec2("Tiling", c.Tiling, 0.05f, "Copies of the image around (X) and across (Y)");
+					UI::PropertyVec2("Scroll", c.Scroll, 0.01f, "Copies of the image per second it scrolls around (X) and across (Y)");
+				}
+				UI::PropertySlider("Edge Fade", c.EdgeFade, 0.0f, 0.5f, "%.2f", "How much of each edge across it fades out softly (a ring's inside and outside, a pillar's ends)");
+				UI::Property("Rim", c.Rim, 0.05f, 0.0f, Limits::MaxRim, "%.2f",
+					"Fades the faces turned toward the camera, so a shield glows at its outline; higher is a thinner rim. 0 is off");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Dissolve");
+			DrawOptionalCurveEditor({ "EffectShapeDissolve", "Dissolve Over Cycle", "Steady at Amount, or a curve over each cycle (0 whole, 1 gone)",
+				"When, from 0 (the cycle's start) to 1 (its end)" }, c.DissolveCurve, c.Dissolve, "How dissolved then: 0 whole, 1 gone", DissolvePresets(), 1.0f);
+			if (UI::BeginPropertyGrid("EffectShapeDissolveLook"))
+			{
+				if (c.DissolveCurve.empty())
+					UI::PropertySlider("Amount", c.Dissolve, 0.0f, 1.0f, "%.2f", "0 whole to 1 gone, eaten away in a noisy pattern");
+				UI::PropertySlider("Edge Width", c.DissolveEdgeWidth, 0.0f, 0.5f, "%.2f", "How wide the glowing edge of the dissolve is");
+				UI::PropertyColor("Edge Color", c.DissolveEdgeColor, false, "The dissolve edge's color (brightened by Intensity)");
+				UI::Property("Scale", c.DissolveScale, 0.05f, Limits::MinDissolveScale, Limits::MaxDissolveScale, "%.2f / m", "Dissolve blobs per meter");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			if (ImGui::Button(ICON_REFRESH_CW "  Restart"))
+				EffectShapeSystem::Play(c);
+			ImGui::SameLine();
+			char status[64];
+			std::snprintf(status, sizeof(status), c.RuntimeFinished ? "Finished" : "%.2f / %.2f s", c.RuntimeTime, c.Duration);
+			UI::TextMuted(status);
 		});
 
 		DrawComponent<DecalComponent>(m_Editor, entity, ICON_STICKER, "Decal", [&](DecalComponent& c)
@@ -1627,6 +1874,7 @@ namespace Bellows {
 		entry.operator()<ParticleEmitterComponent>(ICON_FLAME, "Particle Emitter", "Rendering");
 		entry.operator()<TrailComponent>(ICON_SPLINE, "Trail", "Rendering");
 		entry.operator()<BeamComponent>(ICON_ZAP, "Beam", "Rendering");
+		entry.operator()<EffectShapeComponent>(ICON_CIRCLE_DASHED, "Effect Shape", "Rendering");
 		entry.operator()<DecalComponent>(ICON_STICKER, "Decal", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");

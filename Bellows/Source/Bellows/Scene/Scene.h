@@ -261,6 +261,7 @@ namespace Bellows {
 		void UpdateTrails(float seconds);
 		// Works out each beam's start and end (casting rays for raycast beams while physics runs).
 		void UpdateBeams(float seconds);
+		void UpdateEffectShapes(float seconds);
 		static const TextLayout* LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize);
 		void SubmitUI(SceneRenderer& renderer);
 
