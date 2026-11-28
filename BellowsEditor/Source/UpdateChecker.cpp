@@ -318,12 +318,21 @@ namespace Bellows {
 			const Http::Response response = Http::Get(manifestUrl, UpdateLogic::c_MaxManifestBytes);
 			std::string error;
 			std::optional<UpdateManifest> manifest;
-			if (!response.Ok())
+			// The server answers 404 while no release has update information: nothing newer to offer.
+			const bool nothingYet = UpdateLogic::MeansNoRelease(response.Status);
+			if (nothingYet)
+				error.clear();
+			else if (!response.Ok())
 				error = response.Error.empty() ? "the update server answered " + std::to_string(response.Status) : response.Error;
 			else
 				manifest = UpdateLogic::ParseManifest(response.Body, manifestUrl, error);
 
 			std::lock_guard lock(shared->Mutex);
+			if (nothingYet)
+			{
+				shared->CurrentState = State::UpToDate;
+				return;
+			}
 			if (!manifest)
 			{
 				shared->CurrentState = State::Failed;

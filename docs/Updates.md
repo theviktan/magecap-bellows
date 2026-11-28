@@ -28,6 +28,8 @@ Each release ships two ways on Windows:
 - Builds between releases (`0.7.0-dev`) count as older than the release they lead to, so the
   release is offered to them.
 - Headless and scripted runs (`--headless`, `--run-script`) never look for updates on their own.
+- Until a release with update information is published (0.7.0 is the first), the update server
+  answers 404 and **Check for Updates** says Bellows is up to date.
 
 The update information comes from `https://updates.magecapgames.com/bellows/update.json`.
 `UpdateUrl` in `EditorSettings.json` (in `%APPDATA%\MageCapBellows`) replaces that address, for

@@ -57,6 +57,10 @@ namespace Bellows {
 		// 'reference' resolved against 'base' (only absolute addresses, root-relative and plain relative paths).
 		std::string ResolveUrl(const std::string& base, const std::string& reference);
 
+		// The update server's answer (an HTTP status) when no release has update information yet, as
+		// before the first release with an updater: not a failure, just nothing newer to offer.
+		inline bool MeansNoRelease(int status) { return status == 404; }
+
 		// An automatic check is due when it's on and the last one was a day ago (or in the future: the clock moved).
 		bool IsCheckDue(bool enabled, int64_t lastCheck, int64_t now);
 		// The startup check offers a version unless it was skipped; Help > Check for Updates always does.
@@ -85,7 +89,7 @@ namespace Bellows {
 		{
 			Idle,			// Nothing asked yet
 			Checking,
-			UpToDate,		// The check found nothing newer
+			UpToDate,		// The check found nothing newer (or no release to offer yet: no manifest)
 			Available,		// A newer version is in GetManifest()
 			Failed,			// The check or the download failed: GetError()
 			Downloading,

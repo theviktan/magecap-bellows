@@ -170,6 +170,9 @@ TEST_CASE("Update addresses resolve against the manifest's address")
 TEST_CASE("Automatic update checks run once a day and respect a skipped version")
 {
 	const int64_t now = 1'800'000'000;
+	CHECK(UpdateLogic::MeansNoRelease(404));
+	CHECK_FALSE(UpdateLogic::MeansNoRelease(500));
+	CHECK_FALSE(UpdateLogic::MeansNoRelease(0));		// No answer at all is a failure
 	CHECK(UpdateLogic::IsCheckDue(true, 0, now));
 	CHECK_FALSE(UpdateLogic::IsCheckDue(false, 0, now));
 	CHECK_FALSE(UpdateLogic::IsCheckDue(true, now - 3600, now));

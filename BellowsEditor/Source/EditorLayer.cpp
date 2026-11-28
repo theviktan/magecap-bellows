@@ -2165,10 +2165,13 @@ namespace Bellows {
 		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::Accent));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.12f, 0.06f, 0.01f, 1.0f));
+		// The dark label color is only for the buttons' own labels: a tooltip drawn while it's pushed
+		// would take it too and be unreadable on the dark tooltip background.
+		const ImVec4 labelColor(0.12f, 0.06f, 0.01f, 1.0f);
 		ImGui::SetCursorScreenPos(ImVec2(x, y));
-		if (ImGui::Button(playLabel, ImVec2(playWidth, height)))
-			TogglePlay();
+		ImGui::PushStyleColor(ImGuiCol_Text, labelColor);
+		const bool togglePlay = ImGui::Button(playLabel, ImVec2(playWidth, height));
+		ImGui::PopStyleColor();
 		if (running)
 			ImGui::SetItemTooltip("Stop (Ctrl+P or F8)");
 		else
@@ -2177,10 +2180,14 @@ namespace Bellows {
 		x += playWidth + 1.0f * scale;
 		ImGui::SetCursorScreenPos(ImVec2(x, y));
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, ImGui::GetStyle().FramePadding.y));
+		ImGui::PushStyleColor(ImGuiCol_Text, labelColor);
 		const bool openModeMenu = ImGui::Button(ICON_CHEVRON_DOWN "##PlayMode", ImVec2(chevronWidth, height));
+		ImGui::PopStyleColor();
 		ImGui::PopStyleVar();
 		ImGui::SetItemTooltip("Where Play runs the game");
-		ImGui::PopStyleColor(4);
+		ImGui::PopStyleColor(3);
+		if (togglePlay)
+			TogglePlay();
 		ImGui::PopStyleVar();
 		if (openModeMenu)
 			ImGui::OpenPopup("##PlayModeMenu");
