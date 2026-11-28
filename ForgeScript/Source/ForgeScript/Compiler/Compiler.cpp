@@ -3843,6 +3843,12 @@ namespace ForgeScript {
 					}
 				} while (Match(TokenType::Comma));
 			}
+			else if (CheckWord("follows"))
+			{
+				// 'kind Crate follows 5', 'follows "x"' or a bare 'follows': nothing else may follow a kind's
+				// name on its line, so this was always a mistake; say what 'follows' wants.
+				ErrorAtCurrent("After 'follows', write a contract's name, like: kind Crate follows Damageable");
+			}
 
 			// The fields' types ('set health as number to 100'), read ahead so the kind's functions, compiled
 			// before the field lines, can check 'set my health to ...' against them. Restored for the kind

@@ -88,9 +88,10 @@ Long text: `"""` ... `"""`, over any number of lines. `"` needs no escape; `{ }`
 | Group | Functions |
 |---|---|
 | Output | `print(...)`, `say (value)`, `show(value)` |
-| Types | `text(x)`, `number(x)` (nothing if not a number), `type(x)`, `length(x)`, `copy(x)`, `assert(condition, message)` |
+| Types | `text(x)`, `number(x)` (nothing if not a number), `number(text, base)` (`number("ff", 16)` is 255), `type(x)`, `length(x)`, `copy(x)`, `assert(condition, message)` |
 | Formatting | `format_number(x [, decimals])` (`"1,250.50"`), `format_time(seconds)` (`"1:05"`, `"1:02:03"`) |
 | Math | `abs`, `floor`, `ceil`, `round(x [, digits])`, `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2(y, x)`, `exp`, `log(x [, base])`, `sign`, `min(...)`, `max(...)`, `clamp(x, low, high)`, `lerp(a, b, t)`, `radians`, `degrees`, `pi`, `infinity` |
+| Whole numbers and bits (1.8.0) | `truncate(x)` (toward zero), `quotient(a, b)` (whole-number division that agrees with `%`), `to_base(n, base)` (`"ff"`); for flags, on whole numbers from 0 to 9,007,199,254,740,991: `bit_and(a, b)`, `bit_or(a, b)`, `bit_xor(a, b)`, `shift_left(x, n)`, `shift_right(x, n)`, `has_bit(x, n)`, `with_bit(x, n)`, `without_bit(x, n)`, `flip_bit(x, n)`, `count_bits(x)`. Bits count from 0: bit 0 is worth 1, bit 3 is worth 8 |
 | Game math | `move_toward(from, to, step)` (numbers or vectors), `inverse_lerp(a, b, value)`, `remap(value, from_low, from_high, to_low, to_high)`, `smoothstep(a, b, x)`, `wrap(value, low, high)`, `snapped(value, step)` |
 | Lists of numbers | `range(from, to [, step])` (both ends included, counts down when `to` is smaller), `zip(first, second)` |
 | JSON | `to_json(value)`, `from_json(text)` |

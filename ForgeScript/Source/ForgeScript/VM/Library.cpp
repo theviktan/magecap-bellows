@@ -5,6 +5,7 @@
 #include "ForgeScript/Tools/Json.h"
 
 #include <algorithm>
+#include <bit>
 #include <charconv>
 #include <cctype>
 #include <chrono>
@@ -228,6 +229,10 @@ namespace ForgeScript {
 	// ======================================================================= Helpers
 
 	namespace {
+
+		// The largest whole number a number (a double) holds exactly, 2^53 - 1. Past it, neighbors can't
+		// all be told apart, so the whole-number and bit tools stop there.
+		constexpr uint64_t c_LargestExactWhole = (uint64_t(1) << 53) - 1;
 
 		double ToNumberOr(const std::string& text, bool& ok)
 		{
@@ -569,9 +574,46 @@ namespace ForgeScript {
 		// ------------------------------------------------------------------ Types and conversion
 
 		RegisterFunction("text", 1, [](CallContext& c) { return c.GetVM().MakeText(c.GetVM().ToText(c.Arg(0))); });
-		RegisterFunction("number", 1, [](CallContext& c)
+		RegisterFunction("number", AnyArity, [](CallContext& c)
 		{
+			if (c.Count() < 1 || c.Count() > 2)
+				c.Error("'number' needs 1 or 2 values, but was given " + std::to_string(c.Count()) + " values.");
 			Value value = c.Arg(0);
+			if (c.Count() == 2)
+			{
+				// number("ff", 16): text written in another base. Only the digits of that base (either case),
+				// with a sign in front if you like; anything else, or a number past what a number holds
+				// exactly, gives nothing, as one-value number() does for text that isn't a number.
+				const int64_t base = c.Integer(1);
+				if (base < 2 || base > 36)
+					c.Error("number(text, base) reads bases 2 to 36, like: number(\"ff\", 16). This base is " + std::to_string(base) + ".");
+				if (!IsObjectType(value, ObjectType::String))
+					c.Error("number(text, base) reads text, like: number(\"ff\", 16). This is " +
+						(value.IsNothing() ? std::string("nothing") : "a " + c.GetVM().TypeOf(value)) + ".");
+				const std::string& text = As<String>(value)->Text;
+				size_t at = text.find_first_not_of(" \t");
+				const size_t end = text.find_last_not_of(" \t");
+				if (at == std::string::npos)
+					return Value();
+				bool negative = false;
+				if (text[at] == '-' || text[at] == '+')
+					negative = text[at++] == '-';
+				if (at > end)
+					return Value();
+				uint64_t result = 0;
+				for (; at <= end; at++)
+				{
+					const char ch = static_cast<char>(std::tolower(static_cast<unsigned char>(text[at])));
+					const int digit = ch >= '0' && ch <= '9' ? ch - '0' : (ch >= 'a' && ch <= 'z' ? ch - 'a' + 10 : 99);
+					if (digit >= base)
+						return Value();
+					result = result * static_cast<uint64_t>(base) + static_cast<uint64_t>(digit);
+					if (result > c_LargestExactWhole)
+						return Value();
+				}
+				const double number = static_cast<double>(result);
+				return Value::FromNumber(negative ? -number : number);
+			}
 			if (value.IsNumber())
 				return value;
 			if (value.IsBool())
@@ -649,6 +691,78 @@ namespace ForgeScript {
 		unary("sign", [](double x) { return x > 0 ? 1.0 : (x < 0 ? -1.0 : 0.0); });
 		unary("radians", [](double x) { return x * 3.14159265358979323846 / 180.0; });
 		unary("degrees", [](double x) { return x * 180.0 / 3.14159265358979323846; });
+
+		// ------------------------------------------------------------------ Whole numbers and bits
+
+		unary("truncate", [](double x) { return std::trunc(x); });
+		// Whole-number division that agrees with '%' (which takes the divisor's sign), so
+		// quotient(a, b) * b + a % b is a.
+		RegisterFunction("quotient", 2, [](CallContext& c)
+		{
+			const double a = c.Number(0);
+			const double b = c.Number(1);
+			if (b == 0)
+				c.Error("quotient can't divide by zero.");
+			double r = std::fmod(a, b);
+			if (r != 0 && ((r < 0) != (b < 0)))
+				r += b;
+			return Value::FromNumber(std::round((a - r) / b));
+		});
+		RegisterFunction("to_base", 2, [](CallContext& c)
+		{
+			const double x = c.Number(0);
+			const int64_t base = c.Integer(1);
+			if (base < 2 || base > 36)
+				c.Error("to_base writes bases 2 to 36, like: to_base(255, 16). This base is " + std::to_string(base) + ".");
+			if (x != std::floor(x) || std::fabs(x) > static_cast<double>(c_LargestExactWhole))
+				c.Error("to_base needs a whole number from -9,007,199,254,740,991 to 9,007,199,254,740,991, like: to_base(255, 16). This is " + FormatNumber(x) + ".");
+			uint64_t n = static_cast<uint64_t>(std::fabs(x));
+			std::string digits;
+			do
+			{
+				digits.insert(digits.begin(), "0123456789abcdefghijklmnopqrstuvwxyz"[n % static_cast<uint64_t>(base)]);
+				n /= static_cast<uint64_t>(base);
+			} while (n > 0);
+			return c.GetVM().MakeText((x < 0 ? "-" : "") + digits);
+		});
+
+		// Bits work on whole numbers from 0 to the largest a number holds exactly, so every answer is
+		// exact too. Bit n is worth 2^n: bit 0 is 1, bit 3 is 8.
+		auto bits = [](CallContext& c, size_t index) -> uint64_t
+		{
+			const double x = c.Number(index);
+			if (x != std::floor(x) || x < 0 || x > static_cast<double>(c_LargestExactWhole))
+			{
+				c.Error(c.GetName() + " works on whole numbers from 0 to 9,007,199,254,740,991, but value " + std::to_string(index + 1) + " is " +
+					FormatNumber(x) + ".");
+			}
+			return static_cast<uint64_t>(x);
+		};
+		auto bitIndex = [](CallContext& c, size_t index) -> int
+		{
+			const double n = c.Number(index);
+			if (n != std::floor(n) || n < 0 || n > 52)
+				c.Error(c.GetName() + " counts bits from 0 to 52 (bit 0 is worth 1, bit 3 is worth 8), but this is " + FormatNumber(n) + ".");
+			return static_cast<int>(n);
+		};
+		auto number = [](uint64_t x) { return Value::FromNumber(static_cast<double>(x)); };
+		RegisterFunction("bit_and", 2, [bits, number](CallContext& c) { return number(bits(c, 0) & bits(c, 1)); });
+		RegisterFunction("bit_or", 2, [bits, number](CallContext& c) { return number(bits(c, 0) | bits(c, 1)); });
+		RegisterFunction("bit_xor", 2, [bits, number](CallContext& c) { return number(bits(c, 0) ^ bits(c, 1)); });
+		RegisterFunction("shift_left", 2, [bits, bitIndex, number](CallContext& c)
+		{
+			const uint64_t x = bits(c, 0);
+			const int n = bitIndex(c, 1);
+			if (x > (c_LargestExactWhole >> n))
+				c.Error("shift_left's answer would be past 9,007,199,254,740,991, the largest whole number a number holds exactly.");
+			return number(x << n);
+		});
+		RegisterFunction("shift_right", 2, [bits, bitIndex, number](CallContext& c) { return number(bits(c, 0) >> bitIndex(c, 1)); });
+		RegisterFunction("has_bit", 2, [bits, bitIndex](CallContext& c) { return Value::FromBool(((bits(c, 0) >> bitIndex(c, 1)) & 1) != 0); });
+		RegisterFunction("with_bit", 2, [bits, bitIndex, number](CallContext& c) { return number(bits(c, 0) | (uint64_t(1) << bitIndex(c, 1))); });
+		RegisterFunction("without_bit", 2, [bits, bitIndex, number](CallContext& c) { return number(bits(c, 0) & ~(uint64_t(1) << bitIndex(c, 1))); });
+		RegisterFunction("flip_bit", 2, [bits, bitIndex, number](CallContext& c) { return number(bits(c, 0) ^ (uint64_t(1) << bitIndex(c, 1))); });
+		RegisterFunction("count_bits", 1, [bits, number](CallContext& c) { return number(static_cast<uint64_t>(std::popcount(bits(c, 0)))); });
 
 		RegisterFunction("sqrt", 1, [](CallContext& c)
 		{

@@ -284,6 +284,37 @@ Every one of these has an `is not` form: `a is not even`, `a is not a whole numb
 
 If you prefer symbols, `==`, `!=`, `<`, `<=`, `>`, `>=` also work. A single `=` is **not** used in ForgeScript; the compiler will tell you to use `is` or `to` instead.
 
+### Whole numbers and flags
+
+(1.8.0) A few built-ins work with whole numbers:
+
+```forge
+say truncate(-2.5)        # -2: the fraction goes, toward zero (floor(-2.5) is -3)
+say quotient(17, 5)       # 3: how many whole 5s fit in 17
+say 17 % 5                # 2: what's left over
+say to_base(255, 16)      # ff
+say number("ff", 16)      # 255
+```
+
+`quotient` and `%` always agree, even with negative numbers: `quotient(a, b) * b + a % b` is `a`.
+
+**Flags** pack many yes-or-no facts into one number, like which doors a player has unlocked. Each fact is a **bit**, numbered from **0** (unlike list positions, which start at 1, bits start at 0, the way every chart of binary numbers counts them: bit 0 is worth 1, bit 1 is worth 2, bit 3 is worth 8):
+
+```forge
+set unlocked to 0
+set unlocked to with_bit(unlocked, 3)     # door 3 is now unlocked
+if has_bit(unlocked, 3) then
+	say "Door 3 opens."
+end
+set unlocked to without_bit(unlocked, 3)  # and locked again
+say count_bits(unlocked)                  # how many doors are unlocked: 0
+```
+
+- `with_bit`, `without_bit` and `flip_bit` give back a new number, so write `set flags to with_bit(flags, 3)`.
+- `bit_and`, `bit_or`, `bit_xor`, `shift_left` and `shift_right` are the usual bit math, for masks and packed values.
+- Bits work on whole numbers from 0 to 9,007,199,254,740,991, the largest a number holds exactly, so bits go from 0 to 52. Anything else is an error that says what to write.
+- `&` and `|` aren't used: in conditions, write `and` and `or`.
+
 ### Combining conditions
 
 ```forge
