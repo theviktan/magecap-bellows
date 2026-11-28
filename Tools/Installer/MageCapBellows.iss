@@ -65,12 +65,13 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Name: "association"; Description: "Open .bproject files with MageCap Bellows"; GroupDescription: "Files:"
 
 [InstallDelete]
-; Folders the package replaces as a whole, so files a newer version dropped don't linger.
-Type: filesandordirs; Name: "{app}\Shaders"
-Type: filesandordirs; Name: "{app}\Resources"
-Type: filesandordirs; Name: "{app}\Python"
-Type: filesandordirs; Name: "{app}\PythonRuntime"
-Type: filesandordirs; Name: "{app}\Docs"
+; Folders the package replaces as a whole, so files a newer version dropped don't linger. Only over
+; an installed Bellows, never in a folder that merely has the same names (Audit 21, A21-2).
+Type: filesandordirs; Name: "{app}\Shaders"; Check: IsUpgrade
+Type: filesandordirs; Name: "{app}\Resources"; Check: IsUpgrade
+Type: filesandordirs; Name: "{app}\Python"; Check: IsUpgrade
+Type: filesandordirs; Name: "{app}\PythonRuntime"; Check: IsUpgrade
+Type: filesandordirs; Name: "{app}\Docs"; Check: IsUpgrade
 
 [Files]
 ; The sample project is the user's to change: an update never overwrites it.
@@ -104,6 +105,11 @@ begin
   for I := 1 to ParamCount do
     if CompareText(ParamStr(I), Name) = 0 then
       Result := True;
+end;
+
+function IsUpgrade(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\BellowsEditor.exe'));
 end;
 
 function ShouldLaunch(): Boolean;

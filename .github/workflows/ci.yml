@@ -130,7 +130,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
-            choco install innosetup --no-progress -y
+            choco install innosetup --version 6.4.0 --no-progress -y
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           $version = (Select-String -Path CMakeLists.txt -Pattern '^\s+VERSION\s+([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value

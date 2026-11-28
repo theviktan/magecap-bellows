@@ -17,6 +17,7 @@ const releases = {
 		],
 	},
 	"v0.9.0": { tag_name: "v0.9.0", draft: true, assets: [] },
+	"v1.0.0-beta.1": { tag_name: "v1.0.0-beta.1", draft: false, prerelease: true, assets: [{ id: 21, name: "MageCap-Bellows-1.0.0-beta.1-Windows-Setup.exe" }] },
 };
 const requests = [];
 
@@ -74,6 +75,8 @@ for (const path of [
 	"/bellows/download/v0.8.0/notes.txt",						// Not an allowed kind of file
 	"/bellows/download/v0.8.0/missing.exe",
 	"/bellows/download/v0.9.0/anything.exe",					// A draft
+	"/bellows/download/v1.0.0-beta.1/MageCap-Bellows-1.0.0-beta.1-Windows-Setup.exe",	// A pre-release (Audit 21, A21-1)
+	"/bellows/download/v0.8.0/%E0%A4%A.exe",					// An escape that doesn't decode: 404, not 502
 	"/bellows/download/main/MageCap-Bellows-0.8.0-Windows-Setup.exe",	// Not a version tag
 	"/bellows/download/v0.8.0/..%2Fsecret.exe",
 	"/bellows/other",
