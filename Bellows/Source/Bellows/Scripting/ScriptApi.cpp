@@ -244,6 +244,7 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<ParticleEmitterComponent>("ParticleEmitter"),
 			MakeComponentInfo<TrailComponent>("Trail"),
 			MakeComponentInfo<BeamComponent>("Beam"),
+			MakeComponentInfo<EffectShapeComponent>("EffectShape"),
 			MakeComponentInfo<DecalComponent>("Decal"),
 			MakeComponentInfo<UICanvasComponent>("UICanvas"),
 			MakeComponentInfo<UIRectComponent>("UIRect"),
@@ -298,6 +299,7 @@ namespace Bellows::Scripting {
 		if (type == typeid(ParticleEmitterComponent)) return "ParticleEmitter";
 		if (type == typeid(TrailComponent)) return "Trail";
 		if (type == typeid(BeamComponent)) return "Beam";
+		if (type == typeid(EffectShapeComponent)) return "EffectShape";
 		if (type == typeid(DecalComponent)) return "Decal";
 		if (type == typeid(UICanvasComponent)) return "UICanvas";
 		if (type == typeid(UIRectComponent)) return "UIRect";

@@ -51,6 +51,11 @@ TEST_CASE("Hierarchy search: words, tag:, has: and group:")
 	CHECK(ParseFilter("has:beam").Unknown.empty());
 	CHECK(Matches(scene, laser, ParseFilter("has:beam")));
 	CHECK_FALSE(Matches(scene, comet, ParseFilter("has:beam")));
+	Entity shockwave = scene.CreateEntity("Shockwave");
+	shockwave.AddComponent<EffectShapeComponent>();
+	CHECK(ParseFilter("has:effectshape").Unknown.empty());
+	CHECK(Matches(scene, shockwave, ParseFilter("has:effectshape")));
+	CHECK_FALSE(Matches(scene, laser, ParseFilter("has:effectshape")));
 }
 
 TEST_CASE("Entities are classified for the By type view, the first kind that fits winning")

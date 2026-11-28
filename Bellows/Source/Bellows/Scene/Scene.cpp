@@ -12,6 +12,7 @@
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/BeamSystem.h"
+#include "Bellows/Scene/EffectShapeSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
@@ -586,6 +587,16 @@ namespace Bellows {
 			ParticleSystem::Reset(m_Registry.get<ParticleEmitterComponent>(handle), Entity(handle, this).GetUUID());
 		for (entt::entity handle : m_Registry.view<TrailComponent>())
 			TrailSystem::Clear(m_Registry.get<TrailComponent>(handle));
+		for (entt::entity handle : m_Registry.view<EffectShapeComponent>())
+		{
+			// Every shape starts its cycle with play; one stopped by a script in the editor shows again.
+			EffectShapeComponent& shape = m_Registry.get<EffectShapeComponent>(handle);
+			shape.RuntimeTime = 0.0f;
+			shape.RuntimeSpin = 0.0f;
+			shape.RuntimeOffset = glm::vec2(0.0f);
+			shape.RuntimeDistortionPhase = 0.0f;
+			shape.RuntimeFinished = false;
+		}
 		for (entt::entity handle : m_Registry.view<BeamComponent>())
 		{
 			BeamComponent& beam = m_Registry.get<BeamComponent>(handle);
@@ -829,6 +840,7 @@ namespace Bellows {
 			UpdateParticles(deltaTime);
 			UpdateTrails(deltaTime);
 			UpdateBeams(deltaTime);
+			UpdateEffectShapes(deltaTime);
 		}
 
 		if (m_Audio)
@@ -927,6 +939,15 @@ namespace Bellows {
 		UpdateParticles(timestep.GetSeconds());
 		UpdateTrails(timestep.GetSeconds());
 		UpdateBeams(timestep.GetSeconds());
+		UpdateEffectShapes(timestep.GetSeconds());
+	}
+
+	void Scene::UpdateEffectShapes(float seconds)
+	{
+		BW_PROFILE_SCOPE("EffectShapes");
+		auto shapes = m_Registry.view<EffectShapeComponent>();
+		for (entt::entity handle : shapes)
+			EffectShapeSystem::Update(shapes.get<EffectShapeComponent>(handle), seconds);
 	}
 
 	void Scene::UpdateBeams(float seconds)
@@ -1398,6 +1419,26 @@ namespace Bellows {
 				quads.push_back(quad);
 			}
 			renderer.SubmitParticles(quads.data(), quads.size(), emitter.Blend == ParticleBlend::Additive, emitter.RuntimeTexture);
+		}
+
+		// Effect shapes, each as one surface at its point in its cycle.
+		std::vector<EffectVertex> surface;
+		auto effectShapes = m_Registry.view<EffectShapeComponent>();
+		for (entt::entity handle : effectShapes)
+		{
+			EffectShapeComponent& shape = effectShapes.get<EffectShapeComponent>(handle);
+			if (shape.LoadedTexturePath != shape.TexturePath)
+			{
+				shape.RuntimeTexture = shape.TexturePath.empty() ? nullptr : AssetManager::GetTexture(shape.TexturePath, TextureColorSpace::SRGB);
+				shape.LoadedTexturePath = shape.TexturePath;
+			}
+			if (shape.RuntimeFinished || hidden.contains(handle))
+				continue;
+			const glm::mat4 world = GetWorldTransform(Entity(handle, this));
+			EffectShapeSystem::BuildMesh(shape, world, surface);
+			EffectMaterial material = EffectShapeSystem::BuildMaterial(shape, world);
+			material.Texture = shape.RuntimeTexture;
+			renderer.SubmitEffectMesh(surface.data(), surface.size(), material);
 		}
 
 		// Beams, each as one strip from its entity to where it ends.

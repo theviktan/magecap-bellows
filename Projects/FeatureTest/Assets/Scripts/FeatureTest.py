@@ -570,6 +570,42 @@ class FeatureTest(bellows.Script):
         beam.target = None
         self.check(beam.target is None and not beam.is_hitting and beam.hit_entity is None, "Beam target cleared, no hit")
         other.destroy()
+        shape = entity.add_component(bellows.EffectShape)
+        self.check(shape.shape == "ring" and close(shape.radius, 1.0) and close(shape.inner_radius, 0.8) and close(shape.arc, 360.0)
+                   and shape.segments == 48 and shape.playing and shape.loop and close(shape.duration, 1.0) and shape.size_curve == []
+                   and shape.blend == "additive" and close(shape.edge_fade, 0.25) and close(shape.rim, 0.0) and close(shape.dissolve, 0.0)
+                   and not shape.finished, "EffectShape defaults")
+        shape.shape, shape.radius, shape.inner_radius, shape.top_radius, shape.height = "cylinder", 0.6, 0.0, 0.9, 4.0
+        shape.arc, shape.segments, shape.loop, shape.duration, shape.spin_speed = 180.0, 64, False, 1.5, -30.0
+        shape.size_curve = [[0.0, 0.5], [1.0, 1.5]]
+        shape.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 0.0]]
+        shape.dissolve_curve = [[0.2, 0.0], [1.0, 1.0]]
+        shape.color, shape.intensity, shape.blend = Vec4(1.0, 0.9, 0.5, 0.8), 4.0, "alpha"
+        shape.texture, shape.tiling, shape.scroll = "Textures/GroundTiles.png", Vec2(4.0, 2.0), Vec2(0.0, 0.5)
+        shape.edge_fade, shape.rim, shape.dissolve, shape.dissolve_edge_width = 0.4, 2.5, 0.3, 0.1
+        shape.dissolve_edge_color, shape.dissolve_scale = Vec4(0.2, 1.0, 0.4, 1.0), 6.0
+        shape.distortion, shape.distortion_scale, shape.distortion_speed = 0.35, 5.0, -2.0
+        self.check(shape.shape == "cylinder" and close(shape.radius, 0.6) and close(shape.inner_radius, 0.0) and close(shape.top_radius, 0.9)
+                   and close(shape.height, 4.0) and close(shape.arc, 180.0) and shape.segments == 64 and not shape.loop
+                   and close(shape.duration, 1.5) and close(shape.spin_speed, -30.0) and len(shape.size_curve) == 2
+                   and len(shape.color_gradient) == 2 and len(shape.dissolve_curve) == 2 and close(shape.color, (1.0, 0.9, 0.5, 0.8))
+                   and close(shape.intensity, 4.0) and shape.blend == "alpha" and shape.texture == "Textures/GroundTiles.png"
+                   and close(shape.tiling, (4.0, 2.0)) and close(shape.scroll, (0.0, 0.5)) and close(shape.edge_fade, 0.4)
+                   and close(shape.rim, 2.5) and close(shape.dissolve, 0.3) and close(shape.dissolve_edge_width, 0.1)
+                   and close(shape.dissolve_edge_color, (0.2, 1.0, 0.4, 1.0)) and close(shape.dissolve_scale, 6.0)
+                   and close(shape.distortion, 0.35) and close(shape.distortion_scale, 5.0) and close(shape.distortion_speed, -2.0),
+                   "EffectShape properties")
+        self.check(raises(lambda: setattr(shape, "shape", "pyramid"), ValueError) and raises(lambda: setattr(shape, "segments", 2), ValueError)
+                   and raises(lambda: setattr(shape, "arc", 0.0), ValueError) and raises(lambda: setattr(shape, "edge_fade", 0.6), ValueError)
+                   and raises(lambda: setattr(shape, "dissolve_curve", [[0.5, 2.0]]), ValueError)
+                   and raises(lambda: setattr(shape, "tiling", Vec2(-1.0, 1.0)), ValueError)
+                   and raises(lambda: setattr(shape, "radius", float("nan")), ValueError)
+                   and raises(lambda: setattr(shape, "distortion", 1.5), ValueError),
+                   "EffectShape limits")
+        shape.stop()
+        stopped = shape.finished
+        shape.play()
+        self.check(stopped and not shape.finished and close(shape.time, 0.0) and shape.playing, "EffectShape stop and play")
         decal = entity.add_component(bellows.Decal)
         self.check(decal.texture == "" and close(decal.color, (1.0, 1.0, 1.0, 1.0)) and close(decal.size, (1.0, 1.0, 1.0))
                    and close(decal.max_angle, 60.0) and decal.sort_order == 0, "Decal defaults")
@@ -703,7 +739,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Trail", "Beam", "Decal", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Trail", "Beam", "EffectShape", "Decal", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:

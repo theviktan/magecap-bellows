@@ -6,6 +6,7 @@
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/BeamSystem.h"
+#include "Bellows/Scene/EffectShapeSystem.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 
@@ -531,6 +532,45 @@ namespace Bellows {
 				component.Clamp();
 			}
 
+			if (auto it = json.find("EffectShape"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<EffectShapeComponent>();
+				std::string shape = EffectShapeTypeToString(component.Shape);
+				JsonRead(*it, "Shape", shape);
+				component.Shape = EffectShapeTypeFromString(shape).value_or(component.Shape);
+				JsonRead(*it, "Radius", component.Radius);
+				JsonRead(*it, "InnerRadius", component.InnerRadius);
+				JsonRead(*it, "TopRadius", component.TopRadius);
+				JsonRead(*it, "Height", component.Height);
+				JsonRead(*it, "Arc", component.Arc);
+				JsonRead(*it, "Segments", component.Segments);
+				JsonRead(*it, "Playing", component.Playing);
+				JsonRead(*it, "Loop", component.Loop);
+				JsonRead(*it, "Duration", component.Duration);
+				ReadCurve(*it, "SizeCurve", component.SizeCurve);
+				ReadGradient(*it, "ColorGradient", component.ColorGradient);
+				ReadCurve(*it, "DissolveCurve", component.DissolveCurve);
+				JsonRead(*it, "SpinSpeed", component.SpinSpeed);
+				JsonRead(*it, "Color", component.Color);
+				JsonRead(*it, "Intensity", component.Intensity);
+				std::string blend = ParticleBlendToString(component.Blend);
+				JsonRead(*it, "Blend", blend);
+				component.Blend = ParticleBlendFromString(blend).value_or(component.Blend);
+				JsonRead(*it, "Texture", component.TexturePath);
+				JsonRead(*it, "Tiling", component.Tiling);
+				JsonRead(*it, "Scroll", component.Scroll);
+				JsonRead(*it, "EdgeFade", component.EdgeFade);
+				JsonRead(*it, "Rim", component.Rim);
+				JsonRead(*it, "Dissolve", component.Dissolve);
+				JsonRead(*it, "DissolveEdgeWidth", component.DissolveEdgeWidth);
+				JsonRead(*it, "DissolveEdgeColor", component.DissolveEdgeColor);
+				JsonRead(*it, "DissolveScale", component.DissolveScale);
+				JsonRead(*it, "Distortion", component.Distortion);
+				JsonRead(*it, "DistortionScale", component.DistortionScale);
+				JsonRead(*it, "DistortionSpeed", component.DistortionSpeed);
+				component.Clamp();
+			}
+
 			if (auto it = json.find("Text"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<TextComponent>();
@@ -937,6 +977,40 @@ namespace Bellows {
 			j["NoiseAmplitude"] = c->NoiseAmplitude;
 			j["NoiseFrequency"] = c->NoiseFrequency;
 			j["NoiseSpeed"] = c->NoiseSpeed;
+		}
+
+		if (const auto* c = entity.TryGetComponent<EffectShapeComponent>())
+		{
+			Json& j = json["EffectShape"];
+			j["Shape"] = EffectShapeTypeToString(c->Shape);
+			j["Radius"] = c->Radius;
+			j["InnerRadius"] = c->InnerRadius;
+			j["TopRadius"] = c->TopRadius;
+			j["Height"] = c->Height;
+			j["Arc"] = c->Arc;
+			j["Segments"] = c->Segments;
+			j["Playing"] = c->Playing;
+			j["Loop"] = c->Loop;
+			j["Duration"] = c->Duration;
+			WriteCurve(j, "SizeCurve", c->SizeCurve);
+			WriteGradient(j, "ColorGradient", c->ColorGradient);
+			WriteCurve(j, "DissolveCurve", c->DissolveCurve);
+			j["SpinSpeed"] = c->SpinSpeed;
+			j["Color"] = c->Color;
+			j["Intensity"] = c->Intensity;
+			j["Blend"] = ParticleBlendToString(c->Blend);
+			j["Texture"] = c->TexturePath;
+			j["Tiling"] = c->Tiling;
+			j["Scroll"] = c->Scroll;
+			j["EdgeFade"] = c->EdgeFade;
+			j["Rim"] = c->Rim;
+			j["Dissolve"] = c->Dissolve;
+			j["DissolveEdgeWidth"] = c->DissolveEdgeWidth;
+			j["DissolveEdgeColor"] = c->DissolveEdgeColor;
+			j["DissolveScale"] = c->DissolveScale;
+			j["Distortion"] = c->Distortion;
+			j["DistortionScale"] = c->DistortionScale;
+			j["DistortionSpeed"] = c->DistortionSpeed;
 		}
 
 		if (const auto* c = entity.TryGetComponent<TrailComponent>())

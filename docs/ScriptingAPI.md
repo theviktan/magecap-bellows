@@ -538,6 +538,43 @@ if laser.is_hitting and laser.hit_entity is not None:
     laser.hit_entity.name  # what the laser is burning
 ```
 
+### `EffectShape`
+A glowing or textured surface for effects: shockwave rings, magic circles, shields, light pillars,
+portals, auras. It's centered on the entity, around its up (Y) axis, unlit, and drawn with the
+particles. It plays a cycle that changes its size, color and dissolve, in the editor too.
+* `shape`: `"ring"` (flat on the entity's XZ plane, from `inner_radius` to `radius`; an inner radius
+  of 0 makes a disc), `"cylinder"` (`radius` at the bottom, `top_radius` at the top, `height` tall),
+  `"cone"` (`radius` to a point `height` above), `"sphere"` or `"dome"` (its top half). Sizes are
+  meters, 0 to 1000.
+* `arc` (1 to 360 degrees, centered on the entity's forward: a slice for slash arcs and fans) and
+  `segments` (3 to 256 pieces around a full turn).
+* The cycle: `playing` (off, it holds), `loop` (off, it plays once and hides), `duration` (seconds,
+  0.01 to 3600), and over each cycle `size_curve` (`[time, size]` keys, size multiplying the shape),
+  `color_gradient` (`[time, red, green, blue, alpha]` keys multiplying `color`) and `dissolve_curve`
+  (`[time, dissolve]` keys, 0 to 1). Each takes up to 8 keys; `[]` turns it off. `spin_speed` turns it
+  (degrees per second).
+* The look: `color` (`Vec4`), `intensity` (above 1 it glows), `blend` (`"additive"` or `"alpha"`),
+  `texture` with `tiling` and `scroll` (`Vec2`s: copies around and across, and copies per second),
+  `edge_fade` (0 to 0.5: how much of each edge across the surface fades softly), `rim` (0 to 16; fades
+  the faces turned toward the camera so a shield glows at its outline; 0 is off).
+* Dissolve: `dissolve` (0 whole to 1 gone, in a noisy pattern), `dissolve_edge_width` (0 to 0.5),
+  `dissolve_edge_color` (`Vec4`, brightened by `intensity`) and `dissolve_scale` (blobs per meter).
+* Distortion: `distortion` (0 to 1) bends what's behind it, like heat haze or a shockwave's ripple;
+  `distortion_scale` (waves per meter, 0.01 to 100) and `distortion_speed` (cycles per second, -100 to
+  100). With `intensity` 0 it's only the distortion.
+* `play()` starts the cycle over and shows it; `stop()` hides it until `play()`. Read-only `time`
+  (seconds into the cycle) and `finished` (played through without looping, or stopped).
+
+Values out of range, NaN, an unknown shape or blend, or a malformed key raise `ValueError`.
+
+```python
+blast = bellows.create_entity("Shockwave")
+wave = blast.add_component("EffectShape")
+wave.radius, wave.inner_radius, wave.duration, wave.loop = 4.0, 3.5, 0.6, False
+wave.size_curve = [[0.0, 0.05], [0.4, 0.8], [1.0, 1.0]]
+wave.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 0.0]]
+```
+
 ### `Decal`
 Projects an image, or a plain color, onto the opaque surfaces inside a box: footprints, cracks,
 scorch marks, posters, puddles, road paint. It changes the surfaces' color before lighting, so a

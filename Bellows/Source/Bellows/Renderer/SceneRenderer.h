@@ -183,6 +183,35 @@ namespace Bellows {
 		float U = 0.0f;
 	};
 
+	// One corner of an effect surface (an EffectShape): where it is in the world, the way it faces,
+	// and where it lies on the surface (U around, V across, each 0 to 1).
+	struct EffectVertex
+	{
+		glm::vec3 Position { 0.0f };
+		glm::vec3 Normal { 0.0f, 1.0f, 0.0f };
+		glm::vec2 UV { 0.0f };
+	};
+
+	// How an effect surface is shaded: unlit, with a scrolling texture, soft edges across V, a rim
+	// fade and a noisy dissolve (Particle.frag).
+	struct EffectMaterial
+	{
+		glm::vec4 Color { 1.0f };		// Linear RGB (may be above 1 to glow) and alpha
+		bool Additive = true;
+		Ref<Texture2D> Texture;			// Null: plain color
+		glm::vec2 Tiling { 1.0f };		// Copies of the texture across U and V
+		glm::vec2 Offset { 0.0f };		// Added to the texture's coordinates (scrolling)
+		float EdgeFade = 0.0f;			// The part of V at each edge that fades out (0 to 0.5)
+		float Rim = 0.0f;				// Fades faces turned toward the camera by (1 - facing)^Rim; 0 is off
+		float Dissolve = 0.0f;			// 0 whole to 1 gone
+		float DissolveEdgeWidth = 0.0f;
+		glm::vec4 DissolveEdgeColor { 0.0f };	// Linear RGB (may be above 1) and alpha
+		glm::vec2 NoiseCells { 1.0f };	// Dissolve noise cells across U (whole, so it wraps around) and V
+		float Distortion = 0.0f;		// How far it bends what's behind it, as a fraction of the screen; 0 is off
+		float DistortionPhase = 0.0f;	// Where its waves are, 0 to 1 (wrapping)
+		glm::vec2 DistortionWaves { 1.0f };	// Waves across U (whole, so it wraps around) and V
+	};
+
 	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.
 	//
 	// Usage per frame:
@@ -257,6 +286,8 @@ namespace Bellows {
 		// the particles. 'repeatTexture' tiles the texture along U past 0 to 1 (scrolling beams, tiled
 		// trails); otherwise U is clamped. Without a texture, the strip fades out toward its edges.
 		void SubmitStrip(const StripPoint* points, size_t count, bool additive, const Ref<Texture2D>& texture = nullptr, bool repeatTexture = false);
+		// An effect surface as a triangle list ('count' a multiple of 3), drawn with the particles.
+		void SubmitEffectMesh(const EffectVertex* vertices, size_t count, const EffectMaterial& material);
 
 		// Decals: an image (or a plain color) projected onto opaque surfaces, blended into their color
 		// before lighting, so it's lit and shadowed with them. 'boxToWorld' places the unit box (-0.5
@@ -353,10 +384,10 @@ namespace Bellows {
 		struct ParticleDraw
 		{
 			Ref<Texture2D> TextureRef;
-			bool Textured = false;
 			bool Additive = true;
-			bool Strip = false;			// Soft across V (a strip) instead of a round dot, when untextured
 			bool RepeatTexture = false;
+			bool Distort = false;		// Bends the scene behind it (ParticleDistort.frag) instead of drawing color
+			glm::vec4 Params[4] {};		// The fragment shader's parameters
 			uint32_t FirstVertex = 0;
 			uint32_t VertexCount = 0;
 			float Distance = 0.0f;
@@ -487,6 +518,8 @@ namespace Bellows {
 		nvrhi::TextureHandle m_NormalTexture;
 		nvrhi::TextureHandle m_EntityIDTexture;
 		nvrhi::TextureHandle m_HDRTexture;
+		nvrhi::TextureHandle m_SceneCopyTexture;	// The HDR image just before the particles, for distortion to read
+		nvrhi::BindingSetHandle m_SceneCopySet;
 		nvrhi::TextureHandle m_SSAOTexture;
 		nvrhi::TextureHandle m_SSAOBlurTexture;
 		nvrhi::TextureHandle m_LDRTexture;
@@ -519,7 +552,7 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
 		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
 		nvrhi::GraphicsPipelineHandle m_UIPipeline, m_UIIDPipeline;
-		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline;
+		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline, m_ParticleDistortPipeline;
 		nvrhi::GraphicsPipelineHandle m_DecalCopyPipeline;
 
 		// Constant buffers

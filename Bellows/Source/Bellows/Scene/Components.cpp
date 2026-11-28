@@ -124,6 +124,45 @@ namespace Bellows {
 		ClampGradient(ColorGradient);
 	}
 
+	void EffectShapeComponent::Clamp()
+	{
+		const EffectShapeComponent defaults;
+		if (static_cast<uint8_t>(Shape) > static_cast<uint8_t>(EffectShapeType::Dome))
+			Shape = defaults.Shape;
+		Radius = ClampOrDefault(Radius, 0.0f, MaxSize, defaults.Radius);
+		InnerRadius = ClampOrDefault(InnerRadius, 0.0f, MaxSize, defaults.InnerRadius);
+		TopRadius = ClampOrDefault(TopRadius, 0.0f, MaxSize, defaults.TopRadius);
+		Height = ClampOrDefault(Height, 0.0f, MaxSize, defaults.Height);
+		Arc = ClampOrDefault(Arc, MinArc, MaxArc, defaults.Arc);
+		Segments = std::clamp(Segments, MinSegments, MaxSegments);
+		Duration = ClampOrDefault(Duration, MinDuration, MaxDuration, defaults.Duration);
+		ClampCurve(SizeCurve, MaxSize);
+		ClampGradient(ColorGradient);
+		ClampCurve(DissolveCurve, 1.0f);
+		SpinSpeed = ClampOrDefault(SpinSpeed, -MaxSpinSpeed, MaxSpinSpeed, defaults.SpinSpeed);
+		for (int channel = 0; channel < 4; channel++)
+		{
+			Color[channel] = ClampOrDefault(Color[channel], 0.0f, 1.0f, defaults.Color[channel]);
+			DissolveEdgeColor[channel] = ClampOrDefault(DissolveEdgeColor[channel], 0.0f, 1.0f, defaults.DissolveEdgeColor[channel]);
+		}
+		Intensity = ClampOrDefault(Intensity, 0.0f, ParticleEmitterComponent::MaxIntensity, defaults.Intensity);
+		if (Blend != ParticleBlend::Additive && Blend != ParticleBlend::Alpha)
+			Blend = defaults.Blend;
+		for (int axis = 0; axis < 2; axis++)
+		{
+			Tiling[axis] = ClampOrDefault(Tiling[axis], 0.0f, MaxTiling, defaults.Tiling[axis]);
+			Scroll[axis] = ClampOrDefault(Scroll[axis], -MaxScroll, MaxScroll, defaults.Scroll[axis]);
+		}
+		EdgeFade = ClampOrDefault(EdgeFade, 0.0f, 0.5f, defaults.EdgeFade);
+		Rim = ClampOrDefault(Rim, 0.0f, MaxRim, defaults.Rim);
+		Dissolve = ClampOrDefault(Dissolve, 0.0f, 1.0f, defaults.Dissolve);
+		DissolveEdgeWidth = ClampOrDefault(DissolveEdgeWidth, 0.0f, 0.5f, defaults.DissolveEdgeWidth);
+		DissolveScale = ClampOrDefault(DissolveScale, MinDissolveScale, MaxDissolveScale, defaults.DissolveScale);
+		Distortion = ClampOrDefault(Distortion, 0.0f, 1.0f, defaults.Distortion);
+		DistortionScale = ClampOrDefault(DistortionScale, MinDistortionScale, MaxDistortionScale, defaults.DistortionScale);
+		DistortionSpeed = ClampOrDefault(DistortionSpeed, -MaxDistortionSpeed, MaxDistortionSpeed, defaults.DistortionSpeed);
+	}
+
 	void BeamComponent::Clamp()
 	{
 		const BeamComponent defaults;

@@ -431,6 +431,165 @@ class DirectionalLight:
     def cast_shadows(self, value: bool) -> None: ...
 
 
+class EffectShape:
+    """A glowing or textured surface for effects: shockwave rings, magic circles, shields, light pillars, portals. It plays a cycle that changes its size, color and dissolve, and can spin, scroll its texture, fade at its edges and rim, and dissolve away"""
+    @property
+    def shape(self) -> str:
+        """'ring' (flat; an inner_radius of 0 makes a disc), 'cylinder', 'cone', 'sphere' or 'dome', around the entity's up"""
+    @shape.setter
+    def shape(self, value: str) -> None: ...
+    @property
+    def radius(self) -> float:
+        """Meters (a cylinder's and a cone's at the bottom)"""
+    @radius.setter
+    def radius(self, value: float) -> None: ...
+    @property
+    def inner_radius(self) -> float:
+        """For 'ring': the hole's radius; 0 is a disc"""
+    @inner_radius.setter
+    def inner_radius(self, value: float) -> None: ...
+    @property
+    def top_radius(self) -> float:
+        """For 'cylinder': the radius at its top"""
+    @top_radius.setter
+    def top_radius(self, value: float) -> None: ...
+    @property
+    def height(self) -> float:
+        """For 'cylinder' and 'cone': meters tall, up from the entity"""
+    @height.setter
+    def height(self, value: float) -> None: ...
+    @property
+    def arc(self) -> float:
+        """Degrees drawn around its axis, centered on the entity's forward; below 360 it's a slice (a slash arc, a fan)"""
+    @arc.setter
+    def arc(self, value: float) -> None: ...
+    @property
+    def segments(self) -> int:
+        """Pieces around a full turn: more is rounder"""
+    @segments.setter
+    def segments(self, value: int) -> None: ...
+    @property
+    def playing(self) -> bool:
+        """Its cycle, spin and scroll run; off, it holds where it is"""
+    @playing.setter
+    def playing(self, value: bool) -> None: ...
+    @property
+    def loop(self) -> bool:
+        """Repeats its cycle; off, it plays once and hides at the end"""
+    @loop.setter
+    def loop(self, value: bool) -> None: ...
+    @property
+    def duration(self) -> float:
+        """Seconds per cycle"""
+    @duration.setter
+    def duration(self, value: float) -> None: ...
+    @property
+    def size_curve(self) -> typing.Any:
+        """Size over a cycle as up to 8 [time, size] keys (0 at its start, 1 at its end; size multiplies the shape). [] is size 1"""
+    @size_curve.setter
+    def size_curve(self, value: typing.Any) -> None: ...
+    @property
+    def color_gradient(self) -> typing.Any:
+        """Color over a cycle as up to 8 [time, red, green, blue, alpha] keys, multiplying color. [] is white"""
+    @color_gradient.setter
+    def color_gradient(self, value: typing.Any) -> None: ...
+    @property
+    def dissolve_curve(self) -> typing.Any:
+        """Dissolve over a cycle as up to 8 [time, dissolve] keys (0 whole to 1 gone). [] keeps dissolve throughout"""
+    @dissolve_curve.setter
+    def dissolve_curve(self, value: typing.Any) -> None: ...
+    @property
+    def spin_speed(self) -> float:
+        """Degrees per second it turns around its axis"""
+    @spin_speed.setter
+    def spin_speed(self, value: float) -> None: ...
+    @property
+    def color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha"""
+    @color.setter
+    def color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def intensity(self) -> float:
+        """Brightness, from 0 to 1000; above 1 it glows"""
+    @intensity.setter
+    def intensity(self, value: float) -> None: ...
+    @property
+    def blend(self) -> str:
+        """'additive' adds light (energy, magic); 'alpha' covers what's behind (smoke, dark magic)"""
+    @blend.setter
+    def blend(self, value: str) -> None: ...
+    @property
+    def texture(self) -> str:
+        """An image over the surface (an asset path); empty is plain color"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def tiling(self) -> Vec2:
+        """Copies of the texture around (x) and across (y)"""
+    @tiling.setter
+    def tiling(self, value: Vec2 | typing.Sequence[float]) -> None: ...
+    @property
+    def scroll(self) -> Vec2:
+        """Texture copies per second it scrolls around (x) and across (y)"""
+    @scroll.setter
+    def scroll(self, value: Vec2 | typing.Sequence[float]) -> None: ...
+    @property
+    def edge_fade(self) -> float:
+        """How much of each edge across the surface fades out softly (a ring's inside and outside, a pillar's bottom and top)"""
+    @edge_fade.setter
+    def edge_fade(self, value: float) -> None: ...
+    @property
+    def rim(self) -> float:
+        """Fades the faces turned toward the camera, so a shield glows at its outline; higher is a thinner rim. 0 is off"""
+    @rim.setter
+    def rim(self, value: float) -> None: ...
+    @property
+    def dissolve(self) -> float:
+        """0 whole to 1 gone, eaten away in a noisy pattern"""
+    @dissolve.setter
+    def dissolve(self, value: float) -> None: ...
+    @property
+    def dissolve_edge_width(self) -> float:
+        """How wide the glowing edge of the dissolve is"""
+    @dissolve_edge_width.setter
+    def dissolve_edge_width(self, value: float) -> None: ...
+    @property
+    def dissolve_edge_color(self) -> Vec4 | typing.Sequence[float]:
+        """The dissolve edge's color (brightened by intensity)"""
+    @dissolve_edge_color.setter
+    def dissolve_edge_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def dissolve_scale(self) -> float:
+        """Dissolve blobs per meter"""
+    @dissolve_scale.setter
+    def dissolve_scale(self, value: float) -> None: ...
+    @property
+    def distortion(self) -> float:
+        """How much it bends what's behind it, like heat haze or a shockwave's ripple: 0 is off, 1 the strongest. With intensity 0 it's only the distortion"""
+    @distortion.setter
+    def distortion(self, value: float) -> None: ...
+    @property
+    def distortion_scale(self) -> float:
+        """Distortion waves per meter"""
+    @distortion_scale.setter
+    def distortion_scale(self, value: float) -> None: ...
+    @property
+    def distortion_speed(self) -> float:
+        """How fast the distortion's waves drift, in cycles per second"""
+    @distortion_speed.setter
+    def distortion_speed(self, value: float) -> None: ...
+    def play(self) -> None:
+        """Starts its cycle over, shown and playing"""
+    def stop(self) -> None:
+        """Hides it until play() is called"""
+    @property
+    def time(self) -> float:
+        """Seconds into its cycle"""
+    @property
+    def finished(self) -> bool:
+        """True once it has played through without looping, or was stopped: hidden until play()"""
+
+
 class Entity:
     """A handle to an entity in a scene"""
     @property
@@ -565,6 +724,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['Beam']) -> Beam | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['EffectShape']) -> EffectShape | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['Decal']) -> Decal | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
@@ -634,6 +795,8 @@ class Entity:
     def add_component(self, component: typing.Literal['Trail']) -> Trail: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Beam']) -> Beam: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['EffectShape']) -> EffectShape: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Decal']) -> Decal: ...
     @typing.overload

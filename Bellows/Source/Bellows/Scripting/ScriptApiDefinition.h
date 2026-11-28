@@ -25,6 +25,7 @@
 #include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/BeamSystem.h"
+#include "Bellows/Scene/EffectShapeSystem.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/Scene.h"
@@ -149,7 +150,8 @@ namespace Bellows::Scripting {
 		}
 
 		// [[time, value], ...]: times 0 to 1 (born to dies, or head to tail), values 0 to 1000 multiplying a start value.
-		inline std::vector<ParticleCurveKey> ToCurve(const ScriptValue& value, const char* property, const char* what)
+		inline std::vector<ParticleCurveKey> ToCurve(const ScriptValue& value, const char* property, const char* what,
+			float maximum = ParticleEmitterComponent::MaxSize, const char* range = "0 to 1000")
 		{
 			const ScriptValueList& keys = RequireCurveList(value, property, "[[0, 0], [0.2, 1], [1, 0]]");
 			std::vector<ParticleCurveKey> curve;
@@ -157,9 +159,9 @@ namespace Bellows::Scripting {
 			{
 				float numbers[2];
 				if (!CurveKeyNumbers(key, 2, false, numbers) || numbers[0] < 0.0f || numbers[0] > 1.0f || numbers[1] < 0.0f
-					|| numbers[1] > ParticleEmitterComponent::MaxSize)
+					|| numbers[1] > maximum)
 					throw ScriptValueError(std::string("Each ") + property + " key is [time, " + what + "]: a time from 0 to 1 and a " + what
-						+ " from 0 to 1000, like [0.5, 2]");
+						+ " from " + range + ", like [0.5, " + (maximum >= 2.0f ? "2" : "0.5") + "]");
 				curve.push_back({ numbers[0], numbers[1] });
 			}
 			std::stable_sort(curve.begin(), curve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
@@ -1452,6 +1454,117 @@ namespace Bellows::Scripting {
 		beam.ReadOnly("is_hitting", [](const BeamRef& r) { return r.Get().RuntimeHit; }, "For 'raycast': whether it stopped on something this frame");
 		beam.ReadOnly("hit_normal", [](const BeamRef& r) { return r.Get().RuntimeHitNormal; },
 			"For 'raycast': which way the surface it stopped on faces (for sparks and scorch marks)");
+
+		using ShapeLimits = EffectShapeComponent;
+		auto effectShape = api.template Class<EffectShapeRef>("EffectShape",
+			"A glowing or textured surface for effects: shockwave rings, magic circles, shields, light pillars, portals. It plays a "
+			"cycle that changes its size, color and dissolve, and can spin, scroll its texture, fade at its edges and rim, and dissolve away");
+		effectShape.Property("shape", [](const EffectShapeRef& r) { return std::string(EffectShapeTypeToString(r.Get().Shape)); },
+			[](const EffectShapeRef& r, const std::string& v)
+			{
+				const std::optional<EffectShapeType> shape = EffectShapeTypeFromString(v);
+				if (!shape)
+					throw ScriptValueError("Unknown effect shape '" + v + "'. Shapes: ring, cylinder, cone, sphere, dome");
+				r.Get().Shape = *shape;
+			}, "'ring' (flat; an inner_radius of 0 makes a disc), 'cylinder', 'cone', 'sphere' or 'dome', around the entity's up");
+		effectShape.Property("radius", [](const EffectShapeRef& r) { return r.Get().Radius; },
+			[](const EffectShapeRef& r, float v) { r.Get().Radius = Detail::RangeValue("An EffectShape's radius", v, 0.0f, ShapeLimits::MaxSize, "0 to 1000"); },
+			"Meters (a cylinder's and a cone's at the bottom)");
+		effectShape.Property("inner_radius", [](const EffectShapeRef& r) { return r.Get().InnerRadius; },
+			[](const EffectShapeRef& r, float v) { r.Get().InnerRadius = Detail::RangeValue("An EffectShape's inner_radius", v, 0.0f, ShapeLimits::MaxSize, "0 to 1000"); },
+			"For 'ring': the hole's radius; 0 is a disc");
+		effectShape.Property("top_radius", [](const EffectShapeRef& r) { return r.Get().TopRadius; },
+			[](const EffectShapeRef& r, float v) { r.Get().TopRadius = Detail::RangeValue("An EffectShape's top_radius", v, 0.0f, ShapeLimits::MaxSize, "0 to 1000"); },
+			"For 'cylinder': the radius at its top");
+		effectShape.Property("height", [](const EffectShapeRef& r) { return r.Get().Height; },
+			[](const EffectShapeRef& r, float v) { r.Get().Height = Detail::RangeValue("An EffectShape's height", v, 0.0f, ShapeLimits::MaxSize, "0 to 1000"); },
+			"For 'cylinder' and 'cone': meters tall, up from the entity");
+		effectShape.Property("arc", [](const EffectShapeRef& r) { return r.Get().Arc; },
+			[](const EffectShapeRef& r, float v) { r.Get().Arc = Detail::RangeValue("An EffectShape's arc", v, ShapeLimits::MinArc, ShapeLimits::MaxArc, "1 to 360"); },
+			"Degrees drawn around its axis, centered on the entity's forward; below 360 it's a slice (a slash arc, a fan)");
+		effectShape.Property("segments", [](const EffectShapeRef& r) { return static_cast<int>(r.Get().Segments); },
+			[](const EffectShapeRef& r, int v)
+			{
+				if (v < static_cast<int>(ShapeLimits::MinSegments) || v > static_cast<int>(ShapeLimits::MaxSegments))
+					throw ScriptValueError("An EffectShape's segments is from 3 to 256");
+				r.Get().Segments = static_cast<uint32_t>(v);
+			}, "Pieces around a full turn: more is rounder");
+		effectShape.Property("playing", [](const EffectShapeRef& r) { return r.Get().Playing; }, [](const EffectShapeRef& r, bool v) { r.Get().Playing = v; },
+			"Its cycle, spin and scroll run; off, it holds where it is");
+		effectShape.Property("loop", [](const EffectShapeRef& r) { return r.Get().Loop; }, [](const EffectShapeRef& r, bool v) { r.Get().Loop = v; },
+			"Repeats its cycle; off, it plays once and hides at the end");
+		effectShape.Property("duration", [](const EffectShapeRef& r) { return r.Get().Duration; },
+			[](const EffectShapeRef& r, float v) { r.Get().Duration = Detail::RangeValue("An EffectShape's duration", v, ShapeLimits::MinDuration, ShapeLimits::MaxDuration, "0.01 to 3600"); },
+			"Seconds per cycle");
+		effectShape.Property("size_curve", [](const EffectShapeRef& r) { return Detail::FromCurve(r.Get().SizeCurve); },
+			[](const EffectShapeRef& r, const ScriptValue& v) { r.Get().SizeCurve = Detail::ToCurve(v, "size_curve", "size"); },
+			"Size over a cycle as up to 8 [time, size] keys (0 at its start, 1 at its end; size multiplies the shape). [] is size 1");
+		effectShape.Property("color_gradient", [](const EffectShapeRef& r) { return Detail::FromColorGradient(r.Get().ColorGradient); },
+			[](const EffectShapeRef& r, const ScriptValue& v) { r.Get().ColorGradient = Detail::ToColorGradient(v); },
+			"Color over a cycle as up to 8 [time, red, green, blue, alpha] keys, multiplying color. [] is white");
+		effectShape.Property("dissolve_curve", [](const EffectShapeRef& r) { return Detail::FromCurve(r.Get().DissolveCurve); },
+			[](const EffectShapeRef& r, const ScriptValue& v) { r.Get().DissolveCurve = Detail::ToCurve(v, "dissolve_curve", "dissolve", 1.0f, "0 to 1"); },
+			"Dissolve over a cycle as up to 8 [time, dissolve] keys (0 whole to 1 gone). [] keeps dissolve throughout");
+		effectShape.Property("spin_speed", [](const EffectShapeRef& r) { return r.Get().SpinSpeed; },
+			[](const EffectShapeRef& r, float v) { r.Get().SpinSpeed = Detail::RangeValue("An EffectShape's spin_speed", v, -ShapeLimits::MaxSpinSpeed, ShapeLimits::MaxSpinSpeed, "-36000 to 36000"); },
+			"Degrees per second it turns around its axis");
+		effectShape.Property("color", [](const EffectShapeRef& r) { return ColorValue { r.Get().Color }; },
+			[](const EffectShapeRef& r, const ColorValue& v) { r.Get().Color = Detail::EffectColor("EffectShape", "color", v); }, "Color and alpha");
+		effectShape.Property("intensity", [](const EffectShapeRef& r) { return r.Get().Intensity; },
+			[](const EffectShapeRef& r, float v) { r.Get().Intensity = Detail::RangeValue("An EffectShape's intensity", v, 0.0f, ParticleEmitterComponent::MaxIntensity, "0 to 1000"); },
+			"Brightness, from 0 to 1000; above 1 it glows");
+		effectShape.Property("blend", [](const EffectShapeRef& r) { return std::string(ParticleBlendToString(r.Get().Blend)); },
+			[](const EffectShapeRef& r, const std::string& v) { r.Get().Blend = Detail::RequireParticleBlend(v); },
+			"'additive' adds light (energy, magic); 'alpha' covers what's behind (smoke, dark magic)");
+		effectShape.Property("texture", [](const EffectShapeRef& r) { return r.Get().TexturePath; },
+			[](const EffectShapeRef& r, const std::string& v) { r.Get().TexturePath = v; }, "An image over the surface (an asset path); empty is plain color");
+		effectShape.Property("tiling", [](const EffectShapeRef& r) { return r.Get().Tiling; },
+			[](const EffectShapeRef& r, const glm::vec2& v)
+			{
+				for (int axis = 0; axis < 2; axis++)
+					Detail::RangeValue("An EffectShape's tiling", v[axis], 0.0f, ShapeLimits::MaxTiling, "0 to 1000 on each axis");
+				r.Get().Tiling = v;
+			}, "Copies of the texture around (x) and across (y)");
+		effectShape.Property("scroll", [](const EffectShapeRef& r) { return r.Get().Scroll; },
+			[](const EffectShapeRef& r, const glm::vec2& v)
+			{
+				for (int axis = 0; axis < 2; axis++)
+					Detail::RangeValue("An EffectShape's scroll", v[axis], -ShapeLimits::MaxScroll, ShapeLimits::MaxScroll, "-1000 to 1000 on each axis");
+				r.Get().Scroll = v;
+			}, "Texture copies per second it scrolls around (x) and across (y)");
+		effectShape.Property("edge_fade", [](const EffectShapeRef& r) { return r.Get().EdgeFade; },
+			[](const EffectShapeRef& r, float v) { r.Get().EdgeFade = Detail::RangeValue("An EffectShape's edge_fade", v, 0.0f, 0.5f, "0 to 0.5"); },
+			"How much of each edge across the surface fades out softly (a ring's inside and outside, a pillar's bottom and top)");
+		effectShape.Property("rim", [](const EffectShapeRef& r) { return r.Get().Rim; },
+			[](const EffectShapeRef& r, float v) { r.Get().Rim = Detail::RangeValue("An EffectShape's rim", v, 0.0f, ShapeLimits::MaxRim, "0 to 16"); },
+			"Fades the faces turned toward the camera, so a shield glows at its outline; higher is a thinner rim. 0 is off");
+		effectShape.Property("dissolve", [](const EffectShapeRef& r) { return r.Get().Dissolve; },
+			[](const EffectShapeRef& r, float v) { r.Get().Dissolve = Detail::RangeValue("An EffectShape's dissolve", v, 0.0f, 1.0f, "0 to 1"); },
+			"0 whole to 1 gone, eaten away in a noisy pattern");
+		effectShape.Property("dissolve_edge_width", [](const EffectShapeRef& r) { return r.Get().DissolveEdgeWidth; },
+			[](const EffectShapeRef& r, float v) { r.Get().DissolveEdgeWidth = Detail::RangeValue("An EffectShape's dissolve_edge_width", v, 0.0f, 0.5f, "0 to 0.5"); },
+			"How wide the glowing edge of the dissolve is");
+		effectShape.Property("dissolve_edge_color", [](const EffectShapeRef& r) { return ColorValue { r.Get().DissolveEdgeColor }; },
+			[](const EffectShapeRef& r, const ColorValue& v) { r.Get().DissolveEdgeColor = Detail::EffectColor("EffectShape", "dissolve_edge_color", v); },
+			"The dissolve edge's color (brightened by intensity)");
+		effectShape.Property("dissolve_scale", [](const EffectShapeRef& r) { return r.Get().DissolveScale; },
+			[](const EffectShapeRef& r, float v) { r.Get().DissolveScale = Detail::RangeValue("An EffectShape's dissolve_scale", v, ShapeLimits::MinDissolveScale, ShapeLimits::MaxDissolveScale, "0.01 to 1000"); },
+			"Dissolve blobs per meter");
+		effectShape.Property("distortion", [](const EffectShapeRef& r) { return r.Get().Distortion; },
+			[](const EffectShapeRef& r, float v) { r.Get().Distortion = Detail::RangeValue("An EffectShape's distortion", v, 0.0f, 1.0f, "0 to 1"); },
+			"How much it bends what's behind it, like heat haze or a shockwave's ripple: 0 is off, 1 the strongest. "
+			"With intensity 0 it's only the distortion");
+		effectShape.Property("distortion_scale", [](const EffectShapeRef& r) { return r.Get().DistortionScale; },
+			[](const EffectShapeRef& r, float v) { r.Get().DistortionScale = Detail::RangeValue("An EffectShape's distortion_scale", v, ShapeLimits::MinDistortionScale, ShapeLimits::MaxDistortionScale, "0.01 to 100"); },
+			"Distortion waves per meter");
+		effectShape.Property("distortion_speed", [](const EffectShapeRef& r) { return r.Get().DistortionSpeed; },
+			[](const EffectShapeRef& r, float v) { r.Get().DistortionSpeed = Detail::RangeValue("An EffectShape's distortion_speed", v, -ShapeLimits::MaxDistortionSpeed, ShapeLimits::MaxDistortionSpeed, "-100 to 100"); },
+			"How fast the distortion's waves drift, in cycles per second");
+		effectShape.Method("play", [](const EffectShapeRef& r) { EffectShapeSystem::Play(r.Get()); }, "Starts its cycle over, shown and playing");
+		effectShape.Method("stop", [](const EffectShapeRef& r) { EffectShapeSystem::Stop(r.Get()); }, "Hides it until play() is called");
+		effectShape.ReadOnly("time", [](const EffectShapeRef& r) { return r.Get().RuntimeTime; }, "Seconds into its cycle");
+		effectShape.ReadOnly("finished", [](const EffectShapeRef& r) { return r.Get().RuntimeFinished; },
+			"True once it has played through without looping, or was stopped: hidden until play()");
 
 		auto decal = api.template Class<DecalRef>("Decal",
 			"Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top "
