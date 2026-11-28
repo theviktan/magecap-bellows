@@ -517,6 +517,61 @@ namespace Bellows {
 		std::string LoadedTexturePath;
 	};
 
+	// Where a beam ends.
+	enum class BeamEndMode : uint8_t
+	{
+		Point = 0,	// At EndPoint, in the entity's own space (it turns and moves with the entity)
+		Entity,		// At another entity (Target): a tether, a healing ray, a chain of lightning
+		Raycast,	// Along the entity's forward (-Z) until it hits something, at most Length (a laser)
+	};
+
+	// A glowing strip from the entity to an end point, another entity or whatever it hits: lasers,
+	// lightning, tethers, tractor beams. It faces the camera along its length, can scroll its texture
+	// and wobble, and is drawn with the particles (see BeamSystem).
+	struct BeamComponent
+	{
+		bool Active = true;				// Off, it isn't drawn and doesn't cast
+		BeamEndMode EndMode = BeamEndMode::Point;
+		glm::vec3 EndPoint { 0.0f, 0.0f, -5.0f };	// Point: the end, in the entity's space
+		UUID Target = 0;				// Entity: the entity it reaches; 0 or gone, it isn't drawn
+		float Length = 20.0f;			// Raycast: the farthest it reaches (meters)
+
+		float StartWidth = 0.15f;		// Meters across at the entity
+		float EndWidth = 0.15f;			// Meters across at its end
+		glm::vec4 StartColor { 0.6f, 0.85f, 1.0f, 1.0f };
+		glm::vec4 EndColor { 0.6f, 0.85f, 1.0f, 1.0f };
+		float Intensity = 3.0f;			// Brightness; above 1 it glows
+		ParticleBlend Blend = ParticleBlend::Additive;
+		std::string TexturePath;		// Repeated along it; empty is soft toward its edges
+		float TileLength = 1.0f;		// Meters one copy of the texture covers
+		float ScrollSpeed = 0.0f;		// Texture copies per second it scrolls from the entity outward (below 0, inward)
+
+		uint32_t Segments = 24;			// Pieces it's drawn in: more is smoother when it wobbles
+		float NoiseAmplitude = 0.0f;	// Meters it wobbles sideways at its middle (its ends stay put); lightning, energy
+		float NoiseFrequency = 1.0f;	// Wobbles per meter along it
+		float NoiseSpeed = 4.0f;		// How fast the wobble changes
+
+		static constexpr float MaxLength = 10000.0f;
+		static constexpr float MaxWidth = 1000.0f;
+		static constexpr float MinTileLength = 0.01f, MaxTileLength = 1000.0f;
+		static constexpr float MaxScrollSpeed = 1000.0f;
+		static constexpr uint32_t MinSegments = 1, MaxSegments = 256;
+		static constexpr float MaxNoiseAmplitude = 100.0f, MaxNoiseFrequency = 100.0f, MaxNoiseSpeed = 1000.0f;
+
+		void Clamp();
+
+		// Runtime state (not serialized): where it ran this frame, set by the scene's update.
+		bool RuntimeValid = false;		// Has a start and an end (Active, and its Target exists)
+		glm::vec3 RuntimeStart { 0.0f };
+		glm::vec3 RuntimeEnd { 0.0f };
+		bool RuntimeHit = false;		// Raycast: it stopped on something
+		UUID RuntimeHitEntity = 0;
+		glm::vec3 RuntimeHitNormal { 0.0f };
+		float RuntimeTime = 0.0f;		// Seconds it has run: scrolls and wobbles
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// Projects an image (or a plain color) onto the opaque surfaces inside its box: down the entity's
 	// -Y, with the image's top toward its -Z. It changes the surfaces' color before lighting, so
 	// it's lit and shadowed like them (a footprint, a crack, a poster, a puddle, graffiti).
@@ -728,7 +783,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, TrailComponent, DecalComponent,
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, TrailComponent, BeamComponent, DecalComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
 		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 

@@ -836,6 +836,60 @@ namespace Bellows {
 			ImGui::PopTextWrapPos();
 		});
 
+		DrawComponent<BeamComponent>(m_Editor, entity, ICON_ZAP, "Beam", [&](BeamComponent& c)
+		{
+			using Limits = BeamComponent;
+			if (UI::BeginPropertyGrid("Beam"))
+			{
+				UI::Property("Active", c.Active, "Off, it isn't drawn and doesn't cast");
+				static const char* const s_Modes[] = { "Point", "Entity", "Raycast" };
+				int mode = static_cast<int>(c.EndMode);
+				if (UI::PropertyCombo("Ends At", mode, s_Modes, 3,
+					"Point: a point in the entity's own space. Entity: another entity. Raycast: along the entity's forward (-Z) until it hits something"))
+					c.EndMode = static_cast<BeamEndMode>(mode);
+				if (c.EndMode == BeamEndMode::Point)
+					UI::PropertyVec3("End Point", c.EndPoint, 0.0f, 0.05f, "Where it ends, in the entity's own space: it turns and moves with the entity");
+				else if (c.EndMode == BeamEndMode::Entity)
+					UI::PropertyEntity("Target", c.Target, *entity.GetScene(), entity, "The entity it reaches");
+				else
+					UI::Property("Length", c.Length, 0.1f, 0.0f, Limits::MaxLength, "%.1f m",
+						"The farthest it reaches. It stops on colliders while the game runs; in the editor it shows its full length");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Look");
+			if (UI::BeginPropertyGrid("BeamLook"))
+			{
+				UI::Property("Start Width", c.StartWidth, 0.01f, 0.0f, Limits::MaxWidth, "%.2f m", "Meters across at the entity");
+				UI::Property("End Width", c.EndWidth, 0.01f, 0.0f, Limits::MaxWidth, "%.2f m", "Meters across at its end");
+				UI::PropertyColor("Start Color", c.StartColor);
+				UI::PropertyColor("End Color", c.EndColor);
+				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, ParticleEmitterComponent::MaxIntensity, "%.2f", "Brightness; above 1 it glows");
+				static const char* const s_Blends[] = { "Additive", "Alpha" };
+				int blend = static_cast<int>(c.Blend);
+				if (UI::PropertyCombo("Blend", blend, s_Blends, 2, "Additive adds light; Alpha covers what's behind"))
+					c.Blend = static_cast<ParticleBlend>(blend);
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "An image repeated along it; empty is soft toward its edges");
+				UI::Property("Tile Length", c.TileLength, 0.01f, Limits::MinTileLength, Limits::MaxTileLength, "%.2f m", "Meters one copy of the image covers");
+				UI::Property("Scroll Speed", c.ScrollSpeed, 0.05f, -Limits::MaxScrollSpeed, Limits::MaxScrollSpeed, "%.2f / s",
+					"Copies of the image per second it scrolls outward from the entity (below 0, inward)");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Wobble");
+			if (UI::BeginPropertyGrid("BeamWobble"))
+			{
+				UI::Property("Amount", c.NoiseAmplitude, 0.01f, 0.0f, Limits::MaxNoiseAmplitude, "%.2f m",
+					"Meters it wobbles sideways at its middle (its ends stay put): lightning, crackling energy");
+				if (c.NoiseAmplitude > 0.0f)
+				{
+					UI::Property("Frequency", c.NoiseFrequency, 0.05f, 0.0f, Limits::MaxNoiseFrequency, "%.2f / m", "Wobbles per meter along it");
+					UI::Property("Speed", c.NoiseSpeed, 0.1f, 0.0f, Limits::MaxNoiseSpeed, "%.1f", "How fast the wobble changes");
+				}
+				UI::Property("Segments", c.Segments, Limits::MinSegments, Limits::MaxSegments, "Pieces it's drawn in: more is smoother when it wobbles");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+		});
+
 		DrawComponent<DecalComponent>(m_Editor, entity, ICON_STICKER, "Decal", [&](DecalComponent& c)
 		{
 			if (UI::BeginPropertyGrid("Decal"))
@@ -1572,6 +1626,7 @@ namespace Bellows {
 		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
 		entry.operator()<ParticleEmitterComponent>(ICON_FLAME, "Particle Emitter", "Rendering");
 		entry.operator()<TrailComponent>(ICON_SPLINE, "Trail", "Rendering");
+		entry.operator()<BeamComponent>(ICON_ZAP, "Beam", "Rendering");
 		entry.operator()<DecalComponent>(ICON_STICKER, "Decal", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");

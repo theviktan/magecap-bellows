@@ -25,7 +25,7 @@ namespace Bellows {
 
 		// The search box: plain words match names (any letter case, all of them); "tag:enemy" needs the
 		// tag (any letter case); "has:script" needs a kind of component (script, light, camera, physics,
-		// audio, mesh, ui, animation, nav, particles, trail, decal, tag for any tag); "group:docking" needs the entity's group.
+		// audio, mesh, ui, animation, nav, particles, trail, beam, decal, tag for any tag); "group:docking" needs the entity's group.
 		struct Filter
 		{
 			std::vector<std::string> Words;

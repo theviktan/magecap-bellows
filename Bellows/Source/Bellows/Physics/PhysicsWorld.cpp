@@ -548,9 +548,9 @@ namespace Bellows {
 
 	}
 
-	bool PhysicsWorld::Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit) const
+	bool PhysicsWorld::Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore) const
 	{
-		return CastRay(origin, direction, maxDistance, false, 0, outHit);
+		return CastRay(origin, direction, maxDistance, false, ignore, outHit);
 	}
 
 	bool PhysicsWorld::RaycastStatic(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore) const
@@ -570,9 +570,10 @@ namespace Bellows {
 		JPH::BodyID ignoreBody;
 		if (auto it = m_Jolt->Bodies.find(ignore); ignore != 0 && it != m_Jolt->Bodies.end())
 			ignoreBody = it->second;
+		const JPH::IgnoreSingleBodyFilter skipIgnored(ignoreBody);
 		const bool hit = staticOnly
 			? m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result, StaticBroadPhaseFilter(), StaticObjectFilter(), SolidBodyFilter(ignoreBody))
-			: m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result);
+			: m_Jolt->System.GetNarrowPhaseQuery().CastRay(ray, result, JPH::BroadPhaseLayerFilter(), JPH::ObjectLayerFilter(), skipIgnored);
 		if (!hit)
 			return false;
 

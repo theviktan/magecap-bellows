@@ -181,6 +181,15 @@ for index, path in enumerate(SHOWCASE):
     add_body(pedestal, "Static", bellows.MeshCollider)
     create(f"Sphere {index + 1}", "Builtin/Sphere", path, position=(x, 1.2, -3.0), scale=(1.2, 1.2, 1.2))
 
+# Beams: a crackling arc of lightning between the tops of the last two spheres
+arc_end = create("Arc End", position=(5.0, 1.95, -3.0))
+arc = create("Lightning Arc", position=(2.5, 1.95, -3.0))
+lightning = arc.add_component(bellows.Beam)
+lightning.end_mode, lightning.target = "entity", arc_end
+lightning.start_width, lightning.end_width, lightning.intensity = 0.08, 0.08, 4.0
+lightning.start_color, lightning.end_color = Vec4(0.7, 0.85, 1.0, 1.0), Vec4(0.75, 0.6, 1.0, 1.0)
+lightning.noise_amplitude, lightning.noise_frequency, lightning.noise_speed, lightning.segments = 0.25, 1.5, 14.0, 48
+
 # glTF models
 plinth = create("Bottle Plinth", "Builtin/Cube", STONE, position=(-3.5, 0.4, 2.0), scale=(1.2, 0.8, 1.2))
 add_body(plinth, "Static", bellows.BoxCollider)

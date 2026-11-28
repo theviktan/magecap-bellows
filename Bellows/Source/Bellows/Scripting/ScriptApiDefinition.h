@@ -24,6 +24,7 @@
 #include "Bellows/Math/Math.h"
 #include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Scene/EntityTags.h"
+#include "Bellows/Scene/BeamSystem.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/Scene.h"
@@ -1382,6 +1383,76 @@ namespace Bellows::Scripting {
 		trail.Method("clear", [](const TrailRef& r) { TrailSystem::Clear(r.Get()); }, "Forgets every point at once (after a teleport, say)");
 		trail.ReadOnly("point_count", [](const TrailRef& r) { return static_cast<int>(r.Get().RuntimePoints.size()); }, "How many points it has now");
 
+		using BeamLimits = BeamComponent;
+		auto beam = api.template Class<BeamRef>("Beam",
+			"A glowing strip from the entity to a point, another entity, or whatever it hits along its forward: lasers, lightning, "
+			"tethers, healing rays. It faces the camera along its length, and can scroll its texture and wobble");
+		beam.Property("active", [](const BeamRef& r) { return r.Get().Active; }, [](const BeamRef& r, bool v) { r.Get().Active = v; },
+			"Off, it isn't drawn and doesn't cast");
+		beam.Property("end_mode", [](const BeamRef& r) { return std::string(BeamEndModeToString(r.Get().EndMode)); },
+			[](const BeamRef& r, const std::string& v)
+			{
+				const std::optional<BeamEndMode> mode = BeamEndModeFromString(v);
+				if (!mode)
+					throw ScriptValueError("Unknown beam end_mode '" + v + "'. Modes: point, entity, raycast");
+				r.Get().EndMode = *mode;
+			}, "'point' ends at end_point; 'entity' at target; 'raycast' along the entity's forward (-Z) until it hits something, at most length");
+		beam.Property("end_point", [](const BeamRef& r) { return r.Get().EndPoint; },
+			[](const BeamRef& r, const glm::vec3& v)
+			{
+				for (int axis = 0; axis < 3; axis++)
+					Detail::RangeValue("A Beam's end_point", v[axis], -BeamLimits::MaxLength, BeamLimits::MaxLength, "-10000 to 10000 on each axis");
+				r.Get().EndPoint = v;
+			}, "For 'point': where it ends, in the entity's own space (it turns and moves with the entity)");
+		beam.Property("length", [](const BeamRef& r) { return r.Get().Length; },
+			[](const BeamRef& r, float v) { r.Get().Length = Detail::RangeValue("A Beam's length", v, 0.0f, BeamLimits::MaxLength, "0 to 10000"); },
+			"For 'raycast': the farthest it reaches, in meters");
+		beam.Property("start_width", [](const BeamRef& r) { return r.Get().StartWidth; },
+			[](const BeamRef& r, float v) { r.Get().StartWidth = Detail::RangeValue("A Beam's start_width", v, 0.0f, BeamLimits::MaxWidth, "0 to 1000"); },
+			"Meters across at the entity");
+		beam.Property("end_width", [](const BeamRef& r) { return r.Get().EndWidth; },
+			[](const BeamRef& r, float v) { r.Get().EndWidth = Detail::RangeValue("A Beam's end_width", v, 0.0f, BeamLimits::MaxWidth, "0 to 1000"); },
+			"Meters across at its end");
+		beam.Property("start_color", [](const BeamRef& r) { return ColorValue { r.Get().StartColor }; },
+			[](const BeamRef& r, const ColorValue& v) { r.Get().StartColor = Detail::EffectColor("Beam", "start_color", v); }, "Color and alpha at the entity");
+		beam.Property("end_color", [](const BeamRef& r) { return ColorValue { r.Get().EndColor }; },
+			[](const BeamRef& r, const ColorValue& v) { r.Get().EndColor = Detail::EffectColor("Beam", "end_color", v); }, "Color and alpha at its end");
+		beam.Property("intensity", [](const BeamRef& r) { return r.Get().Intensity; },
+			[](const BeamRef& r, float v) { r.Get().Intensity = Detail::RangeValue("A Beam's intensity", v, 0.0f, ParticleEmitterComponent::MaxIntensity, "0 to 1000"); },
+			"Brightness, from 0 to 1000; above 1 it glows");
+		beam.Property("blend", [](const BeamRef& r) { return std::string(ParticleBlendToString(r.Get().Blend)); },
+			[](const BeamRef& r, const std::string& v) { r.Get().Blend = Detail::RequireParticleBlend(v); },
+			"'additive' adds light; 'alpha' covers what's behind");
+		beam.Property("texture", [](const BeamRef& r) { return r.Get().TexturePath; },
+			[](const BeamRef& r, const std::string& v) { r.Get().TexturePath = v; }, "An image repeated along it (an asset path); empty is soft toward its edges");
+		beam.Property("tile_length", [](const BeamRef& r) { return r.Get().TileLength; },
+			[](const BeamRef& r, float v) { r.Get().TileLength = Detail::RangeValue("A Beam's tile_length", v, BeamLimits::MinTileLength, BeamLimits::MaxTileLength, "0.01 to 1000"); },
+			"Meters one copy of the texture covers");
+		beam.Property("scroll_speed", [](const BeamRef& r) { return r.Get().ScrollSpeed; },
+			[](const BeamRef& r, float v) { r.Get().ScrollSpeed = Detail::RangeValue("A Beam's scroll_speed", v, -BeamLimits::MaxScrollSpeed, BeamLimits::MaxScrollSpeed, "-1000 to 1000"); },
+			"Texture copies per second it scrolls outward from the entity (below 0, inward)");
+		beam.Property("segments", [](const BeamRef& r) { return static_cast<int>(r.Get().Segments); },
+			[](const BeamRef& r, int v)
+			{
+				if (v < static_cast<int>(BeamLimits::MinSegments) || v > static_cast<int>(BeamLimits::MaxSegments))
+					throw ScriptValueError("A Beam's segments is from 1 to 256");
+				r.Get().Segments = static_cast<uint32_t>(v);
+			}, "Pieces it's drawn in, from 1 to 256: more is smoother when it wobbles");
+		beam.Property("noise_amplitude", [](const BeamRef& r) { return r.Get().NoiseAmplitude; },
+			[](const BeamRef& r, float v) { r.Get().NoiseAmplitude = Detail::RangeValue("A Beam's noise_amplitude", v, 0.0f, BeamLimits::MaxNoiseAmplitude, "0 to 100"); },
+			"Meters it wobbles sideways at its middle (its ends stay put): lightning, crackling energy; 0 is straight");
+		beam.Property("noise_frequency", [](const BeamRef& r) { return r.Get().NoiseFrequency; },
+			[](const BeamRef& r, float v) { r.Get().NoiseFrequency = Detail::RangeValue("A Beam's noise_frequency", v, 0.0f, BeamLimits::MaxNoiseFrequency, "0 to 100"); },
+			"Wobbles per meter along it");
+		beam.Property("noise_speed", [](const BeamRef& r) { return r.Get().NoiseSpeed; },
+			[](const BeamRef& r, float v) { r.Get().NoiseSpeed = Detail::RangeValue("A Beam's noise_speed", v, 0.0f, BeamLimits::MaxNoiseSpeed, "0 to 1000"); },
+			"How fast the wobble changes");
+		beam.ReadOnly("end_position", [](const BeamRef& r) { return r.Get().RuntimeEnd; },
+			"Where it ended this frame, in world space (for 'raycast', where it hit or its full length)");
+		beam.ReadOnly("is_hitting", [](const BeamRef& r) { return r.Get().RuntimeHit; }, "For 'raycast': whether it stopped on something this frame");
+		beam.ReadOnly("hit_normal", [](const BeamRef& r) { return r.Get().RuntimeHitNormal; },
+			"For 'raycast': which way the surface it stopped on faces (for sparks and scorch marks)");
+
 		auto decal = api.template Class<DecalRef>("Decal",
 			"Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top "
 			"toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles");
@@ -1614,6 +1685,41 @@ namespace Bellows::Scripting {
 
 		// --- Entity -----------------------------------------------------------
 		auto entity = api.template Class<ScriptEntity>("Entity", "A handle to an entity in a scene");
+
+		// Beam members that name entities come after the Entity class exists, so both languages
+		// describe them with its script name.
+		beam.Property("target",
+			[](const BeamRef& r) -> std::optional<ScriptEntity>
+			{
+				const BeamComponent& c = r.Get();
+				if (Entity target = r.GetEntity().GetScene()->TryGetEntityByUUID(c.Target))
+					return ScriptEntity(target);
+				return std::nullopt;
+			},
+			[](const BeamRef& r, const std::optional<ScriptEntity>& v)
+			{
+				BeamComponent& c = r.Get();
+				if (!v)
+				{
+					c.Target = 0;
+					return;
+				}
+				Entity target = v->Resolve();
+				if (target.GetScene() != r.GetEntity().GetScene())
+					throw ScriptValueError("A Beam's target must be in the same scene as the beam");
+				c.Target = target.GetUUID();
+			},
+			"For 'entity': the entity it reaches, or nothing");
+		beam.ReadOnly("hit_entity", [](const BeamRef& r) -> std::optional<ScriptEntity>
+			{
+				const BeamComponent& c = r.Get();
+				if (!c.RuntimeHit)
+					return std::nullopt;
+				if (Entity hit = r.GetEntity().GetScene()->TryGetEntityByUUID(c.RuntimeHitEntity))
+					return ScriptEntity(hit);
+				return std::nullopt;
+			}, "For 'raycast': the entity it stopped on this frame, or nothing");
+
 		entity.ReadOnly("id", [](const ScriptEntity& e) { return static_cast<uint64_t>(e.ID); }, "");
 		entity.ReadOnly("valid", [](const ScriptEntity& e) { return e.IsValid(); }, "False once the entity has been destroyed");
 		entity.Property("name", [](const ScriptEntity& e) { return e.Resolve().GetName(); }, [](const ScriptEntity& e, const std::string& v) { e.Resolve().SetName(v); }, "");

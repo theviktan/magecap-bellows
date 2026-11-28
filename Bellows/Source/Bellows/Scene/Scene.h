@@ -259,6 +259,8 @@ namespace Bellows {
 		// Moves every particle emitter on by 'seconds' (in the editor too, so effects show while editing).
 		void UpdateParticles(float seconds);
 		void UpdateTrails(float seconds);
+		// Works out each beam's start and end (casting rays for raycast beams while physics runs).
+		void UpdateBeams(float seconds);
 		static const TextLayout* LayoutTextComponent(TextComponent& text, float size, const glm::vec2& boxSize);
 		void SubmitUI(SceneRenderer& renderer);
 

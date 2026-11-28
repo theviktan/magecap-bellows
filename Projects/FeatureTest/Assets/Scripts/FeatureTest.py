@@ -547,6 +547,29 @@ class FeatureTest(bellows.Script):
                    "Trail limits")
         trail.clear()
         self.check(trail.point_count == 0, "Trail.clear and point_count")
+        beam = entity.add_component(bellows.Beam)
+        self.check(beam.active and beam.end_mode == "point" and close(beam.end_point, (0.0, 0.0, -5.0)) and beam.target is None
+                   and close(beam.length, 20.0) and close(beam.start_width, 0.15) and beam.blend == "additive" and beam.segments == 24
+                   and close(beam.noise_amplitude, 0.0) and close(beam.scroll_speed, 0.0), "Beam defaults")
+        other = bellows.create_entity("Beam Target")
+        beam.end_mode, beam.target, beam.end_point, beam.length = "entity", other, Vec3(1.0, 2.0, 3.0), 12.5
+        beam.start_width, beam.end_width, beam.intensity, beam.blend = 0.3, 0.1, 5.0, "alpha"
+        beam.start_color, beam.end_color = Vec4(1.0, 0.0, 0.0, 1.0), Vec4(0.0, 0.0, 1.0, 0.5)
+        beam.texture, beam.tile_length, beam.scroll_speed = "Textures/GroundTiles.png", 0.5, -2.0
+        beam.segments, beam.noise_amplitude, beam.noise_frequency, beam.noise_speed = 40, 0.2, 3.0, 9.0
+        self.check(beam.end_mode == "entity" and beam.target == other and close(beam.end_point, (1.0, 2.0, 3.0)) and close(beam.length, 12.5)
+                   and close(beam.start_width, 0.3) and close(beam.end_width, 0.1) and close(beam.intensity, 5.0) and beam.blend == "alpha"
+                   and close(beam.start_color, (1.0, 0.0, 0.0, 1.0)) and close(beam.end_color, (0.0, 0.0, 1.0, 0.5))
+                   and beam.texture == "Textures/GroundTiles.png" and close(beam.tile_length, 0.5) and close(beam.scroll_speed, -2.0)
+                   and beam.segments == 40 and close(beam.noise_amplitude, 0.2) and close(beam.noise_frequency, 3.0) and close(beam.noise_speed, 9.0),
+                   "Beam properties")
+        self.check(raises(lambda: setattr(beam, "end_mode", "laser"), ValueError) and raises(lambda: setattr(beam, "segments", 0), ValueError)
+                   and raises(lambda: setattr(beam, "length", -1.0), ValueError) and raises(lambda: setattr(beam, "tile_length", 0.0), ValueError)
+                   and raises(lambda: setattr(beam, "noise_amplitude", float("nan")), ValueError),
+                   "Beam limits")
+        beam.target = None
+        self.check(beam.target is None and not beam.is_hitting and beam.hit_entity is None, "Beam target cleared, no hit")
+        other.destroy()
         decal = entity.add_component(bellows.Decal)
         self.check(decal.texture == "" and close(decal.color, (1.0, 1.0, 1.0, 1.0)) and close(decal.size, (1.0, 1.0, 1.0))
                    and close(decal.max_angle, 60.0) and decal.sort_order == 0, "Decal defaults")
@@ -680,7 +703,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Trail", "Decal", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Trail", "Beam", "Decal", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:
