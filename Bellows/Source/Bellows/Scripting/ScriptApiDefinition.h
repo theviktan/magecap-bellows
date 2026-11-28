@@ -1550,6 +1550,16 @@ namespace Bellows::Scripting {
 		effectShape.Property("dissolve_scale", [](const EffectShapeRef& r) { return r.Get().DissolveScale; },
 			[](const EffectShapeRef& r, float v) { r.Get().DissolveScale = Detail::RangeValue("An EffectShape's dissolve_scale", v, ShapeLimits::MinDissolveScale, ShapeLimits::MaxDissolveScale, "0.01 to 1000"); },
 			"Dissolve blobs per meter");
+		effectShape.Property("distortion", [](const EffectShapeRef& r) { return r.Get().Distortion; },
+			[](const EffectShapeRef& r, float v) { r.Get().Distortion = Detail::RangeValue("An EffectShape's distortion", v, 0.0f, 1.0f, "0 to 1"); },
+			"How much it bends what's behind it, like heat haze or a shockwave's ripple: 0 is off, 1 the strongest. "
+			"With intensity 0 it's only the distortion");
+		effectShape.Property("distortion_scale", [](const EffectShapeRef& r) { return r.Get().DistortionScale; },
+			[](const EffectShapeRef& r, float v) { r.Get().DistortionScale = Detail::RangeValue("An EffectShape's distortion_scale", v, ShapeLimits::MinDistortionScale, ShapeLimits::MaxDistortionScale, "0.01 to 100"); },
+			"Distortion waves per meter");
+		effectShape.Property("distortion_speed", [](const EffectShapeRef& r) { return r.Get().DistortionSpeed; },
+			[](const EffectShapeRef& r, float v) { r.Get().DistortionSpeed = Detail::RangeValue("An EffectShape's distortion_speed", v, -ShapeLimits::MaxDistortionSpeed, ShapeLimits::MaxDistortionSpeed, "-100 to 100"); },
+			"How fast the distortion's waves drift, in cycles per second");
 		effectShape.Method("play", [](const EffectShapeRef& r) { EffectShapeSystem::Play(r.Get()); }, "Starts its cycle over, shown and playing");
 		effectShape.Method("stop", [](const EffectShapeRef& r) { EffectShapeSystem::Stop(r.Get()); }, "Hides it until play() is called");
 		effectShape.ReadOnly("time", [](const EffectShapeRef& r) { return r.Get().RuntimeTime; }, "Seconds into its cycle");

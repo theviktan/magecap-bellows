@@ -594,6 +594,7 @@ namespace Bellows {
 			shape.RuntimeTime = 0.0f;
 			shape.RuntimeSpin = 0.0f;
 			shape.RuntimeOffset = glm::vec2(0.0f);
+			shape.RuntimeDistortionPhase = 0.0f;
 			shape.RuntimeFinished = false;
 		}
 		for (entt::entity handle : m_Registry.view<BeamComponent>())

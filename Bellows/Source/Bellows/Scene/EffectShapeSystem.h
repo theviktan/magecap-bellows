@@ -33,9 +33,9 @@ namespace Bellows {
 		// The surface in world space for an entity at 'world', at its point in the cycle (size curve
 		// and spin): U runs around it, V across it. Nothing when finished.
 		void BuildMesh(const EffectShapeComponent& shape, const glm::mat4& world, std::vector<EffectVertex>& outVertices);
-		// The look at its point in the cycle (color gradient, dissolve curve, scroll); the texture is
-		// the caller's to add. Noise cells follow the shape's size so dissolve blobs are DissolveScale
-		// per meter.
+		// The look at its point in the cycle (color gradient, dissolve curve, scroll, distortion); the
+		// texture is the caller's to add. Noise cells and distortion waves follow the shape's size, so
+		// they are DissolveScale and DistortionScale per meter.
 		EffectMaterial BuildMaterial(const EffectShapeComponent& shape, const glm::mat4& world);
 
 	}

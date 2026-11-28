@@ -565,6 +565,9 @@ namespace Bellows {
 				JsonRead(*it, "DissolveEdgeWidth", component.DissolveEdgeWidth);
 				JsonRead(*it, "DissolveEdgeColor", component.DissolveEdgeColor);
 				JsonRead(*it, "DissolveScale", component.DissolveScale);
+				JsonRead(*it, "Distortion", component.Distortion);
+				JsonRead(*it, "DistortionScale", component.DistortionScale);
+				JsonRead(*it, "DistortionSpeed", component.DistortionSpeed);
 				component.Clamp();
 			}
 
@@ -1005,6 +1008,9 @@ namespace Bellows {
 			j["DissolveEdgeWidth"] = c->DissolveEdgeWidth;
 			j["DissolveEdgeColor"] = c->DissolveEdgeColor;
 			j["DissolveScale"] = c->DissolveScale;
+			j["Distortion"] = c->Distortion;
+			j["DistortionScale"] = c->DistortionScale;
+			j["DistortionSpeed"] = c->DistortionSpeed;
 		}
 
 		if (const auto* c = entity.TryGetComponent<TrailComponent>())

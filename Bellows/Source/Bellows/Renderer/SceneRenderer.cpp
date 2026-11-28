@@ -433,6 +433,10 @@ namespace Bellows {
 				.setSrcBlendAlpha(nvrhi::BlendFactor::Zero).setDestBlendAlpha(nvrhi::BlendFactor::One);
 			desc.renderState.blendState.targets[0] = particleAlpha;
 			m_ParticleAlphaPipeline = device->createGraphicsPipeline(desc, hdrDepthInfo);
+
+			// Distortion lays the bent copy of the scene over the scene by the surface's coverage.
+			desc.PS = Renderer::GetShader("ParticleDistort.frag");
+			m_ParticleDistortPipeline = device->createGraphicsPipeline(desc, hdrDepthInfo);
 		}
 
 		// Screen UI: on top of everything, so no depth at all.
@@ -460,7 +464,7 @@ namespace Bellows {
 			&& m_PrepassPipelines.IsComplete() && m_OpaquePipelines.IsComplete() && m_TransparentPipelines.IsComplete()
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
-			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline && m_ParticleAdditivePipeline && m_ParticleAlphaPipeline
+			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline && m_ParticleAdditivePipeline && m_ParticleAlphaPipeline && m_ParticleDistortPipeline
 			&& m_DecalCopyPipeline,
 			"SceneRenderer: failed to create one or more pipelines");
 	}
@@ -490,6 +494,14 @@ namespace Bellows {
 		m_NormalTexture = createTarget(c_NormalFormat, width, height, "SceneNormals", nvrhi::Color(0.0f));
 		m_EntityIDTexture = createTarget(c_EntityIDFormat, width, height, "SceneEntityIDs", nvrhi::Color(0.0f));
 		m_HDRTexture = createTarget(c_HDRFormat, width, height, "SceneHDR", nvrhi::Color(0.0f));
+		m_SceneCopyTexture = createTarget(c_HDRFormat, width, height, "SceneCopy", nvrhi::Color(0.0f));
+		{
+			nvrhi::BindingSetDesc copyDesc;
+			copyDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, m_SceneCopyTexture));
+			copyDesc.addItem(nvrhi::BindingSetItem::Sampler(1, Renderer::GetLinearClampSampler()));
+			copyDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::TextData)));
+			m_SceneCopySet = device->createBindingSet(copyDesc, Renderer::GetTextBindingLayout());
+		}
 		m_LDRTexture = createTarget(c_LDRFormat, width, height, "SceneLDR", nvrhi::Color(0.0f));
 		m_FinalTexture = createTarget(c_LDRFormat, width, height, "SceneFinal", nvrhi::Color(0.0f));
 
@@ -1634,7 +1646,8 @@ namespace Bellows {
 	void SceneRenderer::SubmitEffectMesh(const EffectVertex* vertices, size_t count, const EffectMaterial& material)
 	{
 		count -= count % 3;
-		if (!vertices || count == 0 || material.Color.a <= 0.0f)
+		const bool distorts = material.Distortion > 0.0f;
+		if (!vertices || count == 0 || (material.Color.a <= 0.0f && !distorts))
 			return;
 		const Ref<Texture2D>& image = material.Texture ? material.Texture : Renderer::GetWhiteTexture();
 		GetTextureBindingSet(image->GetHandle(), image, true);
@@ -1671,7 +1684,23 @@ namespace Bellows {
 		draw.VertexCount = static_cast<uint32_t>(count);
 		draw.Distance = glm::length(center / static_cast<float>(count) - m_Camera.Position);
 		m_Statistics.Particles += static_cast<uint32_t>(count / 3);
-		m_ParticleDraws.push_back(std::move(draw));
+
+		if (distorts)
+		{
+			// The same corners again, bending the scene behind them by the same coverage.
+			ParticleDraw bend = draw;
+			bend.Distort = true;
+			bend.Params[0] = glm::vec4(material.Distortion, material.DistortionPhase, material.DissolveEdgeWidth, 0.0f);
+			bend.Params[1] = glm::vec4(1.0f / static_cast<float>(std::max(m_ViewportWidth, 1u)), 1.0f / static_cast<float>(std::max(m_ViewportHeight, 1u)),
+				material.EdgeFade, material.Dissolve);
+			bend.Params[2] = glm::vec4(std::max(1.0f, std::round(material.DistortionWaves.x)), std::max(material.DistortionWaves.y, 0.0f), 0.0f, 0.0f);
+			bend.Params[3] = draw.Params[3];
+			m_ParticleDraws.push_back(std::move(bend));
+		}
+		// Additive with no color adds nothing: a surface that only distorts needs no color pass.
+		const bool invisible = material.Color.a <= 0.0f || (material.Additive && glm::all(glm::lessThanEqual(glm::vec3(material.Color), glm::vec3(0.0f))));
+		if (!invisible)
+			m_ParticleDraws.push_back(std::move(draw));
 	}
 
 	void SceneRenderer::SubmitDecal(const glm::mat4& boxToWorld, const glm::vec4& color, const Ref<Texture2D>& texture, float maxAngleDegrees, int sortOrder)
@@ -1832,18 +1861,26 @@ namespace Bellows {
 		}
 		commandList->writeBuffer(m_ParticleVertexBuffer, m_ParticleVertices.data(), m_ParticleVertices.size() * sizeof(ParticleVertex));
 
-		// Emitters far to near, so an alpha emitter in front covers one behind it.
-		std::stable_sort(m_ParticleDraws.begin(), m_ParticleDraws.end(), [](const ParticleDraw& a, const ParticleDraw& b) { return a.Distance > b.Distance; });
+		// Emitters far to near, so an alpha emitter in front covers one behind it. Distortion goes first,
+		// bending the scene as it was before any particle, and the glows draw over it.
+		std::stable_sort(m_ParticleDraws.begin(), m_ParticleDraws.end(), [](const ParticleDraw& a, const ParticleDraw& b)
+		{
+			if (a.Distort != b.Distort)
+				return a.Distort;
+			return a.Distance > b.Distance;
+		});
+		if (std::any_of(m_ParticleDraws.begin(), m_ParticleDraws.end(), [](const ParticleDraw& draw) { return draw.Distort; }))
+			commandList->copyTexture(m_SceneCopyTexture, nvrhi::TextureSlice(), m_HDRTexture, nvrhi::TextureSlice());
 
 		ShaderInterop::TextData constants;
 		constants.ViewProjection = m_Camera.Projection * m_Camera.View;
 		for (const ParticleDraw& draw : m_ParticleDraws)
 		{
 			nvrhi::GraphicsState state;
-			state.pipeline = draw.Additive ? m_ParticleAdditivePipeline : m_ParticleAlphaPipeline;
+			state.pipeline = draw.Distort ? m_ParticleDistortPipeline : draw.Additive ? m_ParticleAdditivePipeline : m_ParticleAlphaPipeline;
 			state.framebuffer = m_HDRDepthFramebuffer;
 			state.viewport.addViewportAndScissorRect(nvrhi::Viewport(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight)));
-			state.bindings = { GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef, draw.RepeatTexture) };
+			state.bindings = { draw.Distort ? m_SceneCopySet.Get() : GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef, draw.RepeatTexture) };
 			state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_ParticleVertexBuffer).setSlot(0).setOffset(0) };
 			commandList->setGraphicsState(state);
 			constants.Params = draw.Params[0];

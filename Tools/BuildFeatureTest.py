@@ -288,6 +288,7 @@ wave.radius, wave.inner_radius, wave.duration, wave.edge_fade = 1.6, 1.35, 1.6, 
 wave.color, wave.intensity = Vec4(0.55, 0.8, 1.0, 1.0), 2.5
 wave.size_curve = [[0.0, 0.1], [0.4, 0.8], [1.0, 1.0]]
 wave.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 0.0]]
+wave.distortion, wave.distortion_scale, wave.distortion_speed = 0.4, 2.0, 1.0
 glow = portal.add_component(bellows.ParticleEmitter)
 glow.shape, glow.shape_size, glow.facing = "ring", Vec3(0.6, 0.6, 0.6), "flat"
 glow.rate, glow.lifetime, glow.speed, glow.spin_speed, glow.rotation_variation = 12.0, 1.0, 0.0, 90.0, 180.0

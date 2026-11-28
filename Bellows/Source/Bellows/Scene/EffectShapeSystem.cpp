@@ -114,6 +114,7 @@ namespace Bellows {
 				return;
 			shape.RuntimeSpin = std::fmod(shape.RuntimeSpin + shape.SpinSpeed * seconds, 360.0f);
 			shape.RuntimeOffset = glm::fract(shape.RuntimeOffset + shape.Scroll * seconds);
+			shape.RuntimeDistortionPhase = glm::fract(shape.RuntimeDistortionPhase + shape.DistortionSpeed * seconds);
 			const float duration = std::max(shape.Duration, EffectShapeComponent::MinDuration);
 			shape.RuntimeTime += seconds;
 			if (shape.RuntimeTime >= duration)
@@ -214,6 +215,9 @@ namespace Bellows {
 			const float scale = (glm::length(glm::vec3(world[0])) + glm::length(glm::vec3(world[1])) + glm::length(glm::vec3(world[2]))) / 3.0f;
 			const glm::vec2 meters = SurfaceSize(shape) * SizeAt(shape) * (std::isfinite(scale) ? scale : 1.0f);
 			material.NoiseCells = glm::max(meters * shape.DissolveScale, glm::vec2(1.0f));
+			material.Distortion = shape.Distortion * EffectShapeComponent::DistortionScreenFraction;
+			material.DistortionPhase = shape.RuntimeDistortionPhase;
+			material.DistortionWaves = glm::max(meters * shape.DistortionScale, glm::vec2(1.0f));
 			return material;
 		}
 

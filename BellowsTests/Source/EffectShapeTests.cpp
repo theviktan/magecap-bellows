@@ -181,6 +181,11 @@ TEST_CASE("An effect shape's cycle loops or plays once, and drives its size, col
 	CHECK(Near(material.Color.a, 0.75f));
 	CHECK(Near(material.Dissolve, 0.25f));
 	CHECK(material.Offset == shape.RuntimeOffset);
+	CHECK(Near(shape.RuntimeDistortionPhase, 0.25f));		// Default speed 0.5 cycles a second
+	CHECK(material.Distortion == 0.0f);
+	shape.Distortion = 0.5f;
+	CHECK(Near(EffectShapeSystem::BuildMaterial(shape, glm::mat4(1.0f)).Distortion, 0.5f * EffectShapeComponent::DistortionScreenFraction));
+	shape.Distortion = 0.0f;
 	std::vector<EffectVertex> mesh;
 	EffectShapeSystem::BuildMesh(shape, glm::mat4(1.0f), mesh);
 	CHECK(Near(Measure(mesh).MaxRadius, 0.5f));			// Size 0.5 a quarter of the way through
@@ -240,6 +245,8 @@ TEST_CASE("Effect shapes are clamped, saved and loaded")
 	bad.Rim = -1.0f;
 	bad.Tiling = glm::vec2(-1.0f, 1e9f);
 	bad.Blend = static_cast<ParticleBlend>(4);
+	bad.Distortion = 3.0f;
+	bad.DistortionScale = 0.0f;
 	bad.Clamp();
 	CHECK(bad.Shape == EffectShapeType::Ring);
 	CHECK(bad.Radius == 0.0f);
@@ -252,6 +259,8 @@ TEST_CASE("Effect shapes are clamped, saved and loaded")
 	CHECK(bad.Rim == 0.0f);
 	CHECK(bad.Tiling == glm::vec2(0.0f, EffectShapeComponent::MaxTiling));
 	CHECK(bad.Blend == ParticleBlend::Additive);
+	CHECK(bad.Distortion == 1.0f);
+	CHECK(bad.DistortionScale == EffectShapeComponent::MinDistortionScale);
 
 	Scene scene("Saved");
 	Entity entity = scene.CreateEntity("Pillar");
@@ -282,6 +291,9 @@ TEST_CASE("Effect shapes are clamped, saved and loaded")
 	shape.DissolveEdgeWidth = 0.1f;
 	shape.DissolveEdgeColor = glm::vec4(0.2f, 1.0f, 0.4f, 1.0f);
 	shape.DissolveScale = 6.0f;
+	shape.Distortion = 0.35f;
+	shape.DistortionScale = 5.0f;
+	shape.DistortionSpeed = -2.0f;
 
 	const auto json = SceneSerializer::SerializeToJson(scene);
 	Scene loaded("Loaded");
@@ -316,6 +328,9 @@ TEST_CASE("Effect shapes are clamped, saved and loaded")
 	CHECK(read.DissolveEdgeWidth == doctest::Approx(0.1f));
 	CHECK(read.DissolveEdgeColor == shape.DissolveEdgeColor);
 	CHECK(read.DissolveScale == doctest::Approx(6.0f));
+	CHECK(read.Distortion == doctest::Approx(0.35f));
+	CHECK(read.DistortionScale == doctest::Approx(5.0f));
+	CHECK(read.DistortionSpeed == doctest::Approx(-2.0f));
 
 	// An unknown shape name falls back to a ring rather than failing the load.
 	auto broken = json;
@@ -425,6 +440,79 @@ TEST_CASE("[gpu] An effect shape draws its surface, fades its edges and dissolve
 	entity.GetComponent<EffectShapeComponent>().Dissolve = 0.0f;
 	EffectShapeSystem::Stop(entity.GetComponent<EffectShapeComponent>());
 	CHECK(CountGreen(draw()) == 0);
+
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("[gpu] An effect shape's distortion bends what's behind it, and nothing outside it")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+
+	Scene scene("Distortion");
+	SceneRendererSettings& settings = scene.GetSettings().Rendering;
+	settings.ToneMapper = Tonemapper::None;
+	settings.BloomEnabled = false;
+	settings.SSAOEnabled = false;
+	settings.FXAAEnabled = false;
+	settings.ShadowsEnabled = false;
+	settings.Vignette = 0.0f;
+	// A cube under the middle of the view: its edges are what the distortion visibly moves.
+	Entity cube = scene.CreateEntity("Cube");
+	cube.AddComponent<MeshRendererComponent>().MeshPath = "Builtin/Cube";
+	Entity haze = scene.CreateEntity("Haze");
+	haze.GetTransform().Translation = glm::vec3(0.0f, 1.0f, 0.0f);
+	EffectShapeComponent& disc = haze.AddComponent<EffectShapeComponent>();
+	disc.Shape = EffectShapeType::Ring;
+	disc.Radius = 1.2f;
+	disc.InnerRadius = 0.0f;
+	disc.EdgeFade = 0.0f;
+	disc.Intensity = 0.0f;			// Only the distortion
+	disc.Playing = false;
+
+	const auto draw = [&]()
+	{
+		for (int frame = 0; frame < 2; frame++)
+			scene.OnRender(renderer, TopCamera());
+		return Renderer::ReadbackTexture(renderer.GetFinalImage());
+	};
+	const Image plain = draw();
+	haze.GetComponent<EffectShapeComponent>().Distortion = 1.0f;
+	const Image bent = draw();
+	bent.SavePNG(BellowsTests::GetTestOutputDirectory() / "EffectShape_Distortion.png");
+
+	// Inside the disc some pixels moved; well outside it, none did.
+	const float pixelsPerMeter = static_cast<float>(c_Size) / (2.0f * 5.0f * std::tan(glm::radians(25.0f)));
+	const float discPixels = 1.2f * pixelsPerMeter;
+	uint32_t changedInside = 0, changedOutside = 0;
+	for (uint32_t y = 0; y < c_Size; y++)
+	{
+		for (uint32_t x = 0; x < c_Size; x++)
+		{
+			const glm::u8vec4 a = plain.GetPixel(x, y), b = bent.GetPixel(x, y);
+			const bool changed = glm::any(glm::greaterThan(glm::abs(glm::ivec3(a) - glm::ivec3(b)), glm::ivec3(8)));
+			const float distance = glm::length(glm::vec2(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f) - glm::vec2(c_Size * 0.5f));
+			if (distance < discPixels * 0.9f)
+				changedInside += changed ? 1 : 0;
+			else if (distance > discPixels * 1.2f)
+				changedOutside += changed ? 1 : 0;
+		}
+	}
+	CHECK(changedInside > 20);
+	CHECK(changedOutside == 0);
+
+	// Turned off again, the image is as it was.
+	haze.GetComponent<EffectShapeComponent>().Distortion = 0.0f;
+	const Image again = draw();
+	uint32_t different = 0;
+	for (uint32_t y = 0; y < c_Size; y++)
+		for (uint32_t x = 0; x < c_Size; x++)
+			different += again.GetPixel(x, y) != plain.GetPixel(x, y) ? 1 : 0;
+	CHECK(different == 0);
 
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);
 }

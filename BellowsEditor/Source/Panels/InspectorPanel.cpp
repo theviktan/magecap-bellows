@@ -138,7 +138,7 @@ namespace Bellows {
 		};
 
 		void DrawCurveKeys(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, const char* valueTooltip,
-			const std::vector<CurvePreset>& presets, float maximum = ParticleEmitterComponent::MaxSize);
+			const std::vector<CurvePreset>& presets, float valueMaximum = ParticleEmitterComponent::MaxSize);
 		void DrawGradientKeys(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, const std::vector<GradientPreset>& presets);
 
 		// A size-like curve, multiplying 'start': its mode (a straight line to 'end', or the curve), and
@@ -166,9 +166,9 @@ namespace Bellows {
 				DrawCurveKeys(text, curve, valueTooltip, presets);
 		}
 
-		// A curve that is either steady (no keys: 'steadyValue' throughout) or keyed, from 0 to 'maximum'.
+		// A curve that is either steady (no keys: 'steadyValue' throughout) or keyed, from 0 to 'valueMaximum'.
 		void DrawOptionalCurveEditor(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, float steadyValue, const char* valueTooltip,
-			const std::vector<CurvePreset>& presets, float maximum = ParticleEmitterComponent::MaxSize)
+			const std::vector<CurvePreset>& presets, float valueMaximum = ParticleEmitterComponent::MaxSize)
 		{
 			int mode = curve.empty() ? 0 : 1;
 			static const char* const s_Modes[] = { "Steady", "Curve" };
@@ -184,12 +184,12 @@ namespace Bellows {
 				UI::EndPropertyGrid();
 			}
 			if (!curve.empty())
-				DrawCurveKeys(text, curve, valueTooltip, presets, maximum);
+				DrawCurveKeys(text, curve, valueTooltip, presets, valueMaximum);
 		}
 
-		// A curve's presets, plot and keys (each value 0 to 'maximum').
+		// A curve's presets, plot and keys (each value 0 to 'valueMaximum').
 		void DrawCurveKeys(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, const char* valueTooltip,
-			const std::vector<CurvePreset>& presets, float maximum)
+			const std::vector<CurvePreset>& presets, float valueMaximum)
 		{
 			using Limits = ParticleEmitterComponent;
 			ImGui::PushID(text.Id);
@@ -213,7 +213,7 @@ namespace Bellows {
 				ImGui::SetItemTooltip("%s", text.TimeTooltip);
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(width);
-				ImGui::DragFloat("##Value", &curve[i].Value, 0.01f, 0.0f, maximum, "x %.2f");
+				ImGui::DragFloat("##Value", &curve[i].Value, 0.01f, 0.0f, valueMaximum, "x %.2f");
 				ImGui::SetItemTooltip("%s", valueTooltip);
 				ImGui::SameLine();
 				ImGui::BeginDisabled(curve.size() <= 1);
@@ -432,6 +432,16 @@ namespace Bellows {
 					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
 					c.Color = { 0.55f, 0.8f, 1.0f, 1.0f }; c.Intensity = 3.0f; c.Blend = ParticleBlend::Additive;
 					c.EdgeFade = 0.5f; c.Rim = 0.0f; c.Scroll = { 0.0f, 0.0f };
+					c.Distortion = 0.4f; c.DistortionScale = 2.0f; c.DistortionSpeed = 1.0f;
+				} },
+				{ "Heat Haze", [](EffectShapeComponent& c)
+				{
+					c.Shape = EffectShapeType::Cylinder; c.Radius = 0.8f; c.TopRadius = 1.0f; c.Height = 2.5f; c.Arc = 360.0f;
+					c.Loop = true; c.Duration = 2.0f; c.SpinSpeed = 0.0f;
+					c.SizeCurve.clear(); c.ColorGradient.clear(); c.DissolveCurve.clear(); c.Dissolve = 0.0f;
+					c.Color = { 1.0f, 1.0f, 1.0f, 1.0f }; c.Intensity = 0.0f; c.Blend = ParticleBlend::Additive;
+					c.EdgeFade = 0.5f; c.Rim = 1.0f; c.Scroll = { 0.0f, 0.0f };
+					c.Distortion = 0.3f; c.DistortionScale = 3.0f; c.DistortionSpeed = 0.8f;
 				} },
 				{ "Magic Circle", [](EffectShapeComponent& c)
 				{
@@ -442,6 +452,7 @@ namespace Bellows {
 					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
 					c.Color = { 1.0f, 0.75f, 0.3f, 1.0f }; c.Intensity = 2.5f; c.Blend = ParticleBlend::Additive;
 					c.EdgeFade = 0.3f; c.Rim = 0.0f; c.Tiling = { 8.0f, 1.0f }; c.Scroll = { 0.0f, 0.0f };
+					c.Distortion = 0.0f;
 				} },
 				{ "Shield", [](EffectShapeComponent& c)
 				{
@@ -452,6 +463,7 @@ namespace Bellows {
 					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
 					c.Color = { 0.35f, 0.75f, 1.0f, 1.0f }; c.Intensity = 2.0f; c.Blend = ParticleBlend::Additive;
 					c.EdgeFade = 0.0f; c.Rim = 3.0f; c.Tiling = { 6.0f, 3.0f }; c.Scroll = { 0.0f, 0.15f };
+					c.Distortion = 0.0f;
 				} },
 				{ "Light Pillar", [](EffectShapeComponent& c)
 				{
@@ -462,6 +474,7 @@ namespace Bellows {
 					c.DissolveCurve.clear(); c.Dissolve = 0.0f;
 					c.Color = { 1.0f, 0.9f, 0.55f, 1.0f }; c.Intensity = 3.0f; c.Blend = ParticleBlend::Additive;
 					c.EdgeFade = 0.5f; c.Rim = 1.5f; c.Tiling = { 4.0f, 1.0f }; c.Scroll = { 0.0f, 0.5f };
+					c.Distortion = 0.0f;
 				} },
 				{ "Portal", [](EffectShapeComponent& c)
 				{
@@ -472,6 +485,7 @@ namespace Bellows {
 					c.DissolveScale = 3.0f;
 					c.Color = { 0.4f, 0.2f, 1.0f, 1.0f }; c.Intensity = 2.0f; c.Blend = ParticleBlend::Additive;
 					c.EdgeFade = 0.15f; c.Rim = 0.0f; c.Scroll = { 0.0f, -0.3f };
+					c.Distortion = 0.15f; c.DistortionScale = 2.0f; c.DistortionSpeed = -0.5f;
 				} },
 				{ "Burn Away", [](EffectShapeComponent& c)
 				{
@@ -1126,6 +1140,20 @@ namespace Bellows {
 				UI::PropertySlider("Edge Width", c.DissolveEdgeWidth, 0.0f, 0.5f, "%.2f", "How wide the glowing edge of the dissolve is");
 				UI::PropertyColor("Edge Color", c.DissolveEdgeColor, false, "The dissolve edge's color (brightened by Intensity)");
 				UI::Property("Scale", c.DissolveScale, 0.05f, Limits::MinDissolveScale, Limits::MaxDissolveScale, "%.2f / m", "Dissolve blobs per meter");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Distortion");
+			if (UI::BeginPropertyGrid("EffectShapeDistortion"))
+			{
+				UI::PropertySlider("Amount", c.Distortion, 0.0f, 1.0f, "%.2f",
+					"How much it bends what's behind it, like heat haze or a shockwave's ripple; 0 is off. With Intensity 0 it's only the distortion");
+				if (c.Distortion > 0.0f)
+				{
+					UI::Property("Scale", c.DistortionScale, 0.05f, Limits::MinDistortionScale, Limits::MaxDistortionScale, "%.2f / m", "Waves per meter");
+					UI::Property("Speed", c.DistortionSpeed, 0.05f, -Limits::MaxDistortionSpeed, Limits::MaxDistortionSpeed, "%.2f / s",
+						"How fast the waves drift, in cycles per second");
+				}
 				c.Clamp();
 				UI::EndPropertyGrid();
 			}

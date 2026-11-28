@@ -2650,6 +2650,24 @@
 					"doc": "Dissolve blobs per meter"
 				},
 				{
+					"name": "distortion",
+					"kind": "property",
+					"type": "float",
+					"doc": "How much it bends what's behind it, like heat haze or a shockwave's ripple: 0 is off, 1 the strongest. With intensity 0 it's only the distortion"
+				},
+				{
+					"name": "distortion_scale",
+					"kind": "property",
+					"type": "float",
+					"doc": "Distortion waves per meter"
+				},
+				{
+					"name": "distortion_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "How fast the distortion's waves drift, in cycles per second"
+				},
+				{
 					"name": "play",
 					"kind": "method",
 					"params": [],

@@ -584,6 +584,7 @@ class FeatureTest(bellows.Script):
         shape.texture, shape.tiling, shape.scroll = "Textures/GroundTiles.png", Vec2(4.0, 2.0), Vec2(0.0, 0.5)
         shape.edge_fade, shape.rim, shape.dissolve, shape.dissolve_edge_width = 0.4, 2.5, 0.3, 0.1
         shape.dissolve_edge_color, shape.dissolve_scale = Vec4(0.2, 1.0, 0.4, 1.0), 6.0
+        shape.distortion, shape.distortion_scale, shape.distortion_speed = 0.35, 5.0, -2.0
         self.check(shape.shape == "cylinder" and close(shape.radius, 0.6) and close(shape.inner_radius, 0.0) and close(shape.top_radius, 0.9)
                    and close(shape.height, 4.0) and close(shape.arc, 180.0) and shape.segments == 64 and not shape.loop
                    and close(shape.duration, 1.5) and close(shape.spin_speed, -30.0) and len(shape.size_curve) == 2
@@ -591,12 +592,15 @@ class FeatureTest(bellows.Script):
                    and close(shape.intensity, 4.0) and shape.blend == "alpha" and shape.texture == "Textures/GroundTiles.png"
                    and close(shape.tiling, (4.0, 2.0)) and close(shape.scroll, (0.0, 0.5)) and close(shape.edge_fade, 0.4)
                    and close(shape.rim, 2.5) and close(shape.dissolve, 0.3) and close(shape.dissolve_edge_width, 0.1)
-                   and close(shape.dissolve_edge_color, (0.2, 1.0, 0.4, 1.0)) and close(shape.dissolve_scale, 6.0), "EffectShape properties")
+                   and close(shape.dissolve_edge_color, (0.2, 1.0, 0.4, 1.0)) and close(shape.dissolve_scale, 6.0)
+                   and close(shape.distortion, 0.35) and close(shape.distortion_scale, 5.0) and close(shape.distortion_speed, -2.0),
+                   "EffectShape properties")
         self.check(raises(lambda: setattr(shape, "shape", "pyramid"), ValueError) and raises(lambda: setattr(shape, "segments", 2), ValueError)
                    and raises(lambda: setattr(shape, "arc", 0.0), ValueError) and raises(lambda: setattr(shape, "edge_fade", 0.6), ValueError)
                    and raises(lambda: setattr(shape, "dissolve_curve", [[0.5, 2.0]]), ValueError)
                    and raises(lambda: setattr(shape, "tiling", Vec2(-1.0, 1.0)), ValueError)
-                   and raises(lambda: setattr(shape, "radius", float("nan")), ValueError),
+                   and raises(lambda: setattr(shape, "radius", float("nan")), ValueError)
+                   and raises(lambda: setattr(shape, "distortion", 1.5), ValueError),
                    "EffectShape limits")
         shape.stop()
         stopped = shape.finished

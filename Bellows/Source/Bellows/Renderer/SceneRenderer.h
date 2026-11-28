@@ -207,6 +207,9 @@ namespace Bellows {
 		float DissolveEdgeWidth = 0.0f;
 		glm::vec4 DissolveEdgeColor { 0.0f };	// Linear RGB (may be above 1) and alpha
 		glm::vec2 NoiseCells { 1.0f };	// Dissolve noise cells across U (whole, so it wraps around) and V
+		float Distortion = 0.0f;		// How far it bends what's behind it, as a fraction of the screen; 0 is off
+		float DistortionPhase = 0.0f;	// Where its waves are, 0 to 1 (wrapping)
+		glm::vec2 DistortionWaves { 1.0f };	// Waves across U (whole, so it wraps around) and V
 	};
 
 	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.
@@ -383,7 +386,8 @@ namespace Bellows {
 			Ref<Texture2D> TextureRef;
 			bool Additive = true;
 			bool RepeatTexture = false;
-			glm::vec4 Params[4] {};		// Particle.frag's parameters
+			bool Distort = false;		// Bends the scene behind it (ParticleDistort.frag) instead of drawing color
+			glm::vec4 Params[4] {};		// The fragment shader's parameters
 			uint32_t FirstVertex = 0;
 			uint32_t VertexCount = 0;
 			float Distance = 0.0f;
@@ -514,6 +518,8 @@ namespace Bellows {
 		nvrhi::TextureHandle m_NormalTexture;
 		nvrhi::TextureHandle m_EntityIDTexture;
 		nvrhi::TextureHandle m_HDRTexture;
+		nvrhi::TextureHandle m_SceneCopyTexture;	// The HDR image just before the particles, for distortion to read
+		nvrhi::BindingSetHandle m_SceneCopySet;
 		nvrhi::TextureHandle m_SSAOTexture;
 		nvrhi::TextureHandle m_SSAOBlurTexture;
 		nvrhi::TextureHandle m_LDRTexture;
@@ -546,7 +552,7 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_GridPipeline, m_LinePipeline, m_OutlinePipeline;
 		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
 		nvrhi::GraphicsPipelineHandle m_UIPipeline, m_UIIDPipeline;
-		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline;
+		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline, m_ParticleDistortPipeline;
 		nvrhi::GraphicsPipelineHandle m_DecalCopyPipeline;
 
 		// Constant buffers

@@ -563,6 +563,21 @@ class EffectShape:
         """Dissolve blobs per meter"""
     @dissolve_scale.setter
     def dissolve_scale(self, value: float) -> None: ...
+    @property
+    def distortion(self) -> float:
+        """How much it bends what's behind it, like heat haze or a shockwave's ripple: 0 is off, 1 the strongest. With intensity 0 it's only the distortion"""
+    @distortion.setter
+    def distortion(self, value: float) -> None: ...
+    @property
+    def distortion_scale(self) -> float:
+        """Distortion waves per meter"""
+    @distortion_scale.setter
+    def distortion_scale(self, value: float) -> None: ...
+    @property
+    def distortion_speed(self) -> float:
+        """How fast the distortion's waves drift, in cycles per second"""
+    @distortion_speed.setter
+    def distortion_speed(self, value: float) -> None: ...
     def play(self) -> None:
         """Starts its cycle over, shown and playing"""
     def stop(self) -> None:

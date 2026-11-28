@@ -618,6 +618,11 @@ namespace Bellows {
 		float DissolveEdgeWidth = 0.05f;	// How wide the glowing edge of the dissolve is
 		glm::vec4 DissolveEdgeColor { 1.0f, 0.55f, 0.2f, 1.0f };
 		float DissolveScale = 4.0f;		// Noise blobs per meter
+		// Bends what's behind it like heat haze or a shockwave's ripple: 0 off, 1 the strongest (5% of the
+		// screen). With Intensity 0 it's only the distortion.
+		float Distortion = 0.0f;
+		float DistortionScale = 2.0f;	// Waves per meter
+		float DistortionSpeed = 0.5f;	// How fast the waves drift (cycles per second)
 
 		static constexpr float MaxSize = 1000.0f;
 		static constexpr float MinArc = 1.0f, MaxArc = 360.0f;
@@ -627,6 +632,9 @@ namespace Bellows {
 		static constexpr float MaxTiling = 1000.0f, MaxScroll = 1000.0f;
 		static constexpr float MaxRim = 16.0f;
 		static constexpr float MinDissolveScale = 0.01f, MaxDissolveScale = 1000.0f;
+		static constexpr float MinDistortionScale = 0.01f, MaxDistortionScale = 100.0f;
+		static constexpr float MaxDistortionSpeed = 100.0f;
+		static constexpr float DistortionScreenFraction = 0.05f;	// How far a Distortion of 1 bends the scene
 
 		void Clamp();
 
@@ -634,6 +642,7 @@ namespace Bellows {
 		float RuntimeTime = 0.0f;		// Seconds into the cycle
 		float RuntimeSpin = 0.0f;		// Degrees turned
 		glm::vec2 RuntimeOffset { 0.0f };	// The texture's scroll, wrapped to one copy
+		float RuntimeDistortionPhase = 0.0f;	// Where the distortion's waves are, 0 to 1 (wrapping)
 		bool RuntimeFinished = false;	// Played once without looping, or stopped: hidden until played
 		Ref<Texture2D> RuntimeTexture;
 		std::string LoadedTexturePath;

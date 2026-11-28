@@ -158,6 +158,9 @@ namespace Bellows {
 		Dissolve = ClampOrDefault(Dissolve, 0.0f, 1.0f, defaults.Dissolve);
 		DissolveEdgeWidth = ClampOrDefault(DissolveEdgeWidth, 0.0f, 0.5f, defaults.DissolveEdgeWidth);
 		DissolveScale = ClampOrDefault(DissolveScale, MinDissolveScale, MaxDissolveScale, defaults.DissolveScale);
+		Distortion = ClampOrDefault(Distortion, 0.0f, 1.0f, defaults.Distortion);
+		DistortionScale = ClampOrDefault(DistortionScale, MinDistortionScale, MaxDistortionScale, defaults.DistortionScale);
+		DistortionSpeed = ClampOrDefault(DistortionSpeed, -MaxDistortionSpeed, MaxDistortionSpeed, defaults.DistortionSpeed);
 	}
 
 	void BeamComponent::Clamp()

@@ -559,6 +559,9 @@ particles. It plays a cycle that changes its size, color and dissolve, in the ed
   the faces turned toward the camera so a shield glows at its outline; 0 is off).
 * Dissolve: `dissolve` (0 whole to 1 gone, in a noisy pattern), `dissolve_edge_width` (0 to 0.5),
   `dissolve_edge_color` (`Vec4`, brightened by `intensity`) and `dissolve_scale` (blobs per meter).
+* Distortion: `distortion` (0 to 1) bends what's behind it, like heat haze or a shockwave's ripple;
+  `distortion_scale` (waves per meter, 0.01 to 100) and `distortion_speed` (cycles per second, -100 to
+  100). With `intensity` 0 it's only the distortion.
 * `play()` starts the cycle over and shows it; `stop()` hides it until `play()`. Read-only `time`
   (seconds into the cycle) and `finished` (played through without looping, or stopped).
 
