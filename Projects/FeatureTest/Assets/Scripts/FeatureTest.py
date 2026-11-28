@@ -491,6 +491,16 @@ class FeatureTest(bellows.Script):
         emitter.emit(5)
         emitter.stop(clear=True)
         self.check(not emitter.is_playing and emitter.particle_count == 0, "ParticleEmitter.stop")
+        decal = entity.add_component(bellows.Decal)
+        self.check(decal.texture == "" and close(decal.color, (1.0, 1.0, 1.0, 1.0)) and close(decal.size, (1.0, 1.0, 1.0))
+                   and close(decal.max_angle, 60.0) and decal.sort_order == 0, "Decal defaults")
+        decal.texture, decal.color, decal.size = "Textures/TargetMark.png", Vec4(1.0, 0.5, 0.25, 0.5), Vec3(2.0, 0.5, 1.0)
+        decal.max_angle, decal.sort_order = 45.0, -3
+        self.check(decal.texture == "Textures/TargetMark.png" and close(decal.color, (1.0, 0.5, 0.25, 0.5)) and close(decal.size, (2.0, 0.5, 1.0))
+                   and close(decal.max_angle, 45.0) and decal.sort_order == -3, "Decal properties")
+        self.check(raises(lambda: setattr(decal, "size", Vec3(0.0, 1.0, 1.0)), ValueError) and raises(lambda: setattr(decal, "max_angle", 90.0), ValueError)
+                   and raises(lambda: setattr(decal, "sort_order", 5000), ValueError) and raises(lambda: setattr(decal, "color", Vec4(float("nan"), 0.0, 0.0, 1.0)), ValueError),
+                   "Decal limits")
 
         text = entity.add_component(bellows.Text)
         self.check(text.text == "Text" and text.font == "" and text.alignment == "center", "Text defaults")
@@ -614,7 +624,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Decal", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:

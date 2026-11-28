@@ -29,6 +29,8 @@ can drive end to end.
   rate or in bursts, from a point, sphere or box, with gravity, drag, size and color over each
   particle's life, additive or alpha blending and an optional image. Bright ones bloom, and they
   play in the editor while you tune them.
+* **Decals**: project an image (footprints, cracks, posters, road paint) onto the surfaces inside a
+  box, lit and shadowed with them, with a fade on surfaces turned away and a sort order.
 * **Physics** (Jolt): static, dynamic and kinematic bodies; box, sphere, capsule, triangle-mesh and
   compound colliders; triggers; collision callbacks; raycasts.
 * **Audio** (miniaudio): 2D and 3D sound sources, listener, one-shots.

@@ -1207,6 +1207,22 @@ namespace Bellows {
 				meshRenderer.RuntimeMaterial, meshRenderer.CastShadows, posed ? &animator->RuntimeSkinMatrices : nullptr);
 		}
 
+		// Decals, each filling its box scaled by its size.
+		auto decals = m_Registry.view<DecalComponent>();
+		for (entt::entity handle : decals)
+		{
+			DecalComponent& decal = decals.get<DecalComponent>(handle);
+			if (decal.LoadedTexturePath != decal.TexturePath)
+			{
+				decal.RuntimeTexture = decal.TexturePath.empty() ? nullptr : AssetManager::GetTexture(decal.TexturePath, TextureColorSpace::SRGB);
+				decal.LoadedTexturePath = decal.TexturePath;
+			}
+			if (hidden.contains(handle))
+				continue;
+			const glm::mat4 box = GetWorldTransform(Entity(handle, this)) * glm::scale(glm::mat4(1.0f), decal.Size);
+			renderer.SubmitDecal(box, decal.Color, decal.RuntimeTexture, decal.MaxAngle, decal.SortOrder);
+		}
+
 		// World text: centered on its entity in the entity's XY plane, or turned toward the camera.
 		const glm::mat3 cameraRotation = glm::mat3(glm::inverse(camera.View));
 		auto texts = m_Registry.view<TextComponent>();

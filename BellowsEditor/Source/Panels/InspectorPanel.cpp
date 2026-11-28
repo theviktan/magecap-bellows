@@ -447,6 +447,25 @@ namespace Bellows {
 			UI::TextMuted((std::to_string(c.RuntimeParticles.size()) + " alive").c_str());
 		});
 
+		DrawComponent<DecalComponent>(m_Editor, entity, ICON_STICKER, "Decal", [&](DecalComponent& c)
+		{
+			if (UI::BeginPropertyGrid("Decal"))
+			{
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "The image it projects; empty projects a plain rectangle of color");
+				UI::PropertyColor("Color", c.Color, false, "Tint; alpha is the decal's opacity");
+				UI::PropertyVec3("Size", c.Size, 1.0f, 0.01f, "Meters: X the image's width, Y how deep it reaches (down the entity's -Y), Z the image's height");
+				UI::PropertySlider("Max Angle", c.MaxAngle, DecalComponent::MinMaxAngle, DecalComponent::MaxMaxAngle, "%.0f deg",
+					"How far a surface may turn from the decal's up before the decal fades out on it (so it doesn't smear down walls)");
+				UI::Property("Sort Order", c.SortOrder, -DecalComponent::MaxSortOrder, DecalComponent::MaxSortOrder, "Higher decals are drawn on top of lower ones");
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			// Wrapped, so it fits a narrow Inspector.
+			ImGui::PushTextWrapPos(0.0f);
+			UI::TextMuted("Projects onto opaque surfaces inside the green box, down the entity's -Y.");
+			ImGui::PopTextWrapPos();
+		});
+
 		DrawComponent<AudioSourceComponent>(m_Editor, entity, ICON_VOLUME_2, "Audio Source", [&](AudioSourceComponent& c)
 		{
 			if (UI::BeginPropertyGrid("AudioSource"))
@@ -1163,6 +1182,7 @@ namespace Bellows {
 		entry.operator()<SkyLightComponent>(ICON_CLOUD, "Sky Light", "Rendering");
 		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
 		entry.operator()<ParticleEmitterComponent>(ICON_FLAME, "Particle Emitter", "Rendering");
+		entry.operator()<DecalComponent>(ICON_STICKER, "Decal", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");
 		entry.operator()<RigidBodyComponent>(ICON_ATOM, "Rigid Body", "Physics");

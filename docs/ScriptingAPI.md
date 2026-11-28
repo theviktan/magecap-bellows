@@ -452,6 +452,31 @@ sparks.intensity, sparks.gravity_scale = 4.0, 1.0
 sparks.play()   # A burst of sparks every time it's called
 ```
 
+### `Decal`
+Projects an image, or a plain color, onto the opaque surfaces inside a box: footprints, cracks,
+scorch marks, posters, puddles, road paint. It changes the surfaces' color before lighting, so a
+decal is lit and shadowed with the surface under it. The box is centered on the entity and projects
+down its -Y, with the image's top toward its -Z; the entity's rotation and scale apply.
+* `texture` (an image asset; empty projects a plain rectangle of `color`), `color` (`Vec4` tint;
+  its alpha is the decal's opacity, and an image's own alpha cuts its shape).
+* `size` (`Vec3`, meters: x the image's width, y how deep the box reaches, z the image's height;
+  0.001 to 1000).
+* `max_angle` (1 to 89 degrees): surfaces turned further than this from the decal's up fade out,
+  so a floor decal doesn't smear down a wall.
+* `sort_order` (-1000 to 1000): higher decals are drawn on top of lower ones.
+
+Up to 64 decals are drawn at once (the highest sort orders when there are more), with up to 16
+different images. Transparent surfaces don't take decals. Values out of range or NaN raise
+`ValueError`.
+
+```python
+scorch = bellows.create_entity("Scorch")
+scorch.position = hit_point
+decal = scorch.add_component("Decal")
+decal.texture = "Textures/Scorch.png"
+decal.size = Vec3(1.2, 0.5, 1.2)
+```
+
 ### Screen UI (`UICanvas`, `UIRect`, `UIImage`)
 A screen UI is a `UICanvas` entity with UI entities under it. It is drawn over the game at the
 screen's resolution, after tonemapping and anti-aliasing, so it is never blurred or bloomed, and

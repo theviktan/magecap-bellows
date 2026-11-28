@@ -8,6 +8,7 @@
 #define MAX_CASCADES 4
 #define MAX_POINT_LIGHTS 64
 #define MAX_SPOT_LIGHTS 32
+#define MAX_DECALS 64
 
 struct FrameData
 {
@@ -46,6 +47,14 @@ struct SpotLight
 	vec4 DirectionCosOuter;	// xyz = direction, w = cos(outer angle)
 	vec4 ColorIntensity;	// rgb = color, a = intensity
 	vec4 Params;			// x = cos(inner angle)
+};
+
+struct Decal
+{
+	mat4 WorldToDecal;		// Into the decal's unit box (-0.5 to 0.5 on each axis)
+	vec4 Color;				// Tint and opacity
+	vec4 Up;				// xyz = the direction it projects from (world), w = cos(its max angle)
+	vec4 Params;			// x = atlas layer (-1 = no image)
 };
 
 vec3 LinearToSRGB(vec3 color)
