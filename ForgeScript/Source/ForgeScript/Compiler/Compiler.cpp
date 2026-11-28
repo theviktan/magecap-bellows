@@ -132,6 +132,8 @@ namespace ForgeScript {
 			int ScopeDepth = 0;
 			int TryDepth = 0;
 			// 'function heal(amount) as number': the type it says it gives back, for checkers only.
+			// 'set score as number to 0' (Roadmap 3.0 item 5): this function's own variables' types, for checkers.
+			std::map<std::string, std::string> DeclaredTypes;
 			std::string ReturnType;
 			size_t ReturnTypeAt = 0;     // the type's token
 			bool GivesBackValue = false; // a 'return' with a value, or a 'fail', in this function itself
@@ -326,6 +328,7 @@ namespace ForgeScript {
 				}
 
 				WarnTypesOfCalls();
+				WarnScriptVariableTypes();
 				WarnNamesNeverSet();
 				WarnUnreadableText();
 				if (m_AllErrors && !m_AllErrors->empty())
@@ -890,9 +893,11 @@ namespace ForgeScript {
 				}
 
 				bool afterMember = i > 0 && (m_Tokens[i - 1].Type == TokenType::Dot || m_Tokens[i - 1].Type == TokenType::Possessive);
+				// 'set name as number to ...' sets the name too (Roadmap 3.0 item 5).
 				if (!afterMember && (token.Type == TokenType::Set || token.Type == TokenType::Constant) &&
 					i + 2 < m_Tokens.size() && m_Tokens[i + 1].Type == TokenType::Identifier &&
-					(m_Tokens[i + 2].Type == TokenType::To || m_Tokens[i + 2].Type == TokenType::Is))
+					(m_Tokens[i + 2].Type == TokenType::To || m_Tokens[i + 2].Type == TokenType::Is ||
+						(token.Type == TokenType::Set && m_Tokens[i + 2].Type == TokenType::Identifier && m_Tokens[i + 2].Lexeme == "as")))
 				{
 					outNames.emplace_back(m_Tokens[i + 1].Lexeme);
 				}
@@ -1722,31 +1727,106 @@ namespace ForgeScript {
 				UnpackStatement(names);
 				return;
 			}
-			if (m_State->Kind == ScopeKind::Script && Check(TokenType::Identifier) && Peek(1).Type == TokenType::To)
+			const bool typed1 = Peek(1).Type == TokenType::Identifier && Peek(1).Lexeme == "as";
+			if (m_State->Kind == ScopeKind::Script && Check(TokenType::Identifier) && (Peek(1).Type == TokenType::To || typed1))
 			{
 				std::string name(Current().Lexeme);
 				if (ResolveLocal(m_State, name) == -1)
 				{
-					// A script level variable: "set score to 0".
+					// A script level variable: "set score to 0", or with a type for checkers, "set score as number to 0".
 					WarnIfHidesBuiltin(name);
 					NoteScriptName(m_Pos, name, true);
+					const Token nameToken = Current();
 					Advance();
-					Advance();
+					if (CheckWord("as"))
+					{
+						Advance();
+						const std::string type = TypeName();
+						auto [declared, isNew] = m_ScriptTypes.emplace(name, type);
+						if (!isNew)
+							WarnIfRetyped(name, declared->second, type, nameToken);
+					}
+					Consume(TokenType::To, "Expected 'to' after the type, like: set score as number to 0");
+					const size_t first = m_Pos;
 					Expression();
+					m_ScriptVariableSets.push_back({ name, first, m_Pos - 1, false });
 					EmitWithName(OpCode::SetGlobal, name);
 					EmitOp(OpCode::Pop);
 					return;
 				}
 			}
 
+			const size_t targetStart = m_Pos;
 			TargetChain target = ParseTarget();
+			const size_t targetEnd = m_Pos;
+			std::string type;
+			const Token asToken = Current();
+			if (CheckWord("as") && (Peek(1).Type == TokenType::Identifier || Peek(1).Type == TokenType::Function || Peek(1).Type == TokenType::Kind))
+			{
+				// 'set score as number to 0': only a variable's own name takes a type; a field's goes on its line.
+				const bool field = m_Tokens[targetStart].Type == TokenType::My || m_Tokens[targetStart].Type == TokenType::Self;
+				if (targetEnd != targetStart + 1 || m_Tokens[targetStart].Type != TokenType::Identifier)
+					ErrorAtCurrent(field ? "A field's type goes on its line at the top of the kind, like: set health as number to 100" :
+						"Only a variable's own name can have a type, like: set score as number to 0");
+				Advance();
+				type = TypeName();
+			}
 			if (Check(TokenType::Equal))
 			{
 				FixTokens(Current(), Current(), "Change '=' to 'to'", "to");
 				ErrorAtCurrent("Use 'to' instead of '=', like: set health to 100");
 			}
 			Consume(TokenType::To, "Expected 'to' after the name, like: set health to 100");
+			const size_t first = m_Pos;
 			EmitAssign(target, [&]() { Expression(); });
+			CheckTypedTarget(targetStart, targetEnd, first, m_Pos - 1, false, type, asToken);
+		}
+
+		// What a 'set' or 'add' changes, for its type: a variable of this function, a script variable (its
+		// type may come later in the script, so it's noted for WarnScriptVariableTypes), or a field of the
+		// kind being compiled ('my health', 'self.health'). 'type' is the 'as' of this line, if any.
+		void CheckTypedTarget(size_t targetStart, size_t targetEnd, size_t first, size_t last, bool adding, const std::string& type, const Token& asToken)
+		{
+			const Token& start = m_Tokens[targetStart];
+			std::string field;
+			if (start.Type == TokenType::My && targetEnd == targetStart + 2)
+				field = std::string(m_Tokens[targetStart + 1].Lexeme);
+			else if (start.Type == TokenType::Self && targetEnd == targetStart + 3 && m_Tokens[targetStart + 1].Type == TokenType::Dot)
+				field = std::string(m_Tokens[targetStart + 2].Lexeme);
+			if (!field.empty())
+			{
+				if (auto declared = m_FieldTypes.find(field); declared != m_FieldTypes.end())
+					WarnIfOtherTypeThanDeclared(field, declared->second, first, last, adding);
+				return;
+			}
+			if (targetEnd != targetStart + 1 || start.Type != TokenType::Identifier)
+				return;
+			const std::string name(start.Lexeme);
+			if (ResolveLocal(m_State, name) >= 0)
+			{
+				if (!type.empty())
+				{
+					auto [declared, isNew] = m_State->DeclaredTypes.emplace(name, type);
+					if (!isNew)
+						WarnIfRetyped(name, declared->second, type, start);
+				}
+				if (auto declared = m_State->DeclaredTypes.find(name); declared != m_State->DeclaredTypes.end())
+					WarnIfOtherTypeThanDeclared(name, declared->second, first, last, adding);
+				return;
+			}
+			if (ResolveName(name, targetStart).Type == TargetType::Global)
+			{
+				if (!type.empty())
+				{
+					auto [declared, isNew] = m_ScriptTypes.emplace(name, type);
+					if (!isNew)
+						WarnIfRetyped(name, declared->second, type, start);
+				}
+				m_ScriptVariableSets.push_back({ name, first, last, adding });
+				return;
+			}
+			if (!type.empty())
+				ErrorAt(asToken, "'" + name + "' belongs to an outer function. Give it its type where that function first sets it.");
 		}
 
 		void ConstantStatement()
@@ -1767,13 +1847,20 @@ namespace ForgeScript {
 		{
 			Advance();
 			BeginScope();
+			const size_t first = m_Pos;
 			Expression();
+			const size_t last = m_Pos - 1;
 			int valueSlot = AddLocal("");
 			Consume(isAdd ? TokenType::To : TokenType::From,
 				isAdd ? "Expected 'to' here, like: add 5 to score" : "Expected 'from' here, like: take 5 from health");
+			const size_t targetStart = m_Pos;
 			TargetChain target = ParseTarget();
+			const size_t targetEnd = m_Pos;
 			EmitCompound(target, [&]() { EmitOp(OpCode::GetLocal); EmitByte(static_cast<uint8_t>(valueSlot)); },
 				isAdd ? OpCode::AddTo : OpCode::TakeFrom);
+			// 'add 5 to enemies' where enemies is a list of Enemy: the item is checked (CheckTypedTarget).
+			if (isAdd)
+				CheckTypedTarget(targetStart, targetEnd, first, last, true, std::string(), m_Tokens[targetStart]);
 			EndScope();
 		}
 
@@ -2646,16 +2733,25 @@ namespace ForgeScript {
 		// inner functions count too, which can only make it unknown, so a warning is never a guess.
 		std::string KnownTypeOf(const FunctionState& state, const std::string& name, size_t end, std::string& why) const
 		{
+			static const std::vector<std::string_view> c_Plain = { "number", "text", "boolean", "list", "map", "vector" };
+			if (auto declared = state.DeclaredTypes.find(name); declared != state.DeclaredTypes.end())
+			{
+				// 'set name as text to ...': what the script says it holds (plain types only, as for parameters).
+				const std::string base = BaseType(declared->second);
+				if (std::find(c_Plain.begin(), c_Plain.end(), base) == c_Plain.end())
+					return {};
+				why = name + " as " + declared->second;
+				return base;
+			}
 			const auto param = std::find(state.ParamNames.begin(), state.ParamNames.end(), name);
 			std::string type;
 			if (param != state.ParamNames.end())
 			{
 				const size_t index = static_cast<size_t>(param - state.ParamNames.begin());
-				type = index < state.ParamTypes.size() ? state.ParamTypes[index] : std::string();
-				static const std::vector<std::string_view> c_Plain = { "number", "text", "boolean", "list", "map", "vector" };
+				type = index < state.ParamTypes.size() ? BaseType(state.ParamTypes[index]) : std::string();
 				if (std::find(c_Plain.begin(), c_Plain.end(), type) == c_Plain.end())
 					return {};
-				why = name + " as " + type;
+				why = name + " as " + state.ParamTypes[index];
 			}
 			for (size_t i = state.BodyStart; i < end && i < m_Tokens.size(); i++)
 			{
@@ -2718,7 +2814,7 @@ namespace ForgeScript {
 		// is how a function says "none found" ('function nearest_enemy() as Enemy').
 		void WarnIfReturnsOtherType(const Token& at, const std::string& type)
 		{
-			if (!m_Options.Warnings || m_State->ReturnType.empty() || type.empty() || type == "nothing" || type == m_State->ReturnType)
+			if (!m_Options.Warnings || m_State->ReturnType.empty() || type.empty() || type == "nothing" || type == BaseType(m_State->ReturnType))
 				return;
 			const std::string name = m_State->Fn && m_State->Fn->Name ? m_State->Fn->Name->Text : "function";
 			Warn(at, "'" + name + "' says it gives back " + WithArticle(m_State->ReturnType) + " (as " + m_State->ReturnType +
@@ -2743,6 +2839,119 @@ namespace ForgeScript {
 			return std::string(std::string("aeiouAEIOU").find(word[0]) != std::string::npos ? "an " : "a ") + word;
 		}
 
+		// 'list of number' is a list where a whole value is compared.
+		static std::string BaseType(const std::string& type)
+		{
+			const size_t space = type.find(' ');
+			return space == std::string::npos ? type : type.substr(0, space);
+		}
+
+		// The type after 'as' at tokens[i], without reading it as the compiler does (no mistakes): for
+		// scanning ahead, as for a kind's field lines before its functions are compiled.
+		std::string TypeTextAt(size_t i) const
+		{
+			if (i >= m_Tokens.size())
+				return {};
+			const Token& token = m_Tokens[i];
+			if ((token.Lexeme == "list" || token.Lexeme == "map") && i + 1 < m_Tokens.size() && m_Tokens[i + 1].Type == TokenType::Of)
+			{
+				const std::string inner = TypeTextAt(i + 2);
+				return inner.empty() ? std::string() : std::string(token.Lexeme) + " of " + inner;
+			}
+			if (token.Type == TokenType::Identifier || token.Type == TokenType::Function || token.Type == TokenType::Kind)
+				return std::string(token.Lexeme);
+			return {};
+		}
+
+		// The plain values inside the list or map written from tokens[first] to tokens[last]: each item of
+		// a list, each value of a map, as (token, type) for the ones written out plainly.
+		std::vector<std::pair<size_t, std::string>> PlainItemTypes(size_t first, size_t last) const
+		{
+			std::vector<std::pair<size_t, std::string>> items;
+			const bool isMap = m_Tokens[first].Type == TokenType::LeftBrace;
+			size_t start = first + 1;
+			int depth = 0;
+			for (size_t i = first + 1; i <= last; i++)
+			{
+				const TokenType type = m_Tokens[i].Type;
+				if (type == TokenType::LeftBracket || type == TokenType::LeftBrace || type == TokenType::LeftParen)
+					depth++;
+				else if (i < last && (type == TokenType::RightBracket || type == TokenType::RightBrace || type == TokenType::RightParen))
+					depth--;
+				if (depth > 0 || (type != TokenType::Comma && i != last))
+					continue;
+				size_t itemFirst = start;
+				if (isMap)
+				{
+					// 'key: value': the value is after the first colon at this level.
+					while (itemFirst < i && m_Tokens[itemFirst].Type != TokenType::Colon)
+						itemFirst++;
+					itemFirst++;
+				}
+				if (itemFirst < i)
+				{
+					const std::string itemType = PlainValueType(itemFirst, i - 1);
+					if (!itemType.empty())
+						items.emplace_back(itemFirst, itemType);
+				}
+				start = i + 1;
+			}
+			return items;
+		}
+
+		// 'set score to "ten"' where score was said to be a number: a warning on the value, and on each
+		// plain item of a list or map of another type than 'list of' / 'map of' says. Plain values only, so
+		// a warning is never a guess; nothing is always allowed.
+		void WarnIfOtherTypeThanDeclared(const std::string& name, const std::string& type, size_t first, size_t last, bool adding = false)
+		{
+			if (!m_Options.Warnings || type.empty() || first > last || last >= m_Tokens.size())
+				return;
+			const std::string plain = PlainValueType(first, last);
+			const std::string said = "'" + name + "' is " + WithArticle(type) + " (" + name + " as " + type + "), but ";
+			const size_t of = type.find(" of ");
+			if (adding)
+			{
+				// 'add 5 to enemies': the item must be what the list holds.
+				if (of != std::string::npos && BaseType(type) == "list" && !plain.empty() && plain != "nothing" && BaseType(type.substr(of + 4)) != plain)
+					Warn(m_Tokens[first], said + "this is " + WithArticle(plain) + ".");
+				return;
+			}
+			if (plain.empty() || plain == "nothing")
+				return;
+			if (BaseType(type) != plain)
+			{
+				Warn(m_Tokens[first], said + "this is " + WithArticle(plain) + ".");
+				return;
+			}
+			if (of == std::string::npos)
+				return;
+			const std::string item = type.substr(of + 4);
+			for (const auto& [at, itemType] : PlainItemTypes(first, last))
+			{
+				if (itemType != "nothing" && BaseType(item) != itemType)
+					Warn(m_Tokens[at], said + "this item is " + WithArticle(itemType) + ".");
+			}
+		}
+
+		// A second 'as' for one variable that says another type than the first.
+		void WarnIfRetyped(const std::string& name, const std::string& before, const std::string& now, const Token& at)
+		{
+			if (m_Options.Warnings && !before.empty() && before != now)
+				Warn(at, "'" + name + "' was said to be " + WithArticle(before) + " (" + name + " as " + before + "); this says " + now + ". Keep one type.");
+		}
+
+		// Sets and adds of script variables, compared with their types once the whole script is read:
+		// functions are compiled before the top-level lines that may give the type.
+		void WarnScriptVariableTypes()
+		{
+			for (const ScriptVariableSet& set : m_ScriptVariableSets)
+			{
+				auto declared = m_ScriptTypes.find(set.Name);
+				if (declared != m_ScriptTypes.end())
+					WarnIfOtherTypeThanDeclared(set.Name, declared->second, set.First, set.Last, set.Adding);
+			}
+		}
+
 		// 'heal("ten")' where heal is 'function heal(amount as number)': a warning on the value. Only
 		// plain values are compared, so a warning is never a guess.
 		void WarnTypesOfCalls()
@@ -2763,7 +2972,7 @@ namespace ForgeScript {
 							continue;
 						index = static_cast<size_t>(named - function.Params.begin());
 					}
-					if (value.Type.empty() || index >= function.Types.size() || function.Types[index].empty() || function.Types[index] == value.Type)
+					if (value.Type.empty() || index >= function.Types.size() || function.Types[index].empty() || BaseType(function.Types[index]) == value.Type)
 						continue;
 					const std::string& wanted = function.Types[index];
 					const std::string& param = function.Params[index];
@@ -2777,7 +2986,7 @@ namespace ForgeScript {
 					{
 						// Only the plain types are compared for variables: a kind's name or 'object' may hold many things.
 						static const std::vector<std::string_view> c_Plain = { "number", "text", "boolean", "list", "map", "vector" };
-						if (std::find(c_Plain.begin(), c_Plain.end(), wanted) == c_Plain.end())
+						if (std::find(c_Plain.begin(), c_Plain.end(), BaseType(wanted)) == c_Plain.end())
 							continue;
 						Warn(m_Tokens[value.Token], "'" + call.Function + "' takes " + article(wanted) + " for '" + param + "' (" + param +
 							" as " + wanted + "), but '" + value.Variable + "' is " + article(value.Type) + " (" + value.Why + ").");
@@ -3245,6 +3454,25 @@ namespace ForgeScript {
 		std::string ParameterType()
 		{
 			Advance(); // as
+			return TypeName();
+		}
+
+		// A type after 'as': a type word, a kind's or a contract's name, or 'list of' / 'map of' a type.
+		std::string TypeName()
+		{
+			if ((CheckWord("list") || CheckWord("map")) && Peek(1).Type == TokenType::Of)
+			{
+				std::string outer(Current().Lexeme);
+				Advance();
+				Advance(); // of
+				if (Check(TokenType::Function) || Check(TokenType::Kind))
+				{
+					// 'function' after 'of' would start a function in the lexer's eyes, so it has no type here.
+					ErrorAtCurrent("'" + outer + " of' takes a type like number, text or a kind's name. For " + outer +
+						"s of functions or kinds, write: as " + outer);
+				}
+				return outer + " of " + TypeName();
+			}
 			const Token& type = Current();
 			std::string name(type.Lexeme);
 			if (type.Type == TokenType::Function || type.Type == TokenType::Kind)
@@ -3616,6 +3844,43 @@ namespace ForgeScript {
 				} while (Match(TokenType::Comma));
 			}
 
+			// The fields' types ('set health as number to 100'), read ahead so the kind's functions, compiled
+			// before the field lines, can check 'set my health to ...' against them. Restored for the kind
+			// around this one, also when a mistake stops this one.
+			struct FieldTypesScope
+			{
+				std::map<std::string, std::string>& Types;
+				std::map<std::string, std::string> Saved;
+				~FieldTypesScope() { Types = std::move(Saved); }
+			} fieldTypesScope{ m_FieldTypes, std::exchange(m_FieldTypes, {}) };
+			for (size_t i = m_Pos, depth = 0; i < m_Tokens.size() && m_Tokens[i].Type != TokenType::Eof; i++)
+			{
+				if (m_Tokens[i].Type == TokenType::End)
+				{
+					if (depth == 0)
+						break;
+					depth--;
+					continue;
+				}
+				if (IsBlockOpener(m_Tokens, i))
+				{
+					depth++;
+					continue;
+				}
+				const bool startsLine = i == 0 || m_Tokens[i - 1].Type == TokenType::Newline;
+				if (depth != 0 || !startsLine || m_Tokens[i].Type != TokenType::Set)
+					continue;
+				size_t at = i + 1;
+				if (at < m_Tokens.size() && m_Tokens[at].Type == TokenType::My)
+					at++;
+				if (at + 2 < m_Tokens.size() && m_Tokens[at + 1].Type == TokenType::Identifier && m_Tokens[at + 1].Lexeme == "as")
+				{
+					const std::string type = TypeTextAt(at + 2);
+					if (!type.empty())
+						m_FieldTypes.emplace(std::string(m_Tokens[at].Lexeme), type);
+				}
+			}
+
 			// First pass: compile methods and shared values, remember where the field lines are.
 			std::vector<size_t> fieldLines;
 			std::set<std::string> sharedNames;
@@ -3639,7 +3904,7 @@ namespace ForgeScript {
 						Advance();
 				}
 				else if (CheckWord("shared") && Peek(1).Type == TokenType::Identifier &&
-					(Peek(2).Type == TokenType::Is || Peek(2).Type == TokenType::To))
+					(Peek(2).Type == TokenType::Is || Peek(2).Type == TokenType::To || (Peek(2).Type == TokenType::Identifier && Peek(2).Lexeme == "as")))
 				{
 					// 'shared count is 0': worked out once, here, as the kind is made; read as Enemy.count.
 					Advance();
@@ -3650,8 +3915,19 @@ namespace ForgeScript {
 					if (!sharedNames.insert(sharedName).second)
 						ErrorAt(nameToken, "'" + sharedName + "' is shared twice in this kind.");
 					Advance();
+					std::string sharedType;
+					if (CheckWord("as"))
+					{
+						// 'shared count as number is 0': a type for checkers, on the value it starts with.
+						Advance();
+						sharedType = TypeName();
+						if (!Check(TokenType::Is) && !Check(TokenType::To))
+							ErrorAtCurrent("Expected 'is' after the type, like: shared count as number is 0");
+					}
 					Advance();
+					const size_t first = m_Pos;
 					Expression();
+					WarnIfOtherTypeThanDeclared(sharedName, sharedType, first, m_Pos - 1);
 					EmitWithName(OpCode::SharedValue, sharedName);
 				}
 				else if (Check(TokenType::When) && Peek(1).Type == TokenType::My && Peek(2).Type == TokenType::Identifier &&
@@ -3812,10 +4088,23 @@ namespace ForgeScript {
 				std::string field = ConsumeMemberName();
 				shape.Values.insert(field);
 				fields->FieldNames.push_back(field);
+				std::string fieldType;
+				if (CheckWord("as"))
+				{
+					// 'set health as number to 100': for checkers, like a variable's type.
+					Advance();
+					fieldType = TypeName();
+					if (!Check(TokenType::To) && !Check(TokenType::Newline) && !Check(TokenType::End) && !Check(TokenType::Eof))
+						ErrorAtCurrent("Expected 'to' after the type, like: set health as number to 100");
+				}
 				EmitOp(OpCode::GetLocal);
 				EmitByte(0);
 				if (Match(TokenType::To))
+				{
+					const size_t first = m_Pos;
 					Expression();
+					WarnIfOtherTypeThanDeclared(field, fieldType, first, m_Pos - 1);
+				}
 				else
 					EmitOp(OpCode::Nothing);
 				EmitWithName(OpCode::SetProperty, field);
@@ -5692,6 +5981,18 @@ namespace ForgeScript {
 		// ("" for none); and, for checkers, each script function's names and types, and the plain values
 		// calls by name give, to compare once every function is known.
 		std::vector<std::string> m_ParamTypes;
+		// Types of variables (Roadmap 3.0 item 5): script variables by name, the fields of the kind being
+		// compiled, and every set or add of a script variable, compared at the end (WarnScriptVariableTypes).
+		struct ScriptVariableSet
+		{
+			std::string Name;
+			size_t First = 0;
+			size_t Last = 0;
+			bool Adding = false;
+		};
+		std::map<std::string, std::string> m_ScriptTypes;
+		std::map<std::string, std::string> m_FieldTypes;
+		std::vector<ScriptVariableSet> m_ScriptVariableSets;
 		bool m_ParamTypesFresh = false;  // m_ParamTypes belong to the next FunctionBody
 		std::string m_PendingReturnType; // from ReturnTypeAfterParameters, for the next FunctionBody
 		size_t m_PendingReturnTypeAt = 0;

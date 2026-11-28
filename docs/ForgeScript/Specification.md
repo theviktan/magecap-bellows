@@ -88,7 +88,7 @@ A **name** starts with a letter (`a` to `z`, `A` to `Z`) or `_`, followed by let
 | `the`, `first`, `last`, `item` | list words in a value: `the length of items`, `first of items`, `item 2 of items` |
 | `every`, `any` | `every x in list is ...`, `any x in list is ...`; `every` also starts a timer |
 | `choices`, `are` | `choices State are idle, running` at the start of a line |
-| `shared` | `shared count is 0` at the start of a line inside a kind |
+| `shared` | `shared count is 0` (or `shared count as number is 0`) at the start of a line inside a kind |
 | `test`, `expect` | `test "name"` at the start of a line; `expect` followed by a value |
 | `as` | `use "helpers" as h` |
 | `match` | the start of a match block ([5.6](#56-match)) |
@@ -300,7 +300,7 @@ Each statement takes one line, except blocks, which run from their first line to
 ### 5.1 Variables and constants
 
 ```
-set name to expression
+set name [ as type ] to expression
 set target to expression           target: a.b, a's b, my b, a[i]
 set name, name { , name } to expression
 constant NAME is expression
@@ -308,6 +308,7 @@ choices NAME are name { , name } [ and name ]
 ```
 
 - `set name to` gives a variable a value, making it if needed (see [6](#6-names-and-scope) for where).
+- **Types** (1.8.0): `set name as` *type* `to` is for checkers only and never changes what runs ([7](#7-functions) has the types). It works for a top-level variable (checked at every `set` and `add` of it anywhere in the script, functions above the line included) and a function's own variable (checked in that function, and certain for the call check of [7](#7-functions)). A field's type goes on its line among the kind's fields, `set health as number to 100` or `shared count as number is 0` ([9](#9-kinds-and-objects)), and `set my health`, `self.health` and `add ... to my health` in the kind's functions are checked against it. Only a plain name can have a type: a type on `a.b`, `a[i]`, `my b` inside a function, several names, or a variable of an outer function is a mistake that says where the type goes. Giving one name a second, different type is a warning.
 - **Taking apart:** with two or more names, the value must be a list with exactly as many items as names, or a vector with 2 or 3 names (`x`, `y`, `z`). The value is worked out first, so `set a, b to [b, a]` swaps. A name may appear only once.
 - `constant` works only at the top level of a script. A constant cannot be changed afterward.
 - **Choices:** `choices NAME are a, b and c` is `constant NAME is {a: "a", b: "b", c: "c"}`, with the choices in order; each choice is its name as text. It works only at the top level of a script, starting a line, and the names must differ. A script phrase starting with `choices` takes the line instead. Where `NAME` isn't a local, `NAME.x` with `x` not a choice (and not `length`, `size`, `count` or a call) is a compile error, wherever the line is in the script. A `match` with no `otherwise` whose cases are all `NAME.choice` of one set gives a warning ([13](#13-mistakes-and-warnings)) for each choice it leaves out.
@@ -478,13 +479,13 @@ The built-in functions (`print`, `max`, `random`, `time`, ...) and the host's fu
 ```
 function name ( [ parameter { , parameter } ] [ , name ... ] ) [ as type ]  block  end
 parameter:  name [ as type ] [ is expression ]
-type:       number | text | boolean | list | map | function | vector | object | kind | name
+type:       number | text | boolean | list [ of type ] | map [ of type ] | function | vector | object | kind | name
 ```
 
 - A call must give each parameter without a default exactly once. Too few or too many values is an error that says how many the function needs.
 - **Defaults** (`damage is 10`) come after the parameters without one. A default is worked out at each call that leaves its value out, and may use the parameters before it.
 - **Named values:** `attack(goblin, crit: 5)` gives values by name, after the values given in order. Built-in functions take values in order only.
-- **Types:** `as` *type* after a parameter's name is for checkers only and never changes what runs. A checker warns ([13](#13-mistakes-and-warnings)) for each value of a call to one of the script's own top-level functions, by name, that is written out plainly (a number, `-` and a number, text without `{ }`, `true`/`false`/`yes`/`no`, `nothing`, a list or a map) and isn't of the parameter's type; values given by name are matched to their parameters. In 1.7.0 a value that is one of the calling function's own variables is checked too, against a parameter of type `number`, `text`, `boolean`, `list`, `map` or `vector`, when the variable's type is certain: every `set` of it in the function (inner functions included) gives a plain value of one type other than `nothing`, and nothing else gives it a value (`for`, `with`, `catch`, `set a, b to`); or it is a parameter with one of those types that the function never sets. A lowercase type that is one edit from a type word is a mistake. A `name...` parameter can't have a type. `function` and `kind` after `as` open no block.
+- **Types:** `as` *type* after a parameter's name is for checkers only and never changes what runs. A checker warns ([13](#13-mistakes-and-warnings)) for each value of a call to one of the script's own top-level functions, by name, that is written out plainly (a number, `-` and a number, text without `{ }`, `true`/`false`/`yes`/`no`, `nothing`, a list or a map) and isn't of the parameter's type; values given by name are matched to their parameters. In 1.7.0 a value that is one of the calling function's own variables is checked too, against a parameter of type `number`, `text`, `boolean`, `list`, `map` or `vector`, when the variable's type is certain: every `set` of it in the function (inner functions included) gives a plain value of one type other than `nothing`, and nothing else gives it a value (`for`, `with`, `catch`, `set a, b to`); or it is a parameter with one of those types that the function never sets. A lowercase type that is one edit from a type word is a mistake. A `name...` parameter can't have a type. `function` and `kind` after `as` open no block. In 1.8.0 `list of` *type* and `map of` *type* also say what the items (a map's values) are; the type after `of` can't be `function` or `kind` (a mistake that says to write `as list`). The checks compare only the `list` or `map` part, and the items where they are written out plainly inside `[ ]` or `{ }`.
 - **What it gives back** (1.7.0): `as` *type* right after the `)`, on the same line, is for checkers only, like a parameter's type, for a script's functions and kinds' functions. A checker warns for a `return` whose value is written out plainly (as above) and isn't of that type; `return nothing` and a bare `return` are never warned about. It also warns, at the type, when the function has no `return` with a value and no `fail`. A lone `as` after the `)` with no type after it is read as before.
 - **The rest:** a last parameter written `name...` gets the values given in order after the other parameters, as a new list (`[]` when there are none). The parameters before it work as above; a call needs at least as many values as they have without defaults, and too few is an error that says "at least". The `...` parameter can't have a default or be named.
 - `return` *expression* gives back a value and leaves the function. A function that ends without `return`, or with a bare `return`, gives back `nothing`.
@@ -520,8 +521,8 @@ contract Name
 end
 
 kind Name [extends Name] [follows Name { , Name }]
-    { set field to expression }
-    { shared name is expression }
+    { set field [ as type ] to expression }
+    { shared name [ as type ] is expression }
     { when my field changes [ with name [ , name ] ]  block  end }
     { property name [ as type ]  block  end }
     { keep my field between term and term }
@@ -628,6 +629,7 @@ A **warning** points at code that runs but probably doesn't do what was meant. A
 - In 1.7.0: a name read as a value that nothing sets: not this script (anywhere in it), not a script it uses, not the language and not the engine. "'helth' isn't set anywhere, so this line will stop with a mistake when it runs. Did you mean 'health'?" A name is suggested only when it is the one close name. Calls (`helth()`) are left alone.
 - In 1.7.0: a `return` with a plain value of another type than the function's return type: "'status' says it gives back text (as text), but this gives back a number." And a function with a return type but no `return` with a value: "'status' says it gives back text (as text), but it never returns a value, so it always gives back nothing. Add 'return' with the text it should give back." (No quick fix: `return nothing` would hide the mistake.)
 - In 1.7.0: a call that gives one of the function's own variables whose type is certain (see [7](#7-functions)) and isn't the parameter's type: "'heal' takes a number for 'amount' (amount as number), but 'name' is text (it is only ever set to text)." For a typed parameter the reason reads "(who as text)".
+- In 1.8.0: a `set` or `add` that gives a typed variable, field or shared value ([5.1](#51-variables-and-constants)) a plain value of another type, or a typed list or map an item of another type, written out plainly: "'score' is a number (score as number), but this is text." and "'names' is a list of text (names as list of text), but this item is a number." `nothing` is never warned about. A second, different type for the same name: "'score' was said to be a number (score as number); this says text. Keep one type." A typed function variable passed to a typed parameter reads "... but 'lives' is a number (lives as number)."
 
 `forgescript --check --strict` (1.7.0) counts warnings too: the output is the same, and the exit code is 1 when there is a warning (65 when there is a mistake). The language server's `strict` initialization option sends warnings as errors. Neither changes what runs.
 

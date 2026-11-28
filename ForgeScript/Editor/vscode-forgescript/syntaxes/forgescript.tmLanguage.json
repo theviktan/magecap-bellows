@@ -102,6 +102,19 @@
 					}
 				},
 				{
+					"match": "^\\s*(set|shared)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(as)\\s+((?:(?:list|map)\\s+of\\s+)*[A-Za-z_][A-Za-z0-9_]*)(?=\\s+(to|is)\\b)",
+					"captures": {
+						"1": { "name": "keyword.other.statement.forge" },
+						"2": { "name": "variable.other.forge" },
+						"3": { "name": "keyword.control.forge" },
+						"4": { "name": "entity.name.type.forge" }
+					}
+				},
+				{
+					"match": "\\b(as)\\s+((?:list|map)\\s+of\\s+(?:(?:list|map)\\s+of\\s+)*[A-Za-z_][A-Za-z0-9_]*)",
+					"captures": { "1": { "name": "keyword.control.forge" }, "2": { "name": "entity.name.type.forge" } }
+				},
+				{
 					"match": "^\\s*(phrase)\\s+(.*)$",
 					"captures": { "1": { "name": "storage.type.function.forge" }, "2": { "name": "entity.name.function.forge" } }
 				},

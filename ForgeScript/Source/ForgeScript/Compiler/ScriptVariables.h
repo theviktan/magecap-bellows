@@ -39,6 +39,7 @@ namespace ForgeScript {
 		std::string Text;
 		double Components[4] = { 0.0, 0.0, 0.0, 1.0 };
 		int Line = 0;
+		std::string Type; // the line's 'as' type ('set speed as number to 5'), or empty
 	};
 
 	// Finds every "set name to <plain value>" line at the top level of a script (not inside functions,

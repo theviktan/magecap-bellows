@@ -7,6 +7,17 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.8.0 (not released yet)
 
+- **Types on variables, fields and lists** (Roadmap 3.0, item 5; Ron, 8:32 PM Nov 27), for the checker
+  only: `set score as number to 0`, `set names as list of text to []`, `set loot as map of number to
+  {}`, and on a kind's field lines, `set health as number to 100` and `shared count as number is 0`.
+  The editor and `--check` warn when a `set` or `add` gives one a plain value of another type, or a
+  typed list a plain item of another type ("'names' is a list of text (names as list of text), but this
+  item is a number."). `nothing` is always fine, worked-out values are never warned about, and nothing
+  that runs changes: an untyped script reads exactly as before, and `as` is still not a reserved word.
+  `list of` and `map of` work for values and what a function gives back too. A typed function
+  variable counts as certain for 1.7.0's call check. The outline and hover show the type, the
+  Inspector reads a typed top-level line as the same setting (`ScriptVariable::Type` has the type),
+  and the VS Code grammar colors the type.
 - **Properties on kinds** (Roadmap 3.0, item 3, design approved by Ron on Nov 25), three new forms
   inside a kind. Each was a mistake in 1.7.0, and `property` and `keep` stay ordinary names
   everywhere else:

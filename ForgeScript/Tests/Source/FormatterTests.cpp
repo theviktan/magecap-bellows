@@ -184,3 +184,11 @@ TEST_CASE("FormatterIndentsContracts")
 	REQUIRE(result.Error.empty());
 	CHECK_EQ(result.Text, std::string("contract Damageable\n\tneeds health\n\tneeds take_hit(amount)\nend\nkind Crate follows Damageable\n\tset health to 1\n\tfunction take_hit(amount)\n\tend\nend\nset contract to 2\n"));
 }
+
+TEST_CASE("FormatterKeepsTypesOnVariablesAndFields")
+{
+	// 'as' types on set and shared lines (Roadmap 3.0 item 5) are laid out like any other line.
+	const FormatResult result = FormatScript("set names as list of text to []\nkind Ship\nset fuel as number to 5\nshared count as number is 0\nend\n");
+	REQUIRE(result.Error.empty());
+	CHECK_EQ(result.Text, std::string("set names as list of text to []\nkind Ship\n\tset fuel as number to 5\n\tshared count as number is 0\nend\n"));
+}

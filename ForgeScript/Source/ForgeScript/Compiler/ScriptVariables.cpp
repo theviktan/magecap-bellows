@@ -198,15 +198,27 @@ namespace ForgeScript {
 			const bool lineStart = i == 0 || tokens[i - 1].Type == TokenType::Newline;
 			if (depth != 0 || !lineStart || tokens[i].Type != TokenType::Set)
 				continue;
-			if (i + 3 >= tokens.size() || tokens[i + 1].Type != TokenType::Identifier || tokens[i + 2].Type != TokenType::To)
+			if (i + 3 >= tokens.size() || tokens[i + 1].Type != TokenType::Identifier)
+				continue;
+			// 'set speed to 5', or with a type for checkers, 'set speed as number to 5' ('list of text' too).
+			size_t to = i + 2;
+			std::string type;
+			if (tokens[to].Type == TokenType::Identifier && tokens[to].Lexeme == "as")
+			{
+				for (to++; to < tokens.size() && (tokens[to].Type == TokenType::Identifier || tokens[to].Type == TokenType::Of ||
+					tokens[to].Type == TokenType::Function || tokens[to].Type == TokenType::Kind); to++)
+					type += (type.empty() ? "" : " ") + std::string(tokens[to].Lexeme);
+			}
+			if (to + 1 >= tokens.size() || tokens[to].Type != TokenType::To)
 				continue;
 
 			ScriptVariable variable;
 			variable.Name = std::string(tokens[i + 1].Lexeme);
 			variable.Line = tokens[i].Line;
+			variable.Type = type;
 			if (variable.Name.empty() || variable.Name[0] == '_' || seen.contains(variable.Name))
 				continue;
-			if (ReadPlainValue(tokens, i + 3, variable))
+			if (ReadPlainValue(tokens, to + 1, variable))
 			{
 				seen.insert(variable.Name);
 				variables.push_back(std::move(variable));

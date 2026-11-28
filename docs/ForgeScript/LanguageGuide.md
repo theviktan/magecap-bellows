@@ -142,6 +142,9 @@ constant MAX_HEALTH is 100
 
 Trying to `set MAX_HEALTH to 5` later is an error.
 
+You can also say what a variable holds, as a note for the editor: `set score as number to 0`. It
+never changes what runs. See [Saying what a variable holds](#saying-what-a-variable-holds).
+
 For a fixed set of named options, like an enemy that is idle, patrolling or chasing, use
 `choices State are idle, patrol, chase` (see [Naming your choices](#naming-your-choices-with-choices)).
 
@@ -769,6 +772,55 @@ end
   `return` with a value at all ("...it never returns a value, so it always gives back nothing").
 - `return nothing` (or a bare `return`) is never warned about: it's how a function says "none found",
   like `function nearest_enemy() as Enemy`.
+
+### Saying what a variable holds
+
+(1.8.0) Variables, a kind's fields and its shared values can have a type too. Write `as` and the type
+after the name, the first time you set it:
+
+```forge
+set score as number to 0
+set names as list of text to []
+set loot as map of number to {gold: 5}
+set target as Enemy to nothing
+
+set score to "ten"     # the editor warns: 'score' is a number (score as number), but this is text.
+add 3 to names         # the editor warns: 'names' is a list of text (names as list of text), but this is a number.
+```
+
+- **It never changes what runs**, just like the types of values. The script above still runs, and
+  `score` really does become `"ten"`. The type is a note for you, the editor and `forgescript --check`.
+- `list of` and `map of` say what the items are: `list of number`, `map of text`, and even
+  `list of list of number`. A plain `list` or `map` says nothing about the items. These also work for
+  values and what a function gives back: `function total(xs as list of number) as number`.
+- The editor warns only about plain values (`5`, `"ten"`, `yes`, `[1, 2]`, `{a: 1}`) of another type,
+  whether they come from `set`, `add`, or an item written inside `[ ]` or `{ }`. A value worked out,
+  like `1 + 2` or `enemy.health`, is never warned about, so a warning is never a guess.
+- `nothing` is always fine, for any type: it's how a variable says "none yet".
+- Say the type once. Saying another type later is a warning: "'score' was said to be a number (score
+  as number); this says text. Keep one type." Later lines just use `set score to ...`.
+- A top-level variable is checked everywhere it's set, in functions too, even ones above the line
+  with the type. A function's own variable is checked in that function, and its type counts as
+  certain when you pass it to a function with typed values.
+- Fields get their type on their line at the top of the kind, and `set my health` or
+  `self.health` in the kind's functions is checked against it:
+
+```forge
+kind Guard
+	set health as number to 100
+	shared count as number is 0
+
+	function hurt()
+		set my health to "low"     # the editor warns: 'health' is a number (health as number), but this is text.
+	end
+end
+```
+
+- Only a name can have a type: `set xs[1] as number to 2` and `set my x as number to 1` inside a
+  function are mistakes, with a message that says where the type goes instead.
+- `list of function` and `list of kind` aren't types (the words `function` and `kind` would open a
+  block); write `as list`.
+- `as` is still not a reserved word: `set as to 1` keeps working.
 
 ### Default values
 

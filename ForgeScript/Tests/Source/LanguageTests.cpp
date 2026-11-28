@@ -725,6 +725,85 @@ TEST_CASE("RepeatForeverWithoutAWaitWarns")
 	CHECK(warnings("while true and false do\n\tsay 1\nend\n").empty());
 }
 
+TEST_CASE("TypesOnVariablesFieldsAndListsWarnOnPlainValuesOnly")
+{
+	VM vm;
+	auto warnings = [&vm](const std::string& source) { return vm.FindWarnings(source, "test.forge", {}); };
+	auto messages = [&warnings](const std::string& source)
+	{
+		std::vector<std::string> out;
+		for (const CompileError& warning : warnings(source))
+			out.push_back(warning.Message);
+		return out;
+	};
+
+	// A script variable, set later on the top level or in a function compiled before that line.
+	std::vector<CompileError> found = warnings("set score as number to 0\nset score to \"ten\"\n");
+	REQUIRE(found.size() == 1);
+	CHECK(found[0].Line == 2);
+	CHECK(found[0].Column == 14);
+	CHECK_EQ(found[0].Message, std::string("'score' is a number (score as number), but this is text."));
+	CHECK_CONTAINS(warnings("function later()\n\tset score to [1]\nend\nset score as number to 0\n").at(0).Message,
+		"'score' is a number (score as number), but this is a list.");
+	CHECK_CONTAINS(warnings("set score as number to \"x\"\n").at(0).Message, "but this is text.");
+	CHECK_CONTAINS(warnings("set score as number to 0\nset score as text to \"\"\n").at(0).Message,
+		"'score' was said to be a number (score as number); this says text. Keep one type.");
+
+	// Lists and maps: the items, and 'add'.
+	CHECK_EQ(messages("set names as list of text to [\"Ana\", 5]\n"),
+		std::vector<std::string>{ "'names' is a list of text (names as list of text), but this item is a number." });
+	CHECK_EQ(messages("set names as list of text to []\nadd 3 to names\n"),
+		std::vector<std::string>{ "'names' is a list of text (names as list of text), but this is a number." });
+	CHECK_CONTAINS(warnings("set loot as map of number to {gold: 5, gem: \"red\"}\n").at(0).Message, "but this item is text.");
+
+	// A function's own variables, and their type counts as certain for the 1.7.0 call check.
+	const std::vector<std::string> local = messages("function heal(amount as text)\nend\nfunction f()\n\tset lives as number to 3\n\tset lives to \"many\"\n\theal(lives)\nend\n");
+	REQUIRE(local.size() == 2);
+	CHECK_EQ(local[0], std::string("'lives' is a number (lives as number), but this is text."));
+	CHECK_EQ(local[1], std::string("'heal' takes text for 'amount' (amount as text), but 'lives' is a number (lives as number)."));
+
+	// A kind's fields, shared values, and 'set my' / 'self.' in its functions, above or below the field line.
+	CHECK_CONTAINS(warnings("kind Guard\n\tset health as number to \"full\"\nend\n").at(0).Message, "'health' is a number (health as number), but this is text.");
+	CHECK_CONTAINS(warnings("kind Guard\n\tshared count as number is \"none\"\nend\n").at(0).Message, "'count' is a number (count as number)");
+	CHECK_EQ(messages("kind Guard\n\tfunction hurt()\n\t\tset my health to \"low\"\n\t\tset self.health to 3\n\tend\n\tset health as number to 100\nend\n"),
+		std::vector<std::string>{ "'health' is a number (health as number), but this is text." });
+
+	// 'list of' types where parameters and return values take types.
+	CHECK_CONTAINS(warnings("function total(xs as list of number) as number\n\treturn 1\nend\ntotal({})\n").at(0).Message,
+		"'total' takes a list of number for 'xs' (xs as list of number), but this is a map.");
+	CHECK_CONTAINS(warnings("function names() as list of text\n\treturn 5\nend\n").at(0).Message,
+		"'names' says it gives back a list of text (as list of text), but this gives back a number.");
+
+	// Nothing, worked-out values and right types: no warning. Untyped scripts read as before.
+	CHECK(warnings("set target as Enemy to nothing\nset target to nothing\nset score as number to 0\nset score to 1 + 2\nadd 1 to score\n"
+		"set names as list of text to [\"a\", nothing]\nadd \"b\" to names\nset xs as list to [1, \"a\"]\n").empty());
+	CHECK(warnings("set score to 0\nset score to \"ten\"\nset xs to []\nadd 3 to xs\n").empty());
+}
+
+TEST_CASE("TypesOnVariablesAreReadAndExplainTheirMistakes")
+{
+	// What the type changes is only what the checker says: the script runs the same.
+	CHECK_EQ(Output("set score as number to 0\nset score to \"ten\"\nsay score\nset xs as list of number to [1]\nadd \"x\" to xs\nsay xs\n"),
+		std::string("ten\n[1, \"x\"]\n"));
+	CHECK_CONTAINS(CompileFails("set score as numbr to 0\n").Message, "'numbr' isn't a type. Did you mean 'number'?");
+	CHECK_CONTAINS(CompileFails("set xs as list of function to []\n").Message, "For lists of functions or kinds, write: as list");
+	CHECK_CONTAINS(CompileFails("kind K\n\tfunction f()\n\t\tset my x as number to 1\n\tend\nend\n").Message,
+		"A field's type goes on its line at the top of the kind, like: set health as number to 100");
+	CHECK_CONTAINS(CompileFails("set xs to [1]\nset xs[1] as number to 2\n").Message, "Only a variable's own name can have a type");
+	CHECK_CONTAINS(CompileFails("function outer()\n\tset n to 1\n\tfunction inner()\n\t\tset n as number to 2\n\tend\nend\n").Message,
+		"'n' belongs to an outer function. Give it its type where that function first sets it.");
+	CHECK(Compiles("set as to 1\nset of_x to as\n"));
+
+	// The Inspector reads a typed top-level line as the same setting, with its type.
+	const std::vector<ScriptVariable> variables = FindScriptVariables("set speed as number to 5\nset names as list of text to \"x\"\nset plain to 2\n");
+	REQUIRE(variables.size() == 3);
+	CHECK_EQ(variables[0].Name, std::string("speed"));
+	CHECK(variables[0].Number == 5.0);
+	CHECK_EQ(variables[0].Type, std::string("number"));
+	CHECK_EQ(variables[1].Type, std::string("list of text"));
+	CHECK(variables[2].Type.empty());
+}
+
 TEST_CASE("OptionalTypesWarnOnPlainValuesOnly")
 {
 	VM vm;
