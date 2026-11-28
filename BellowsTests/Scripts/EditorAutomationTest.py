@@ -20,6 +20,15 @@ output = root / "Output"
 output.mkdir(parents=True)
 
 
+def raises(action, error):
+    """True when action() raises the given exception type."""
+    try:
+        action()
+    except error:
+        return True
+    return False
+
+
 def check(condition, message):
     if not condition:
         raise AssertionError(message)
@@ -123,6 +132,29 @@ check(editor.save_scene("Scenes/Copy.bscene"), "save scene as")
 check(editor.scene_path() == "Scenes/Copy.bscene", "save as switches the open scene")
 check(editor.open_scene("Scenes/Main.bscene"), "reopen scene")
 check(bellows.find_entity("Player") is not None, "saved entity loads back")
+
+# The title bar's search (Ctrl+K) --------------------------------------------------------
+listed = editor.search()
+check(listed and all(r["kind"] == "command" for r in listed) and listed[0]["name"] == "Save Scene",
+      f"an empty search lists the commands ({[r['name'] for r in listed]})")
+found = editor.search("player", 5)
+check(found and found[0]["kind"] == "entity" and found[0]["name"] == "Player", f"search finds an entity by name ({found})")
+check(any(r["kind"] == "scene" and r["name"] == "Main.bscene" and r["detail"] == "Scenes" for r in editor.search("main")),
+      "search finds a scene in its folder")
+check(any(r["name"] == "Save Scene" for r in editor.search("sv sc")), "search matches scattered letters")
+check(not next(r for r in editor.search("stop") if r["name"] == "Stop")["enabled"], "a command that can't run now is listed disabled")
+bellows.create_entity("Searchable")
+editor.commit("Searchable")
+editor.run_command("Undo")
+check(bellows.find_entity("Searchable") is None, "run_command runs a command (Undo)")
+check(raises(lambda: editor.run_command("Stop"), ValueError), "run_command refuses a command that can't run now")
+check(raises(lambda: editor.run_command("Fly to the Moon"), ValueError), "run_command refuses an unknown command")
+editor.open_search("sav")
+editor.run_frames(2)
+check(editor.is_search_open(), "open_search")
+editor.close_search()
+editor.run_frames(1)
+check(not editor.is_search_open(), "close_search")
 check(bellows.find_entity("Player").is_in_group("Heroes") and bellows.group("Heroes").note == "The player and friends",
       "groups are saved with the scene")
 

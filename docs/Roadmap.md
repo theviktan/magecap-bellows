@@ -237,9 +237,10 @@ tested and shown to Ron against the design:
 
 1. **Theme tokens** (0.7): the navy palette, neutral toggles and primary buttons, the warm
    selection, rounder fields and tabs, the "MageCap Bellows" title.
-2. **Title bar and icon rail:** the search box (Ctrl+K), the project breadcrumb with the unsaved
-   dot, Export game, the ember Play button; Scene, Script, Animation, Profiler and Content on a
-   rail at the left.
+2. **Title bar and icon rail** (0.7): the search box (Ctrl+K) for commands, entities, scenes and
+   scripts, the project and scene with the unsaved dot, the ember Play button (it moves into the
+   viewport toolbar in step 4), Export game; Scene, Script, Profiler and Content on a rail at the
+   left, Settings at its foot. Animation joins the rail when the editor has an Animation workspace.
 3. **Panels:** rounded panels with gaps and grips between them, the panel headers, the warm
    selection in the Hierarchy and Content panels.
 4. **Viewport:** one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the

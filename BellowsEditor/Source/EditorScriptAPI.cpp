@@ -479,6 +479,45 @@ namespace Bellows {
 				}
 				return result;
 			}, "The Hierarchy panel's rows as it last drew them, top to bottom: {kind, name, depth, group}");
+			m.def("search", [](const std::string& query, int limit)
+			{
+				if (limit < 1)
+					throw py::value_error("search's limit is 1 or more");
+				const std::vector<EditorLayer::SearchEntry> entries = Editor().CollectSearchEntries();
+				std::vector<CommandSearch::Item> items;
+				for (const EditorLayer::SearchEntry& entry : entries)
+					items.push_back(entry.Item);
+				py::list result;
+				for (size_t index : CommandSearch::Rank(items, query, static_cast<size_t>(limit)))
+				{
+					py::dict row;
+					row["kind"] = CommandSearch::KindName(items[index].Kind);
+					row["name"] = items[index].Name;
+					row["detail"] = items[index].Detail;
+					row["enabled"] = items[index].Enabled;
+					result.append(row);
+				}
+				return result;
+			}, py::arg("query") = "", py::arg("limit") = 20,
+				"What the title bar's search (Ctrl+K) lists for 'query', best first: {kind, name, detail, enabled}. "
+				"kind is 'command', 'entity', 'scene' or 'script'; an empty query lists the commands");
+			m.def("run_command", [](const std::string& name)
+			{
+				for (const EditorLayer::SearchEntry& entry : Editor().CollectSearchEntries())
+				{
+					if (entry.Item.Kind != CommandSearch::ResultKind::Command || entry.Item.Name != name)
+						continue;
+					if (!entry.Item.Enabled)
+						throw py::value_error("'" + name + "' can't run right now (the search lists it dimmed)");
+					entry.Run();
+					return;
+				}
+				throw py::value_error("No command is called '" + name + "'. editor.search() lists them");
+			}, py::arg("name"), "Runs a command from the title bar's search by its exact name, as picking it there would");
+			m.def("open_search", [](const std::string& query) { Editor().OpenSearch(query); }, py::arg("query") = "",
+				"Opens the title bar's search (as Ctrl+K does), with 'query' typed in it");
+			m.def("close_search", [] { Editor().CloseSearch(); }, "Closes the title bar's search");
+			m.def("is_search_open", [] { return Editor().IsSearchOpen(); }, "Whether the title bar's search is open");
 			m.def("set_hierarchy_view", [](const std::string& view)
 			{
 				using View = SceneHierarchyPanel::View;

@@ -8,6 +8,8 @@ set(EDITOR_LOGIC_SOURCES
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AgentServer.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AssetFiles.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/AssetFiles.h"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/CommandSearch.cpp"
+	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/CommandSearch.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/EditorSettings.cpp"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/EditorSettings.h"
 	"${PROJECT_SOURCE_DIR}/BellowsEditor/Source/ForgeScriptAssist.cpp"
