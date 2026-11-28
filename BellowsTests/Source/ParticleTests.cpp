@@ -14,9 +14,12 @@
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 using namespace Bellows;
 
@@ -555,6 +558,400 @@ TEST_CASE("[gpu] Particles draw as camera-facing dots, add up when additive, and
 		wall.GetTransform().Translation = glm::vec3(0.0f, 0.0f, 2.0f);
 		wall.GetTransform().Scale = glm::vec3(4.0f, 4.0f, 0.2f);
 		CHECK(CountRedPixels(Draw(renderer, scene)) == 0);
+	}
+
+	CHECK(RenderDevice::GetValidationErrorCount() == 0);
+}
+
+TEST_CASE("Particle size curves and color gradients shape a particle over its life")
+{
+	using ParticleSystem::EvaluateCurve;
+	using ParticleSystem::EvaluateGradient;
+	CHECK(EvaluateCurve({}, 0.5f, 7.0f) == 7.0f);
+	const std::vector<ParticleCurveKey> bump { { 0.2f, 0.0f }, { 0.5f, 2.0f }, { 1.0f, 1.0f } };
+	CHECK(EvaluateCurve(bump, 0.0f, 9.0f) == doctest::Approx(0.0f));		// Level before the first key
+	CHECK(EvaluateCurve(bump, 0.35f, 9.0f) == doctest::Approx(1.0f));
+	CHECK(EvaluateCurve(bump, 0.75f, 9.0f) == doctest::Approx(1.5f));
+	CHECK(EvaluateCurve(bump, 1.0f, 9.0f) == doctest::Approx(1.0f));
+	// Two keys at the same time: a step, not a division by zero.
+	const std::vector<ParticleCurveKey> step { { 0.5f, 0.0f }, { 0.5f, 4.0f } };
+	CHECK(EvaluateCurve(step, 0.5f, 9.0f) == doctest::Approx(0.0f));
+	CHECK(EvaluateCurve(step, 0.6f, 9.0f) == doctest::Approx(4.0f));
+
+	const std::vector<ParticleColorKey> flash { { 0.0f, glm::vec4(1.0f) }, { 0.5f, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) }, { 1.0f, glm::vec4(0.0f, 0.0f, 1.0f, 0.0f) } };
+	CHECK(EvaluateGradient({}, 0.5f, glm::vec4(0.25f)) == glm::vec4(0.25f));
+	CHECK(Near(glm::vec3(EvaluateGradient(flash, 0.25f, glm::vec4(0.0f))), glm::vec3(0.5f, 0.5f, 1.0f), 1e-5f));
+	CHECK(EvaluateGradient(flash, 0.75f, glm::vec4(0.0f)).a == doctest::Approx(0.5f));
+
+	ParticleEmitterComponent emitter = QuietEmitter();
+	emitter.StartSize = 2.0f;
+	emitter.EndSize = 100.0f;		// Not used once there's a curve
+	emitter.SizeCurve = { { 0.0f, 0.0f }, { 0.5f, 1.0f }, { 1.0f, 0.0f } };
+	emitter.ColorGradient = flash;
+	emitter.Intensity = 2.0f;
+	Particle particle;
+	particle.Lifetime = 2.0f;
+	particle.Age = 0.5f;
+	CHECK(ParticleSystem::GetSize(emitter, particle) == doctest::Approx(1.0f));
+	particle.Age = 1.0f;
+	CHECK(ParticleSystem::GetSize(emitter, particle) == doctest::Approx(2.0f));
+	CHECK(ParticleSystem::GetColor(emitter, particle) == glm::vec4(0.0f, 0.0f, 2.0f, 1.0f));	// Intensity on RGB, not alpha
+	emitter.SizeCurve.clear();
+	emitter.ColorGradient.clear();
+	CHECK(ParticleSystem::GetSize(emitter, particle) == doctest::Approx(51.0f));				// Back to start to end
+}
+
+TEST_CASE("New particle settings are held to their ranges")
+{
+	ParticleEmitterComponent emitter;
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	for (int i = 0; i < 12; i++)
+		emitter.SizeCurve.push_back({ 1.0f - static_cast<float>(i) * 0.05f, 5000.0f });
+	emitter.SizeCurve[0].Time = nan;
+	emitter.ColorGradient = { { 0.9f, glm::vec4(2.0f, -1.0f, nan, 0.5f) }, { 0.1f, glm::vec4(1.0f) } };
+	emitter.Facing = static_cast<ParticleFacing>(77);
+	emitter.Shape = static_cast<ParticleShape>(42);
+	emitter.FlipbookColumns = 0;
+	emitter.FlipbookRows = 500;
+	emitter.FlipbookFps = -3.0f;
+	emitter.SpinSpeed = 1e9f;
+	emitter.RotationVariation = nan;
+	emitter.NoiseStrength = -1.0f;
+	emitter.Clamp();
+
+	CHECK(emitter.SizeCurve.size() == ParticleEmitterComponent::MaxCurveKeys);
+	CHECK(std::is_sorted(emitter.SizeCurve.begin(), emitter.SizeCurve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; }));
+	for (const ParticleCurveKey& key : emitter.SizeCurve)
+	{
+		CHECK(key.Time >= 0.0f);
+		CHECK(key.Time <= 1.0f);
+		CHECK(key.Value == ParticleEmitterComponent::MaxSize);
+	}
+	REQUIRE(emitter.ColorGradient.size() == 2);
+	CHECK(emitter.ColorGradient[0].Time == 0.1f);
+	CHECK(emitter.ColorGradient[1].Color == glm::vec4(1.0f, 0.0f, 1.0f, 0.5f));
+	CHECK(emitter.Facing == ParticleFacing::Camera);
+	CHECK(emitter.Shape == ParticleShape::Point);
+	CHECK(emitter.FlipbookColumns == 1);
+	CHECK(emitter.FlipbookRows == ParticleEmitterComponent::MaxFlipbookFrames);
+	CHECK(emitter.FlipbookFps == 0.0f);
+	CHECK(emitter.SpinSpeed == ParticleEmitterComponent::MaxSpin);
+	CHECK(emitter.RotationVariation == 0.0f);
+	CHECK(emitter.NoiseStrength == 0.0f);
+}
+
+TEST_CASE("Rings, lines and outward particles; spin, swirl and flipbook frames")
+{
+	SUBCASE("a ring's particles start on its circle around +Y, and a line's along X")
+	{
+		ParticleEmitterComponent ring = QuietEmitter();
+		ring.Shape = ParticleShape::Ring;
+		ring.ShapeSize = glm::vec3(2.0f);
+		ring.Speed = 0.0f;
+		ring.Lifetime = 100.0f;
+		ParticleSystem::Emit(ring, 200);
+		Run(ring, 0.0f, 1);
+		REQUIRE(ring.RuntimeParticles.size() == 200);
+		float minimumX = 10.0f, maximumX = -10.0f;
+		for (const Particle& particle : ring.RuntimeParticles)
+		{
+			CHECK(glm::length(particle.Position) == doctest::Approx(2.0f).epsilon(1e-4));
+			CHECK(particle.Position.y == doctest::Approx(0.0f));
+			minimumX = std::min(minimumX, particle.Position.x);
+			maximumX = std::max(maximumX, particle.Position.x);
+		}
+		CHECK(minimumX < -1.8f);		// All the way round
+		CHECK(maximumX > 1.8f);
+
+		ParticleEmitterComponent line = ring;
+		line.RuntimeParticles.clear();
+		line.Shape = ParticleShape::Line;
+		line.ShapeSize.x = 3.0f;
+		ParticleSystem::Emit(line, 200);
+		Run(line, 0.0f, 1);
+		for (const Particle& particle : line.RuntimeParticles)
+		{
+			CHECK(std::abs(particle.Position.x) <= 1.5f);
+			CHECK(particle.Position.y == 0.0f);
+			CHECK(particle.Position.z == 0.0f);
+		}
+	}
+
+	SUBCASE("outward particles leave away from the center")
+	{
+		ParticleEmitterComponent burst = QuietEmitter();
+		burst.Outward = true;
+		burst.SpreadAngle = 0.0f;
+		burst.Shape = ParticleShape::Sphere;
+		burst.ShapeSize = glm::vec3(1.0f);
+		burst.Speed = 3.0f;
+		burst.Lifetime = 100.0f;
+		ParticleSystem::Emit(burst, 100);
+		Run(burst, 0.0f, 1);
+		int down = 0;
+		for (const Particle& particle : burst.RuntimeParticles)
+		{
+			CHECK(glm::length(particle.Velocity) == doctest::Approx(3.0f).epsilon(1e-4));
+			if (glm::length(particle.Position) > 1e-3f)
+				CHECK(glm::dot(glm::normalize(particle.Velocity), glm::normalize(particle.Position)) > 0.999f);
+			down += particle.Velocity.y < 0.0f ? 1 : 0;
+		}
+		CHECK(down > 20);		// Every way, not only up
+
+		// A ring's go out flat, and a point's go every way.
+		ParticleEmitterComponent shockwave = burst;
+		shockwave.RuntimeParticles.clear();
+		shockwave.Shape = ParticleShape::Ring;
+		ParticleSystem::Emit(shockwave, 50);
+		Run(shockwave, 0.0f, 1);
+		for (const Particle& particle : shockwave.RuntimeParticles)
+			CHECK(std::abs(particle.Velocity.y) < 1e-4f);
+		ParticleEmitterComponent point = burst;
+		point.RuntimeParticles.clear();
+		point.Shape = ParticleShape::Point;
+		ParticleSystem::Emit(point, 100);
+		Run(point, 0.0f, 1);
+		glm::vec3 average(0.0f);
+		for (const Particle& particle : point.RuntimeParticles)
+			average += particle.Velocity / 100.0f;
+		CHECK(glm::length(average) < 1.0f);
+	}
+
+	SUBCASE("rotation starts where it's set and spins")
+	{
+		ParticleEmitterComponent emitter = QuietEmitter();
+		emitter.StartRotation = 90.0f;
+		emitter.SpinSpeed = 180.0f;
+		emitter.Lifetime = 100.0f;
+		ParticleSystem::Emit(emitter, 1);
+		Run(emitter, 0.0f, 1);
+		REQUIRE(emitter.RuntimeParticles.size() == 1);
+		CHECK(emitter.RuntimeParticles[0].Rotation == doctest::Approx(glm::half_pi<float>()));
+		Run(emitter, 0.25f, 2);
+		CHECK(emitter.RuntimeParticles[0].Rotation == doctest::Approx(glm::pi<float>()).epsilon(1e-4));
+
+		ParticleEmitterComponent varied = QuietEmitter();
+		varied.RotationVariation = 180.0f;
+		varied.Lifetime = 100.0f;
+		ParticleSystem::Emit(varied, 50);
+		Run(varied, 0.0f, 1);
+		float smallest = 10.0f, largest = -10.0f;
+		for (const Particle& particle : varied.RuntimeParticles)
+		{
+			smallest = std::min(smallest, particle.Rotation);
+			largest = std::max(largest, particle.Rotation);
+		}
+		CHECK(largest - smallest > 3.0f);
+	}
+
+	SUBCASE("swirl noise bends paths, the same way every run")
+	{
+		auto run = [](float strength)
+		{
+			ParticleEmitterComponent emitter = QuietEmitter();
+			emitter.SpreadAngle = 0.0f;
+			emitter.Speed = 1.0f;
+			emitter.Lifetime = 100.0f;
+			emitter.NoiseStrength = strength;
+			ParticleSystem::Emit(emitter, 1);
+			Run(emitter, 0.05f, 40);
+			return emitter.RuntimeParticles.at(0).Position;
+		};
+		const glm::vec3 straight = run(0.0f);
+		CHECK(Near(straight, glm::vec3(0.0f, 1.95f, 0.0f), 1e-3f));
+		const glm::vec3 swirled = run(4.0f);
+		CHECK(glm::length(glm::vec2(swirled.x, swirled.z)) > 0.05f);
+		CHECK(Near(swirled, run(4.0f), 1e-6f));
+	}
+
+	SUBCASE("flipbook frames go across then down, over the life or at a frame rate")
+	{
+		ParticleEmitterComponent emitter = QuietEmitter();
+		Particle particle;
+		particle.Lifetime = 1.0f;
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+		emitter.FlipbookColumns = 2;
+		emitter.FlipbookRows = 2;
+		particle.Age = 0.0f;
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.0f, 0.0f, 0.5f, 0.5f));
+		particle.Age = 0.3f;
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.5f, 0.0f, 1.0f, 0.5f));
+		particle.Age = 0.6f;
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.0f, 0.5f, 0.5f, 1.0f));
+		particle.Age = 1.0f;
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.5f, 0.5f, 1.0f, 1.0f));	// The last frame, not past it
+		emitter.FlipbookFps = 10.0f;
+		particle.Age = 0.55f;		// Frame 5 of a looping 4: frame 1
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.5f, 0.0f, 1.0f, 0.5f));
+		emitter.FlipbookRandomStart = true;
+		particle.Age = 0.0f;
+		particle.Random = 0.8f;		// Starts on frame 3
+		CHECK(ParticleSystem::GetFrameRect(emitter, particle) == glm::vec4(0.5f, 0.5f, 1.0f, 1.0f));
+	}
+}
+
+TEST_CASE("The new particle settings are saved and loaded, and broken curves are skipped")
+{
+	Scene scene("Effects");
+	Entity portal = scene.CreateEntity("Portal");
+	ParticleEmitterComponent& emitter = portal.AddComponent<ParticleEmitterComponent>();
+	emitter.Shape = ParticleShape::Ring;
+	emitter.Outward = true;
+	emitter.Facing = ParticleFacing::Stretched;
+	emitter.StretchAmount = 0.2f;
+	emitter.StartRotation = 45.0f;
+	emitter.RotationVariation = 10.0f;
+	emitter.SpinSpeed = -90.0f;
+	emitter.SpinVariation = 30.0f;
+	emitter.NoiseStrength = 2.0f;
+	emitter.NoiseFrequency = 0.5f;
+	emitter.NoiseSpeed = 1.5f;
+	emitter.TexturePath = "Textures/Sparkle.png";
+	emitter.FlipbookColumns = 4;
+	emitter.FlipbookRows = 2;
+	emitter.FlipbookFps = 24.0f;
+	emitter.FlipbookRandomStart = true;
+	emitter.SizeCurve = { { 0.0f, 0.0f }, { 0.25f, 1.5f }, { 1.0f, 0.0f } };
+	emitter.ColorGradient = { { 0.0f, glm::vec4(1.0f) }, { 1.0f, glm::vec4(0.25f, 0.5f, 1.0f, 0.0f) } };
+
+	const Json json = SceneSerializer::SerializeToJson(scene);
+	Scene loaded("Loaded");
+	REQUIRE(SceneSerializer::DeserializeFromJson(loaded, json));
+	Entity loadedPortal = loaded.TryGetEntityByUUID(portal.GetUUID());
+	REQUIRE(loadedPortal);
+	const ParticleEmitterComponent& read = loadedPortal.GetComponent<ParticleEmitterComponent>();
+	CHECK(read.Shape == ParticleShape::Ring);
+	CHECK(read.Outward);
+	CHECK(read.Facing == ParticleFacing::Stretched);
+	CHECK(read.StretchAmount == 0.2f);
+	CHECK(read.StartRotation == 45.0f);
+	CHECK(read.RotationVariation == 10.0f);
+	CHECK(read.SpinSpeed == -90.0f);
+	CHECK(read.SpinVariation == 30.0f);
+	CHECK(read.NoiseStrength == 2.0f);
+	CHECK(read.NoiseFrequency == 0.5f);
+	CHECK(read.NoiseSpeed == 1.5f);
+	CHECK(read.FlipbookColumns == 4);
+	CHECK(read.FlipbookRows == 2);
+	CHECK(read.FlipbookFps == 24.0f);
+	CHECK(read.FlipbookRandomStart);
+	CHECK(read.SizeCurve == emitter.SizeCurve);
+	CHECK(read.ColorGradient == emitter.ColorGradient);
+	CHECK(SceneSerializer::SerializeToJson(loaded)["Entities"].dump() == json["Entities"].dump());
+
+	// Keys that aren't [time, value] or [time, r, g, b, a] are skipped; the rest load.
+	Json broken = json;
+	for (Json& entity : broken["Entities"])
+	{
+		if (entity.contains("ParticleEmitter"))
+		{
+			entity["ParticleEmitter"]["SizeCurve"] = Json::parse(R"([[0, 1], "big", [0.5], [0.5, 2, 3], [1, 0.5], {"t": 1}])");
+			entity["ParticleEmitter"]["ColorGradient"] = Json::parse(R"([[0, 1, 1, 1, 1], [0.5, 1, 1, 1], 7, [1, 0, 0, 0, "x"]])");
+			entity["ParticleEmitter"]["Facing"] = "sideways";
+		}
+	}
+	Scene fixed("Fixed");
+	REQUIRE(SceneSerializer::DeserializeFromJson(fixed, broken));
+	Entity fixedPortal = fixed.TryGetEntityByUUID(portal.GetUUID());
+	REQUIRE(fixedPortal);
+	const ParticleEmitterComponent& kept = fixedPortal.GetComponent<ParticleEmitterComponent>();
+	CHECK(kept.SizeCurve == std::vector<ParticleCurveKey> { { 0.0f, 1.0f }, { 1.0f, 0.5f } });
+	CHECK(kept.ColorGradient.size() == 1);
+	CHECK(kept.Facing == ParticleFacing::Camera);
+
+	// An old scene without them keeps the defaults.
+	Json old = json;
+	for (Json& entity : old["Entities"])
+	{
+		if (entity.contains("ParticleEmitter"))
+		{
+			for (const char* key : { "Outward", "Facing", "SizeCurve", "ColorGradient", "FlipbookColumns", "NoiseStrength", "SpinSpeed" })
+				entity["ParticleEmitter"].erase(key);
+		}
+	}
+	Scene older("Older");
+	REQUIRE(SceneSerializer::DeserializeFromJson(older, old));
+	Entity olderPortal = older.TryGetEntityByUUID(portal.GetUUID());
+	REQUIRE(olderPortal);
+	const ParticleEmitterComponent& defaults = olderPortal.GetComponent<ParticleEmitterComponent>();
+	CHECK_FALSE(defaults.Outward);
+	CHECK(defaults.Facing == ParticleFacing::Camera);
+	CHECK(defaults.SizeCurve.empty());
+	CHECK(defaults.ColorGradient.empty());
+	CHECK(defaults.FlipbookColumns == 1);
+	CHECK(defaults.NoiseStrength == 0.0f);
+	CHECK(defaults.SpinSpeed == 0.0f);
+}
+
+TEST_CASE("[gpu] Stretched particles streak along their motion, and flat ones lie across the emitter's up")
+{
+	Application& application = BellowsTests::GetTestApplication();
+	REQUIRE(application.IsValid());
+	RenderDevice::ResetValidationErrorCount();
+
+	SceneRenderer renderer;
+	renderer.SetViewportSize(c_Size, c_Size);
+
+	// The widest and tallest runs of red pixels in the image.
+	auto redExtent = [](const Image& image)
+	{
+		uint32_t minX = c_Size, maxX = 0, minY = c_Size, maxY = 0;
+		for (uint32_t y = 0; y < c_Size; y++)
+		{
+			for (uint32_t x = 0; x < c_Size; x++)
+			{
+				const glm::u8vec4 pixel = image.GetPixel(x, y);
+				if (pixel.r > 150 && pixel.g < 60 && pixel.b < 60)
+				{
+					minX = std::min(minX, x);
+					maxX = std::max(maxX, x);
+					minY = std::min(minY, y);
+					maxY = std::max(maxY, y);
+				}
+			}
+		}
+		return maxX >= minX ? glm::ivec2(static_cast<int>(maxX - minX), static_cast<int>(maxY - minY)) : glm::ivec2(-1);
+	};
+
+	SUBCASE("a stretched particle moving sideways is wider than it is tall")
+	{
+		Scene scene("Streak");
+		PlainSettings(scene);
+		ParticleEmitterComponent& emitter = AddStillEmitter(scene, "Streak", 1, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), ParticleBlend::Alpha);
+		emitter.StartSize = emitter.EndSize = 0.4f;
+		emitter.Speed = 10.0f;
+		emitter.SpreadAngle = 0.0f;
+		emitter.Facing = ParticleFacing::Stretched;
+		emitter.StretchAmount = 0.2f;			// 2 m long at 10 m/s
+		emitter.Drag = 0.0f;
+		Entity entity = scene.FindEntityByName("Streak");
+		// Up (+Y, where it's sent) turned to +X: it moves sideways across the view.
+		entity.GetTransform().SetRotationEuler(glm::vec3(0.0f, 0.0f, -glm::half_pi<float>()));
+		scene.OnUpdateEditor(Timestep(0.0f));
+		const Image image = Draw(renderer, scene);
+		image.SavePNG(BellowsTests::GetTestOutputDirectory() / "Particles_Stretched.png");
+		const glm::ivec2 extent = redExtent(image);
+		CHECK(extent.x > extent.y * 3);
+
+		emitter.Facing = ParticleFacing::Camera;
+		const glm::ivec2 square = redExtent(Draw(renderer, scene));
+		CHECK(std::abs(square.x - square.y) <= 2);
+	}
+
+	SUBCASE("a flat particle is edge-on from the side, and a full disc from above its plane")
+	{
+		Scene scene("Flat");
+		PlainSettings(scene);
+		ParticleEmitterComponent& emitter = AddStillEmitter(scene, "Ring", 1, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), ParticleBlend::Alpha);
+		emitter.Facing = ParticleFacing::Flat;
+		scene.OnUpdateEditor(Timestep(0.0f));
+		CHECK(CountRedPixels(Draw(renderer, scene)) < 20);		// Lying flat, seen from level
+
+		// Turned so its up faces the camera (+Z): a disc.
+		scene.FindEntityByName("Ring").GetTransform().SetRotationEuler(glm::vec3(glm::half_pi<float>(), 0.0f, 0.0f));
+		const Image image = Draw(renderer, scene);
+		image.SavePNG(BellowsTests::GetTestOutputDirectory() / "Particles_Flat.png");
+		CHECK(CountRedPixels(image) > 50);
 	}
 
 	CHECK(RenderDevice::GetValidationErrorCount() == 0);

@@ -27,6 +27,252 @@ namespace Bellows {
 
 	namespace {
 
+		// A strip showing a curve over a particle's life (left born, right dies) with its keys.
+		void DrawCurvePlot(const std::vector<ParticleCurveKey>& keys, float maximum)
+		{
+			const float scale = Theme::GetScale();
+			const ImVec2 size(ImGui::GetContentRegionAvail().x, 56.0f * scale);
+			const ImVec2 start = ImGui::GetCursorScreenPos();
+			ImGui::Dummy(size);
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			drawList->AddRectFilled(start, ImVec2(start.x + size.x, start.y + size.y), Theme::Field, 6.0f * scale);
+			const float top = std::max(maximum, 1e-3f);
+			auto point = [&](float t, float value)
+			{
+				return ImVec2(start.x + 4.0f * scale + t * (size.x - 8.0f * scale),
+					start.y + size.y - 4.0f * scale - std::clamp(value / top, 0.0f, 1.0f) * (size.y - 8.0f * scale));
+			};
+			ImVec2 previous = point(0.0f, ParticleSystem::EvaluateCurve(keys, 0.0f, 1.0f));
+			for (int i = 1; i <= 48; i++)
+			{
+				const float t = static_cast<float>(i) / 48.0f;
+				const ImVec2 next = point(t, ParticleSystem::EvaluateCurve(keys, t, 1.0f));
+				drawList->AddLine(previous, next, Theme::NeutralBright, 2.0f * scale);
+				previous = next;
+			}
+			for (const ParticleCurveKey& key : keys)
+				drawList->AddCircleFilled(point(key.Time, key.Value), 3.5f * scale, Theme::Accent);
+		}
+
+		// A strip showing a gradient over a particle's life over a checkerboard (so alpha shows).
+		void DrawGradientBar(const std::vector<ParticleColorKey>& keys)
+		{
+			const float scale = Theme::GetScale();
+			const ImVec2 size(ImGui::GetContentRegionAvail().x, 22.0f * scale);
+			const ImVec2 start = ImGui::GetCursorScreenPos();
+			ImGui::Dummy(size);
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const float cell = 6.0f * scale;
+			for (float x = 0.0f; x < size.x; x += cell)
+			{
+				for (float y = 0.0f; y < size.y; y += cell)
+				{
+					const bool dark = (static_cast<int>(x / cell) + static_cast<int>(y / cell)) % 2 == 0;
+					drawList->AddRectFilled(ImVec2(start.x + x, start.y + y), ImVec2(start.x + std::min(x + cell, size.x), start.y + std::min(y + cell, size.y)),
+						dark ? IM_COL32(70, 70, 80, 255) : IM_COL32(110, 110, 120, 255));
+				}
+			}
+			const int steps = 48;
+			for (int i = 0; i < steps; i++)
+			{
+				const float t0 = static_cast<float>(i) / steps, t1 = static_cast<float>(i + 1) / steps;
+				const auto colorAt = [&](float t)
+				{
+					const glm::vec4 color = ParticleSystem::EvaluateGradient(keys, t, glm::vec4(1.0f));
+					return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, color.a));
+				};
+				const ImU32 a = colorAt(t0), b = colorAt(t1);
+				drawList->AddRectFilledMultiColor(ImVec2(start.x + t0 * size.x, start.y), ImVec2(start.x + t1 * size.x, start.y + size.y), a, b, b, a);
+			}
+			drawList->AddRect(start, ImVec2(start.x + size.x, start.y + size.y), Theme::Border);
+		}
+
+		// A row of small preset buttons that wraps to the next line instead of running off the panel.
+		// Returns the index of the one clicked, or -1.
+		template<typename Preset, size_t Count>
+		int PresetButtons(const Preset (&presets)[Count])
+		{
+			int clicked = -1;
+			const ImGuiStyle& style = ImGui::GetStyle();
+			const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+			for (size_t i = 0; i < Count; i++)
+			{
+				const float width = ImGui::CalcTextSize(presets[i].Name).x + style.FramePadding.x * 2.0f;
+				if (i > 0 && ImGui::GetItemRectMax().x + style.ItemSpacing.x + width <= right)
+					ImGui::SameLine();
+				if (ImGui::SmallButton(presets[i].Name))
+					clicked = static_cast<int>(i);
+			}
+			return clicked;
+		}
+
+		// The time of key 'index' stays between its neighbors, so dragging never reorders the keys.
+		template<typename Key>
+		void KeyTimeRange(const std::vector<Key>& keys, size_t index, float& minimum, float& maximum)
+		{
+			minimum = index > 0 ? keys[index - 1].Time : 0.0f;
+			maximum = index + 1 < keys.size() ? keys[index + 1].Time : 1.0f;
+		}
+
+		void DrawSizeCurve(ParticleEmitterComponent& c)
+		{
+			using Limits = ParticleEmitterComponent;
+			int mode = c.SizeCurve.empty() ? 0 : 1;
+			static const char* const s_Modes[] = { "Start to End", "Curve" };
+			if (UI::BeginPropertyGrid("ParticleSizeMode"))
+			{
+				if (UI::PropertyCombo("Size Over Life", mode, s_Modes, 2, "A straight line from Start Size to End Size, or a curve of your own"))
+				{
+					if (mode == 1)
+						c.SizeCurve = { { 0.0f, 1.0f }, { 1.0f, c.StartSize > 0.0f ? c.EndSize / c.StartSize : 0.0f } };
+					else
+						c.SizeCurve.clear();
+				}
+				if (c.SizeCurve.empty())
+					UI::Property("End Size", c.EndSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when it dies");
+				UI::EndPropertyGrid();
+			}
+			if (c.SizeCurve.empty())
+				return;
+			struct Preset { const char* Name; std::vector<ParticleCurveKey> Keys; };
+			static const Preset s_Presets[] = {
+				{ "Grow, shrink", { { 0.0f, 0.0f }, { 0.25f, 1.0f }, { 1.0f, 0.0f } } },
+				{ "Pop", { { 0.0f, 0.2f }, { 0.08f, 1.3f }, { 0.2f, 1.0f }, { 1.0f, 0.8f } } },
+				{ "Grow", { { 0.0f, 0.1f }, { 1.0f, 1.0f } } },
+				{ "Shrink", { { 0.0f, 1.0f }, { 1.0f, 0.0f } } },
+				{ "Steady", { { 0.0f, 1.0f }, { 1.0f, 1.0f } } },
+			};
+			if (const int preset = PresetButtons(s_Presets); preset >= 0)
+				c.SizeCurve = s_Presets[preset].Keys;
+			float top = 1.0f;
+			for (const ParticleCurveKey& key : c.SizeCurve)
+				top = std::max(top, key.Value);
+			DrawCurvePlot(c.SizeCurve, top);
+			size_t remove = c.SizeCurve.size();
+			for (size_t i = 0; i < c.SizeCurve.size(); i++)
+			{
+				ImGui::PushID(static_cast<int>(i));
+				float minimum, maximum;
+				KeyTimeRange(c.SizeCurve, i, minimum, maximum);
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
+				const float width = (ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x * 2.0f) * 0.5f;
+				ImGui::SetNextItemWidth(width);
+				ImGui::SliderFloat("##Time", &c.SizeCurve[i].Time, minimum, maximum, "at %.2f");
+				ImGui::SetItemTooltip("When, from 0 (born) to 1 (dies)");
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(width);
+				ImGui::DragFloat("##Value", &c.SizeCurve[i].Value, 0.01f, 0.0f, Limits::MaxSize, "x %.2f");
+				ImGui::SetItemTooltip("The size then, times Start Size");
+				ImGui::SameLine();
+				ImGui::BeginDisabled(c.SizeCurve.size() <= 1);
+				if (ImGui::SmallButton(ICON_X))
+					remove = i;
+				ImGui::EndDisabled();
+				ImGui::PopID();
+			}
+			if (remove < c.SizeCurve.size())
+				c.SizeCurve.erase(c.SizeCurve.begin() + static_cast<std::ptrdiff_t>(remove));
+			ImGui::BeginDisabled(c.SizeCurve.size() >= Limits::MaxCurveKeys);
+			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
+			{
+				// Halfway along the widest gap, on the curve, so the shape doesn't change.
+				size_t widest = 0;
+				float gap = c.SizeCurve.front().Time;
+				float time = gap * 0.5f;
+				for (size_t i = 1; i <= c.SizeCurve.size(); i++)
+				{
+					const float from = c.SizeCurve[i - 1].Time, to = i < c.SizeCurve.size() ? c.SizeCurve[i].Time : 1.0f;
+					if (to - from > gap)
+					{
+						gap = to - from;
+						time = (from + to) * 0.5f;
+						widest = i;
+					}
+				}
+				c.SizeCurve.insert(c.SizeCurve.begin() + static_cast<std::ptrdiff_t>(widest), { time, ParticleSystem::EvaluateCurve(c.SizeCurve, time, 1.0f) });
+			}
+			ImGui::EndDisabled();
+		}
+
+		void DrawColorGradient(ParticleEmitterComponent& c)
+		{
+			using Limits = ParticleEmitterComponent;
+			int mode = c.ColorGradient.empty() ? 0 : 1;
+			static const char* const s_Modes[] = { "Start to End", "Gradient" };
+			if (UI::BeginPropertyGrid("ParticleColorMode"))
+			{
+				if (UI::PropertyCombo("Color Over Life", mode, s_Modes, 2, "A straight blend from Start Color to End Color, or a gradient of your own"))
+				{
+					if (mode == 1)
+						c.ColorGradient = { { 0.0f, c.StartColor }, { 1.0f, c.EndColor } };
+					else
+						c.ColorGradient.clear();
+				}
+				if (c.ColorGradient.empty())
+				{
+					UI::PropertyColor("Start Color", c.StartColor);
+					UI::PropertyColor("End Color", c.EndColor, false, "Set its alpha to 0 to fade particles out");
+				}
+				UI::EndPropertyGrid();
+			}
+			if (c.ColorGradient.empty())
+				return;
+			struct Preset { const char* Name; std::vector<ParticleColorKey> Keys; };
+			static const Preset s_Presets[] = {
+				{ "Fire", { { 0.0f, { 1.0f, 0.95f, 0.7f, 1.0f } }, { 0.25f, { 1.0f, 0.55f, 0.1f, 1.0f } }, { 0.7f, { 0.8f, 0.15f, 0.02f, 0.6f } }, { 1.0f, { 0.2f, 0.05f, 0.02f, 0.0f } } } },
+				{ "Magic", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 0.2f, { 0.45f, 0.7f, 1.0f, 1.0f } }, { 0.7f, { 0.5f, 0.2f, 1.0f, 0.7f } }, { 1.0f, { 0.3f, 0.1f, 0.8f, 0.0f } } } },
+				{ "Poison", { { 0.0f, { 0.8f, 1.0f, 0.5f, 1.0f } }, { 0.5f, { 0.3f, 0.9f, 0.2f, 0.8f } }, { 1.0f, { 0.1f, 0.4f, 0.05f, 0.0f } } } },
+				{ "Smoke", { { 0.0f, { 0.6f, 0.6f, 0.6f, 0.0f } }, { 0.15f, { 0.5f, 0.5f, 0.5f, 0.6f } }, { 1.0f, { 0.3f, 0.3f, 0.3f, 0.0f } } } },
+				{ "Fade", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
+			};
+			if (const int preset = PresetButtons(s_Presets); preset >= 0)
+				c.ColorGradient = s_Presets[preset].Keys;
+			DrawGradientBar(c.ColorGradient);
+			size_t remove = c.ColorGradient.size();
+			for (size_t i = 0; i < c.ColorGradient.size(); i++)
+			{
+				ImGui::PushID(static_cast<int>(i));
+				float minimum, maximum;
+				KeyTimeRange(c.ColorGradient, i, minimum, maximum);
+				ImGui::ColorEdit4("##Color", &c.ColorGradient[i].Color.r, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf);
+				ImGui::SameLine();
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x);
+				ImGui::SliderFloat("##Time", &c.ColorGradient[i].Time, minimum, maximum, "at %.2f");
+				ImGui::SetItemTooltip("When, from 0 (born) to 1 (dies)");
+				ImGui::SameLine();
+				ImGui::BeginDisabled(c.ColorGradient.size() <= 1);
+				if (ImGui::SmallButton(ICON_X))
+					remove = i;
+				ImGui::EndDisabled();
+				ImGui::PopID();
+			}
+			if (remove < c.ColorGradient.size())
+				c.ColorGradient.erase(c.ColorGradient.begin() + static_cast<std::ptrdiff_t>(remove));
+			ImGui::BeginDisabled(c.ColorGradient.size() >= Limits::MaxCurveKeys);
+			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
+			{
+				size_t widest = 0;
+				float gap = c.ColorGradient.front().Time;
+				float time = gap * 0.5f;
+				for (size_t i = 1; i <= c.ColorGradient.size(); i++)
+				{
+					const float from = c.ColorGradient[i - 1].Time, to = i < c.ColorGradient.size() ? c.ColorGradient[i].Time : 1.0f;
+					if (to - from > gap)
+					{
+						gap = to - from;
+						time = (from + to) * 0.5f;
+						widest = i;
+					}
+				}
+				c.ColorGradient.insert(c.ColorGradient.begin() + static_cast<std::ptrdiff_t>(widest),
+					{ time, ParticleSystem::EvaluateGradient(c.ColorGradient, time, glm::vec4(1.0f)) });
+			}
+			ImGui::EndDisabled();
+		}
+
 		// Draws one component section when the entity has it. 'draw' receives the component.
 		template<typename T, typename DrawFunction>
 		void DrawComponent(EditorLayer& editor, Entity entity, const char* icon, const char* name, DrawFunction draw, bool canRemove = true)
@@ -410,33 +656,76 @@ namespace Bellows {
 				UI::Property("Speed", c.Speed, 0.05f, 0.0f, Limits::MaxSpeed, "%.2f m/s");
 				UI::PropertySlider("Speed Variation", c.SpeedVariation, 0.0f, 1.0f, "%.2f", "How much speeds vary either way");
 				UI::PropertySlider("Spread", c.SpreadAngle, 0.0f, 180.0f, "%.0f deg", "Degrees from the entity's up (+Y) they may leave at: 0 a line, 180 every way");
-				static const char* const s_Shapes[] = { "Point", "Sphere", "Box" };
+				UI::Property("Outward", c.Outward, "Leave away from the center instead of up (bursts, rings that expand); Spread tilts them");
+				static const char* const s_Shapes[] = { "Point", "Sphere", "Box", "Ring", "Line" };
 				int shape = static_cast<int>(c.Shape);
-				if (UI::PropertyCombo("Shape", shape, s_Shapes, 3, "Where particles are born"))
+				if (UI::PropertyCombo("Shape", shape, s_Shapes, 5, "Where particles are born: Ring is a circle around the entity's up, Line runs along its X"))
 					c.Shape = static_cast<ParticleShape>(shape);
-				if (c.Shape == ParticleShape::Sphere)
+				if (c.Shape == ParticleShape::Sphere || c.Shape == ParticleShape::Ring)
 					UI::Property("Radius", c.ShapeSize.x, 0.01f, 0.0f, Limits::MaxShapeSize, "%.2f m");
+				else if (c.Shape == ParticleShape::Line)
+					UI::Property("Length", c.ShapeSize.x, 0.01f, 0.0f, Limits::MaxShapeSize, "%.2f m", "Along the entity's X, centered on it");
 				else if (c.Shape == ParticleShape::Box)
 					UI::PropertyVec3("Half Size", c.ShapeSize, 0.5f, 0.01f, "Half the box's size on each axis, meters");
 				UI::Property("Gravity Scale", c.GravityScale, 0.01f, -Limits::MaxGravityScale, Limits::MaxGravityScale, "%.2f",
 					"How much the scene's gravity pulls them: 0 none, 1 full, below 0 they rise");
 				UI::Property("Drag", c.Drag, 0.01f, 0.0f, Limits::MaxDrag, "%.2f", "Air resistance: how quickly they slow down");
+				UI::Property("Noise", c.NoiseStrength, 0.05f, 0.0f, Limits::MaxNoise, "%.2f m/s²", "A swirling push: wisps, embers, curling smoke");
+				if (c.NoiseStrength > 0.0f)
+				{
+					UI::Property("Noise Frequency", c.NoiseFrequency, 0.01f, 0.0f, Limits::MaxNoiseFrequency, "%.2f / m", "How tight the swirls are");
+					UI::Property("Noise Speed", c.NoiseSpeed, 0.01f, 0.0f, Limits::MaxNoiseSpeed, "%.2f", "How fast the swirls change");
+				}
 				UI::Property("World Space", c.WorldSpace, "Born particles stay where they are when the entity moves; off, they move with it");
+				UI::EndPropertyGrid();
+			}
+			UI::SectionHeader("Rotation");
+			if (UI::BeginPropertyGrid("ParticleEmitterRotation"))
+			{
+				static const char* const s_Facings[] = { "Camera", "Stretched", "Flat" };
+				int facing = static_cast<int>(c.Facing);
+				if (UI::PropertyCombo("Facing", facing, s_Facings, 3,
+					"Camera faces the camera; Stretched stretches along the way each moves (streaks, rain); Flat lies across the entity's up (ground rings, shockwaves)"))
+					c.Facing = static_cast<ParticleFacing>(facing);
+				if (c.Facing == ParticleFacing::Stretched)
+				{
+					UI::Property("Stretch", c.StretchAmount, 0.005f, 0.0f, Limits::MaxStretch, "%.3f s", "Seconds of motion its length shows: faster ones are longer");
+				}
+				else
+				{
+					UI::PropertySlider("Start Rotation", c.StartRotation, -360.0f, 360.0f, "%.0f deg");
+					UI::PropertySlider("Rotation Variation", c.RotationVariation, 0.0f, 180.0f, "%.0f deg", "How much the start rotation varies either way (180: any angle)");
+					UI::Property("Spin", c.SpinSpeed, 1.0f, -Limits::MaxSpin, Limits::MaxSpin, "%.0f deg/s", "Degrees per second each turns (below 0 the other way)");
+					UI::Property("Spin Variation", c.SpinVariation, 1.0f, 0.0f, Limits::MaxSpin, "%.0f deg/s", "How much the spin varies either way");
+				}
 				UI::EndPropertyGrid();
 			}
 			UI::SectionHeader("Look");
 			if (UI::BeginPropertyGrid("ParticleEmitterLook"))
 			{
-				UI::Property("Start Size", c.StartSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when born");
-				UI::Property("End Size", c.EndSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when it dies");
-				UI::PropertyColor("Start Color", c.StartColor);
-				UI::PropertyColor("End Color", c.EndColor, false, "Set its alpha to 0 to fade particles out");
+				UI::Property("Start Size", c.StartSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when born (a size curve multiplies it)");
+				UI::EndPropertyGrid();
+			}
+			DrawSizeCurve(c);
+			DrawColorGradient(c);
+			if (UI::BeginPropertyGrid("ParticleEmitterLookMore"))
+			{
 				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, Limits::MaxIntensity, "%.2f", "Brightness; above 1 they glow");
 				static const char* const s_Blends[] = { "Additive", "Alpha" };
 				int blend = static_cast<int>(c.Blend);
 				if (UI::PropertyCombo("Blend", blend, s_Blends, 2, "Additive adds light (fire, sparks); Alpha covers what's behind (smoke, dust)"))
 					c.Blend = static_cast<ParticleBlend>(blend);
 				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "The image each particle shows; empty draws a soft round dot");
+				if (!c.TexturePath.empty())
+				{
+					UI::Property("Flipbook Columns", c.FlipbookColumns, 1u, Limits::MaxFlipbookFrames, "An animated sheet's columns of frames (left to right, then top to bottom)");
+					UI::Property("Flipbook Rows", c.FlipbookRows, 1u, Limits::MaxFlipbookFrames, "An animated sheet's rows of frames");
+					if (c.FlipbookColumns * c.FlipbookRows > 1)
+					{
+						UI::Property("Flipbook FPS", c.FlipbookFps, 0.5f, 0.0f, Limits::MaxFlipbookFps, "%.1f", "Frames per second; 0 plays the sheet once over each particle's life");
+						UI::Property("Random Start Frame", c.FlipbookRandomStart, "Each particle starts on a random frame");
+					}
+				}
 				c.Clamp();
 				UI::EndPropertyGrid();
 			}

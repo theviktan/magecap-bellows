@@ -419,29 +419,44 @@ label.outline_width = 0.04
 ```
 
 ### `ParticleEmitter`
-Camera-facing particles (fire, sparks, smoke, dust, magic) sent from the entity in a cone around
-its local +Y. Emitters run in the editor too, so an effect shows while you edit; play starts each
-one afresh.
+Particles (fire, sparks, smoke, dust, magic, streaks, shockwaves) sent from the entity in a cone
+around its local +Y, or away from its center. Emitters run in the editor too, so an effect shows
+while you edit; play starts each one afresh.
 * Emission: `play_on_start`, `looping`, `duration` (seconds one cycle lasts, 0.05 to 3600),
   `rate` (particles per second, 0 to 10000), `burst` (sent at once when each cycle starts, 0 to
   10000), `max_particles` (alive at once, 0 to 10000).
 * Each particle: `lifetime` (seconds, 0.01 to 600) and `lifetime_variation` (0 to 1: 1 means
   anywhere from none to double), `speed` (m/s) and `speed_variation`, `spread_angle` (degrees from
   +Y: 0 is a straight line, 180 every way).
-* Where they're born: `shape` (`"point"`, `"sphere"`, `"box"`) and `shape_size` (`Vec3`: a
-  sphere's radius in x, or a box's half size).
+* Where they're born: `shape` (`"point"`, `"sphere"`, `"box"`, `"ring"`: a circle around +Y, or
+  `"line"`: along X) and `shape_size` (`Vec3`: a sphere's or ring's radius in x, a line's length in
+  x, or a box's half size). `outward` sends them away from the center instead of up +Y (bursts,
+  rings that expand); `spread_angle` then tilts them.
 * Forces: `gravity_scale` (how much the scene's gravity pulls; below 0 they rise), `drag` (air
-  resistance).
+  resistance), and a swirling push: `noise_strength` (m/s², 0 for none), `noise_frequency` (swirls
+  per meter) and `noise_speed` (how fast they change), for wisps, embers and curling smoke.
+* Facing and turning: `facing` (`"camera"`; `"stretched"` along the way each moves, `stretch_amount`
+  seconds of motion long, for streaks and rain; `"flat"` lying across the entity's +Y, for ground
+  rings and shockwaves), `start_rotation` and `rotation_variation` (degrees; 180 is any angle),
+  `spin_speed` and `spin_variation` (degrees per second).
 * Look: `start_size` and `end_size` (meters across), `start_color` and `end_color` (`Vec4`; give
   `end_color` an alpha of 0 to fade them out), `intensity` (brightness; above 1 they glow and
   bloom), `blend` (`"additive"` adds light, for fire and sparks; `"alpha"` covers what's behind, for
   smoke and dust), `texture` (an image asset; empty draws a soft round dot), `world_space` (born
   particles stay put when the entity moves; off, they move with it).
+* Over a particle's life: `size_curve`, up to 8 `[time, size]` keys (time 0 when born to 1 when it
+  dies; size multiplies `start_size`), and `color_gradient`, up to 8 `[time, red, green, blue,
+  alpha]` keys (each 0 to 1; alpha may be left out). Values go in a straight line between keys and
+  stay level past the ends; keys are put in time order. An empty list (`[]`) goes back to start and
+  end.
+* Flipbooks (an animated texture sheet): `flipbook_columns` and `flipbook_rows` (1 to 16; frames
+  go left to right, then top to bottom), `flipbook_fps` (0 plays the sheet once over each
+  particle's life) and `flipbook_random_start`.
 * `play()` starts a cycle and its burst, `stop(clear=False)` stops new ones (`clear=True` also
   removes the live ones), `emit(count)` sends `count` at once; read-only `is_playing` and
   `particle_count`.
 
-Values out of range, NaN, or an unknown shape or blend raise `ValueError`.
+Values out of range, NaN, an unknown shape, blend or facing, or a malformed curve key raise `ValueError`.
 
 ```python
 sparks = entity.add_component("ParticleEmitter")
@@ -450,6 +465,18 @@ sparks.burst, sparks.speed, sparks.spread_angle = 40, 6.0, 180.0
 sparks.start_color, sparks.end_color = Vec4(1.0, 0.7, 0.2, 1.0), Vec4(1.0, 0.2, 0.0, 0.0)
 sparks.intensity, sparks.gravity_scale = 4.0, 1.0
 sparks.play()   # A burst of sparks every time it's called
+
+# A shockwave: a flat ring that bursts outward, flashing white then fading to blue
+wave = entity.add_component("ParticleEmitter")
+wave.shape, wave.outward, wave.spread_angle, wave.facing = "ring", True, 90.0, "flat"
+wave.burst, wave.rate, wave.speed, wave.start_size = 24, 0.0, 4.0, 0.6
+wave.size_curve = [[0.0, 0.3], [0.2, 1.0], [1.0, 1.6]]
+wave.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [0.3, 0.4, 0.6, 1.0, 0.8], [1.0, 0.2, 0.3, 1.0, 0.0]]
+```
+
+```forge
+set wave.size_curve to [[0, 0.3], [0.2, 1], [1, 1.6]]
+set wave.facing to "flat"
 ```
 
 In ForgeScript the same can be written with the particle phrases ([engine

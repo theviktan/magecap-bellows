@@ -252,6 +252,24 @@ sparks.rate, sparks.lifetime, sparks.speed, sparks.spread_angle = 30.0, 1.2, 1.5
 sparks.shape, sparks.shape_size = "sphere", Vec3(0.2, 0.2, 0.2)
 sparks.start_size, sparks.end_size, sparks.intensity = 0.15, 0.02, 3.0
 
+# Effects: a magic ring on the landing mark, its sparks swirling up from a flat glow, white
+# flashing to blue as they grow and fade
+portal = create("Magic Ring", position=(-1.5, 0.05, 4.0))
+glow = portal.add_component(bellows.ParticleEmitter)
+glow.shape, glow.shape_size, glow.facing = "ring", Vec3(0.6, 0.6, 0.6), "flat"
+glow.rate, glow.lifetime, glow.speed, glow.spin_speed, glow.rotation_variation = 12.0, 1.0, 0.0, 90.0, 180.0
+glow.start_size, glow.intensity, glow.blend = 0.5, 2.0, "additive"
+glow.size_curve = [[0.0, 0.0], [0.3, 1.0], [1.0, 0.6]]
+glow.color_gradient = [[0.0, 0.6, 0.85, 1.0, 0.0], [0.3, 0.4, 0.6, 1.0, 0.8], [1.0, 0.3, 0.3, 1.0, 0.0]]
+motes = create("Magic Ring Motes", parent=portal)
+wisps = motes.add_component(bellows.ParticleEmitter)
+wisps.shape, wisps.shape_size, wisps.facing, wisps.stretch_amount = "ring", Vec3(0.6, 0.6, 0.6), "stretched", 0.08
+wisps.rate, wisps.lifetime, wisps.speed, wisps.spread_angle = 40.0, 1.4, 1.2, 10.0
+wisps.noise_strength, wisps.noise_frequency, wisps.drag = 3.0, 1.5, 0.5
+wisps.start_size, wisps.intensity = 0.06, 3.0
+wisps.size_curve = [[0.0, 0.0], [0.15, 1.0], [1.0, 0.2]]
+wisps.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [0.4, 0.45, 0.7, 1.0, 1.0], [1.0, 0.35, 0.2, 1.0, 0.0]]
+
 # Decals: a painted landing mark on the ground in front of the speaker
 landing = create("Landing Mark", position=(-1.5, 0.0, 4.0))
 mark = landing.add_component(bellows.Decal)

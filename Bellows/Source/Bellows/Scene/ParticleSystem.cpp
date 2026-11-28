@@ -12,6 +12,8 @@ namespace Bellows {
 			case ParticleShape::Point:	return "point";
 			case ParticleShape::Sphere:	return "sphere";
 			case ParticleShape::Box:	return "box";
+			case ParticleShape::Ring:	return "ring";
+			case ParticleShape::Line:	return "line";
 		}
 		return "point";
 	}
@@ -21,6 +23,8 @@ namespace Bellows {
 		if (text == "point") return ParticleShape::Point;
 		if (text == "sphere") return ParticleShape::Sphere;
 		if (text == "box") return ParticleShape::Box;
+		if (text == "ring") return ParticleShape::Ring;
+		if (text == "line") return ParticleShape::Line;
 		return std::nullopt;
 	}
 
@@ -38,6 +42,25 @@ namespace Bellows {
 	{
 		if (text == "additive") return ParticleBlend::Additive;
 		if (text == "alpha") return ParticleBlend::Alpha;
+		return std::nullopt;
+	}
+
+	const char* ParticleFacingToString(ParticleFacing facing)
+	{
+		switch (facing)
+		{
+			case ParticleFacing::Camera:	return "camera";
+			case ParticleFacing::Stretched:	return "stretched";
+			case ParticleFacing::Flat:		return "flat";
+		}
+		return "camera";
+	}
+
+	std::optional<ParticleFacing> ParticleFacingFromString(std::string_view text)
+	{
+		if (text == "camera") return ParticleFacing::Camera;
+		if (text == "stretched") return ParticleFacing::Stretched;
+		if (text == "flat") return ParticleFacing::Flat;
 		return std::nullopt;
 	}
 
@@ -91,6 +114,13 @@ namespace Bellows::ParticleSystem {
 					return RandomUnitVector(state) * (emitter.ShapeSize.x * std::cbrt(Random01(state)));
 				case ParticleShape::Box:
 					return glm::vec3(RandomSigned(state), RandomSigned(state), RandomSigned(state)) * emitter.ShapeSize;
+				case ParticleShape::Ring:
+				{
+					const float angle = Random01(state) * glm::two_pi<float>();
+					return glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * emitter.ShapeSize.x;
+				}
+				case ParticleShape::Line:
+					return glm::vec3(RandomSigned(state) * emitter.ShapeSize.x * 0.5f, 0.0f, 0.0f);
 				case ParticleShape::Point:
 					break;
 			}
@@ -107,6 +137,40 @@ namespace Bellows::ParticleSystem {
 			return glm::vec3(sinTheta * std::cos(phi), cosTheta, sinTheta * std::sin(phi));
 		}
 
+		// 'v' (given around +Y) turned so +Y points along the unit vector 'axis'.
+		glm::vec3 TurnFromUp(const glm::vec3& v, const glm::vec3& axis)
+		{
+			if (axis.y > 0.9999f)
+				return v;
+			if (axis.y < -0.9999f)
+				return glm::vec3(v.x, -v.y, -v.z);
+			const glm::vec3 side = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), axis));
+			const glm::vec3 forward = glm::cross(side, axis);
+			return side * v.x + axis * v.y + forward * v.z;
+		}
+
+		// Which way 'Outward' sends a particle born at 'position' (local): away from the center, or
+		// anywhere when it's born at the center.
+		glm::vec3 OutwardAxis(const ParticleEmitterComponent& emitter, const glm::vec3& position, uint32_t& state)
+		{
+			glm::vec3 away = position;
+			if (emitter.Shape == ParticleShape::Line)
+				away = glm::vec3(position.x, 0.0f, 0.0f);
+			const float length = glm::length(away);
+			return length > 1e-5f ? away / length : RandomUnitVector(state);
+		}
+
+		// A smooth, swirling push that changes over time: three sine waves per axis at unrelated
+		// angles, so it doesn't look like a grid. -1 to 1 on each axis, roughly.
+		glm::vec3 Swirl(const glm::vec3& p, float time, float phase)
+		{
+			const glm::vec3 a = p + glm::vec3(phase, phase * 1.7f, phase * 2.3f);
+			return glm::vec3(
+				std::sin(a.y * 1.31f + time * 1.10f) + std::sin(a.z * 1.73f - time * 0.70f + 1.7f),
+				std::sin(a.z * 1.19f + time * 0.90f + 2.9f) + std::sin(a.x * 1.57f - time * 1.30f + 0.4f),
+				std::sin(a.x * 1.43f + time * 0.80f + 4.1f) + std::sin(a.y * 1.91f - time * 1.20f + 3.3f)) * 0.5f;
+		}
+
 		void Spawn(ParticleEmitterComponent& emitter, const glm::mat4& transform, uint32_t count)
 		{
 			const size_t room = emitter.MaxParticles > emitter.RuntimeParticles.size() ? emitter.MaxParticles - emitter.RuntimeParticles.size() : 0;
@@ -118,6 +182,8 @@ namespace Bellows::ParticleSystem {
 				Particle particle;
 				const glm::vec3 position = SpawnPosition(emitter, state);
 				glm::vec3 direction = SpawnDirection(emitter, state);
+				if (emitter.Outward)
+					direction = TurnFromUp(direction, OutwardAxis(emitter, position, state));
 				const float speed = emitter.Speed * (1.0f + emitter.SpeedVariation * RandomSigned(state));
 				particle.Lifetime = std::max(ParticleEmitterComponent::MinLifetime,
 					emitter.Lifetime * (1.0f + emitter.LifetimeVariation * RandomSigned(state)));
@@ -134,6 +200,9 @@ namespace Bellows::ParticleSystem {
 					particle.Position = position;
 				}
 				particle.Velocity = direction * speed;
+				particle.Rotation = glm::radians(emitter.StartRotation + emitter.RotationVariation * RandomSigned(state));
+				particle.Spin = glm::radians(emitter.SpinSpeed + emitter.SpinVariation * RandomSigned(state));
+				particle.Random = Random01(state);
 				emitter.RuntimeParticles.push_back(particle);
 			}
 		}
@@ -148,6 +217,7 @@ namespace Bellows::ParticleSystem {
 		emitter.RuntimeTime = 0.0f;
 		emitter.RuntimeEmitCarry = 0.0f;
 		emitter.RuntimePending = 0;
+		emitter.RuntimeClock = 0.0f;
 		Seed(emitter, seed);
 	}
 
@@ -207,13 +277,21 @@ namespace Bellows::ParticleSystem {
 			pull = std::abs(glm::determinant(rotation)) > 1e-12f ? glm::inverse(rotation) * pull : glm::vec3(0.0f);
 		}
 		const float keep = std::exp(-emitter.Drag * seconds);
+		emitter.RuntimeClock = std::fmod(emitter.RuntimeClock + seconds * emitter.NoiseSpeed, 10000.0f);
+		const bool swirl = emitter.NoiseStrength > 0.0f;
+		// Each emitter's swirls are its own, from its seed.
+		const float phase = static_cast<float>(emitter.RuntimeSeed % 1000u) * 0.37f;
 		std::erase_if(emitter.RuntimeParticles, [&](Particle& particle)
 		{
 			particle.Age += seconds;
 			if (particle.Age >= particle.Lifetime)
 				return true;
-			particle.Velocity = (particle.Velocity + pull * seconds) * keep;
+			glm::vec3 push = pull;
+			if (swirl)
+				push += Swirl(particle.Position * emitter.NoiseFrequency, emitter.RuntimeClock, phase) * emitter.NoiseStrength;
+			particle.Velocity = (particle.Velocity + push * seconds) * keep;
 			particle.Position += particle.Velocity * seconds;
+			particle.Rotation = std::fmod(particle.Rotation + particle.Spin * seconds, glm::two_pi<float>());
 			return false;
 		});
 
@@ -249,16 +327,80 @@ namespace Bellows::ParticleSystem {
 		Spawn(emitter, transform, count);
 	}
 
+	float EvaluateCurve(const std::vector<ParticleCurveKey>& keys, float t, float fallback)
+	{
+		if (keys.empty())
+			return fallback;
+		if (t <= keys.front().Time)
+			return keys.front().Value;
+		for (size_t i = 1; i < keys.size(); i++)
+		{
+			if (t <= keys[i].Time)
+			{
+				const float span = keys[i].Time - keys[i - 1].Time;
+				const float blend = span > 1e-6f ? (t - keys[i - 1].Time) / span : 1.0f;
+				return glm::mix(keys[i - 1].Value, keys[i].Value, blend);
+			}
+		}
+		return keys.back().Value;
+	}
+
+	glm::vec4 EvaluateGradient(const std::vector<ParticleColorKey>& keys, float t, const glm::vec4& fallback)
+	{
+		if (keys.empty())
+			return fallback;
+		if (t <= keys.front().Time)
+			return keys.front().Color;
+		for (size_t i = 1; i < keys.size(); i++)
+		{
+			if (t <= keys[i].Time)
+			{
+				const float span = keys[i].Time - keys[i - 1].Time;
+				const float blend = span > 1e-6f ? (t - keys[i - 1].Time) / span : 1.0f;
+				return glm::mix(keys[i - 1].Color, keys[i].Color, blend);
+			}
+		}
+		return keys.back().Color;
+	}
+
+	namespace {
+
+		float LifeFraction(const Particle& particle)
+		{
+			return particle.Lifetime > 0.0f ? std::clamp(particle.Age / particle.Lifetime, 0.0f, 1.0f) : 1.0f;
+		}
+
+	}
+
 	float GetSize(const ParticleEmitterComponent& emitter, const Particle& particle)
 	{
-		const float t = particle.Lifetime > 0.0f ? std::clamp(particle.Age / particle.Lifetime, 0.0f, 1.0f) : 1.0f;
+		const float t = LifeFraction(particle);
+		if (!emitter.SizeCurve.empty())
+			return emitter.StartSize * EvaluateCurve(emitter.SizeCurve, t, 1.0f);
 		return glm::mix(emitter.StartSize, emitter.EndSize, t);
+	}
+
+	glm::vec4 GetFrameRect(const ParticleEmitterComponent& emitter, const Particle& particle)
+	{
+		const uint32_t columns = std::max(emitter.FlipbookColumns, 1u), rows = std::max(emitter.FlipbookRows, 1u);
+		const uint32_t frames = columns * rows;
+		if (frames == 1)
+			return glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+		const uint32_t start = emitter.FlipbookRandomStart ? std::min(static_cast<uint32_t>(particle.Random * static_cast<float>(frames)), frames - 1) : 0;
+		uint32_t frame;
+		if (emitter.FlipbookFps > 0.0f)
+			frame = (static_cast<uint32_t>(std::max(particle.Age, 0.0f) * emitter.FlipbookFps) + start) % frames;
+		else
+			frame = (std::min(static_cast<uint32_t>(LifeFraction(particle) * static_cast<float>(frames)), frames - 1) + start) % frames;
+		const float width = 1.0f / static_cast<float>(columns), height = 1.0f / static_cast<float>(rows);
+		const float u = static_cast<float>(frame % columns) * width, v = static_cast<float>(frame / columns) * height;
+		return glm::vec4(u, v, u + width, v + height);
 	}
 
 	glm::vec4 GetColor(const ParticleEmitterComponent& emitter, const Particle& particle)
 	{
-		const float t = particle.Lifetime > 0.0f ? std::clamp(particle.Age / particle.Lifetime, 0.0f, 1.0f) : 1.0f;
-		glm::vec4 color = glm::mix(emitter.StartColor, emitter.EndColor, t);
+		const float t = LifeFraction(particle);
+		glm::vec4 color = EvaluateGradient(emitter.ColorGradient, t, glm::mix(emitter.StartColor, emitter.EndColor, t));
 		color.r *= emitter.Intensity;
 		color.g *= emitter.Intensity;
 		color.b *= emitter.Intensity;

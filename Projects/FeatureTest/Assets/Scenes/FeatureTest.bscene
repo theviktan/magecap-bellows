@@ -39,7 +39,7 @@
 	},
 	"Entities": [
 		{
-			"ID": 7740039098488179687,
+			"ID": 5558629488492935524,
 			"Name": "Main Camera",
 			"Parent": 0,
 			"Transform": {
@@ -78,7 +78,7 @@
 			}
 		},
 		{
-			"ID": 11563988783828558111,
+			"ID": 11981319544048091331,
 			"Name": "Sun",
 			"Parent": 0,
 			"Transform": {
@@ -109,7 +109,7 @@
 			}
 		},
 		{
-			"ID": 12890176937512465945,
+			"ID": 6876232090665575719,
 			"Name": "Sky",
 			"Parent": 0,
 			"Transform": {
@@ -156,7 +156,7 @@
 			}
 		},
 		{
-			"ID": 13049901710396008856,
+			"ID": 9097481640342372677,
 			"Name": "Ground",
 			"Parent": 0,
 			"Transform": {
@@ -210,7 +210,7 @@
 			}
 		},
 		{
-			"ID": 3547111818583419264,
+			"ID": 10701712672060511576,
 			"Name": "Pedestal 1",
 			"Parent": 0,
 			"Transform": {
@@ -255,7 +255,7 @@
 			}
 		},
 		{
-			"ID": 8695639650342689617,
+			"ID": 4659850422371878106,
 			"Name": "Sphere 1",
 			"Parent": 0,
 			"Transform": {
@@ -283,7 +283,7 @@
 			}
 		},
 		{
-			"ID": 2611560303404791977,
+			"ID": 7868765313008881386,
 			"Name": "Pedestal 2",
 			"Parent": 0,
 			"Transform": {
@@ -328,7 +328,7 @@
 			}
 		},
 		{
-			"ID": 17299543555103676631,
+			"ID": 16045743885495863055,
 			"Name": "Sphere 2",
 			"Parent": 0,
 			"Transform": {
@@ -356,7 +356,7 @@
 			}
 		},
 		{
-			"ID": 11464941386683420928,
+			"ID": 12395823632325852273,
 			"Name": "Pedestal 3",
 			"Parent": 0,
 			"Transform": {
@@ -401,7 +401,7 @@
 			}
 		},
 		{
-			"ID": 1098551219137089801,
+			"ID": 11100358846253299441,
 			"Name": "Sphere 3",
 			"Parent": 0,
 			"Transform": {
@@ -429,7 +429,7 @@
 			}
 		},
 		{
-			"ID": 14975196459821813468,
+			"ID": 12101668584529387444,
 			"Name": "Pedestal 4",
 			"Parent": 0,
 			"Transform": {
@@ -474,7 +474,7 @@
 			}
 		},
 		{
-			"ID": 15614886614901334316,
+			"ID": 10491834464246219308,
 			"Name": "Sphere 4",
 			"Parent": 0,
 			"Transform": {
@@ -502,7 +502,7 @@
 			}
 		},
 		{
-			"ID": 10454878634015157073,
+			"ID": 11011590092150056425,
 			"Name": "Pedestal 5",
 			"Parent": 0,
 			"Transform": {
@@ -547,7 +547,7 @@
 			}
 		},
 		{
-			"ID": 12499354454845810695,
+			"ID": 10253419350060884565,
 			"Name": "Sphere 5",
 			"Parent": 0,
 			"Transform": {
@@ -575,7 +575,7 @@
 			}
 		},
 		{
-			"ID": 4090999323574850703,
+			"ID": 11379428368545369033,
 			"Name": "Bottle Plinth",
 			"Parent": 0,
 			"Transform": {
@@ -629,7 +629,7 @@
 			}
 		},
 		{
-			"ID": 16799268358899660320,
+			"ID": 10291185369611549521,
 			"Name": "Water Bottle",
 			"Parent": 0,
 			"Transform": {
@@ -668,7 +668,7 @@
 			}
 		},
 		{
-			"ID": 614889509440904079,
+			"ID": 11390043069467881937,
 			"Name": "Dancer",
 			"Parent": 0,
 			"Transform": {
@@ -702,7 +702,7 @@
 			}
 		},
 		{
-			"ID": 7455786943272741986,
+			"ID": 8710538518842644485,
 			"Name": "Lantern",
 			"Parent": 0,
 			"Transform": {
@@ -730,7 +730,7 @@
 			}
 		},
 		{
-			"ID": 6336200516537359389,
+			"ID": 15512033889587793718,
 			"Name": "Spot Light",
 			"Parent": 0,
 			"Transform": {
@@ -763,7 +763,7 @@
 			}
 		},
 		{
-			"ID": 11013210748038166390,
+			"ID": 11602704655427880511,
 			"Name": "Orbiting Light 1",
 			"Parent": 0,
 			"Transform": {
@@ -831,7 +831,7 @@
 			}
 		},
 		{
-			"ID": 18194311182593740452,
+			"ID": 10555732677138788775,
 			"Name": "Orbiting Light 2",
 			"Parent": 0,
 			"Transform": {
@@ -899,7 +899,7 @@
 			}
 		},
 		{
-			"ID": 1826943035013127370,
+			"ID": 11281924025673847777,
 			"Name": "Orbiting Light 3",
 			"Parent": 0,
 			"Transform": {
@@ -967,7 +967,7 @@
 			}
 		},
 		{
-			"ID": 1729897513381825797,
+			"ID": 14649354286200775676,
 			"Name": "Crate 0-0",
 			"Parent": 0,
 			"Transform": {
@@ -1021,7 +1021,7 @@
 			}
 		},
 		{
-			"ID": 7582788785043880024,
+			"ID": 10043963202108320851,
 			"Name": "Crate 0-1",
 			"Parent": 0,
 			"Transform": {
@@ -1075,7 +1075,7 @@
 			}
 		},
 		{
-			"ID": 18101452215167698139,
+			"ID": 3790016773820206885,
 			"Name": "Crate 0-2",
 			"Parent": 0,
 			"Transform": {
@@ -1129,7 +1129,7 @@
 			}
 		},
 		{
-			"ID": 13786803986250071983,
+			"ID": 5778505035829162722,
 			"Name": "Crate 1-0",
 			"Parent": 0,
 			"Transform": {
@@ -1183,7 +1183,7 @@
 			}
 		},
 		{
-			"ID": 1870741142330095621,
+			"ID": 10750133871256858780,
 			"Name": "Crate 1-1",
 			"Parent": 0,
 			"Transform": {
@@ -1237,7 +1237,7 @@
 			}
 		},
 		{
-			"ID": 5142021384012297038,
+			"ID": 8066658801459965602,
 			"Name": "Crate 2-0",
 			"Parent": 0,
 			"Transform": {
@@ -1291,7 +1291,7 @@
 			}
 		},
 		{
-			"ID": 17859240332059613825,
+			"ID": 7646591266383218336,
 			"Name": "Cannon",
 			"Parent": 0,
 			"Transform": {
@@ -1328,9 +1328,9 @@
 			}
 		},
 		{
-			"ID": 7363724269777149029,
+			"ID": 6427258396654921029,
 			"Name": "Barrel",
-			"Parent": 17859240332059613825,
+			"Parent": 7646591266383218336,
 			"Transform": {
 				"Translation": [
 					0.0,
@@ -1356,7 +1356,7 @@
 			}
 		},
 		{
-			"ID": 2299018741557324204,
+			"ID": 8939701278446525073,
 			"Name": "Cannon Base",
 			"Parent": 0,
 			"Transform": {
@@ -1384,7 +1384,7 @@
 			}
 		},
 		{
-			"ID": 8670789385728173521,
+			"ID": 6190193273830924327,
 			"Name": "Ramp",
 			"Parent": 0,
 			"Transform": {
@@ -1429,7 +1429,7 @@
 			}
 		},
 		{
-			"ID": 12896974629455443957,
+			"ID": 12741892741389560252,
 			"Name": "Capsule Buddy",
 			"Parent": 0,
 			"Transform": {
@@ -1480,7 +1480,7 @@
 			}
 		},
 		{
-			"ID": 7733001487724282681,
+			"ID": 996915623863824917,
 			"Name": "Guard",
 			"Parent": 0,
 			"Transform": {
@@ -1541,7 +1541,7 @@
 			}
 		},
 		{
-			"ID": 9663206779357154131,
+			"ID": 6218159395312239358,
 			"Name": "Trigger Zone",
 			"Parent": 0,
 			"Transform": {
@@ -1601,7 +1601,7 @@
 			}
 		},
 		{
-			"ID": 7732745791472730588,
+			"ID": 16379905288079611182,
 			"Name": "Speaker",
 			"Parent": 0,
 			"Transform": {
@@ -1640,7 +1640,7 @@
 			}
 		},
 		{
-			"ID": 7443647002775694692,
+			"ID": 14047433160425344521,
 			"Name": "Campfire",
 			"Parent": 0,
 			"Transform": {
@@ -1697,11 +1697,249 @@
 				"Intensity": 3.0,
 				"Blend": "additive",
 				"Texture": "",
-				"WorldSpace": true
+				"WorldSpace": true,
+				"Outward": false,
+				"NoiseStrength": 0.0,
+				"NoiseFrequency": 1.0,
+				"NoiseSpeed": 0.5,
+				"FlipbookColumns": 1,
+				"FlipbookRows": 1,
+				"FlipbookFps": 0.0,
+				"FlipbookRandomStart": false,
+				"Facing": "camera",
+				"StretchAmount": 0.10000000149011612,
+				"StartRotation": 0.0,
+				"RotationVariation": 0.0,
+				"SpinSpeed": 0.0,
+				"SpinVariation": 0.0
 			}
 		},
 		{
-			"ID": 16548804352748137209,
+			"ID": 4820668866626424861,
+			"Name": "Magic Ring",
+			"Parent": 0,
+			"Transform": {
+				"Translation": [
+					-1.5,
+					0.05000000074505806,
+					4.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"ParticleEmitter": {
+				"PlayOnStart": true,
+				"Looping": true,
+				"Duration": 5.0,
+				"Rate": 12.0,
+				"Burst": 0,
+				"MaxParticles": 1000,
+				"Lifetime": 1.0,
+				"LifetimeVariation": 0.25,
+				"Speed": 0.0,
+				"SpeedVariation": 0.25,
+				"SpreadAngle": 25.0,
+				"Shape": "ring",
+				"ShapeSize": [
+					0.6000000238418579,
+					0.6000000238418579,
+					0.6000000238418579
+				],
+				"GravityScale": 0.0,
+				"Drag": 0.0,
+				"StartSize": 0.5,
+				"EndSize": 0.05000000074505806,
+				"StartColor": [
+					1.0,
+					0.6000000238418579,
+					0.20000000298023224,
+					1.0
+				],
+				"EndColor": [
+					1.0,
+					0.20000000298023224,
+					0.05000000074505806,
+					0.0
+				],
+				"Intensity": 2.0,
+				"Blend": "additive",
+				"Texture": "",
+				"WorldSpace": true,
+				"Outward": false,
+				"NoiseStrength": 0.0,
+				"NoiseFrequency": 1.0,
+				"NoiseSpeed": 0.5,
+				"FlipbookColumns": 1,
+				"FlipbookRows": 1,
+				"FlipbookFps": 0.0,
+				"FlipbookRandomStart": false,
+				"Facing": "flat",
+				"StretchAmount": 0.10000000149011612,
+				"StartRotation": 0.0,
+				"RotationVariation": 180.0,
+				"SpinSpeed": 90.0,
+				"SpinVariation": 0.0,
+				"SizeCurve": [
+					[
+						0.0,
+						0.0
+					],
+					[
+						0.30000001192092896,
+						1.0
+					],
+					[
+						1.0,
+						0.6000000238418579
+					]
+				],
+				"ColorGradient": [
+					[
+						0.0,
+						0.6000000238418579,
+						0.8500000238418579,
+						1.0,
+						0.0
+					],
+					[
+						0.30000001192092896,
+						0.4000000059604645,
+						0.6000000238418579,
+						1.0,
+						0.800000011920929
+					],
+					[
+						1.0,
+						0.30000001192092896,
+						0.30000001192092896,
+						1.0,
+						0.0
+					]
+				]
+			}
+		},
+		{
+			"ID": 17914910289469502903,
+			"Name": "Magic Ring Motes",
+			"Parent": 4820668866626424861,
+			"Transform": {
+				"Translation": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"RotationEuler": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"Scale": [
+					1.0,
+					1.0,
+					1.0
+				]
+			},
+			"ParticleEmitter": {
+				"PlayOnStart": true,
+				"Looping": true,
+				"Duration": 5.0,
+				"Rate": 40.0,
+				"Burst": 0,
+				"MaxParticles": 1000,
+				"Lifetime": 1.399999976158142,
+				"LifetimeVariation": 0.25,
+				"Speed": 1.2000000476837158,
+				"SpeedVariation": 0.25,
+				"SpreadAngle": 10.0,
+				"Shape": "ring",
+				"ShapeSize": [
+					0.6000000238418579,
+					0.6000000238418579,
+					0.6000000238418579
+				],
+				"GravityScale": 0.0,
+				"Drag": 0.5,
+				"StartSize": 0.05999999865889549,
+				"EndSize": 0.05000000074505806,
+				"StartColor": [
+					1.0,
+					0.6000000238418579,
+					0.20000000298023224,
+					1.0
+				],
+				"EndColor": [
+					1.0,
+					0.20000000298023224,
+					0.05000000074505806,
+					0.0
+				],
+				"Intensity": 3.0,
+				"Blend": "additive",
+				"Texture": "",
+				"WorldSpace": true,
+				"Outward": false,
+				"NoiseStrength": 3.0,
+				"NoiseFrequency": 1.5,
+				"NoiseSpeed": 0.5,
+				"FlipbookColumns": 1,
+				"FlipbookRows": 1,
+				"FlipbookFps": 0.0,
+				"FlipbookRandomStart": false,
+				"Facing": "stretched",
+				"StretchAmount": 0.07999999821186066,
+				"StartRotation": 0.0,
+				"RotationVariation": 0.0,
+				"SpinSpeed": 0.0,
+				"SpinVariation": 0.0,
+				"SizeCurve": [
+					[
+						0.0,
+						0.0
+					],
+					[
+						0.15000000596046448,
+						1.0
+					],
+					[
+						1.0,
+						0.20000000298023224
+					]
+				],
+				"ColorGradient": [
+					[
+						0.0,
+						1.0,
+						1.0,
+						1.0,
+						1.0
+					],
+					[
+						0.4000000059604645,
+						0.44999998807907104,
+						0.699999988079071,
+						1.0,
+						1.0
+					],
+					[
+						1.0,
+						0.3499999940395355,
+						0.20000000298023224,
+						1.0,
+						0.0
+					]
+				]
+			}
+		},
+		{
+			"ID": 12802583171144879941,
 			"Name": "Landing Mark",
 			"Parent": 0,
 			"Transform": {
@@ -1739,7 +1977,7 @@
 			}
 		},
 		{
-			"ID": 852806329823794078,
+			"ID": 12962020085719092509,
 			"Name": "Title",
 			"Parent": 0,
 			"Transform": {
@@ -1790,7 +2028,7 @@
 			}
 		},
 		{
-			"ID": 13050411594272415622,
+			"ID": 8578338066838218632,
 			"Name": "Speaker Label",
 			"Parent": 0,
 			"Transform": {
@@ -1841,7 +2079,7 @@
 			}
 		},
 		{
-			"ID": 4928650018470505986,
+			"ID": 8943764764643754155,
 			"Name": "HUD",
 			"Parent": 0,
 			"Transform": {
@@ -1873,9 +2111,9 @@
 			}
 		},
 		{
-			"ID": 3566719971418473933,
+			"ID": 11545286655569988502,
 			"Name": "HUD Panel",
-			"Parent": 4928650018470505986,
+			"Parent": 8943764764643754155,
 			"Transform": {
 				"Translation": [
 					0.0,
@@ -1946,9 +2184,9 @@
 			}
 		},
 		{
-			"ID": 18144327301084217692,
+			"ID": 12209544117389352088,
 			"Name": "HUD Title",
-			"Parent": 3566719971418473933,
+			"Parent": 11545286655569988502,
 			"Transform": {
 				"Translation": [
 					0.0,
@@ -2024,7 +2262,7 @@
 			}
 		},
 		{
-			"ID": 2971364302320287118,
+			"ID": 2306776014914841827,
 			"Name": "Test Runner",
 			"Parent": 0,
 			"Transform": {
@@ -2052,7 +2290,7 @@
 			}
 		},
 		{
-			"ID": 11061809655609115719,
+			"ID": 14720027236452834909,
 			"Name": "ForgeScript Test Runner",
 			"Parent": 0,
 			"Transform": {

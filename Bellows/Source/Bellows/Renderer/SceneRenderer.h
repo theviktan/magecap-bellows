@@ -156,9 +156,21 @@ namespace Bellows {
 	// One camera-facing particle for SubmitParticles.
 	struct ParticleQuad
 	{
+		enum class FacingMode : uint8_t
+		{
+			Camera,		// Toward the camera, turned by Rotation
+			Stretched,	// Along Axis (its world velocity) as seen by the camera, Length longer than it is wide
+			Flat,		// Lying across the plane whose normal is Axis, turned by Rotation
+		};
+
 		glm::vec3 Position { 0.0f };	// World space, the quad's center
 		float Size = 0.1f;				// Meters across
 		glm::vec4 Color { 1.0f };		// Linear RGB (may be above 1 to glow) and alpha
+		glm::vec4 TexRect { 0.0f, 0.0f, 1.0f, 1.0f };	// The part of the texture shown: u0, v0, u1, v1
+		float Rotation = 0.0f;			// Radians
+		FacingMode Facing = FacingMode::Camera;
+		glm::vec3 Axis { 0.0f, 1.0f, 0.0f };	// Stretched: the way it moves; Flat: the plane's normal (world)
+		float Length = 0.0f;			// Stretched: meters added to its length along Axis
 	};
 
 	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.

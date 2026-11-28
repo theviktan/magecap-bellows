@@ -1274,7 +1274,13 @@ namespace Bellows {
 			if (emitter.RuntimeParticles.empty() || hidden.contains(handle))
 				continue;
 
-			const glm::mat4 toWorld = emitter.WorldSpace ? glm::mat4(1.0f) : GetWorldTransform(Entity(handle, this));
+			const glm::mat4 entityToWorld = GetWorldTransform(Entity(handle, this));
+			const glm::mat4 toWorld = emitter.WorldSpace ? glm::mat4(1.0f) : entityToWorld;
+			const glm::mat3 turnToWorld(toWorld);
+			// Flat particles lie across the emitter's +Y, wherever their own space is.
+			const glm::vec3 flatNormal = glm::mat3(entityToWorld) * glm::vec3(0.0f, 1.0f, 0.0f);
+			const ParticleQuad::FacingMode facing = emitter.Facing == ParticleFacing::Stretched ? ParticleQuad::FacingMode::Stretched
+				: emitter.Facing == ParticleFacing::Flat ? ParticleQuad::FacingMode::Flat : ParticleQuad::FacingMode::Camera;
 			quads.clear();
 			quads.reserve(emitter.RuntimeParticles.size());
 			for (const Particle& particle : emitter.RuntimeParticles)
@@ -1283,6 +1289,19 @@ namespace Bellows {
 				quad.Position = emitter.WorldSpace ? particle.Position : glm::vec3(toWorld * glm::vec4(particle.Position, 1.0f));
 				quad.Size = ParticleSystem::GetSize(emitter, particle);
 				quad.Color = ParticleSystem::GetColor(emitter, particle);
+				quad.TexRect = ParticleSystem::GetFrameRect(emitter, particle);
+				quad.Rotation = particle.Rotation;
+				quad.Facing = facing;
+				if (facing == ParticleQuad::FacingMode::Stretched)
+				{
+					const glm::vec3 velocity = emitter.WorldSpace ? particle.Velocity : turnToWorld * particle.Velocity;
+					quad.Axis = velocity;
+					quad.Length = glm::length(velocity) * emitter.StretchAmount;
+				}
+				else if (facing == ParticleQuad::FacingMode::Flat)
+				{
+					quad.Axis = flatNormal;
+				}
 				quads.push_back(quad);
 			}
 			renderer.SubmitParticles(quads.data(), quads.size(), emitter.Blend == ParticleBlend::Additive, emitter.RuntimeTexture);

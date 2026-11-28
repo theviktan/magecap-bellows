@@ -1498,18 +1498,54 @@ namespace Bellows {
 			const ParticleQuad& quad = quads[index];
 			if (!(quad.Size > 0.0f) || quad.Color.a <= 0.0f)
 				continue;
-			const glm::vec3 x = right * (quad.Size * 0.5f), y = up * (quad.Size * 0.5f);
+			const float half = quad.Size * 0.5f;
+			glm::vec3 x, y;
+			if (quad.Facing == ParticleQuad::FacingMode::Stretched)
+			{
+				// Long along the way it moves (as the camera sees it), wide across it; the texture's
+				// top (v = 0) leads. Not moving, or moving straight at the camera: a plain square.
+				const glm::vec3 toCamera = m_Camera.Position - quad.Position;
+				const glm::vec3 across = glm::cross(quad.Axis, toCamera);
+				const float acrossLength = glm::length(across);
+				const float axisLength = glm::length(quad.Axis);
+				if (acrossLength > 1e-6f && axisLength > 1e-6f)
+				{
+					x = across / acrossLength * half;
+					y = quad.Axis / axisLength * (half + quad.Length * 0.5f);
+				}
+				else
+				{
+					x = right * half;
+					y = up * half;
+				}
+			}
+			else
+			{
+				glm::vec3 baseX = right, baseY = up;
+				if (quad.Facing == ParticleQuad::FacingMode::Flat)
+				{
+					const float normalLength = glm::length(quad.Axis);
+					const glm::vec3 normal = normalLength > 1e-6f ? quad.Axis / normalLength : glm::vec3(0.0f, 1.0f, 0.0f);
+					const glm::vec3 helper = std::abs(normal.z) < 0.9f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+					baseX = glm::normalize(glm::cross(helper, normal));
+					baseY = glm::cross(normal, baseX);
+				}
+				const float c = std::cos(quad.Rotation), s = std::sin(quad.Rotation);
+				x = (baseX * c + baseY * s) * half;
+				y = (baseY * c - baseX * s) * half;
+			}
+			const glm::vec4& uv = quad.TexRect;
 			const auto vertex = [&](const glm::vec3& position, float u, float v)
 			{
 				m_ParticleVertices.push_back({ position, glm::vec2(u, v), quad.Color });
 			};
 			// UV (0, 0) is the image's top-left, so v grows downward.
-			vertex(quad.Position - x - y, 0.0f, 1.0f);
-			vertex(quad.Position + x - y, 1.0f, 1.0f);
-			vertex(quad.Position + x + y, 1.0f, 0.0f);
-			vertex(quad.Position - x - y, 0.0f, 1.0f);
-			vertex(quad.Position + x + y, 1.0f, 0.0f);
-			vertex(quad.Position - x + y, 0.0f, 0.0f);
+			vertex(quad.Position - x - y, uv.x, uv.w);
+			vertex(quad.Position + x - y, uv.z, uv.w);
+			vertex(quad.Position + x + y, uv.z, uv.y);
+			vertex(quad.Position - x - y, uv.x, uv.w);
+			vertex(quad.Position + x + y, uv.z, uv.y);
+			vertex(quad.Position - x + y, uv.x, uv.y);
 			center += quad.Position;
 		}
 		draw.VertexCount = static_cast<uint32_t>(m_ParticleVertices.size()) - draw.FirstVertex;

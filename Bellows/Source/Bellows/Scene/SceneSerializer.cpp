@@ -406,6 +406,43 @@ namespace Bellows {
 				component.Blend = ParticleBlendFromString(blend).value_or(component.Blend);
 				JsonRead(*it, "Texture", component.TexturePath);
 				JsonRead(*it, "WorldSpace", component.WorldSpace);
+				JsonRead(*it, "Outward", component.Outward);
+				JsonRead(*it, "NoiseStrength", component.NoiseStrength);
+				JsonRead(*it, "NoiseFrequency", component.NoiseFrequency);
+				JsonRead(*it, "NoiseSpeed", component.NoiseSpeed);
+				JsonRead(*it, "FlipbookColumns", component.FlipbookColumns);
+				JsonRead(*it, "FlipbookRows", component.FlipbookRows);
+				JsonRead(*it, "FlipbookFps", component.FlipbookFps);
+				JsonRead(*it, "FlipbookRandomStart", component.FlipbookRandomStart);
+				std::string facing = ParticleFacingToString(component.Facing);
+				JsonRead(*it, "Facing", facing);
+				component.Facing = ParticleFacingFromString(facing).value_or(component.Facing);
+				JsonRead(*it, "StretchAmount", component.StretchAmount);
+				JsonRead(*it, "StartRotation", component.StartRotation);
+				JsonRead(*it, "RotationVariation", component.RotationVariation);
+				JsonRead(*it, "SpinSpeed", component.SpinSpeed);
+				JsonRead(*it, "SpinVariation", component.SpinVariation);
+				// Curves are lists of [time, value] and [time, r, g, b, a]; a malformed key is skipped.
+				if (auto curve = it->find("SizeCurve"); curve != it->end() && curve->is_array())
+				{
+					for (const Json& key : *curve)
+					{
+						if (component.SizeCurve.size() < ParticleEmitterComponent::MaxCurveKeys && key.is_array() && key.size() == 2
+							&& key[0].is_number() && key[1].is_number())
+							component.SizeCurve.push_back({ key[0].get<float>(), key[1].get<float>() });
+					}
+				}
+				if (auto gradient = it->find("ColorGradient"); gradient != it->end() && gradient->is_array())
+				{
+					for (const Json& key : *gradient)
+					{
+						if (component.ColorGradient.size() >= ParticleEmitterComponent::MaxCurveKeys || !key.is_array() || key.size() != 5)
+							continue;
+						if (std::all_of(key.begin(), key.end(), [](const Json& value) { return value.is_number(); }))
+							component.ColorGradient.push_back({ key[0].get<float>(),
+								glm::vec4(key[1].get<float>(), key[2].get<float>(), key[3].get<float>(), key[4].get<float>()) });
+					}
+				}
 				component.Clamp();
 			}
 
@@ -776,6 +813,32 @@ namespace Bellows {
 			j["Blend"] = ParticleBlendToString(c->Blend);
 			j["Texture"] = c->TexturePath;
 			j["WorldSpace"] = c->WorldSpace;
+			j["Outward"] = c->Outward;
+			j["NoiseStrength"] = c->NoiseStrength;
+			j["NoiseFrequency"] = c->NoiseFrequency;
+			j["NoiseSpeed"] = c->NoiseSpeed;
+			j["FlipbookColumns"] = c->FlipbookColumns;
+			j["FlipbookRows"] = c->FlipbookRows;
+			j["FlipbookFps"] = c->FlipbookFps;
+			j["FlipbookRandomStart"] = c->FlipbookRandomStart;
+			j["Facing"] = ParticleFacingToString(c->Facing);
+			j["StretchAmount"] = c->StretchAmount;
+			j["StartRotation"] = c->StartRotation;
+			j["RotationVariation"] = c->RotationVariation;
+			j["SpinSpeed"] = c->SpinSpeed;
+			j["SpinVariation"] = c->SpinVariation;
+			if (!c->SizeCurve.empty())
+			{
+				Json& curve = j["SizeCurve"] = Json::array();
+				for (const ParticleCurveKey& key : c->SizeCurve)
+					curve.push_back(Json::array({ key.Time, key.Value }));
+			}
+			if (!c->ColorGradient.empty())
+			{
+				Json& gradient = j["ColorGradient"] = Json::array();
+				for (const ParticleColorKey& key : c->ColorGradient)
+					gradient.push_back(Json::array({ key.Time, key.Color.r, key.Color.g, key.Color.b, key.Color.a }));
+			}
 		}
 
 		if (const auto* c = entity.TryGetComponent<TextComponent>())
