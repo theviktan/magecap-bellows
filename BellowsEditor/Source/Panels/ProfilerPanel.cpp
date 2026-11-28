@@ -108,6 +108,7 @@ namespace Bellows {
 	void ProfilerPanel::OnImGuiRender(bool* open)
 	{
 		ImGui::SetNextWindowSize(ImVec2(560.0f * Theme::GetScale(), 440.0f * Theme::GetScale()), ImGuiCond_FirstUseEver);
+		UI::PrepareDockedBackground(WindowName);
 		if (!ImGui::Begin(WindowName, open))
 		{
 			ImGui::End();

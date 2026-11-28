@@ -610,11 +610,26 @@ namespace Bellows::UI {
 		}
 	}
 
+	void PrepareDockedBackground(const char* name)
+	{
+		// Docked in the editor's dock space, the editor draws the window's rounded card behind it, so
+		// the window draws none. (Docked together in a floating window, it keeps its own background.)
+		// A window that was docked last frame is docked this frame, unless it's being dragged out.
+		const ImGuiWindow* window = ImGui::FindWindowByName(name);
+		if (window && window->DockIsActive && window->DockNode)
+		{
+			const ImGuiDockNode* root = ImGui::DockNodeGetRootNode(window->DockNode);
+			if (root && root->IsDockSpace())
+				ImGui::SetNextWindowBgAlpha(0.0f);
+		}
+	}
+
 	bool BeginPanel(const char* name, bool* open, ImGuiWindowFlags flags)
 	{
 		ImGuiWindowClass windowClass;
 		windowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoCloseButton;
 		ImGui::SetNextWindowClass(&windowClass);
+		PrepareDockedBackground(name);
 		return ImGui::Begin(name, open, flags);
 	}
 

@@ -39,6 +39,9 @@ namespace Bellows {
 		// A selected row's warm fill, and the same while it is pressed.
 		constexpr ImU32 Selection		= IM_COL32(242, 112, 26, 46);
 		constexpr ImU32 SelectionStrong	= IM_COL32(242, 112, 26, 77);
+		// A selected row's outline and its words (design F: warm, so a selection never reads as a hover).
+		constexpr ImU32 SelectionRing	= IM_COL32(242, 112, 26, 77);
+		constexpr ImU32 SelectionText	= IM_COL32(255, 227, 204, 255);
 
 		// A primary action (Create, Save, Rename): light and neutral, so it leads without using the
 		// accent that belongs to the selection and Play.
@@ -60,6 +63,8 @@ namespace Bellows {
 
 		// Corner radius of fields, buttons and tabs, before the DPI scale.
 		constexpr float FrameRadius = 7.0f;
+		constexpr float PanelRadius = 12.0f;	// Docked panels' corners (design F)
+		constexpr float PanelGap = 8.0f;		// Between docked panels, and around them
 
 		constexpr float BaseFontSize = 15.0f;
 

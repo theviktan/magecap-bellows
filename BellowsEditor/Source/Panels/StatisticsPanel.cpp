@@ -20,6 +20,7 @@ namespace Bellows {
 		m_FrameTimeOffset = (m_FrameTimeOffset + 1) % m_FrameTimes.size();
 
 		ImGui::SetNextWindowSize(ImVec2(340.0f * Theme::GetScale(), 0.0f), ImGuiCond_FirstUseEver);
+		UI::PrepareDockedBackground("Statistics");
 		if (!ImGui::Begin("Statistics", open))
 		{
 			ImGui::End();

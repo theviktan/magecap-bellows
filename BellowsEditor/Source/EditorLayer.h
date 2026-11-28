@@ -26,6 +26,9 @@
 #include <string>
 #include <vector>
 
+struct ImDrawList;
+struct ImDrawListSplitter;
+
 namespace Bellows {
 
 	class SceneHierarchyPanel;
@@ -234,6 +237,8 @@ namespace Bellows {
 		float DrawTitleBarActions(float barTop, float barHeight);
 		void ShowExportDialog();
 		void DrawRail();
+		// The docked panels' rounded cards, their corners and outlines, and grips in the gaps.
+		void DrawPanelCards(ImDrawList* drawList, ImDrawListSplitter& layers, unsigned int dockspaceID);
 		void DrawSearch();
 		void DrawStatusBar();
 		void DrawViewport();

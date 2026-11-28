@@ -572,6 +572,8 @@ namespace Bellows {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 3.0f));
 		ImGui::TreeNodeEx("##node", flags);
 		ImGui::PopStyleVar();
+		if (selected)
+			ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), Theme::SelectionRing, ImGui::GetStyle().FrameRounding);
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 			m_Editor.Select(entity, ImGui::GetIO().KeyCtrl);
@@ -631,7 +633,7 @@ namespace Bellows {
 		{
 			const bool pending = scene->IsPendingDestroy(entity);
 			const bool hidden = m_Editor.GetSceneState() == SceneState::Edit && scene->IsHiddenInEditor(entity);
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(pending || hidden ? Theme::TextDisabled : Theme::Text));
+			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(pending || hidden ? Theme::TextDisabled : (selected ? Theme::SelectionText : Theme::Text)));
 			ImGui::TextUnformatted(entity.GetName().c_str());
 			ImGui::PopStyleColor();
 			// The flat views say which group an entity is in.
