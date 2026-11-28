@@ -431,6 +431,111 @@ namespace Bellows::UI {
 		return changed;
 	}
 
+	bool PropertyEntity(const char* label, UUID& id, Scene& scene, Entity self, const char* tooltip)
+	{
+		BeginRow(label, tooltip);
+		bool changed = false;
+		ImGui::PushID(label);
+
+		const float buttonWidth = ImGui::GetFrameHeight();
+		const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+		Entity current = id != 0 ? scene.TryGetEntityByUUID(id) : Entity();
+		const float fieldWidth = ImGui::GetContentRegionAvail().x - (buttonWidth + spacing) * (id != 0 ? 2.0f : 1.0f);
+		// An ID with no entity behind it (deleted since) says so rather than showing None.
+		const std::string display = current ? current.GetName() : id != 0 ? std::string("Missing entity") : std::string("None");
+		ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(current ? Theme::Text : id != 0 ? Theme::Warning : Theme::TextDisabled));
+		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+		const std::string buttonLabel = std::string(ICON_BOX "  ") + display;
+		const bool select = ImGui::Button(buttonLabel.c_str(), ImVec2(std::max(fieldWidth, 20.0f), 0.0f));
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor();
+		Tooltip("Click to choose an entity, or drop one here from the Hierarchy");
+		if (select)
+			ImGui::OpenPopup("##EntityPicker");
+
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(EntityPayload))
+			{
+				Entity dropped = scene.TryGetEntityByUUID(*static_cast<const uint64_t*>(payload->Data));
+				if (dropped && dropped != self)
+				{
+					id = dropped.GetUUID();
+					changed = true;
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		ImGui::SameLine(0.0f, spacing);
+		if (ImGui::Button(ICON_SEARCH, ImVec2(buttonWidth, 0.0f)))
+			ImGui::OpenPopup("##EntityPicker");
+		Tooltip("Choose an entity");
+		if (id != 0)
+		{
+			ImGui::SameLine(0.0f, spacing);
+			if (ImGui::Button(ICON_X, ImVec2(buttonWidth, 0.0f)))
+			{
+				id = 0;
+				changed = true;
+			}
+			Tooltip("Clear");
+		}
+
+		ImGui::SetNextWindowSizeConstraints(ImVec2(240.0f * Theme::GetScale(), 0.0f), ImVec2(420.0f * Theme::GetScale(), 360.0f * Theme::GetScale()));
+		if (ImGui::BeginPopup("##EntityPicker"))
+		{
+			static std::string s_Filter;
+			if (ImGui::IsWindowAppearing())
+			{
+				s_Filter.clear();
+				ImGui::SetKeyboardFocusHere();
+			}
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			ImGui::InputTextWithHint("##filter", ICON_SEARCH "  Search", &s_Filter);
+			std::string filter = s_Filter;
+			std::transform(filter.begin(), filter.end(), filter.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			// Every entity but this one, by name.
+			std::vector<std::pair<std::string, UUID>> entities;
+			for (Entity entity : scene.GetAllEntities())
+			{
+				if (entity == self)
+					continue;
+				std::string name = entity.GetName();
+				std::string lower = name;
+				std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+				if (filter.empty() || lower.find(filter) != std::string::npos)
+					entities.emplace_back(std::move(name), entity.GetUUID());
+			}
+			std::sort(entities.begin(), entities.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+			if (ImGui::BeginChild("##entities", ImVec2(0.0f, std::min(240.0f * Theme::GetScale(), (static_cast<float>(entities.size()) + 1.0f) * ImGui::GetFrameHeightWithSpacing()))))
+			{
+				if (ImGui::Selectable("None", id == 0))
+				{
+					id = 0;
+					changed = true;
+					ImGui::CloseCurrentPopup();
+				}
+				for (const auto& [name, uuid] : entities)
+				{
+					const uint64_t rowID = static_cast<uint64_t>(uuid);
+					ImGui::PushID(reinterpret_cast<const char*>(&rowID), reinterpret_cast<const char*>(&rowID + 1));
+					if (ImGui::Selectable((std::string(ICON_BOX "  ") + name).c_str(), uuid == id))
+					{
+						id = uuid;
+						changed = true;
+						ImGui::CloseCurrentPopup();
+					}
+					ImGui::PopID();
+				}
+			}
+			ImGui::EndChild();
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+		return changed;
+	}
+
 	namespace {
 
 		// A small picture of a preset: the parent's frame, and the anchors as a dot, a bar or a block.

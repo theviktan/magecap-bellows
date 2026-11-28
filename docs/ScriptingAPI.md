@@ -509,6 +509,35 @@ slash.width_curve = [[0.0, 0.2], [0.15, 1.0], [1.0, 0.0]]
 slash.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [0.3, 0.5, 0.8, 1.0, 0.8], [1.0, 0.3, 0.4, 1.0, 0.0]]
 ```
 
+### `Beam`
+A glowing line from the entity to an end point: lasers, tractor beams, lightning arcs, tethers,
+healing links. It faces the camera along its length, is drawn with the particles, and updates in the
+editor too.
+* `active`, `end_mode`: `"point"` ends at `end_point` (a `Vec3` in the entity's own space, so it
+  turns and moves with it), `"entity"` ends at `target` (an entity in the same scene, or `None`;
+  with no target, or the entity itself, nothing is drawn), `"raycast"` shoots `length` meters (0 to
+  10000) down the entity's -Z and stops at the first collider, ignoring the entity's own.
+* `start_width` and `end_width` (meters, 0 to 1000), `start_color` and `end_color` (`Vec4`),
+  `intensity` (above 1 it glows), `blend` (`"additive"` or `"alpha"`).
+* `texture` (an image asset, repeated every `tile_length` meters, 0.01 to 1000; empty is soft
+  toward its edges) and `scroll_speed` (tiles per second, -1000 to 1000) to make it flow.
+* Wobble for lightning and energy: `segments` (1 to 256), `noise_amplitude` (meters, 0 to 100; 0
+  is a straight beam), `noise_frequency` (waves along it, 0 to 100) and `noise_speed` (how fast it
+  writhes, 0 to 1000). The two ends stay put.
+* Read-only: `end_position` (where it ends this frame, in world space), `is_hitting`,
+  `hit_entity` and `hit_normal` (what a raycast beam struck).
+
+Values out of range, NaN, an unknown end mode or blend, or a target from another scene raise
+`ValueError`.
+
+```python
+laser = turret.add_component("Beam")
+laser.end_mode, laser.length, laser.start_width = "raycast", 50.0, 0.05
+laser.start_color = laser.end_color = Vec4(1.0, 0.2, 0.1, 1.0)
+if laser.is_hitting and laser.hit_entity is not None:
+    laser.hit_entity.name  # what the laser is burning
+```
+
 ### `Decal`
 Projects an image, or a plain color, onto the opaque surfaces inside a box: footprints, cracks,
 scorch marks, posters, puddles, road paint. It changes the surfaces' color before lighting, so a

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Bellows/Asset/AssetManager.h"
+#include "Bellows/Scene/Entity.h"
+#include "Bellows/Scene/Scene.h"
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -36,6 +38,9 @@ namespace Bellows::UI {
 	bool PropertyCombo(const char* label, int& selected, const char* const* items, int itemCount, const char* tooltip = nullptr);
 	// An asset path field: accepts drops from the content browser and offers a searchable list of matching assets.
 	bool PropertyAsset(const char* label, std::string& path, AssetType type, const char* tooltip = nullptr, bool allowBuiltins = false);
+	// An entity of 'scene' (other than 'self'), by its ID: dropped from the Hierarchy, or chosen from a
+	// searchable list. 0 is none.
+	bool PropertyEntity(const char* label, UUID& id, Scene& scene, Entity self, const char* tooltip = nullptr);
 	void PropertyText(const char* label, const char* value);
 	// A UI rect's anchors as a button showing the matching preset; it opens a 4 x 4 grid of presets.
 	// Returns true with 'outPreset' (a UIAnchorPreset index) when one is picked.

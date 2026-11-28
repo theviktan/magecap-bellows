@@ -5,6 +5,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Navigation/SceneNavigation.h"
 #include "Bellows/Scene/EntityTags.h"
+#include "Bellows/Scene/BeamSystem.h"
 #include "Bellows/Scene/ParticleSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 
@@ -475,6 +476,36 @@ namespace Bellows {
 				component.Clamp();
 			}
 
+			if (auto it = json.find("Beam"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<BeamComponent>();
+				JsonRead(*it, "Active", component.Active);
+				std::string endMode = BeamEndModeToString(component.EndMode);
+				JsonRead(*it, "EndMode", endMode);
+				component.EndMode = BeamEndModeFromString(endMode).value_or(component.EndMode);
+				JsonRead(*it, "EndPoint", component.EndPoint);
+				uint64_t target = 0;
+				JsonRead(*it, "Target", target);
+				component.Target = UUID(target);
+				JsonRead(*it, "Length", component.Length);
+				JsonRead(*it, "StartWidth", component.StartWidth);
+				JsonRead(*it, "EndWidth", component.EndWidth);
+				JsonRead(*it, "StartColor", component.StartColor);
+				JsonRead(*it, "EndColor", component.EndColor);
+				JsonRead(*it, "Intensity", component.Intensity);
+				std::string blend = ParticleBlendToString(component.Blend);
+				JsonRead(*it, "Blend", blend);
+				component.Blend = ParticleBlendFromString(blend).value_or(component.Blend);
+				JsonRead(*it, "Texture", component.TexturePath);
+				JsonRead(*it, "TileLength", component.TileLength);
+				JsonRead(*it, "ScrollSpeed", component.ScrollSpeed);
+				JsonRead(*it, "Segments", component.Segments);
+				JsonRead(*it, "NoiseAmplitude", component.NoiseAmplitude);
+				JsonRead(*it, "NoiseFrequency", component.NoiseFrequency);
+				JsonRead(*it, "NoiseSpeed", component.NoiseSpeed);
+				component.Clamp();
+			}
+
 			if (auto it = json.find("Trail"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<TrailComponent>();
@@ -885,6 +916,29 @@ namespace Bellows {
 			WriteGradient(j, "ColorGradient", c->ColorGradient);
 		}
 
+		if (const auto* c = entity.TryGetComponent<BeamComponent>())
+		{
+			Json& j = json["Beam"];
+			j["Active"] = c->Active;
+			j["EndMode"] = BeamEndModeToString(c->EndMode);
+			j["EndPoint"] = c->EndPoint;
+			j["Target"] = static_cast<uint64_t>(c->Target);
+			j["Length"] = c->Length;
+			j["StartWidth"] = c->StartWidth;
+			j["EndWidth"] = c->EndWidth;
+			j["StartColor"] = c->StartColor;
+			j["EndColor"] = c->EndColor;
+			j["Intensity"] = c->Intensity;
+			j["Blend"] = ParticleBlendToString(c->Blend);
+			j["Texture"] = c->TexturePath;
+			j["TileLength"] = c->TileLength;
+			j["ScrollSpeed"] = c->ScrollSpeed;
+			j["Segments"] = c->Segments;
+			j["NoiseAmplitude"] = c->NoiseAmplitude;
+			j["NoiseFrequency"] = c->NoiseFrequency;
+			j["NoiseSpeed"] = c->NoiseSpeed;
+		}
+
 		if (const auto* c = entity.TryGetComponent<TrailComponent>())
 		{
 			Json& j = json["Trail"];
@@ -1107,6 +1161,15 @@ namespace Bellows {
 
 			if (newParent)
 				scene.SetParent(entity, newParent, false);
+		}
+		// A beam aimed at an entity of the same tree aims at it under its new ID.
+		for (const auto& entry : created)
+		{
+			if (BeamComponent* beam = Entity(entry.first).TryGetComponent<BeamComponent>())
+			{
+				if (auto it = remap.find(static_cast<uint64_t>(beam->Target)); beam->Target != 0 && it != remap.end())
+					beam->Target = it->second;
+			}
 		}
 		// The tree's top entity keeps its group when the scene has it (a prefab placed in the scene it was
 		// made in, a paste); otherwise it goes in none. SetParent cleared the children's.

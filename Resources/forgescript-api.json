@@ -2348,6 +2348,148 @@
 			]
 		},
 		{
+			"name": "Beam",
+			"doc": "A glowing strip from the entity to a point, another entity, or whatever it hits along its forward: lasers, lightning, tethers, healing rays. It faces the camera along its length, and can scroll its texture and wobble",
+			"members": [
+				{
+					"name": "active",
+					"kind": "property",
+					"type": "bool",
+					"doc": "Off, it isn't drawn and doesn't cast"
+				},
+				{
+					"name": "end_mode",
+					"kind": "property",
+					"type": "str",
+					"doc": "'point' ends at end_point; 'entity' at target; 'raycast' along the entity's forward (-Z) until it hits something, at most length"
+				},
+				{
+					"name": "end_point",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "For 'point': where it ends, in the entity's own space (it turns and moves with the entity)"
+				},
+				{
+					"name": "length",
+					"kind": "property",
+					"type": "float",
+					"doc": "For 'raycast': the farthest it reaches, in meters"
+				},
+				{
+					"name": "start_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across at the entity"
+				},
+				{
+					"name": "end_width",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters across at its end"
+				},
+				{
+					"name": "start_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha at the entity"
+				},
+				{
+					"name": "end_color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Color and alpha at its end"
+				},
+				{
+					"name": "intensity",
+					"kind": "property",
+					"type": "float",
+					"doc": "Brightness, from 0 to 1000; above 1 it glows"
+				},
+				{
+					"name": "blend",
+					"kind": "property",
+					"type": "str",
+					"doc": "'additive' adds light; 'alpha' covers what's behind"
+				},
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "An image repeated along it (an asset path); empty is soft toward its edges"
+				},
+				{
+					"name": "tile_length",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters one copy of the texture covers"
+				},
+				{
+					"name": "scroll_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "Texture copies per second it scrolls outward from the entity (below 0, inward)"
+				},
+				{
+					"name": "segments",
+					"kind": "property",
+					"type": "int",
+					"doc": "Pieces it's drawn in, from 1 to 256: more is smoother when it wobbles"
+				},
+				{
+					"name": "noise_amplitude",
+					"kind": "property",
+					"type": "float",
+					"doc": "Meters it wobbles sideways at its middle (its ends stay put): lightning, crackling energy; 0 is straight"
+				},
+				{
+					"name": "noise_frequency",
+					"kind": "property",
+					"type": "float",
+					"doc": "Wobbles per meter along it"
+				},
+				{
+					"name": "noise_speed",
+					"kind": "property",
+					"type": "float",
+					"doc": "How fast the wobble changes"
+				},
+				{
+					"name": "end_position",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "Where it ended this frame, in world space (for 'raycast', where it hit or its full length)"
+				},
+				{
+					"name": "is_hitting",
+					"kind": "property",
+					"type": "bool",
+					"readonly": true,
+					"doc": "For 'raycast': whether it stopped on something this frame"
+				},
+				{
+					"name": "hit_normal",
+					"kind": "property",
+					"type": "Vec3",
+					"readonly": true,
+					"doc": "For 'raycast': which way the surface it stopped on faces (for sparks and scorch marks)"
+				},
+				{
+					"name": "target",
+					"kind": "property",
+					"type": "Entity | None",
+					"doc": "For 'entity': the entity it reaches, or nothing"
+				},
+				{
+					"name": "hit_entity",
+					"kind": "property",
+					"type": "Entity | None",
+					"readonly": true,
+					"doc": "For 'raycast': the entity it stopped on this frame, or nothing"
+				}
+			]
+		},
+		{
 			"name": "Decal",
 			"doc": "Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles",
 			"members": [

@@ -226,6 +226,112 @@ class AudioSource:
     def is_playing(self) -> bool: ...
 
 
+class Beam:
+    """A glowing strip from the entity to a point, another entity, or whatever it hits along its forward: lasers, lightning, tethers, healing rays. It faces the camera along its length, and can scroll its texture and wobble"""
+    @property
+    def active(self) -> bool:
+        """Off, it isn't drawn and doesn't cast"""
+    @active.setter
+    def active(self, value: bool) -> None: ...
+    @property
+    def end_mode(self) -> str:
+        """'point' ends at end_point; 'entity' at target; 'raycast' along the entity's forward (-Z) until it hits something, at most length"""
+    @end_mode.setter
+    def end_mode(self, value: str) -> None: ...
+    @property
+    def end_point(self) -> Vec3:
+        """For 'point': where it ends, in the entity's own space (it turns and moves with the entity)"""
+    @end_point.setter
+    def end_point(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def length(self) -> float:
+        """For 'raycast': the farthest it reaches, in meters"""
+    @length.setter
+    def length(self, value: float) -> None: ...
+    @property
+    def start_width(self) -> float:
+        """Meters across at the entity"""
+    @start_width.setter
+    def start_width(self, value: float) -> None: ...
+    @property
+    def end_width(self) -> float:
+        """Meters across at its end"""
+    @end_width.setter
+    def end_width(self, value: float) -> None: ...
+    @property
+    def start_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha at the entity"""
+    @start_color.setter
+    def start_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def end_color(self) -> Vec4 | typing.Sequence[float]:
+        """Color and alpha at its end"""
+    @end_color.setter
+    def end_color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def intensity(self) -> float:
+        """Brightness, from 0 to 1000; above 1 it glows"""
+    @intensity.setter
+    def intensity(self, value: float) -> None: ...
+    @property
+    def blend(self) -> str:
+        """'additive' adds light; 'alpha' covers what's behind"""
+    @blend.setter
+    def blend(self, value: str) -> None: ...
+    @property
+    def texture(self) -> str:
+        """An image repeated along it (an asset path); empty is soft toward its edges"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def tile_length(self) -> float:
+        """Meters one copy of the texture covers"""
+    @tile_length.setter
+    def tile_length(self, value: float) -> None: ...
+    @property
+    def scroll_speed(self) -> float:
+        """Texture copies per second it scrolls outward from the entity (below 0, inward)"""
+    @scroll_speed.setter
+    def scroll_speed(self, value: float) -> None: ...
+    @property
+    def segments(self) -> int:
+        """Pieces it's drawn in, from 1 to 256: more is smoother when it wobbles"""
+    @segments.setter
+    def segments(self, value: int) -> None: ...
+    @property
+    def noise_amplitude(self) -> float:
+        """Meters it wobbles sideways at its middle (its ends stay put): lightning, crackling energy; 0 is straight"""
+    @noise_amplitude.setter
+    def noise_amplitude(self, value: float) -> None: ...
+    @property
+    def noise_frequency(self) -> float:
+        """Wobbles per meter along it"""
+    @noise_frequency.setter
+    def noise_frequency(self, value: float) -> None: ...
+    @property
+    def noise_speed(self) -> float:
+        """How fast the wobble changes"""
+    @noise_speed.setter
+    def noise_speed(self, value: float) -> None: ...
+    @property
+    def end_position(self) -> Vec3:
+        """Where it ended this frame, in world space (for 'raycast', where it hit or its full length)"""
+    @property
+    def is_hitting(self) -> bool:
+        """For 'raycast': whether it stopped on something this frame"""
+    @property
+    def hit_normal(self) -> Vec3:
+        """For 'raycast': which way the surface it stopped on faces (for sparks and scorch marks)"""
+    @property
+    def target(self) -> Entity | None:
+        """For 'entity': the entity it reaches, or nothing"""
+    @target.setter
+    def target(self, value: Entity | None) -> None: ...
+    @property
+    def hit_entity(self) -> Entity | None:
+        """For 'raycast': the entity it stopped on this frame, or nothing"""
+
+
 class BoxCollider:
     @property
     def half_extents(self) -> Vec3: ...
@@ -457,6 +563,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['Trail']) -> Trail | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['Beam']) -> Beam | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['Decal']) -> Decal | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
@@ -524,6 +632,8 @@ class Entity:
     def add_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Trail']) -> Trail: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['Beam']) -> Beam: ...
     @typing.overload
     def add_component(self, component: typing.Literal['Decal']) -> Decal: ...
     @typing.overload

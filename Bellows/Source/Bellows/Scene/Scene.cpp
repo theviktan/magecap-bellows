@@ -11,6 +11,7 @@
 #include "Bellows/Renderer/Renderer.h"
 #include "Bellows/Scene/Entity.h"
 #include "Bellows/Scene/ParticleSystem.h"
+#include "Bellows/Scene/BeamSystem.h"
 #include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
@@ -254,11 +255,15 @@ namespace Bellows {
 		if (!entity)
 			return {};
 
+		std::unordered_map<UUID, UUID> copies;		// Original to copy, for references inside the tree
+		std::vector<Entity> created;
 		std::function<Entity(Entity, Entity)> duplicate = [&](Entity source, Entity parent) -> Entity
 		{
 			Entity copy = CreateEntity(source.GetName());
 			copy.GetComponent<TagComponent>() = source.GetComponent<TagComponent>();
 			CopyEntityComponents(AllComponents {}, copy, source);
+			copies[source.GetUUID()] = copy.GetUUID();
+			created.push_back(copy);
 			if (parent)
 				SetParent(copy, parent, false);
 			for (Entity child : source.GetChildren())
@@ -267,6 +272,15 @@ namespace Bellows {
 		};
 
 		Entity copy = duplicate(entity, entity.GetParent());
+		// A beam aimed at an entity inside the copied tree aims at that entity's copy.
+		for (Entity made : created)
+		{
+			if (BeamComponent* beam = made.TryGetComponent<BeamComponent>())
+			{
+				if (auto it = copies.find(beam->Target); it != copies.end())
+					beam->Target = it->second;
+			}
+		}
 
 		// Place the copy right after the original among its siblings.
 		Entity parent = entity.GetParent();
@@ -572,6 +586,14 @@ namespace Bellows {
 			ParticleSystem::Reset(m_Registry.get<ParticleEmitterComponent>(handle), Entity(handle, this).GetUUID());
 		for (entt::entity handle : m_Registry.view<TrailComponent>())
 			TrailSystem::Clear(m_Registry.get<TrailComponent>(handle));
+		for (entt::entity handle : m_Registry.view<BeamComponent>())
+		{
+			BeamComponent& beam = m_Registry.get<BeamComponent>(handle);
+			beam.RuntimeValid = false;
+			beam.RuntimeHit = false;
+			beam.RuntimeHitEntity = 0;
+			beam.RuntimeTime = 0.0f;
+		}
 		for (entt::entity handle : m_Registry.view<NavAgentComponent>())
 		{
 			NavAgentComponent& agent = m_Registry.get<NavAgentComponent>(handle);
@@ -806,6 +828,7 @@ namespace Bellows {
 		{
 			UpdateParticles(deltaTime);
 			UpdateTrails(deltaTime);
+			UpdateBeams(deltaTime);
 		}
 
 		if (m_Audio)
@@ -903,6 +926,61 @@ namespace Bellows {
 		UpdateAnimators(timestep.GetSeconds());
 		UpdateParticles(timestep.GetSeconds());
 		UpdateTrails(timestep.GetSeconds());
+		UpdateBeams(timestep.GetSeconds());
+	}
+
+	void Scene::UpdateBeams(float seconds)
+	{
+		BW_PROFILE_SCOPE("Beams");
+		seconds = std::isfinite(seconds) ? std::max(seconds, 0.0f) : 0.0f;
+		auto beams = m_Registry.view<BeamComponent>();
+		for (entt::entity handle : beams)
+		{
+			BeamComponent& beam = beams.get<BeamComponent>(handle);
+			Entity entity(handle, this);
+			beam.RuntimeValid = false;
+			beam.RuntimeHit = false;
+			beam.RuntimeHitEntity = 0;
+			// A long run's clock wraps, so its sines stay precise.
+			beam.RuntimeTime = std::fmod(beam.RuntimeTime + seconds, 10000.0f);
+			if (!beam.Active)
+				continue;
+			const glm::mat4 world = GetWorldTransform(entity);
+			beam.RuntimeStart = glm::vec3(world[3]);
+			switch (beam.EndMode)
+			{
+				case BeamEndMode::Point:
+					beam.RuntimeEnd = glm::vec3(world * glm::vec4(beam.EndPoint, 1.0f));
+					beam.RuntimeValid = true;
+					break;
+				case BeamEndMode::Entity:
+					if (Entity target = TryGetEntityByUUID(beam.Target); target && target != entity)
+					{
+						beam.RuntimeEnd = glm::vec3(GetWorldTransform(target)[3]);
+						beam.RuntimeValid = true;
+					}
+					break;
+				case BeamEndMode::Raycast:
+				{
+					const glm::vec3 forward = -glm::vec3(world[2]);
+					const float forwardLength = glm::length(forward);
+					if (!(forwardLength > 1e-6f))
+						break;
+					const glm::vec3 direction = forward / forwardLength;
+					beam.RuntimeEnd = beam.RuntimeStart + direction * beam.Length;
+					RaycastHit hit;
+					if (m_PhysicsWorld && m_PhysicsWorld->Raycast(beam.RuntimeStart, direction, beam.Length, hit, entity.GetUUID()))
+					{
+						beam.RuntimeEnd = hit.Point;
+						beam.RuntimeHit = true;
+						beam.RuntimeHitEntity = hit.Entity;
+						beam.RuntimeHitNormal = hit.Normal;
+					}
+					beam.RuntimeValid = true;
+					break;
+				}
+			}
+		}
 	}
 
 	void Scene::UpdateTrails(float seconds)
@@ -1322,8 +1400,24 @@ namespace Bellows {
 			renderer.SubmitParticles(quads.data(), quads.size(), emitter.Blend == ParticleBlend::Additive, emitter.RuntimeTexture);
 		}
 
-		// Trails, each as one strip from its entity back along where it has been.
+		// Beams, each as one strip from its entity to where it ends.
 		std::vector<StripPoint> strip;
+		auto beams = m_Registry.view<BeamComponent>();
+		for (entt::entity handle : beams)
+		{
+			BeamComponent& beam = beams.get<BeamComponent>(handle);
+			if (beam.LoadedTexturePath != beam.TexturePath)
+			{
+				beam.RuntimeTexture = beam.TexturePath.empty() ? nullptr : AssetManager::GetTexture(beam.TexturePath, TextureColorSpace::SRGB);
+				beam.LoadedTexturePath = beam.TexturePath;
+			}
+			if (!beam.RuntimeValid || hidden.contains(handle))
+				continue;
+			BeamSystem::BuildStrip(beam, strip);
+			renderer.SubmitStrip(strip.data(), strip.size(), beam.Blend == ParticleBlend::Additive, beam.RuntimeTexture, true);
+		}
+
+		// Trails, each as one strip from its entity back along where it has been.
 		auto trails = m_Registry.view<TrailComponent>();
 		for (entt::entity handle : trails)
 		{

@@ -278,8 +278,8 @@ Statuses: Planned, In progress, Done. Releases: a version (0.8, 1.0) or Later.
 | Decals | Images projected onto surfaces | 0.7 | Done | 1e0354e |
 | Installer and updates | Per-user setup program; updates from inside the editor | 0.7 | Done | a3c81a0, Audit 21 fixes 7516f8a |
 | VFX 1: richer particles | Curves, gradients, facings, spin, flipbooks, swirl, ring and line shapes | 0.7 | Done | ab98bc3 |
-| VFX 2: trails and ribbons | Strips that follow a moving point: slashes, comet tails, spell streaks | 0.7 | In progress | |
-| VFX 3: beams | A strip between two points or along a raycast, scrolling and glowing: lasers, lightning, tethers | 0.7 | Planned | |
+| VFX 2: trails and ribbons | Strips that follow a moving point: slashes, comet tails, spell streaks | 0.7 | Done | Trail component, 5cbd723 |
+| VFX 3: beams | A strip between two points or along a raycast, scrolling and glowing: lasers, lightning, tethers | 0.7 | Done | Beam component (point, entity and raycast ends, lightning wobble) |
 | VFX 4: effect shapes and materials | Rings, cones, domes, slash arcs and swirls with scrolling, edge fade, dissolve and distortion: portals, shockwaves, shields | 0.7 | Planned | |
 | VFX 5: mesh debris | Mesh particles with physics, and dust where they land: rock smashes | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |
 | VFX 6: Effects editor | `.beffect` assets: layers on a timeline, a looping preview, starter effects, `play effect` from scripts | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |

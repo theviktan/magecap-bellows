@@ -124,6 +124,32 @@ namespace Bellows {
 		ClampGradient(ColorGradient);
 	}
 
+	void BeamComponent::Clamp()
+	{
+		const BeamComponent defaults;
+		if (static_cast<uint8_t>(EndMode) > static_cast<uint8_t>(BeamEndMode::Raycast))
+			EndMode = defaults.EndMode;
+		for (int axis = 0; axis < 3; axis++)
+			EndPoint[axis] = ClampOrDefault(EndPoint[axis], -MaxLength, MaxLength, defaults.EndPoint[axis]);
+		Length = ClampOrDefault(Length, 0.0f, MaxLength, defaults.Length);
+		StartWidth = ClampOrDefault(StartWidth, 0.0f, MaxWidth, defaults.StartWidth);
+		EndWidth = ClampOrDefault(EndWidth, 0.0f, MaxWidth, defaults.EndWidth);
+		for (int channel = 0; channel < 4; channel++)
+		{
+			StartColor[channel] = ClampOrDefault(StartColor[channel], 0.0f, 1.0f, defaults.StartColor[channel]);
+			EndColor[channel] = ClampOrDefault(EndColor[channel], 0.0f, 1.0f, defaults.EndColor[channel]);
+		}
+		Intensity = ClampOrDefault(Intensity, 0.0f, ParticleEmitterComponent::MaxIntensity, defaults.Intensity);
+		if (Blend != ParticleBlend::Additive && Blend != ParticleBlend::Alpha)
+			Blend = defaults.Blend;
+		TileLength = ClampOrDefault(TileLength, MinTileLength, MaxTileLength, defaults.TileLength);
+		ScrollSpeed = ClampOrDefault(ScrollSpeed, -MaxScrollSpeed, MaxScrollSpeed, defaults.ScrollSpeed);
+		Segments = std::clamp(Segments, MinSegments, MaxSegments);
+		NoiseAmplitude = ClampOrDefault(NoiseAmplitude, 0.0f, MaxNoiseAmplitude, defaults.NoiseAmplitude);
+		NoiseFrequency = ClampOrDefault(NoiseFrequency, 0.0f, MaxNoiseFrequency, defaults.NoiseFrequency);
+		NoiseSpeed = ClampOrDefault(NoiseSpeed, 0.0f, MaxNoiseSpeed, defaults.NoiseSpeed);
+	}
+
 	void DecalComponent::Clamp()
 	{
 		const DecalComponent defaults;

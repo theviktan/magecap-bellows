@@ -57,7 +57,8 @@ namespace Bellows {
 		// Contact events collected during the last Step (in order).
 		const std::vector<ContactEvent>& GetContactEvents() const { return m_ContactEvents; }
 
-		bool Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit) const;
+		// The nearest body along the ray, other than 'ignore''s (a beam leaving its own entity's collider).
+		bool Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore = 0) const;
 		// The same, hitting only the ground a navmesh is baked from: static bodies that aren't triggers,
 		// other than 'ignore''s.
 		bool RaycastStatic(const glm::vec3& origin, const glm::vec3& direction, float maxDistance, RaycastHit& outHit, UUID ignore = 0) const;
