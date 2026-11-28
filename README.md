@@ -182,7 +182,7 @@ tested version.
    an existing `.bproject` and **Scan** finds all projects in a folder. Come back to it any time
    with **File → Project Manager...**.
 2. Use **Entity → 3D Object** to add shapes, select them in the viewport or the **Hierarchy**
-   panel, and move them with the gizmo (**W** move, **E** rotate, **R** scale; hold **Ctrl** to snap).
+   panel, and move them with the gizmo (**W** move, **E** rotate, **R** scale; hold **Ctrl** to snap, or click the magnet in the viewport's toolbar to snap all the time).
    Fly around the viewport with the **right mouse button** held plus **W A S D**.
 3. Right-click an entity in the **Hierarchy** and choose **Attach Script...**. Pick **ForgeScript**
    or **Python**, keep the suggested path (for example `Scripts/Cube.forge`) and click **Create**.

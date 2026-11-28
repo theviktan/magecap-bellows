@@ -238,6 +238,13 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		settings.UIView = true;
 		settings.UIViewWidth = 1280;
 		settings.UIViewHeight = 99999;
+		CHECK_FALSE(settings.Snap);
+		CHECK(settings.SelectionGlow);
+		settings.Snap = true;
+		settings.TranslateSnap = 0.25f;
+		settings.RotateSnap = 0.0f;			// Held to its smallest step when loaded
+		settings.ScaleSnap = 0.5f;
+		settings.SelectionGlow = false;
 		REQUIRE(settings.Save());
 
 		const EditorSettings loaded = EditorSettings::Load();
@@ -254,6 +261,11 @@ TEST_CASE("Editor settings remember projects, favorites and panels")
 		CHECK(loaded.UIView);
 		CHECK(loaded.UIViewWidth == 1280);
 		CHECK(loaded.UIViewHeight == 8192);	// Kept to a size the renderer can make
+		CHECK(loaded.Snap);
+		CHECK(loaded.TranslateSnap == 0.25f);
+		CHECK(loaded.RotateSnap == 0.1f);
+		CHECK(loaded.ScaleSnap == 0.5f);
+		CHECK_FALSE(loaded.SelectionGlow);
 	}
 
 	SUBCASE("Settings from before the Project Manager keep their recent projects")

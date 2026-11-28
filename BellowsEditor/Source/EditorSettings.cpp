@@ -6,6 +6,7 @@
 #include "Bellows/Serialization/JsonUtils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 
 namespace Bellows {
@@ -172,6 +173,20 @@ namespace Bellows {
 		settings.UIViewWidth = std::clamp(settings.UIViewWidth, 64u, 8192u);
 		settings.UIViewHeight = std::clamp(settings.UIViewHeight, 64u, 8192u);
 		JsonRead(json, "CameraSpeed", settings.CameraSpeed);
+		JsonRead(json, "Snap", settings.Snap);
+		JsonRead(json, "TranslateSnap", settings.TranslateSnap);
+		JsonRead(json, "RotateSnap", settings.RotateSnap);
+		JsonRead(json, "ScaleSnap", settings.ScaleSnap);
+		// A step of 0 (or a hand-edited NaN) would make the gizmo stick, so each is held to a sane range.
+		const EditorSettings defaults;
+		const auto step = [](float value, float minimum, float maximum, float fallback)
+		{
+			return std::isfinite(value) ? std::clamp(value, minimum, maximum) : fallback;
+		};
+		settings.TranslateSnap = step(settings.TranslateSnap, 0.001f, 1000.0f, defaults.TranslateSnap);
+		settings.RotateSnap = step(settings.RotateSnap, 0.1f, 180.0f, defaults.RotateSnap);
+		settings.ScaleSnap = step(settings.ScaleSnap, 0.001f, 100.0f, defaults.ScaleSnap);
+		JsonRead(json, "SelectionGlow", settings.SelectionGlow);
 		JsonRead(json, "ShowContentFolderTree", settings.ShowContentFolderTree);
 		JsonRead(json, "LastProjectLocation", settings.LastProjectLocation);
 		JsonRead(json, "PlayInGameWindow", settings.PlayInGameWindow);
@@ -203,6 +218,11 @@ namespace Bellows {
 		json["UIViewWidth"] = UIViewWidth;
 		json["UIViewHeight"] = UIViewHeight;
 		json["CameraSpeed"] = CameraSpeed;
+		json["Snap"] = Snap;
+		json["TranslateSnap"] = TranslateSnap;
+		json["RotateSnap"] = RotateSnap;
+		json["ScaleSnap"] = ScaleSnap;
+		json["SelectionGlow"] = SelectionGlow;
 		json["ShowContentFolderTree"] = ShowContentFolderTree;
 		json["LastProjectLocation"] = LastProjectLocation;
 		json["PlayInGameWindow"] = PlayInGameWindow;

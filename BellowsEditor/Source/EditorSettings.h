@@ -41,6 +41,12 @@ namespace Bellows {
 		uint32_t UIViewWidth = 1920;
 		uint32_t UIViewHeight = 1080;
 		float CameraSpeed = 6.0f;
+		// Gizmo snapping: always on, or only while Ctrl is held (Ctrl flips it either way), and its steps.
+		bool Snap = false;
+		float TranslateSnap = 0.5f;				// Meters
+		float RotateSnap = 15.0f;				// Degrees
+		float ScaleSnap = 0.1f;
+		bool SelectionGlow = true;					// A faint glow around the selection's outline in the viewport
 		EditorPanelVisibility Panels;
 		bool ShowContentFolderTree = true;
 		std::string LastProjectLocation;			// Where the last new project was created

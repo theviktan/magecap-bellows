@@ -1,13 +1,13 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
-// Selection outline built from the entity ID buffer.
+// Selection outline built from the entity ID buffer, with a faint glow fading out around it.
 
 #include "PostProcess.glsl"
 
 layout(set = 0, binding = 0, std140) uniform OutlineBlock
 {
 	vec4 Color;
-	vec4 Params;		// x = thickness in pixels, y = selected ID count
+	vec4 Params;		// x = thickness in pixels, y = selected ID count, z = glow radius in pixels (0 = none)
 	uvec4 SelectedIDs[8];
 } u_Outline;
 
@@ -53,7 +53,39 @@ void main()
 		}
 	}
 
-	if (!edge || centerSelected)
+	if (centerSelected)
 		discard;
-	o_Color = u_Outline.Color;
+	if (edge)
+	{
+		o_Color = u_Outline.Color;
+		return;
+	}
+
+	// The glow: the nearest selected pixel within the radius, found on 16 rays at 3 distances (a sparse
+	// search keeps the pass cheap; the glow is soft, so it needn't be exact).
+	float radius = u_Outline.Params.z;
+	if (radius <= 0.0)
+		discard;
+	float nearest = radius + 1.0;
+	for (int ray = 0; ray < 16; ray++)
+	{
+		float angle = float(ray) * (6.28318530718 / 16.0);
+		vec2 direction = vec2(cos(angle), sin(angle));
+		for (int step = 1; step <= 3; step++)
+		{
+			float distanceFromPixel = radius * float(step) / 3.0;
+			if (distanceFromPixel >= nearest)
+				break;
+			ivec2 probe = clamp(pixel + ivec2(round(direction * distanceFromPixel)), ivec2(0), size - 1);
+			if (IsSelected(texelFetch(usampler2D(u_EntityIDs, s_PointClamp), probe, 0).r))
+			{
+				nearest = distanceFromPixel;
+				break;
+			}
+		}
+	}
+	if (nearest > radius)
+		discard;
+	float strength = 1.0 - nearest / (radius + 1.0);
+	o_Color = vec4(u_Outline.Color.rgb, u_Outline.Color.a * 0.3 * strength);
 }

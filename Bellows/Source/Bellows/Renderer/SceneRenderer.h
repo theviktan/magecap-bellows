@@ -71,6 +71,7 @@ namespace Bellows {
 		bool ShowGrid = false;
 		float GridCellSize = 1.0f;
 		bool ShowSelectionOutline = true;
+		bool ShowSelectionGlow = true;		// A faint glow fading out around the selection's outline
 		bool ShowUI = true;					// Screen UI (the editor can hide it while editing the 3D scene)
 		glm::vec4 OutlineColor { 1.0f, 0.52f, 0.12f, 1.0f };
 	};

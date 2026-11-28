@@ -27,6 +27,7 @@
 #include <vector>
 
 struct ImDrawList;
+struct ImVec2;
 struct ImDrawListSplitter;
 
 namespace Bellows {
@@ -236,6 +237,11 @@ namespace Bellows {
 		// Returns its left edge, so the search box can stay clear of it.
 		float DrawTitleBarActions(float barTop, float barHeight);
 		void ShowExportDialog();
+		// Play (ember) with where it plays, Pause and Step, starting at 'position'; returns their width.
+		float DrawPlayControls(ImVec2 position, float height);
+		float GetPlayControlsWidth(float height) const;
+		// The orientation gizmo in the viewport's corner; clicking an axis looks along it.
+		void DrawOrientationGizmo(ImVec2 center, float radius);
 		void DrawRail();
 		// The docked panels' rounded cards, their corners and outlines, and grips in the gaps.
 		void DrawPanelCards(ImDrawList* drawList, ImDrawListSplitter& layers, unsigned int dockspaceID);
@@ -321,9 +327,6 @@ namespace Bellows {
 		GizmoMode m_GizmoMode = GizmoMode::Translate;
 		bool m_GizmoLocal = false;
 		bool m_GizmoWasUsing = false;
-		float m_TranslateSnap = 0.5f;
-		float m_RotateSnap = 15.0f;
-		float m_ScaleSnap = 0.1f;
 
 		Scope<SceneHierarchyPanel> m_HierarchyPanel;
 		Scope<InspectorPanel> m_InspectorPanel;
@@ -348,6 +351,9 @@ namespace Bellows {
 		bool m_ShowSaveSceneAsDialog = false;
 		bool m_ShowStatistics = false;
 		bool m_ShowProfiler = false;
+		// The floating toolbar, chips and gizmo over the viewport, as drawn last frame (min xy, max xy):
+		// a click on them isn't a click on the scene.
+		std::vector<glm::vec4> m_ViewportOverlays;
 		bool m_SearchOpen = false;
 		bool m_SearchJustOpened = false;
 		std::string m_SearchQuery;
