@@ -680,6 +680,7 @@ namespace Bellows {
 
 		// Forget textures nothing but this renderer holds any more (a font or image no longer used).
 		std::erase_if(m_TextureSets, [](const auto& entry) { return entry.second.Owner.use_count() <= 1; });
+		std::erase_if(m_RepeatTextureSets, [](const auto& entry) { return entry.second.Owner.use_count() <= 1; });
 	}
 
 	void SceneRenderer::SetEnvironment(const EnvironmentSettings& environment)
@@ -1557,6 +1558,80 @@ namespace Bellows {
 		m_ParticleDraws.push_back(std::move(draw));
 	}
 
+	void SceneRenderer::SubmitStrip(const StripPoint* points, size_t count, bool additive, const Ref<Texture2D>& texture, bool repeatTexture)
+	{
+		if (!points || count < 2)
+			return;
+		const Ref<Texture2D>& image = texture ? texture : Renderer::GetWhiteTexture();
+		GetTextureBindingSet(image->GetHandle(), image, repeatTexture);
+
+		ParticleDraw draw;
+		draw.TextureRef = image;
+		draw.Textured = static_cast<bool>(texture);
+		draw.Additive = additive;
+		draw.Strip = true;
+		draw.RepeatTexture = repeatTexture;
+		draw.FirstVertex = static_cast<uint32_t>(m_ParticleVertices.size());
+
+		// Each point's side: across the strip's direction there and the view to it, so the strip shows
+		// its face to the camera all along. Where it can't be told (two points in the same place, or
+		// looking straight down the strip), a point takes its neighbor's.
+		std::vector<glm::vec3>& sides = m_StripSides;
+		std::vector<uint8_t>& known = m_StripSideKnown;
+		sides.assign(count, glm::vec3(0.0f));
+		known.assign(count, 0);
+		for (size_t i = 0; i < count; i++)
+		{
+			const glm::vec3 along = points[i + 1 < count ? i + 1 : i].Position - points[i > 0 ? i - 1 : i].Position;
+			const glm::vec3 side = glm::cross(along, m_Camera.Position - points[i].Position);
+			const float length = glm::length(side);
+			if (length > 1e-8f && std::isfinite(length))
+			{
+				sides[i] = side / length;
+				known[i] = 1;
+			}
+		}
+		const auto first = std::find(known.begin(), known.end(), uint8_t(1));
+		if (first == known.end())
+			return;
+		glm::vec3 carried = sides[static_cast<size_t>(first - known.begin())];
+		for (size_t i = 0; i < count; i++)
+		{
+			if (known[i])
+				carried = sides[i];
+			else
+				sides[i] = carried;
+		}
+		const auto edge = [&](size_t i, float sign) { return points[i].Position + sides[i] * (points[i].Width * 0.5f * sign); };
+
+		glm::vec3 center(0.0f);
+		for (size_t i = 0; i + 1 < count; i++)
+		{
+			const StripPoint& a = points[i];
+			const StripPoint& b = points[i + 1];
+			if (a.Color.a <= 0.0f && b.Color.a <= 0.0f)
+				continue;
+			const auto vertex = [&](const glm::vec3& position, float u, float v, const glm::vec4& color)
+			{
+				m_ParticleVertices.push_back({ position, glm::vec2(u, v), color });
+			};
+			vertex(edge(i, 1.0f), a.U, 0.0f, a.Color);
+			vertex(edge(i, -1.0f), a.U, 1.0f, a.Color);
+			vertex(edge(i + 1, -1.0f), b.U, 1.0f, b.Color);
+			vertex(edge(i, 1.0f), a.U, 0.0f, a.Color);
+			vertex(edge(i + 1, -1.0f), b.U, 1.0f, b.Color);
+			vertex(edge(i + 1, 1.0f), b.U, 0.0f, b.Color);
+			center += a.Position;
+		}
+		draw.VertexCount = static_cast<uint32_t>(m_ParticleVertices.size()) - draw.FirstVertex;
+		if (draw.VertexCount == 0)
+			return;
+		const uint32_t segments = draw.VertexCount / 6;
+		draw.Distance = glm::length(center / static_cast<float>(segments) - m_Camera.Position);
+		m_Statistics.Particles += segments;
+		m_ParticleDraws.push_back(std::move(draw));
+	}
+
 	void SceneRenderer::SubmitDecal(const glm::mat4& boxToWorld, const glm::vec4& color, const Ref<Texture2D>& texture, float maxAngleDegrees, int sortOrder)
 	{
 		// A box flattened to nothing on any axis has no inside to project through.
@@ -1726,28 +1801,29 @@ namespace Bellows {
 			state.pipeline = draw.Additive ? m_ParticleAdditivePipeline : m_ParticleAlphaPipeline;
 			state.framebuffer = m_HDRDepthFramebuffer;
 			state.viewport.addViewportAndScissorRect(nvrhi::Viewport(static_cast<float>(m_ViewportWidth), static_cast<float>(m_ViewportHeight)));
-			state.bindings = { GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef) };
+			state.bindings = { GetTextureBindingSet(draw.TextureRef->GetHandle(), draw.TextureRef, draw.RepeatTexture) };
 			state.vertexBuffers = { nvrhi::VertexBufferBinding().setBuffer(m_ParticleVertexBuffer).setSlot(0).setOffset(0) };
 			commandList->setGraphicsState(state);
-			constants.Params = glm::vec4(draw.Textured ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+			constants.Params = glm::vec4(draw.Textured ? 1.0f : 0.0f, draw.Strip ? 1.0f : 0.0f, 0.0f, 0.0f);
 			commandList->setPushConstants(&constants, sizeof(constants));
 			commandList->draw(nvrhi::DrawArguments().setVertexCount(draw.VertexCount).setStartVertexLocation(draw.FirstVertex));
 			m_Statistics.DrawCalls++;
 		}
 	}
 
-	nvrhi::IBindingSet* SceneRenderer::GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner)
+	nvrhi::IBindingSet* SceneRenderer::GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner, bool repeat)
 	{
-		auto it = m_TextureSets.find(texture);
-		if (it != m_TextureSets.end())
+		auto& sets = repeat ? m_RepeatTextureSets : m_TextureSets;
+		auto it = sets.find(texture);
+		if (it != sets.end())
 			return it->second.Set;
 
 		nvrhi::BindingSetDesc desc;
 		desc.addItem(nvrhi::BindingSetItem::Texture_SRV(0, texture));
-		desc.addItem(nvrhi::BindingSetItem::Sampler(1, Renderer::GetLinearClampSampler()));
+		desc.addItem(nvrhi::BindingSetItem::Sampler(1, repeat ? Renderer::GetLinearWrapSampler() : Renderer::GetLinearClampSampler()));
 		desc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::TextData)));
 		TextureBinding binding { std::move(owner), Renderer::GetDevice()->createBindingSet(desc, Renderer::GetTextBindingLayout()) };
-		return m_TextureSets.emplace(texture, std::move(binding)).first->second.Set;
+		return sets.emplace(texture, std::move(binding)).first->second.Set;
 	}
 
 	nvrhi::IBindingSet* SceneRenderer::GetTextBindingSet(const Ref<Font>& font)

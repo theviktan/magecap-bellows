@@ -219,8 +219,8 @@ Planned, from Ron's priorities (section 2). Ron confirmed this order, with iOS w
 
 | Release | Contents |
 |---------|----------|
-| 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals; the Windows installer and updates from inside the editor. **Visual effects made in Bellows** (Ron, November 28, 2026: building blocks first, as part of 0.7): richer particles (done), then trails and ribbons, beams, effect shapes with effect materials, mesh debris with physics, and an Effects editor with `.beffect` assets that combines them |
-| 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3). **Gameplay essentials:** a character controller, physics joints, shape casts and overlap queries, an animation state machine, entity fields for scripts |
+| 0.7 | **Performance tools and effects:** a CPU and GPU profiler (Tracy is BSD-licensed) with frame stats in the editor; particles (CPU first, GPU later) and decals; the Windows installer and updates from inside the editor. **Visual effects made in Bellows** (Ron, November 28, 2026: building blocks first; then, the same day, release 0.7 after trails, beams and effect shapes): richer particles, trails and ribbons, beams, effect shapes with effect materials |
+| 0.8 | **2D:** sprites, Camera2D, Box2D physics, tilemaps, sprite animation, a 2D editor mode and 2D templates (section 3). **Gameplay essentials:** a character controller, physics joints, shape casts and overlap queries, an animation state machine, entity fields for scripts. **Moved from 0.7:** mesh debris with physics, the Effects editor with `.beffect` assets, and editor redesign steps 5 and 6 |
 | 0.9 | **Lighting and quality:** fog, screen-space reflections, area lights, TAA and upscaling, HDR output, then global illumination; plus LOD and occlusion culling. **Performance and animation:** a job system, GPU particles, navigation links and runtime rebaking; blend spaces, IK, an animation timeline, ragdolls |
 | 0.10 | **Android** on Vulkan, with touch input and Android export. **Shipping a game:** localization, audio bus effects |
 | 0.11 | **Web** through a WebGPU backend, with Web export. **Game UI:** themes, rich text, accessibility |
@@ -249,9 +249,9 @@ tested and shown to Ron against the design:
 4. **Viewport** (0.7): one floating toolbar (tools, snapping, space, Play), the orientation gizmo, the
    CPU/GPU readout, a faint selection glow with an off switch in the View menu; it also moves the
    toolbar off the game's own UI.
-5. **Inspector:** compact X/Y/Z drag fields, the uniform-scale lock, switches, and the ForgeScript
+5. **Inspector** (0.8): compact X/Y/Z drag fields, the uniform-scale lock, switches, and the ForgeScript
    card with the script inline (Open in Script, Debug).
-6. **Content and status bar:** asset previews with type badges; the frame-time graph and plain
+6. **Content and status bar** (0.8): asset previews with type badges; the frame-time graph and plain
    status text.
 
 ## 8. Feature checklist
@@ -278,13 +278,13 @@ Statuses: Planned, In progress, Done. Releases: a version (0.8, 1.0) or Later.
 | Decals | Images projected onto surfaces | 0.7 | Done | 1e0354e |
 | Installer and updates | Per-user setup program; updates from inside the editor | 0.7 | Done | a3c81a0, Audit 21 fixes 7516f8a |
 | VFX 1: richer particles | Curves, gradients, facings, spin, flipbooks, swirl, ring and line shapes | 0.7 | Done | ab98bc3 |
-| VFX 2: trails and ribbons | Strips that follow a moving point: slashes, comet tails, spell streaks | 0.7 | Planned | |
+| VFX 2: trails and ribbons | Strips that follow a moving point: slashes, comet tails, spell streaks | 0.7 | In progress | |
 | VFX 3: beams | A strip between two points or along a raycast, scrolling and glowing: lasers, lightning, tethers | 0.7 | Planned | |
 | VFX 4: effect shapes and materials | Rings, cones, domes, slash arcs and swirls with scrolling, edge fade, dissolve and distortion: portals, shockwaves, shields | 0.7 | Planned | |
-| VFX 5: mesh debris | Mesh particles with physics, and dust where they land: rock smashes | 0.7 | Planned | |
-| VFX 6: Effects editor | `.beffect` assets: layers on a timeline, a looping preview, starter effects, `play effect` from scripts | 0.7 | Planned | |
-| Redesign step 5: Inspector | Compact X/Y/Z fields, uniform-scale lock, switches, the ForgeScript card | 0.7 | Planned | |
-| Redesign step 6: Content and status bar | Asset previews with type badges, the frame-time graph, plain status text | 0.7 | Planned | |
+| VFX 5: mesh debris | Mesh particles with physics, and dust where they land: rock smashes | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |
+| VFX 6: Effects editor | `.beffect` assets: layers on a timeline, a looping preview, starter effects, `play effect` from scripts | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |
+| Redesign step 5: Inspector | Compact X/Y/Z fields, uniform-scale lock, switches, the ForgeScript card | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |
+| Redesign step 6: Content and status bar | Asset previews with type badges, the frame-time graph, plain status text | 0.8 | Planned | Moved from 0.7 by Ron, November 28, 2026 ("complete Trails and ribbons, beams and effect shapes and materials and then release 0.7") |
 | 2D | Sprites, Camera2D, Box2D physics, tilemaps, sprite animation, 2D editor mode, 2D templates (section 3) | 0.8 | Planned | |
 | Character controller | A capsule that walks, climbs steps and slopes and slides along walls, for players and NPCs | 0.8 | Planned | |
 | Physics joints | Fixed, hinge, slider, spring, distance and rope joints between bodies, with limits and motors | 0.8 | Planned | |

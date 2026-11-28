@@ -522,6 +522,31 @@ class FeatureTest(bellows.Script):
         emitter.emit(5)
         emitter.stop(clear=True)
         self.check(not emitter.is_playing and emitter.particle_count == 0, "ParticleEmitter.stop")
+        trail = entity.add_component(bellows.Trail)
+        self.check(trail.emitting and close(trail.lifetime, 0.5) and close(trail.min_distance, 0.05) and trail.max_points == 256
+                   and close(trail.start_width, 0.2) and close(trail.end_width, 0.0) and trail.width_curve == [] and trail.color_gradient == []
+                   and trail.blend == "additive" and trail.texture == "" and trail.texture_mode == "stretch" and close(trail.tile_length, 1.0),
+                   "Trail defaults")
+        trail.emitting, trail.lifetime, trail.min_distance, trail.max_points = False, 1.5, 0.1, 64
+        trail.start_width, trail.end_width, trail.intensity, trail.blend = 0.5, 0.1, 3.0, "alpha"
+        trail.start_color, trail.end_color = Vec4(1.0, 0.5, 0.0, 1.0), Vec4(0.0, 0.0, 1.0, 0.0)
+        trail.texture, trail.texture_mode, trail.tile_length = "Textures/GroundTiles.png", "tile", 0.5
+        trail.width_curve = [[1.0, 0.0], [0.0, 1.0]]
+        trail.color_gradient = [[0.0, 1.0, 1.0, 1.0], [1.0, 0.2, 0.4, 1.0, 0.0]]
+        self.check(not trail.emitting and close(trail.lifetime, 1.5) and close(trail.min_distance, 0.1) and trail.max_points == 64
+                   and close(trail.start_width, 0.5) and close(trail.end_width, 0.1) and close(trail.intensity, 3.0) and trail.blend == "alpha"
+                   and close(trail.start_color, (1.0, 0.5, 0.0, 1.0)) and close(trail.end_color, (0.0, 0.0, 1.0, 0.0))
+                   and trail.texture == "Textures/GroundTiles.png" and trail.texture_mode == "tile" and close(trail.tile_length, 0.5)
+                   and [[round(n, 3) for n in key] for key in trail.width_curve] == [[0.0, 1.0], [1.0, 0.0]]
+                   and [[round(n, 3) for n in key] for key in trail.color_gradient] == [[0.0, 1.0, 1.0, 1.0, 1.0], [1.0, 0.2, 0.4, 1.0, 0.0]],
+                   "Trail properties")
+        self.check(raises(lambda: setattr(trail, "lifetime", 0.0), ValueError) and raises(lambda: setattr(trail, "max_points", 1), ValueError)
+                   and raises(lambda: setattr(trail, "texture_mode", "wrap"), ValueError) and raises(lambda: setattr(trail, "blend", "glow"), ValueError)
+                   and raises(lambda: setattr(trail, "start_width", float("nan")), ValueError)
+                   and raises(lambda: setattr(trail, "width_curve", [[0.5, 2000.0]]), ValueError),
+                   "Trail limits")
+        trail.clear()
+        self.check(trail.point_count == 0, "Trail.clear and point_count")
         decal = entity.add_component(bellows.Decal)
         self.check(decal.texture == "" and close(decal.color, (1.0, 1.0, 1.0, 1.0)) and close(decal.size, (1.0, 1.0, 1.0))
                    and close(decal.max_angle, 60.0) and decal.sort_order == 0, "Decal defaults")
@@ -655,7 +680,7 @@ class FeatureTest(bellows.Script):
         self.check(script.path == "Scripts/Spinner.py" and script.class_name == "Spinner" and script.run_while_paused, "ScriptComponent properties")
 
         expected = ["Transform", "MeshRenderer", "Camera", "PointLight", "SpotLight", "RigidBody", "BoxCollider", "SphereCollider",
-                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Decal", "UICanvas", "UIRect", "UIImage",
+                    "CapsuleCollider", "MeshCollider", "Script", "AudioSource", "Animator", "NavAgent", "AudioListener", "Text", "ParticleEmitter", "Trail", "Decal", "UICanvas", "UIRect", "UIImage",
                     "UILayout", "UIScroll", "UIButton", "UIToggle", "UISlider", "UIDropdown", "UITextInput"]
         self.check(entity.components == expected, f"components list ({entity.components})")
         for name in expected[1:]:

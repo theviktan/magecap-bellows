@@ -484,6 +484,31 @@ phrases](#using-the-api-from-forgescript)): `play particles on sparks`, `pause p
 `clear particles on sparks`, `emit 40 particles from sparks` and `the particles on sparks are
 playing`.
 
+### `Trail`
+A ribbon that follows the entity, left behind where it has been and fading out: sword slashes,
+comet tails, spell streaks, tire marks. It faces the camera along its length and is drawn with the
+particles. It records in the editor too, so moving the entity shows it; play starts each trail empty.
+* `emitting` (leaves new points while the entity moves; off, the trail lets go and shrinks away),
+  `lifetime` (seconds each point lasts, 0.01 to 60: how long the trail is in time), `min_distance`
+  (meters moved before another point, 0.001 to 100; smaller is smoother), `max_points` (2 to 4096).
+* `start_width` and `end_width` (meters across at the entity and at the tail), or `width_curve`:
+  up to 8 `[time, width]` keys, 0 at the entity to 1 at the tail, the width multiplying
+  `start_width`.
+* `start_color` and `end_color` (`Vec4`), or `color_gradient`: up to 8 `[time, red, green, blue,
+  alpha]` keys along it. `intensity` (above 1 it glows), `blend` (`"additive"` or `"alpha"`).
+* `texture` (an image asset; empty is soft toward its edges) and `texture_mode`: `"stretch"` lays it
+  once along the whole trail, `"tile"` repeats it every `tile_length` meters.
+* `clear()` forgets every point (after a teleport); read-only `point_count`.
+
+Values out of range, NaN, an unknown blend or texture mode, or a malformed curve key raise `ValueError`.
+
+```python
+slash = sword_tip.add_component("Trail")
+slash.lifetime, slash.start_width, slash.intensity = 0.25, 0.6, 3.0
+slash.width_curve = [[0.0, 0.2], [0.15, 1.0], [1.0, 0.0]]
+slash.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [0.3, 0.5, 0.8, 1.0, 0.8], [1.0, 0.3, 0.4, 1.0, 0.0]]
+```
+
 ### `Decal`
 Projects an image, or a plain color, onto the opaque surfaces inside a box: footprints, cracks,
 scorch marks, posters, puddles, road paint. It changes the surfaces' color before lighting, so a

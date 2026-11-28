@@ -28,6 +28,7 @@ ICONS = [
     "save-all", "star", "bug", "redo-dot", "arrow-down-to-dot", "arrow-up-from-dot", "list-x", "type", "file-type",
     "mouse-pointer-click", "square-check", "chevrons-up-down", "text-cursor-input", "layout-template", "person-standing", "route", "footprints", "diamond",
     "anchor", "user", "users", "flag", "swords", "trees", "layout", "arrow-down", "pin", "pin-off", "sticker",
+    "spline", "circle-dashed",
 ]
 
 def main():

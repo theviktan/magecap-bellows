@@ -40,6 +40,7 @@ namespace Bellows::HierarchyLogic {
 			if (kind == "animation")	return entity.HasComponent<AnimatorComponent>();
 			if (kind == "nav")			return entity.HasComponent<NavAgentComponent>();
 			if (kind == "particles")	return entity.HasComponent<ParticleEmitterComponent>();
+			if (kind == "trail")		return entity.HasComponent<TrailComponent>();
 			if (kind == "decal")		return entity.HasComponent<DecalComponent>();
 			if (kind == "tag")			return !entity.GetComponent<TagComponent>().Tags.empty();
 			return false;
@@ -102,7 +103,7 @@ namespace Bellows::HierarchyLogic {
 	const std::vector<std::string_view>& GetHasValues()
 	{
 		static const std::vector<std::string_view> s_Values = {
-			"script", "light", "camera", "physics", "audio", "mesh", "ui", "animation", "nav", "particles", "decal", "tag"
+			"script", "light", "camera", "physics", "audio", "mesh", "ui", "animation", "nav", "particles", "trail", "decal", "tag"
 		};
 		return s_Values;
 	}

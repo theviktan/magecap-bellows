@@ -207,6 +207,12 @@ for index, path in enumerate(GLOWS):
     point.color = Vec3(*[(0.95, 0.45, 0.1), (0.1, 0.7, 1.0), (1.0, 0.15, 0.7)][index])
     point.intensity, point.range = 12.0, 6.0
     add_script(orb, "Scripts/Orbit.py", radius=4.0, speed=0.5, phase=index * 2.0944, height=1.4, center=Vec3(0.0, 0.0, 0.5))
+    # A glowing trail in the light's color, tapering away behind it
+    streak = orb.add_component(bellows.Trail)
+    red, green, blue = [(0.95, 0.45, 0.1), (0.1, 0.7, 1.0), (1.0, 0.15, 0.7)][index]
+    streak.lifetime, streak.min_distance, streak.start_width, streak.intensity = 0.9, 0.05, 0.16, 2.5
+    streak.width_curve = [[0.0, 1.0], [1.0, 0.0]]
+    streak.color_gradient = [[0.0, 1.0, 1.0, 1.0, 1.0], [0.2, red, green, blue, 0.9], [1.0, red, green, blue, 0.0]]
 
 # Physics playground: a crate pyramid, a cannon, a ramp, a capsule and a trigger zone
 crate_size = 0.8

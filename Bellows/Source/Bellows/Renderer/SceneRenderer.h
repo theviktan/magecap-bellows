@@ -173,6 +173,16 @@ namespace Bellows {
 		float Length = 0.0f;			// Stretched: meters added to its length along Axis
 	};
 
+	// One point along a strip (a trail, a ribbon, a beam): where it is, how wide, its color, and how far
+	// along the texture it is (U; V runs across the strip, 0 on one edge and 1 on the other).
+	struct StripPoint
+	{
+		glm::vec3 Position { 0.0f };	// World space
+		float Width = 0.1f;				// Meters across
+		glm::vec4 Color { 1.0f };		// Linear RGB (may be above 1 to glow) and alpha
+		float U = 0.0f;
+	};
+
 	// Renders a scene into an off-screen LDR image (GetFinalImage), ready to present or show in the editor.
 	//
 	// Usage per frame:
@@ -243,6 +253,10 @@ namespace Bellows {
 		// Additive ones add light; alpha ones are sorted far to near. Without a texture, each quad is
 		// a soft round dot; a texture's color and alpha are multiplied by the particle's color.
 		void SubmitParticles(const ParticleQuad* quads, size_t count, bool additive, const Ref<Texture2D>& texture = nullptr);
+		// A strip through 'points' (two or more), turned to face the camera along its length, drawn with
+		// the particles. 'repeatTexture' tiles the texture along U past 0 to 1 (scrolling beams, tiled
+		// trails); otherwise U is clamped. Without a texture, the strip fades out toward its edges.
+		void SubmitStrip(const StripPoint* points, size_t count, bool additive, const Ref<Texture2D>& texture = nullptr, bool repeatTexture = false);
 
 		// Decals: an image (or a plain color) projected onto opaque surfaces, blended into their color
 		// before lighting, so it's lit and shadowed with them. 'boxToWorld' places the unit box (-0.5
@@ -341,6 +355,8 @@ namespace Bellows {
 			Ref<Texture2D> TextureRef;
 			bool Textured = false;
 			bool Additive = true;
+			bool Strip = false;			// Soft across V (a strip) instead of a round dot, when untextured
+			bool RepeatTexture = false;
 			uint32_t FirstVertex = 0;
 			uint32_t VertexCount = 0;
 			float Distance = 0.0f;
@@ -398,7 +414,7 @@ namespace Bellows {
 		void RenderSelectionOutline(nvrhi::ICommandList* commandList);
 		// A texture and sampler set for the text and UI pipelines. 'owner' keeps the texture alive while
 		// the set exists; sets whose owner nothing else holds are dropped at the next BeginScene.
-		nvrhi::IBindingSet* GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner);
+		nvrhi::IBindingSet* GetTextureBindingSet(nvrhi::ITexture* texture, std::shared_ptr<const void> owner, bool repeat = false);
 		nvrhi::IBindingSet* GetTextBindingSet(const Ref<Font>& font);
 		void AddUIQuad(nvrhi::IBindingSet* set, float distanceRange, const glm::vec4* clipRect, const UIVertex (&corners)[4]);
 
@@ -437,6 +453,8 @@ namespace Bellows {
 		std::vector<TextDraw> m_TextDraws;
 		std::vector<ParticleVertex> m_ParticleVertices;
 		std::vector<ParticleDraw> m_ParticleDraws;
+		std::vector<glm::vec3> m_StripSides;		// SubmitStrip's working space, kept to avoid allocating each frame
+		std::vector<uint8_t> m_StripSideKnown;
 		std::vector<uint32_t> m_ParticleOrder;		// Scratch: an alpha emitter's quads far to near
 		std::vector<DecalDraw> m_Decals;
 		ShaderInterop::DecalData m_DecalData {};
@@ -543,6 +561,7 @@ namespace Bellows {
 			nvrhi::BindingSetHandle Set;
 		};
 		std::unordered_map<nvrhi::ITexture*, TextureBinding> m_TextureSets;
+		std::unordered_map<nvrhi::ITexture*, TextureBinding> m_RepeatTextureSets;	// The same, with a wrapping sampler
 	};
 
 }

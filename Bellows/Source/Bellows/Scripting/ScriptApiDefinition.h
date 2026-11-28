@@ -25,6 +25,7 @@
 #include "Bellows/Navigation/NavAgents.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/ParticleSystem.h"
+#include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scene/Scene.h"
 #include "Bellows/Scene/SceneSerializer.h"
 #include "Bellows/Scene/Tweens.h"
@@ -140,30 +141,31 @@ namespace Bellows::Scripting {
 		{
 			const ScriptValueList* keys = std::get_if<ScriptValueList>(&value.Data);
 			if (!keys)
-				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is a list of keys, like " + example + ". [] turns it off");
+				throw ScriptValueError(std::string(property) + " is a list of keys, like " + example + ". [] turns it off");
 			if (keys->size() > ParticleEmitterComponent::MaxCurveKeys)
-				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " has at most 8 keys");
+				throw ScriptValueError(std::string(property) + " has at most 8 keys");
 			return *keys;
 		}
 
-		// [[time, value], ...]: times 0 (born) to 1 (dies), values multiplying start_size.
-		inline std::vector<ParticleCurveKey> ToSizeCurve(const ScriptValue& value)
+		// [[time, value], ...]: times 0 to 1 (born to dies, or head to tail), values 0 to 1000 multiplying a start value.
+		inline std::vector<ParticleCurveKey> ToCurve(const ScriptValue& value, const char* property, const char* what)
 		{
-			const ScriptValueList& keys = RequireCurveList(value, "size_curve", "[[0, 0], [0.2, 1], [1, 0]]");
+			const ScriptValueList& keys = RequireCurveList(value, property, "[[0, 0], [0.2, 1], [1, 0]]");
 			std::vector<ParticleCurveKey> curve;
 			for (const ScriptValue& key : keys)
 			{
 				float numbers[2];
 				if (!CurveKeyNumbers(key, 2, false, numbers) || numbers[0] < 0.0f || numbers[0] > 1.0f || numbers[1] < 0.0f
 					|| numbers[1] > ParticleEmitterComponent::MaxSize)
-					throw ScriptValueError("Each size_curve key is [time, size]: a time from 0 to 1 and a size from 0 to 1000, like [0.5, 2]");
+					throw ScriptValueError(std::string("Each ") + property + " key is [time, " + what + "]: a time from 0 to 1 and a " + what
+						+ " from 0 to 1000, like [0.5, 2]");
 				curve.push_back({ numbers[0], numbers[1] });
 			}
 			std::stable_sort(curve.begin(), curve.end(), [](const ParticleCurveKey& a, const ParticleCurveKey& b) { return a.Time < b.Time; });
 			return curve;
 		}
 
-		inline ScriptValue FromSizeCurve(const std::vector<ParticleCurveKey>& curve)
+		inline ScriptValue FromCurve(const std::vector<ParticleCurveKey>& curve)
 		{
 			ScriptValueList keys;
 			for (const ParticleCurveKey& key : curve)
@@ -204,6 +206,23 @@ namespace Bellows::Scripting {
 			if (value < minimum || value > maximum)
 				throw ScriptValueError(std::string("A ParticleEmitter's ") + property + " is from " + range);
 			return value;
+		}
+
+		// A number checked against its range; 'what' names it the way the error reads ("A Trail's lifetime").
+		inline float RangeValue(const char* what, float value, float minimum, float maximum, const char* range)
+		{
+			if (!std::isfinite(value))
+				throw ScriptValueError(std::string(what) + " needs an ordinary number, not NaN or infinity");
+			if (value < minimum || value > maximum)
+				throw ScriptValueError(std::string(what) + " is from " + range);
+			return value;
+		}
+
+		// A color for 'className.property', each channel held to 0 to 1.
+		inline glm::vec4 EffectColor(const char* className, const char* property, const ColorValue& color)
+		{
+			RequireFiniteNumbers(color, std::string(className) + "." + property);
+			return glm::clamp(color.Value, glm::vec4(0.0f), glm::vec4(1.0f));
 		}
 
 		inline uint32_t ParticleCount(const char* property, int value, uint32_t maximum)
@@ -1235,8 +1254,8 @@ namespace Bellows::Scripting {
 		particles.Property("end_size", [](const ParticleEmitterRef& r) { return r.Get().EndSize; },
 			[](const ParticleEmitterRef& r, float v) { r.Get().EndSize = Detail::ParticleValue("end_size", v, 0.0f, Limits::MaxSize, "0 to 1000"); },
 			"Meters across when it dies");
-		particles.Property("size_curve", [](const ParticleEmitterRef& r) { return Detail::FromSizeCurve(r.Get().SizeCurve); },
-			[](const ParticleEmitterRef& r, const ScriptValue& v) { r.Get().SizeCurve = Detail::ToSizeCurve(v); },
+		particles.Property("size_curve", [](const ParticleEmitterRef& r) { return Detail::FromCurve(r.Get().SizeCurve); },
+			[](const ParticleEmitterRef& r, const ScriptValue& v) { r.Get().SizeCurve = Detail::ToCurve(v, "size_curve", "size"); },
 			"Size over life as up to 8 [time, size] keys (time 0 born to 1 dies; size multiplies start_size), straight between keys, "
 			"like [[0, 0], [0.2, 1], [1, 0]] to grow then shrink. [] goes from start_size to end_size");
 		particles.Property("start_color", [](const ParticleEmitterRef& r) { return ColorValue { r.Get().StartColor }; },
@@ -1304,6 +1323,64 @@ namespace Bellows::Scripting {
 			}, "Whether it's sending particles");
 		particles.ReadOnly("particle_count", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().RuntimeParticles.size()); },
 			"How many are alive now");
+
+		using TrailLimits = TrailComponent;
+		auto trail = api.template Class<TrailRef>("Trail",
+			"A ribbon that follows the entity, left behind where it has been and fading out: sword slashes, comet tails, spell "
+			"streaks. It faces the camera along its length, and shows in the editor too when you move the entity");
+		trail.Property("emitting", [](const TrailRef& r) { return r.Get().Emitting; }, [](const TrailRef& r, bool v) { r.Get().Emitting = v; },
+			"Leaves new points while the entity moves; off, the trail lets go of the entity and shrinks away");
+		trail.Property("lifetime", [](const TrailRef& r) { return r.Get().Lifetime; },
+			[](const TrailRef& r, float v) { r.Get().Lifetime = Detail::RangeValue("A Trail's lifetime", v, TrailLimits::MinLifetime, TrailLimits::MaxLifetime, "0.01 to 60"); },
+			"Seconds each point lasts: how long the trail is, in time");
+		trail.Property("min_distance", [](const TrailRef& r) { return r.Get().MinDistance; },
+			[](const TrailRef& r, float v) { r.Get().MinDistance = Detail::RangeValue("A Trail's min_distance", v, TrailLimits::MinMinDistance, TrailLimits::MaxMinDistance, "0.001 to 100"); },
+			"Meters the entity moves before the trail leaves another point (smaller is smoother)");
+		trail.Property("max_points", [](const TrailRef& r) { return static_cast<int>(r.Get().MaxPoints); },
+			[](const TrailRef& r, int v)
+			{
+				if (v < 2 || v > static_cast<int>(TrailLimits::MaxMaxPoints))
+					throw ScriptValueError("A Trail's max_points is from 2 to 4096");
+				r.Get().MaxPoints = static_cast<uint32_t>(v);
+			}, "The most points it keeps; the oldest go first");
+		trail.Property("start_width", [](const TrailRef& r) { return r.Get().StartWidth; },
+			[](const TrailRef& r, float v) { r.Get().StartWidth = Detail::RangeValue("A Trail's start_width", v, 0.0f, TrailLimits::MaxWidth, "0 to 1000"); },
+			"Meters across at the entity");
+		trail.Property("end_width", [](const TrailRef& r) { return r.Get().EndWidth; },
+			[](const TrailRef& r, float v) { r.Get().EndWidth = Detail::RangeValue("A Trail's end_width", v, 0.0f, TrailLimits::MaxWidth, "0 to 1000"); },
+			"Meters across at its tail");
+		trail.Property("width_curve", [](const TrailRef& r) { return Detail::FromCurve(r.Get().WidthCurve); },
+			[](const TrailRef& r, const ScriptValue& v) { r.Get().WidthCurve = Detail::ToCurve(v, "width_curve", "width"); },
+			"Width along the trail as up to 8 [time, width] keys (0 at the entity, 1 at the tail; width multiplies start_width). "
+			"[] goes from start_width to end_width");
+		trail.Property("start_color", [](const TrailRef& r) { return ColorValue { r.Get().StartColor }; },
+			[](const TrailRef& r, const ColorValue& v) { r.Get().StartColor = Detail::EffectColor("Trail", "start_color", v); }, "Color and alpha at the entity");
+		trail.Property("end_color", [](const TrailRef& r) { return ColorValue { r.Get().EndColor }; },
+			[](const TrailRef& r, const ColorValue& v) { r.Get().EndColor = Detail::EffectColor("Trail", "end_color", v); }, "Color and alpha at the tail");
+		trail.Property("color_gradient", [](const TrailRef& r) { return Detail::FromColorGradient(r.Get().ColorGradient); },
+			[](const TrailRef& r, const ScriptValue& v) { r.Get().ColorGradient = Detail::ToColorGradient(v); },
+			"Color along the trail as up to 8 [time, red, green, blue, alpha] keys (0 at the entity, 1 at the tail). [] goes from start_color to end_color");
+		trail.Property("intensity", [](const TrailRef& r) { return r.Get().Intensity; },
+			[](const TrailRef& r, float v) { r.Get().Intensity = Detail::RangeValue("A Trail's intensity", v, 0.0f, ParticleEmitterComponent::MaxIntensity, "0 to 1000"); },
+			"Brightness, from 0 to 1000; above 1 it glows");
+		trail.Property("blend", [](const TrailRef& r) { return std::string(ParticleBlendToString(r.Get().Blend)); },
+			[](const TrailRef& r, const std::string& v) { r.Get().Blend = Detail::RequireParticleBlend(v); },
+			"'additive' adds light (glows, magic); 'alpha' covers what's behind (smoke, tire marks)");
+		trail.Property("texture", [](const TrailRef& r) { return r.Get().TexturePath; },
+			[](const TrailRef& r, const std::string& v) { r.Get().TexturePath = v; }, "An image along the trail (an asset path); empty is soft toward its edges");
+		trail.Property("texture_mode", [](const TrailRef& r) { return std::string(TrailTextureModeToString(r.Get().TextureMode)); },
+			[](const TrailRef& r, const std::string& v)
+			{
+				const std::optional<TrailTextureMode> mode = TrailTextureModeFromString(v);
+				if (!mode)
+					throw ScriptValueError("Unknown trail texture_mode '" + v + "'. Modes: stretch, tile");
+				r.Get().TextureMode = *mode;
+			}, "'stretch' lays the texture once along the whole trail; 'tile' repeats it every tile_length meters");
+		trail.Property("tile_length", [](const TrailRef& r) { return r.Get().TileLength; },
+			[](const TrailRef& r, float v) { r.Get().TileLength = Detail::RangeValue("A Trail's tile_length", v, TrailLimits::MinTileLength, TrailLimits::MaxTileLength, "0.01 to 1000"); },
+			"For 'tile': meters one copy of the texture covers");
+		trail.Method("clear", [](const TrailRef& r) { TrailSystem::Clear(r.Get()); }, "Forgets every point at once (after a teleport, say)");
+		trail.ReadOnly("point_count", [](const TrailRef& r) { return static_cast<int>(r.Get().RuntimePoints.size()); }, "How many points it has now");
 
 		auto decal = api.template Class<DecalRef>("Decal",
 			"Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top "

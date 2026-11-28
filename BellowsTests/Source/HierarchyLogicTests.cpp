@@ -40,6 +40,12 @@ TEST_CASE("Hierarchy search: words, tag:, has: and group:")
 	CHECK(Matches(scene, lamp, ParseFilter("has:light lam")));
 	CHECK(Matches(scene, crate, ParseFilter("has:tag")));
 	CHECK_FALSE(Matches(scene, lamp, ParseFilter("has:tag")));
+
+	Entity comet = scene.CreateEntity("Comet");
+	comet.AddComponent<TrailComponent>();
+	CHECK(ParseFilter("has:trail").Unknown.empty());
+	CHECK(Matches(scene, comet, ParseFilter("has:trail")));
+	CHECK_FALSE(Matches(scene, lamp, ParseFilter("has:trail")));
 }
 
 TEST_CASE("Entities are classified for the By type view, the first kind that fits winning")

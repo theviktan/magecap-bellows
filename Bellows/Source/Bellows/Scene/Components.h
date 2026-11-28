@@ -465,6 +465,58 @@ namespace Bellows {
 		std::string LoadedTexturePath;
 	};
 
+	// How a trail's texture lies along it.
+	enum class TrailTextureMode : uint8_t
+	{
+		Stretch = 0,	// Once along the whole trail, head to tail
+		Tile,			// Repeated every TileLength meters (chains, footprints, dashes)
+	};
+
+	// One recorded point of a trail.
+	struct TrailPoint
+	{
+		glm::vec3 Position { 0.0f };	// World space
+		float Age = 0.0f;				// Seconds since it was left
+	};
+
+	// A ribbon that follows the entity, left behind where it has been and fading out (sword slashes,
+	// comet tails, spell streaks, tire marks). It faces the camera along its length and is drawn with
+	// the particles (see TrailSystem).
+	struct TrailComponent
+	{
+		bool Emitting = true;			// Leaves new points while it moves; off, the trail shrinks away
+		float Lifetime = 0.5f;			// Seconds a point lasts: how long the trail is in time
+		float MinDistance = 0.05f;		// Meters it moves before it leaves another point
+		uint32_t MaxPoints = 256;		// The oldest points go first past this
+
+		float StartWidth = 0.2f;		// Meters across at the entity
+		float EndWidth = 0.0f;			// Meters across at its tail
+		// Width along the trail (0 at the entity, 1 at the tail), multiplying StartWidth. Empty: a
+		// straight line from StartWidth to EndWidth.
+		std::vector<ParticleCurveKey> WidthCurve;
+		glm::vec4 StartColor { 1.0f, 1.0f, 1.0f, 1.0f };
+		glm::vec4 EndColor { 1.0f, 1.0f, 1.0f, 0.0f };
+		std::vector<ParticleColorKey> ColorGradient;	// Along the trail; empty: StartColor to EndColor
+		float Intensity = 1.0f;			// Brightness; above 1 it glows
+		ParticleBlend Blend = ParticleBlend::Additive;
+		std::string TexturePath;		// Empty: soft toward its edges
+		TrailTextureMode TextureMode = TrailTextureMode::Stretch;
+		float TileLength = 1.0f;		// Tile: meters one copy of the texture covers
+
+		static constexpr uint32_t MaxMaxPoints = 4096;
+		static constexpr float MinLifetime = 0.01f, MaxLifetime = 60.0f;
+		static constexpr float MinMinDistance = 0.001f, MaxMinDistance = 100.0f;
+		static constexpr float MaxWidth = 1000.0f;
+		static constexpr float MinTileLength = 0.01f, MaxTileLength = 1000.0f;
+
+		void Clamp();
+
+		// Runtime state (not serialized)
+		std::vector<TrailPoint> RuntimePoints;	// Oldest first
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// Projects an image (or a plain color) onto the opaque surfaces inside its box: down the entity's
 	// -Y, with the image's top toward its -Z. It changes the surfaces' color before lighting, so
 	// it's lit and shadowed like them (a footprint, a crack, a poster, a puddle, graffiti).
@@ -676,7 +728,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, DecalComponent,
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, TrailComponent, DecalComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
 		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 

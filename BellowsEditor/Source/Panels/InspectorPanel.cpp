@@ -14,6 +14,7 @@
 #include "Bellows/Core/FileSystem.h"
 #include "Bellows/Scene/EntityTags.h"
 #include "Bellows/Scene/ParticleSystem.h"
+#include "Bellows/Scene/TrailSystem.h"
 #include "Bellows/Scripting/ForgeScriptRuntime.h"
 #include "Bellows/UI/UILayout.h"
 #include "Bellows/UI/UIWidgets.h"
@@ -89,13 +90,13 @@ namespace Bellows {
 
 		// A row of small preset buttons that wraps to the next line instead of running off the panel.
 		// Returns the index of the one clicked, or -1.
-		template<typename Preset, size_t Count>
-		int PresetButtons(const Preset (&presets)[Count])
+		template<typename Preset>
+		int PresetButtons(const std::vector<Preset>& presets)
 		{
 			int clicked = -1;
 			const ImGuiStyle& style = ImGui::GetStyle();
 			const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
-			for (size_t i = 0; i < Count; i++)
+			for (size_t i = 0; i < presets.size(); i++)
 			{
 				const float width = ImGui::CalcTextSize(presets[i].Name).x + style.FramePadding.x * 2.0f;
 				if (i > 0 && ImGui::GetItemRectMax().x + style.ItemSpacing.x + width <= right)
@@ -114,163 +115,212 @@ namespace Bellows {
 			maximum = index + 1 < keys.size() ? keys[index + 1].Time : 1.0f;
 		}
 
-		void DrawSizeCurve(ParticleEmitterComponent& c)
+		// What a curve or gradient editor needs to know about the setting it edits.
+		struct CurveEditorText
+		{
+			const char* Id;				// Unique within the component
+			const char* Label;			// "Size Over Life"
+			const char* ModeTooltip;
+			const char* TimeTooltip;	// What the 0 to 1 of a key's time means here
+		};
+
+		struct CurvePreset
+		{
+			const char* Name;
+			std::vector<ParticleCurveKey> Keys;
+		};
+
+		struct GradientPreset
+		{
+			const char* Name;
+			std::vector<ParticleColorKey> Keys;
+		};
+
+		// A size-like curve, multiplying 'start': its mode (a straight line to 'end', or the curve), and
+		// the curve's presets, plot and keys. 'endLabel' names the line's end value when there's no curve.
+		void DrawCurveEditor(const CurveEditorText& text, std::vector<ParticleCurveKey>& curve, float start, float& end,
+			const char* endLabel, const char* endTooltip, const char* valueTooltip, const std::vector<CurvePreset>& presets)
 		{
 			using Limits = ParticleEmitterComponent;
-			int mode = c.SizeCurve.empty() ? 0 : 1;
+			int mode = curve.empty() ? 0 : 1;
 			static const char* const s_Modes[] = { "Start to End", "Curve" };
-			if (UI::BeginPropertyGrid("ParticleSizeMode"))
+			if (UI::BeginPropertyGrid(text.Id))
 			{
-				if (UI::PropertyCombo("Size Over Life", mode, s_Modes, 2, "A straight line from Start Size to End Size, or a curve of your own"))
+				if (UI::PropertyCombo(text.Label, mode, s_Modes, 2, text.ModeTooltip))
 				{
 					if (mode == 1)
-						c.SizeCurve = { { 0.0f, 1.0f }, { 1.0f, c.StartSize > 0.0f ? c.EndSize / c.StartSize : 0.0f } };
+						curve = { { 0.0f, 1.0f }, { 1.0f, start > 0.0f ? end / start : 0.0f } };
 					else
-						c.SizeCurve.clear();
+						curve.clear();
 				}
-				if (c.SizeCurve.empty())
-					UI::Property("End Size", c.EndSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when it dies");
+				if (curve.empty())
+					UI::Property(endLabel, end, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", endTooltip);
 				UI::EndPropertyGrid();
 			}
-			if (c.SizeCurve.empty())
+			if (curve.empty())
 				return;
-			struct Preset { const char* Name; std::vector<ParticleCurveKey> Keys; };
-			static const Preset s_Presets[] = {
+			ImGui::PushID(text.Id);
+			if (const int preset = PresetButtons(presets); preset >= 0)
+				curve = presets[static_cast<size_t>(preset)].Keys;
+			float top = 1.0f;
+			for (const ParticleCurveKey& key : curve)
+				top = std::max(top, key.Value);
+			DrawCurvePlot(curve, top);
+			size_t remove = curve.size();
+			for (size_t i = 0; i < curve.size(); i++)
+			{
+				ImGui::PushID(static_cast<int>(i));
+				float minimum, maximum;
+				KeyTimeRange(curve, i, minimum, maximum);
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
+				const float width = (ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x * 2.0f) * 0.5f;
+				ImGui::SetNextItemWidth(width);
+				ImGui::SliderFloat("##Time", &curve[i].Time, minimum, maximum, "at %.2f");
+				ImGui::SetItemTooltip("%s", text.TimeTooltip);
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(width);
+				ImGui::DragFloat("##Value", &curve[i].Value, 0.01f, 0.0f, Limits::MaxSize, "x %.2f");
+				ImGui::SetItemTooltip("%s", valueTooltip);
+				ImGui::SameLine();
+				ImGui::BeginDisabled(curve.size() <= 1);
+				if (ImGui::SmallButton(ICON_X))
+					remove = i;
+				ImGui::EndDisabled();
+				ImGui::PopID();
+			}
+			if (remove < curve.size())
+				curve.erase(curve.begin() + static_cast<std::ptrdiff_t>(remove));
+			ImGui::BeginDisabled(curve.size() >= Limits::MaxCurveKeys);
+			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
+			{
+				// Halfway along the widest gap, on the curve, so the shape doesn't change.
+				size_t widest = 0;
+				float gap = curve.front().Time;
+				float time = gap * 0.5f;
+				for (size_t i = 1; i <= curve.size(); i++)
+				{
+					const float from = curve[i - 1].Time, to = i < curve.size() ? curve[i].Time : 1.0f;
+					if (to - from > gap)
+					{
+						gap = to - from;
+						time = (from + to) * 0.5f;
+						widest = i;
+					}
+				}
+				curve.insert(curve.begin() + static_cast<std::ptrdiff_t>(widest), { time, ParticleSystem::EvaluateCurve(curve, time, 1.0f) });
+			}
+			ImGui::EndDisabled();
+			ImGui::PopID();
+		}
+
+		// A color gradient: its mode (a straight blend from 'startColor' to 'endColor', or the gradient),
+		// and the gradient's presets, bar and keys.
+		void DrawGradientEditor(const CurveEditorText& text, std::vector<ParticleColorKey>& gradient, glm::vec4& startColor, glm::vec4& endColor,
+			const std::vector<GradientPreset>& presets)
+		{
+			using Limits = ParticleEmitterComponent;
+			int mode = gradient.empty() ? 0 : 1;
+			static const char* const s_Modes[] = { "Start to End", "Gradient" };
+			if (UI::BeginPropertyGrid(text.Id))
+			{
+				if (UI::PropertyCombo(text.Label, mode, s_Modes, 2, text.ModeTooltip))
+				{
+					if (mode == 1)
+						gradient = { { 0.0f, startColor }, { 1.0f, endColor } };
+					else
+						gradient.clear();
+				}
+				if (gradient.empty())
+				{
+					UI::PropertyColor("Start Color", startColor);
+					UI::PropertyColor("End Color", endColor, false, "Set its alpha to 0 to fade out");
+				}
+				UI::EndPropertyGrid();
+			}
+			if (gradient.empty())
+				return;
+			ImGui::PushID(text.Id);
+			if (const int preset = PresetButtons(presets); preset >= 0)
+				gradient = presets[static_cast<size_t>(preset)].Keys;
+			DrawGradientBar(gradient);
+			size_t remove = gradient.size();
+			for (size_t i = 0; i < gradient.size(); i++)
+			{
+				ImGui::PushID(static_cast<int>(i));
+				float minimum, maximum;
+				KeyTimeRange(gradient, i, minimum, maximum);
+				ImGui::ColorEdit4("##Color", &gradient[i].Color.r, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf);
+				ImGui::SameLine();
+				const ImGuiStyle& style = ImGui::GetStyle();
+				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
+				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x);
+				ImGui::SliderFloat("##Time", &gradient[i].Time, minimum, maximum, "at %.2f");
+				ImGui::SetItemTooltip("%s", text.TimeTooltip);
+				ImGui::SameLine();
+				ImGui::BeginDisabled(gradient.size() <= 1);
+				if (ImGui::SmallButton(ICON_X))
+					remove = i;
+				ImGui::EndDisabled();
+				ImGui::PopID();
+			}
+			if (remove < gradient.size())
+				gradient.erase(gradient.begin() + static_cast<std::ptrdiff_t>(remove));
+			ImGui::BeginDisabled(gradient.size() >= Limits::MaxCurveKeys);
+			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
+			{
+				size_t widest = 0;
+				float gap = gradient.front().Time;
+				float time = gap * 0.5f;
+				for (size_t i = 1; i <= gradient.size(); i++)
+				{
+					const float from = gradient[i - 1].Time, to = i < gradient.size() ? gradient[i].Time : 1.0f;
+					if (to - from > gap)
+					{
+						gap = to - from;
+						time = (from + to) * 0.5f;
+						widest = i;
+					}
+				}
+				gradient.insert(gradient.begin() + static_cast<std::ptrdiff_t>(widest), { time, ParticleSystem::EvaluateGradient(gradient, time, glm::vec4(1.0f)) });
+			}
+			ImGui::EndDisabled();
+			ImGui::PopID();
+		}
+
+		const std::vector<CurvePreset>& SizePresets()
+		{
+			static const std::vector<CurvePreset> s_Presets = {
 				{ "Grow, shrink", { { 0.0f, 0.0f }, { 0.25f, 1.0f }, { 1.0f, 0.0f } } },
 				{ "Pop", { { 0.0f, 0.2f }, { 0.08f, 1.3f }, { 0.2f, 1.0f }, { 1.0f, 0.8f } } },
 				{ "Grow", { { 0.0f, 0.1f }, { 1.0f, 1.0f } } },
 				{ "Shrink", { { 0.0f, 1.0f }, { 1.0f, 0.0f } } },
 				{ "Steady", { { 0.0f, 1.0f }, { 1.0f, 1.0f } } },
 			};
-			if (const int preset = PresetButtons(s_Presets); preset >= 0)
-				c.SizeCurve = s_Presets[preset].Keys;
-			float top = 1.0f;
-			for (const ParticleCurveKey& key : c.SizeCurve)
-				top = std::max(top, key.Value);
-			DrawCurvePlot(c.SizeCurve, top);
-			size_t remove = c.SizeCurve.size();
-			for (size_t i = 0; i < c.SizeCurve.size(); i++)
-			{
-				ImGui::PushID(static_cast<int>(i));
-				float minimum, maximum;
-				KeyTimeRange(c.SizeCurve, i, minimum, maximum);
-				const ImGuiStyle& style = ImGui::GetStyle();
-				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
-				const float width = (ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x * 2.0f) * 0.5f;
-				ImGui::SetNextItemWidth(width);
-				ImGui::SliderFloat("##Time", &c.SizeCurve[i].Time, minimum, maximum, "at %.2f");
-				ImGui::SetItemTooltip("When, from 0 (born) to 1 (dies)");
-				ImGui::SameLine();
-				ImGui::SetNextItemWidth(width);
-				ImGui::DragFloat("##Value", &c.SizeCurve[i].Value, 0.01f, 0.0f, Limits::MaxSize, "x %.2f");
-				ImGui::SetItemTooltip("The size then, times Start Size");
-				ImGui::SameLine();
-				ImGui::BeginDisabled(c.SizeCurve.size() <= 1);
-				if (ImGui::SmallButton(ICON_X))
-					remove = i;
-				ImGui::EndDisabled();
-				ImGui::PopID();
-			}
-			if (remove < c.SizeCurve.size())
-				c.SizeCurve.erase(c.SizeCurve.begin() + static_cast<std::ptrdiff_t>(remove));
-			ImGui::BeginDisabled(c.SizeCurve.size() >= Limits::MaxCurveKeys);
-			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
-			{
-				// Halfway along the widest gap, on the curve, so the shape doesn't change.
-				size_t widest = 0;
-				float gap = c.SizeCurve.front().Time;
-				float time = gap * 0.5f;
-				for (size_t i = 1; i <= c.SizeCurve.size(); i++)
-				{
-					const float from = c.SizeCurve[i - 1].Time, to = i < c.SizeCurve.size() ? c.SizeCurve[i].Time : 1.0f;
-					if (to - from > gap)
-					{
-						gap = to - from;
-						time = (from + to) * 0.5f;
-						widest = i;
-					}
-				}
-				c.SizeCurve.insert(c.SizeCurve.begin() + static_cast<std::ptrdiff_t>(widest), { time, ParticleSystem::EvaluateCurve(c.SizeCurve, time, 1.0f) });
-			}
-			ImGui::EndDisabled();
+			return s_Presets;
 		}
 
-		void DrawColorGradient(ParticleEmitterComponent& c)
+		const std::vector<CurvePreset>& TrailWidthPresets()
 		{
-			using Limits = ParticleEmitterComponent;
-			int mode = c.ColorGradient.empty() ? 0 : 1;
-			static const char* const s_Modes[] = { "Start to End", "Gradient" };
-			if (UI::BeginPropertyGrid("ParticleColorMode"))
-			{
-				if (UI::PropertyCombo("Color Over Life", mode, s_Modes, 2, "A straight blend from Start Color to End Color, or a gradient of your own"))
-				{
-					if (mode == 1)
-						c.ColorGradient = { { 0.0f, c.StartColor }, { 1.0f, c.EndColor } };
-					else
-						c.ColorGradient.clear();
-				}
-				if (c.ColorGradient.empty())
-				{
-					UI::PropertyColor("Start Color", c.StartColor);
-					UI::PropertyColor("End Color", c.EndColor, false, "Set its alpha to 0 to fade particles out");
-				}
-				UI::EndPropertyGrid();
-			}
-			if (c.ColorGradient.empty())
-				return;
-			struct Preset { const char* Name; std::vector<ParticleColorKey> Keys; };
-			static const Preset s_Presets[] = {
+			static const std::vector<CurvePreset> s_Presets = {
+				{ "Taper", { { 0.0f, 1.0f }, { 1.0f, 0.0f } } },
+				{ "Slash", { { 0.0f, 0.2f }, { 0.15f, 1.0f }, { 1.0f, 0.0f } } },
+				{ "Comet", { { 0.0f, 1.0f }, { 0.1f, 0.6f }, { 1.0f, 0.0f } } },
+				{ "Steady", { { 0.0f, 1.0f }, { 1.0f, 1.0f } } },
+			};
+			return s_Presets;
+		}
+
+		const std::vector<GradientPreset>& ColorPresets()
+		{
+			static const std::vector<GradientPreset> s_Presets = {
 				{ "Fire", { { 0.0f, { 1.0f, 0.95f, 0.7f, 1.0f } }, { 0.25f, { 1.0f, 0.55f, 0.1f, 1.0f } }, { 0.7f, { 0.8f, 0.15f, 0.02f, 0.6f } }, { 1.0f, { 0.2f, 0.05f, 0.02f, 0.0f } } } },
 				{ "Magic", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 0.2f, { 0.45f, 0.7f, 1.0f, 1.0f } }, { 0.7f, { 0.5f, 0.2f, 1.0f, 0.7f } }, { 1.0f, { 0.3f, 0.1f, 0.8f, 0.0f } } } },
 				{ "Poison", { { 0.0f, { 0.8f, 1.0f, 0.5f, 1.0f } }, { 0.5f, { 0.3f, 0.9f, 0.2f, 0.8f } }, { 1.0f, { 0.1f, 0.4f, 0.05f, 0.0f } } } },
 				{ "Smoke", { { 0.0f, { 0.6f, 0.6f, 0.6f, 0.0f } }, { 0.15f, { 0.5f, 0.5f, 0.5f, 0.6f } }, { 1.0f, { 0.3f, 0.3f, 0.3f, 0.0f } } } },
 				{ "Fade", { { 0.0f, { 1.0f, 1.0f, 1.0f, 1.0f } }, { 1.0f, { 1.0f, 1.0f, 1.0f, 0.0f } } } },
 			};
-			if (const int preset = PresetButtons(s_Presets); preset >= 0)
-				c.ColorGradient = s_Presets[preset].Keys;
-			DrawGradientBar(c.ColorGradient);
-			size_t remove = c.ColorGradient.size();
-			for (size_t i = 0; i < c.ColorGradient.size(); i++)
-			{
-				ImGui::PushID(static_cast<int>(i));
-				float minimum, maximum;
-				KeyTimeRange(c.ColorGradient, i, minimum, maximum);
-				ImGui::ColorEdit4("##Color", &c.ColorGradient[i].Color.r, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf);
-				ImGui::SameLine();
-				const ImGuiStyle& style = ImGui::GetStyle();
-				const float removeWidth = ImGui::CalcTextSize(ICON_X).x + style.FramePadding.x * 2.0f;
-				ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - removeWidth - style.ItemSpacing.x);
-				ImGui::SliderFloat("##Time", &c.ColorGradient[i].Time, minimum, maximum, "at %.2f");
-				ImGui::SetItemTooltip("When, from 0 (born) to 1 (dies)");
-				ImGui::SameLine();
-				ImGui::BeginDisabled(c.ColorGradient.size() <= 1);
-				if (ImGui::SmallButton(ICON_X))
-					remove = i;
-				ImGui::EndDisabled();
-				ImGui::PopID();
-			}
-			if (remove < c.ColorGradient.size())
-				c.ColorGradient.erase(c.ColorGradient.begin() + static_cast<std::ptrdiff_t>(remove));
-			ImGui::BeginDisabled(c.ColorGradient.size() >= Limits::MaxCurveKeys);
-			if (ImGui::SmallButton(ICON_PLUS "  Add key"))
-			{
-				size_t widest = 0;
-				float gap = c.ColorGradient.front().Time;
-				float time = gap * 0.5f;
-				for (size_t i = 1; i <= c.ColorGradient.size(); i++)
-				{
-					const float from = c.ColorGradient[i - 1].Time, to = i < c.ColorGradient.size() ? c.ColorGradient[i].Time : 1.0f;
-					if (to - from > gap)
-					{
-						gap = to - from;
-						time = (from + to) * 0.5f;
-						widest = i;
-					}
-				}
-				c.ColorGradient.insert(c.ColorGradient.begin() + static_cast<std::ptrdiff_t>(widest),
-					{ time, ParticleSystem::EvaluateGradient(c.ColorGradient, time, glm::vec4(1.0f)) });
-			}
-			ImGui::EndDisabled();
+			return s_Presets;
 		}
 
 		// Draws one component section when the entity has it. 'draw' receives the component.
@@ -706,8 +756,11 @@ namespace Bellows {
 				UI::Property("Start Size", c.StartSize, 0.01f, 0.0f, Limits::MaxSize, "%.2f m", "Meters across when born (a size curve multiplies it)");
 				UI::EndPropertyGrid();
 			}
-			DrawSizeCurve(c);
-			DrawColorGradient(c);
+			DrawCurveEditor({ "ParticleSize", "Size Over Life", "A straight line from Start Size to End Size, or a curve of your own",
+				"When, from 0 (born) to 1 (dies)" }, c.SizeCurve, c.StartSize, c.EndSize, "End Size", "Meters across when it dies",
+				"The size then, times Start Size", SizePresets());
+			DrawGradientEditor({ "ParticleColor", "Color Over Life", "A straight blend from Start Color to End Color, or a gradient of your own",
+				"When, from 0 (born) to 1 (dies)" }, c.ColorGradient, c.StartColor, c.EndColor, ColorPresets());
 			if (UI::BeginPropertyGrid("ParticleEmitterLookMore"))
 			{
 				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, Limits::MaxIntensity, "%.2f", "Brightness; above 1 they glow");
@@ -734,6 +787,53 @@ namespace Bellows {
 				ParticleSystem::Reset(c, entity.GetUUID());
 			ImGui::SameLine();
 			UI::TextMuted((std::to_string(c.RuntimeParticles.size()) + " alive").c_str());
+		});
+
+		DrawComponent<TrailComponent>(m_Editor, entity, ICON_SPLINE, "Trail", [&](TrailComponent& c)
+		{
+			using Limits = TrailComponent;
+			if (UI::BeginPropertyGrid("Trail"))
+			{
+				UI::Property("Emitting", c.Emitting, "Leaves new points while the entity moves; off, the trail lets go and shrinks away");
+				UI::Property("Lifetime", c.Lifetime, 0.01f, Limits::MinLifetime, Limits::MaxLifetime, "%.2f s", "Seconds each point lasts: how long the trail is, in time");
+				UI::Property("Min Distance", c.MinDistance, 0.005f, Limits::MinMinDistance, Limits::MaxMinDistance, "%.3f m",
+					"Meters the entity moves before another point is left (smaller is smoother)");
+				UI::Property("Max Points", c.MaxPoints, 2u, Limits::MaxMaxPoints, "The most points it keeps; the oldest go first");
+				UI::Property("Start Width", c.StartWidth, 0.01f, 0.0f, Limits::MaxWidth, "%.2f m", "Meters across at the entity (a width curve multiplies it)");
+				UI::EndPropertyGrid();
+			}
+			DrawCurveEditor({ "TrailWidth", "Width Along Trail", "A straight line from Start Width to End Width, or a curve of your own",
+				"Where, from 0 (at the entity) to 1 (the tail)" }, c.WidthCurve, c.StartWidth, c.EndWidth, "End Width", "Meters across at its tail",
+				"The width there, times Start Width", TrailWidthPresets());
+			DrawGradientEditor({ "TrailColor", "Color Along Trail", "A straight blend from Start Color to End Color, or a gradient of your own",
+				"Where, from 0 (at the entity) to 1 (the tail)" }, c.ColorGradient, c.StartColor, c.EndColor, ColorPresets());
+			if (UI::BeginPropertyGrid("TrailLook"))
+			{
+				UI::Property("Intensity", c.Intensity, 0.05f, 0.0f, ParticleEmitterComponent::MaxIntensity, "%.2f", "Brightness; above 1 it glows");
+				static const char* const s_Blends[] = { "Additive", "Alpha" };
+				int blend = static_cast<int>(c.Blend);
+				if (UI::PropertyCombo("Blend", blend, s_Blends, 2, "Additive adds light (glows, magic); Alpha covers what's behind (smoke, tire marks)"))
+					c.Blend = static_cast<ParticleBlend>(blend);
+				UI::PropertyAsset("Texture", c.TexturePath, AssetType::Texture, "An image along the trail; empty is soft toward its edges");
+				if (!c.TexturePath.empty())
+				{
+					static const char* const s_Modes[] = { "Stretch", "Tile" };
+					int mode = static_cast<int>(c.TextureMode);
+					if (UI::PropertyCombo("Texture Mode", mode, s_Modes, 2, "Stretch lays the image once along the whole trail; Tile repeats it every Tile Length"))
+						c.TextureMode = static_cast<TrailTextureMode>(mode);
+					if (c.TextureMode == TrailTextureMode::Tile)
+						UI::Property("Tile Length", c.TileLength, 0.01f, Limits::MinTileLength, Limits::MaxTileLength, "%.2f m", "Meters one copy of the image covers");
+				}
+				c.Clamp();
+				UI::EndPropertyGrid();
+			}
+			if (ImGui::Button(ICON_REFRESH_CW "  Clear"))
+				TrailSystem::Clear(c);
+			ImGui::SameLine();
+			// Wrapped, so it fits a narrow Inspector.
+			ImGui::PushTextWrapPos(0.0f);
+			UI::TextMuted((std::to_string(c.RuntimePoints.size()) + " points. Move the entity to see it.").c_str());
+			ImGui::PopTextWrapPos();
 		});
 
 		DrawComponent<DecalComponent>(m_Editor, entity, ICON_STICKER, "Decal", [&](DecalComponent& c)
@@ -1471,6 +1571,7 @@ namespace Bellows {
 		entry.operator()<SkyLightComponent>(ICON_CLOUD, "Sky Light", "Rendering");
 		entry.operator()<TextComponent>(ICON_TYPE, "Text", "Rendering");
 		entry.operator()<ParticleEmitterComponent>(ICON_FLAME, "Particle Emitter", "Rendering");
+		entry.operator()<TrailComponent>(ICON_SPLINE, "Trail", "Rendering");
 		entry.operator()<DecalComponent>(ICON_STICKER, "Decal", "Rendering");
 		if (m_ComponentFilter.empty())
 			UI::SectionHeader("Physics");
