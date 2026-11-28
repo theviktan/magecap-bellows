@@ -1525,3 +1525,21 @@ TEST_CASE("OutlineAndSymbolsListPropertiesInTheirKind")
 	}
 	CHECK(sawProperty);
 }
+
+TEST_CASE("OutlineAndHoverShowTypesOnVariablesAndFields")
+{
+	// A typed 'set' or 'shared' line defines its name like an untyped one, and shows its type.
+	const std::string source = "set names as list of text to [\"a\"]\nkind Ship\n\tset fuel as number to 5\n\tshared count as number is 0\nend\nsay names\n";
+	const std::vector<OutlineItem> outline = FindOutline(source);
+	REQUIRE_EQ(outline.size(), static_cast<size_t>(2));
+	CHECK(outline[0].ItemKind == OutlineItem::Kind::Variable);
+	CHECK_EQ(outline[0].Detail, std::string("set names as list of text to [ \"a\" ]"));
+	REQUIRE_EQ(outline[1].Children.size(), static_cast<size_t>(2));
+	CHECK_EQ(outline[1].Children[0].Detail, std::string("set fuel as number to 5"));
+	CHECK_EQ(outline[1].Children[1].Name, std::string("count"));
+
+	Session session;
+	const std::string uri = "file:///tmp/typed.forge";
+	session.Open(uri, source);
+	CHECK(HoverText(session.At("textDocument/hover", uri, 5, 5)).find("set names as list of text to") != std::string::npos);
+}

@@ -6,7 +6,7 @@ Everything in the language on one page. For explanations and examples, see the [
 
 | Statement | Example |
 |---|---|
-| Make / change a variable | `set health to 100` |
+| Make / change a variable | `set health to 100`; with a type for the checker (1.8.0): `set score as number to 0`, `set names as list of text to []` (never changes what runs; the checker warns on a plain value or list item of another type) |
 | Change a property or item | `set enemy.health to 0`, `set list[2] to "x"`, `set my speed to 3` |
 | Take a list apart | `set name, score to entry` (one item per name, exactly), `set x, y, z to position` (a vector: 2 or 3 names), `set a, b to [b, a]` (swaps) |
 | Constant (top level only) | `constant MAX_HP is 100` |
@@ -23,10 +23,10 @@ Everything in the language on one page. For explanations and examples, see the [
 | Each | `for each item [, position] in list do ... end` (maps: `key, value`; objects made from a kind: `field, value`) |
 | While / until | `while x is below 5 do ... end`, `until done do ... end` |
 | Leave / skip a loop | `stop`, `skip` |
-| Function | `function name(a, b) ... return x ... end`; defaults: `function attack(target, damage is 10)` (worked out at each call that leaves the value out; defaults come last); named values in a call, after the others: `attack(goblin, crit: 5)` (not for built-in functions); any number of values: `function total(numbers...)` (the last parameter gets the rest as a list, `[]` when none); optional types: `function heal(amount as number)` (never changes what runs; the checker warns on a call with a plain value of another type); what it gives back: `function health_left() as number` (1.7.0; the checker warns on a `return` with a plain value of another type, and when there's no `return` with a value) |
+| Function | `function name(a, b) ... return x ... end`; defaults: `function attack(target, damage is 10)` (worked out at each call that leaves the value out; defaults come last); named values in a call, after the others: `attack(goblin, crit: 5)` (not for built-in functions); any number of values: `function total(numbers...)` (the last parameter gets the rest as a list, `[]` when none); optional types: `function heal(amount as number)`, `xs as list of number` (1.8.0) (never changes what runs; the checker warns on a call with a plain value of another type); what it gives back: `function health_left() as number` (1.7.0; the checker warns on a `return` with a plain value of another type, and when there's no `return` with a value) |
 | Anonymous function | `function(x) return x * 2 end` |
 | Phrase | `phrase heal (target) by (amount) ... end` → `heal hero by 5` |
-| Kind | `kind Enemy [extends Base] set field to 1  function method() ... end end` |
+| Kind | `kind Enemy [extends Base] set field [as number] to 1  function method() ... end end` |
 | Change handler | `when my health changes [with now, before] ... end` inside a kind: runs right after a write that changes the field (not for its first value; not again for a write inside it) |
 | Contract | `contract Damageable  needs health  needs take_hit(amount)  end` at the top level (1.8.0); `kind Crate [extends Box] follows Damageable, Named`; `x is a Damageable`; a missing need is a mistake at the `kind` line |
 | Property | `property health_percent [as number] ... return ... end` inside a kind (1.8.0): read like a field (`hero.health_percent`), worked out by its block at each read; can't be set or `wait`; a kind that extends it can replace it, and `parent.health_percent` reads the one it replaced |

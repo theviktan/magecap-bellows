@@ -19,12 +19,36 @@ namespace ForgeScript {
 	namespace {
 
 		// The positions of the names in "set x, y to ...", from the first name; empty when it isn't that.
-		// 'shared count is 0' at the start of a line (inside a kind, the compiler's shared value).
+		// Where 'to' is in 'set name to ...' or, with a type for checkers, 'set name as list of text to ...',
+		// from the name at tokens[name]; 0 when the line isn't that.
+		size_t TypedSetTo(const std::vector<Token>& tokens, size_t name)
+		{
+			size_t at = name + 1;
+			if (at < tokens.size() && tokens[at].Type == TokenType::Identifier && tokens[at].Lexeme == "as")
+			{
+				for (at++; at < tokens.size() && (tokens[at].Type == TokenType::Identifier || tokens[at].Type == TokenType::Of ||
+					tokens[at].Type == TokenType::Function || tokens[at].Type == TokenType::Kind); at++)
+				{
+				}
+			}
+			return at < tokens.size() && tokens[at].Type == TokenType::To ? at : 0;
+		}
+
+		// 'shared count is 0' (or 'shared count as number is 0') at the start of a line (inside a kind,
+		// the compiler's shared value).
 		bool IsSharedLine(const std::vector<Token>& tokens, size_t i)
 		{
-			return i + 2 < tokens.size() && (i == 0 || tokens[i - 1].Type == TokenType::Newline) &&
-				tokens[i].Type == TokenType::Identifier && tokens[i].Lexeme == "shared" && tokens[i + 1].Type == TokenType::Identifier &&
-				(tokens[i + 2].Type == TokenType::Is || tokens[i + 2].Type == TokenType::To);
+			if (i + 2 >= tokens.size() || (i > 0 && tokens[i - 1].Type != TokenType::Newline) || tokens[i].Type != TokenType::Identifier ||
+				tokens[i].Lexeme != "shared" || tokens[i + 1].Type != TokenType::Identifier)
+				return false;
+			if (tokens[i + 2].Type == TokenType::Is || tokens[i + 2].Type == TokenType::To)
+				return true;
+			if (tokens[i + 2].Type != TokenType::Identifier || tokens[i + 2].Lexeme != "as")
+				return false;
+			size_t at = i + 3;
+			while (at < tokens.size() && (tokens[at].Type == TokenType::Identifier || tokens[at].Type == TokenType::Of))
+				at++;
+			return at < tokens.size() && (tokens[at].Type == TokenType::Is || tokens[at].Type == TokenType::To);
 		}
 
 		// A parameter written 'numbers...', which gets the values left over.
@@ -649,17 +673,22 @@ namespace ForgeScript {
 				if (variables.insert(owner + "." + std::string(name.Lexeme)).second)
 					add(Kind::Variable, name, std::string(name.Lexeme), RestOfLine(tokens, i), docAbove(token.Line), owner);
 			}
-			else if (token.Type == TokenType::Set && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && tokens[i + 2].Type == TokenType::To)
+			else if (token.Type == TokenType::Set && i + 2 < tokens.size() && tokens[i + 1].Type == TokenType::Identifier && TypedSetTo(tokens, i + 1))
 			{
-				// The first 'set' of a name defines it; 'set my x' inside a kind defines a field.
+				// The first 'set' of a name defines it; 'set my x' inside a kind defines a field. Its type, if the
+				// line gives one, is in what hover shows: 'set score as number to 0'.
 				const Token& name = tokens[i + 1];
 				const std::string key = owner + "." + std::string(name.Lexeme);
 				if (variables.insert(key).second)
 				{
+					const size_t to = TypedSetTo(tokens, i + 1);
+					std::string typed;
+					for (size_t j = i + 2; j < to; j++)
+						typed += " " + std::string(tokens[j].Lexeme);
 					std::string value;
-					for (size_t j = i + 3; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof && value.size() < 60; j++)
+					for (size_t j = to + 1; j < tokens.size() && tokens[j].Type != TokenType::Newline && tokens[j].Type != TokenType::Eof && value.size() < 60; j++)
 						value += (value.empty() ? "" : " ") + std::string(tokens[j].Lexeme);
-					add(Kind::Variable, name, std::string(name.Lexeme), "set " + std::string(name.Lexeme) + " to " + value, docAbove(token.Line), owner);
+					add(Kind::Variable, name, std::string(name.Lexeme), "set " + std::string(name.Lexeme) + typed + " to " + value, docAbove(token.Line), owner);
 				}
 			}
 			else if (token.Type == TokenType::Set && !UnpackedNames(tokens, i + 1).empty())
@@ -1908,12 +1937,11 @@ namespace ForgeScript {
 				if (variables.insert({ parent, std::string(next->Lexeme) }).second)
 					add(Kind::Variable, std::string(next->Lexeme), RestOfLine(tokens, i), token, *next, static_cast<int>(next->Lexeme.size()), parent);
 			}
-			else if (listed && token.Type == TokenType::Set && next && next->Type == TokenType::Identifier &&
-				i + 2 < tokens.size() && tokens[i + 2].Type == TokenType::To)
+			else if (listed && token.Type == TokenType::Set && next && next->Type == TokenType::Identifier && TypedSetTo(tokens, i + 1))
 			{
 				// The first 'set' of a name defines it.
 				if (variables.insert({ parent, std::string(next->Lexeme) }).second)
-					add(Kind::Variable, std::string(next->Lexeme), "set " + std::string(next->Lexeme) + " to " + lineText(i + 3), token, *next,
+					add(Kind::Variable, std::string(next->Lexeme), "set " + lineText(i + 1), token, *next,
 						static_cast<int>(next->Lexeme.size()), parent);
 			}
 			else if (listed && token.Type == TokenType::Set && !UnpackedNames(tokens, i + 1).empty())
