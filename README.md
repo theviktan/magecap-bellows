@@ -61,12 +61,13 @@ can drive end to end.
   [docs/Roadmap.md](docs/Roadmap.md).
 * **Editor**: hierarchy, inspector, content browser with drag and drop, console with a Python
   prompt, transform gizmos, picking, undo/redo, play/pause/step, prefabs, render settings, project
-  manager, and **Export Game** (a standalone build with its own Python runtime).
+  manager, and **Export Game** (a standalone build with its own Python runtime). **Ctrl+K** (or the
+  search box in the title bar) finds any command, entity, scene or script by a few letters.
 * **Project Manager** like Godot's: every project in one list with search, sorting, favorites,
   New Project templates, Import and Scan. Panels can be closed from their tab and brought back from
   **View → Panels**, docked anywhere by dragging their tab, and reset with **View → Reset Layout**;
   the Content panel has a folder tree.
-* **Script Editor** built in, like Godot's: a **Scene / Script** switch in the toolbar, tabs for
+* **Script Editor** built in, like Godot's: a **Scene / Script** switch on the rail at the left, tabs for
   open scripts, ForgeScript and Python highlighting, an outline of functions and events, find and
   replace, completion, live error checking (the line turns red as you type), ForgeScript
   completion and hover help from the ForgeScript language server (engine functions, phrases and
@@ -186,7 +187,7 @@ tested version.
 3. Right-click an entity in the **Hierarchy** and choose **Attach Script...**. Pick **ForgeScript**
    or **Python**, keep the suggested path (for example `Scripts/Cube.forge`) and click **Create**.
    The new script opens in the **Script** workspace: type your code, press **Ctrl+S** to save, and
-   click **Scene** in the top-left toolbar to go back to the 3D view. (You can also create scripts
+   click **Scene** (the cube at the top of the rail on the left) to go back to the 3D view. (You can also create scripts
    in the **Content** panel with right-click → **ForgeScript Script** / **Python Script**, and drag
    a script onto an entity in the Hierarchy to attach it.)
 4. Press **Play** (Ctrl+P) to run the game in its own window, the way it runs once exported; F5 plays

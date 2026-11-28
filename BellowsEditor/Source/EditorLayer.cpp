@@ -1504,6 +1504,8 @@ namespace Bellows {
 		HandlePlayKeys(ctrl);
 		if (io.WantTextInput)
 			return;
+		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_K, false))
+			OpenSearch();
 
 		// The Script Editor handles its own editing keys (save, undo, ...); only play mode passes through.
 		if (m_ScriptEditorPanel->IsFocused())
@@ -1569,26 +1571,26 @@ namespace Bellows {
 		}
 
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
-		const float toolbarHeight = ImGui::GetFrameHeight() + 10.0f * Theme::GetScale();
 		const float statusHeight = ImGui::GetFrameHeight() + 2.0f * Theme::GetScale();
 
-		// Root window: menu bar, toolbar, dock space and status bar.
+		// Root window: title bar, rail, dock space and status bar.
 		ImGui::SetNextWindowPos(viewport->WorkPos);
 		ImGui::SetNextWindowSize(viewport->WorkSize);
 		ImGui::SetNextWindowViewport(viewport->ID);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		// The title bar's height comes from the frame padding when the window begins.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 11.0f));
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::ToVec4(Theme::Background));
 		const ImGuiWindowFlags rootFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse
 			| ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus
 			| ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 		ImGui::Begin("##EditorRoot", nullptr, rootFlags);
 		ImGui::PopStyleColor();
-		ImGui::PopStyleVar(3);
+		ImGui::PopStyleVar(4);
 
 		DrawMenuBar();
-		DrawToolbar();
 
 		const ImGuiID dockspaceID = ImGui::GetID("EditorDockspace");
 		if (!m_LayoutInitialized || !ImGui::DockBuilderGetNode(dockspaceID))
@@ -1596,13 +1598,20 @@ namespace Bellows {
 			BuildDefaultLayout(dockspaceID);
 			m_LayoutInitialized = true;
 		}
-		const ImVec2 dockSize(ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y - statusHeight);
+		// The rail of workspaces at the left, then the panels.
+		const float railWidth = 56.0f * Theme::GetScale();
+		const float areaHeight = ImGui::GetContentRegionAvail().y - statusHeight;
 		ImGui::SetCursorPosX(0.0f);
+		ImGui::BeginChild("##Rail", ImVec2(railWidth, areaHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		DrawRail();
+		ImGui::EndChild();
+		ImGui::SameLine(0.0f, 0.0f);
+		const ImVec2 dockSize(ImGui::GetContentRegionAvail().x, areaHeight);
 		ImGui::DockSpace(dockspaceID, dockSize, ImGuiDockNodeFlags_None);
 
 		DrawStatusBar();
 		ImGui::End();
-		(void)toolbarHeight;
+		DrawSearch();
 
 		EditorPanelVisibility& panels = m_Settings.Panels;
 		if (panels.Hierarchy)
@@ -1680,7 +1689,8 @@ namespace Bellows {
 
 	void EditorLayer::DrawMenuBar()
 	{
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 7.0f));
+		// Design F's title bar (made taller when the root window begins), with the search, the scene and Play in it.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 11.0f));
 		if (!ImGui::BeginMenuBar())
 		{
 			ImGui::PopStyleVar();
@@ -1740,12 +1750,7 @@ namespace Bellows {
 				m_ScriptEditorPanel->ShowCreateDialog();
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_ROCKET "  Export Game..."))
-			{
-				if (m_DialogPath.empty() || !m_ShowExportDialog)
-					m_DialogPath = (m_Project->GetProjectDirectory() / "Build").string();
-				m_LastExport = {};
-				m_ShowExportDialog = true;
-			}
+				ShowExportDialog();
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_X "  Exit"))
 				RequestExit(0);
@@ -1842,11 +1847,7 @@ namespace Bellows {
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_ROCKET "  Export Game..."))
-			{
-				m_DialogPath = (m_Project->GetProjectDirectory() / "Build").string();
-				m_LastExport = {};
-				m_ShowExportDialog = true;
-			}
+				ShowExportDialog();
 			ImGui::EndMenu();
 		}
 
@@ -1859,67 +1860,137 @@ namespace Bellows {
 			ImGui::EndMenu();
 		}
 
-		// Project name, right aligned.
-		const std::string projectLabel = std::string(ICON_PACKAGE "  ") + m_Project->GetConfig().Name;
-		const float width = ImGui::CalcTextSize(projectLabel.c_str()).x;
-		ImGui::SameLine(ImGui::GetWindowWidth() - width - 20.0f * Theme::GetScale());
-		UI::TextMuted(projectLabel.c_str());
+		const float menusEnd = ImGui::GetCursorScreenPos().x;
+		const float barTop = barWindow->Pos.y + barWindow->TitleBarHeight;
+		const float actionsLeft = DrawTitleBarActions(barTop, barHeight);
+
+		// The search box (Ctrl+K), centered in the window when there's room, else between the menus
+		// and the actions; just its icon when the window is narrow.
+		const float scale = Theme::GetScale();
+		const float gap = 14.0f * scale;
+		const float room = actionsLeft - menusEnd - gap * 2.0f;
+		const float boxHeight = 30.0f * scale;
+		if (room > 36.0f * scale)
+		{
+			const bool compact = room < 200.0f * scale;
+			const float boxWidth = compact ? boxHeight : std::min(380.0f * scale, room);
+			const float centered = barWindow->Pos.x + (barWindow->Size.x - boxWidth) * 0.5f;
+			const float x = std::clamp(centered, menusEnd + gap, actionsLeft - gap - boxWidth);
+			const ImVec2 min(x, barTop + (barHeight - boxHeight) * 0.5f);
+			const ImVec2 max(min.x + boxWidth, min.y + boxHeight);
+			ImGui::SetCursorScreenPos(min);
+			if (ImGui::InvisibleButton("##SearchBox", ImVec2(boxWidth, boxHeight)))
+				OpenSearch();
+			const bool hovered = ImGui::IsItemHovered();
+			ImGui::SetItemTooltip("Search commands, entities, scenes and scripts (Ctrl+K)");
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			drawList->AddRectFilled(min, max, Theme::Field, 9.0f * scale);
+			drawList->AddRect(min, max, hovered ? Theme::BorderStrong : Theme::Border, 9.0f * scale);
+			const float textY = min.y + (boxHeight - ImGui::GetFontSize()) * 0.5f;
+			const float iconX = compact ? min.x + (boxWidth - ImGui::CalcTextSize(ICON_SEARCH).x) * 0.5f : min.x + 11.0f * scale;
+			drawList->AddText(ImVec2(iconX, textY), Theme::TextMuted, ICON_SEARCH);
+			if (!compact)
+			{
+				// Key caps at the right end, then the hint where there's room for it.
+				float capRight = max.x - 6.0f * scale;
+				for (const char* key : { "K", "Ctrl" })
+				{
+					const float capWidth = ImGui::CalcTextSize(key).x + 10.0f * scale;
+					const ImVec2 capMin(capRight - capWidth, min.y + 6.0f * scale), capMax(capRight, max.y - 6.0f * scale);
+					drawList->AddRectFilled(capMin, capMax, Theme::PanelRaised, 5.0f * scale);
+					drawList->AddText(ImVec2(capMin.x + 5.0f * scale, textY), Theme::TextMuted, key);
+					capRight = capMin.x - 3.0f * scale;
+				}
+				const char* hint = "Search or run a command";
+				const float hintX = iconX + ImGui::CalcTextSize(ICON_SEARCH).x + 9.0f * scale;
+				if (hintX + ImGui::CalcTextSize(hint).x < capRight - 8.0f * scale)
+					drawList->AddText(ImVec2(hintX, textY), Theme::Neutral, hint);
+			}
+		}
 
 		ImGui::EndMenuBar();
 		ImGui::PopStyleVar();
+
+		// A thin line under the title bar while the game runs makes play mode impossible to miss.
+		if (m_SceneState != SceneState::Edit || m_GameWindow.IsRunning())
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const float y = barTop + barHeight;
+			drawList->AddRectFilled(ImVec2(barWindow->Pos.x, y - 2.0f * scale), ImVec2(barWindow->Pos.x + barWindow->Size.x, y),
+				m_SceneState == SceneState::Pause ? Theme::Warning : Theme::Accent);
+		}
 	}
 
-	void EditorLayer::DrawToolbar()
+	float EditorLayer::DrawTitleBarActions(float barTop, float barHeight)
 	{
 		const float scale = Theme::GetScale();
-		const float height = ImGui::GetFrameHeight() + 10.0f * scale;
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, Theme::ToVec4(Theme::Background));
-		ImGui::BeginChild("##Toolbar", ImVec2(0.0f, height), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-		ImGui::PopStyleColor();
-
-		const float buttonSize = ImGui::GetFrameHeight();
-		const float spacing = 4.0f * scale;
-		const float modeButtonWidth = buttonSize * 0.6f;
-		const float totalWidth = buttonSize * 3.0f + modeButtonWidth + spacing * 3.0f;
-
-		// Workspace switcher on the left.
-		const Workspace workspace = GetWorkspace();
-		ImGui::SetCursorPos(ImVec2(10.0f * scale, 5.0f * scale));
-		struct WorkspaceButton { const char* Label; const char* Tooltip; Workspace Target; };
-		const WorkspaceButton workspaceButtons[] = {
-			{ ICON_BOX "  Scene", "The 3D scene and viewport", Workspace::Scene },
-			{ ICON_CODE "  Script", "The Script Editor for ForgeScript and Python", Workspace::Script },
-		};
-		for (const WorkspaceButton& button : workspaceButtons)
-		{
-			const ImVec2 size(ImGui::CalcTextSize(button.Label).x + 22.0f * scale, buttonSize);
-			if (UI::IconButton(button.Label, button.Tooltip, workspace == button.Target, size))
-				SetWorkspace(button.Target);
-			ImGui::SameLine(0.0f, spacing);
-		}
-		ImGui::SetCursorPos(ImVec2((ImGui::GetWindowWidth() - totalWidth) * 0.5f, 5.0f * scale));
-
+		const ImGuiWindow* barWindow = ImGui::GetCurrentWindow();
+		const float height = 30.0f * scale;
+		const float y = barTop + (barHeight - height) * 0.5f;
+		const float gap = 6.0f * scale;
 		const bool editing = m_SceneState == SceneState::Edit;
 		const bool gameWindowRunning = m_GameWindow.IsRunning();
-		if (editing && !gameWindowRunning)
+		const bool running = !editing || gameWindowRunning;
+
+		// Widths first, so the group can sit flush with the right edge.
+		const std::string project = m_Project->GetConfig().Name;
+		const std::string scene = m_ScenePath.empty() ? std::string("Untitled") : std::filesystem::path(m_ScenePath).stem().string();
+		const bool dirty = IsSceneDirty();
+		const float slashWidth = ImGui::CalcTextSize(" / ").x;
+		const float crumbsWidth = ImGui::CalcTextSize(project.c_str()).x + slashWidth + ImGui::CalcTextSize(scene.c_str()).x + (dirty ? 14.0f * scale : 0.0f);
+		const char* playLabel = running ? ICON_SQUARE "  Stop" : ICON_PLAY "  Play";
+		const float playWidth = std::max(ImGui::CalcTextSize(ICON_PLAY "  Play").x, ImGui::CalcTextSize(ICON_SQUARE "  Stop").x) + 26.0f * scale;
+		const float chevronWidth = 22.0f * scale;
+		const char* exportLabel = "Export game";
+		const float exportWidth = ImGui::CalcTextSize(exportLabel).x + 26.0f * scale;
+		const float total = crumbsWidth + 16.0f * scale + playWidth + chevronWidth + gap + height * 2.0f + gap * 2.0f + 10.0f * scale + exportWidth + 12.0f * scale;
+		const float left = barWindow->Pos.x + barWindow->Size.x - total;
+		float x = left;
+
+		// Project / scene, with a dot while the scene has unsaved changes.
+		const float textY = barTop + (barHeight - ImGui::GetFontSize()) * 0.5f;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(ImVec2(x, textY), Theme::TextMuted, project.c_str());
+		x += ImGui::CalcTextSize(project.c_str()).x;
+		drawList->AddText(ImVec2(x, textY), Theme::BorderStrong, " / ");
+		x += slashWidth;
+		drawList->AddText(ImVec2(x, textY), Theme::Text, scene.c_str());
+		x += ImGui::CalcTextSize(scene.c_str()).x;
+		if (dirty)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, Theme::ToVec4(Theme::Success));
-			const char* tooltip = m_Settings.PlayInGameWindow ? "Play in a game window (Ctrl+P; F5 plays the project, F6 the scene)"
-				: "Play in the editor viewport (Ctrl+P)";
-			if (UI::IconButton(ICON_PLAY, tooltip, false, ImVec2(buttonSize, buttonSize)))
-				PlayInPreferredMode();
-			ImGui::PopStyleColor();
+			const ImVec2 center(x + 9.0f * scale, barTop + barHeight * 0.5f);
+			drawList->AddCircleFilled(center, 3.5f * scale, Theme::NeutralBright);
+			ImGui::SetCursorScreenPos(ImVec2(center.x - 6.0f * scale, center.y - 6.0f * scale));
+			ImGui::InvisibleButton("##UnsavedDot", ImVec2(12.0f * scale, 12.0f * scale));
+			ImGui::SetItemTooltip("Unsaved changes (Ctrl+S saves)");
+			x += 14.0f * scale;
 		}
+		x += 16.0f * scale;
+
+		// The bar's tall padding would push button labels down; these center them in their height.
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f * scale, (height - ImGui::GetFontSize()) * 0.5f));
+
+		// Play (ember: the one warm button), where it plays, Pause and Step.
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * scale);
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::Accent));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::AccentHovered));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, Theme::ToVec4(Theme::Accent));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.12f, 0.06f, 0.01f, 1.0f));
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		if (ImGui::Button(playLabel, ImVec2(playWidth, height)))
+			TogglePlay();
+		if (running)
+			ImGui::SetItemTooltip("Stop (Ctrl+P or F8)");
 		else
-		{
-			if (UI::IconButton(ICON_SQUARE, "Stop (Ctrl+P or F8)", true, ImVec2(buttonSize, buttonSize)))
-				TogglePlay();
-		}
-		ImGui::SameLine(0.0f, 1.0f * scale);
-		// Where Play runs the game: its own window (like an exported game) or the editor viewport.
-		// A narrow button: no side padding, or the chevron would be clipped.
+			ImGui::SetItemTooltip(m_Settings.PlayInGameWindow ? "Play in a game window (Ctrl+P; F5 plays the project, F6 the scene)"
+				: "Play in the editor viewport (Ctrl+P)");
+		x += playWidth + 1.0f * scale;
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, ImGui::GetStyle().FramePadding.y));
-		const bool openModeMenu = UI::IconButton(ICON_CHEVRON_DOWN "##PlayMode", "Where Play runs the game", false, ImVec2(modeButtonWidth, buttonSize));
+		const bool openModeMenu = ImGui::Button(ICON_CHEVRON_DOWN "##PlayMode", ImVec2(chevronWidth, height));
+		ImGui::PopStyleVar();
+		ImGui::SetItemTooltip("Where Play runs the game");
+		ImGui::PopStyleColor(4);
 		ImGui::PopStyleVar();
 		if (openModeMenu)
 			ImGui::OpenPopup("##PlayModeMenu");
@@ -1937,26 +2008,366 @@ namespace Bellows {
 			}
 			ImGui::EndPopup();
 		}
-		ImGui::SameLine(0.0f, spacing);
+		x += chevronWidth + gap;
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
 		ImGui::BeginDisabled(editing);
-		if (UI::IconButton(ICON_PAUSE, "Pause", m_SceneState == SceneState::Pause, ImVec2(buttonSize, buttonSize)))
+		if (UI::IconButton(ICON_PAUSE, "Pause", m_SceneState == SceneState::Pause, ImVec2(height, height)))
 			SetPaused(m_SceneState != SceneState::Pause);
-		ImGui::SameLine(0.0f, spacing);
+		x += height + gap;
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
 		ImGui::BeginDisabled(m_SceneState != SceneState::Pause || m_ScriptDebugger.IsStopped());
-		if (UI::IconButton(ICON_STEP_FORWARD, "Advance one frame", false, ImVec2(buttonSize, buttonSize)))
+		if (UI::IconButton(ICON_STEP_FORWARD, "Advance one frame", false, ImVec2(height, height)))
 			Step(1);
 		ImGui::EndDisabled();
 		ImGui::EndDisabled();
+		x += height + gap + 10.0f * scale;
 
-		// A thin accent line across the toolbar while playing makes play mode impossible to miss.
-		if (!editing || gameWindowRunning)
+		// Export game: a plain raised button.
+		ImGui::SetCursorScreenPos(ImVec2(x, y));
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * scale);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+		ImGui::PushStyleColor(ImGuiCol_Button, Theme::ToVec4(Theme::PanelRaised));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Theme::ToVec4(Theme::BorderStrong));
+		ImGui::PushStyleColor(ImGuiCol_Border, Theme::ToVec4(Theme::BorderStrong));
+		if (ImGui::Button(exportLabel, ImVec2(exportWidth, height)))
+			ShowExportDialog();
+		ImGui::SetItemTooltip("Build the game for players to run (File, Export Game)");
+		ImGui::PopStyleColor(3);
+		ImGui::PopStyleVar(3);
+		return left;
+	}
+
+	void EditorLayer::ShowExportDialog()
+	{
+		if (m_DialogPath.empty() || !m_ShowExportDialog)
+			m_DialogPath = (m_Project->GetProjectDirectory() / "Build").string();
+		m_LastExport = {};
+		m_ShowExportDialog = true;
+	}
+
+	void EditorLayer::DrawRail()
+	{
+		const float scale = Theme::GetScale();
+		const float size = 42.0f * scale;
+		const float x = (ImGui::GetWindowWidth() - size) * 0.5f;
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		ImFont* font = ImGui::GetFont();
+		const float iconSize = 19.0f * scale;
+
+		// One square button: filled with a ring and a dot under it when on, lit when hovered.
+		const auto button = [&](const char* icon, const char* id, const char* tooltip, bool on)
 		{
-			const ImVec2 min = ImGui::GetWindowPos();
-			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(min.x, min.y + height - 2.0f * scale), ImVec2(min.x + ImGui::GetWindowWidth(), min.y + height),
-				m_SceneState == SceneState::Pause ? Theme::Warning : Theme::Accent);
+			ImGui::SetCursorPosX(x);
+			const bool clicked = ImGui::InvisibleButton(id, ImVec2(size, size));
+			const bool hovered = ImGui::IsItemHovered();
+			ImGui::SetItemTooltip("%s", tooltip);
+			const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+			if (on)
+			{
+				drawList->AddRectFilled(min, max, Theme::PanelRaised, 12.0f * scale);
+				drawList->AddRect(min, max, Theme::BorderStrong, 12.0f * scale);
+				drawList->AddCircleFilled(ImVec2((min.x + max.x) * 0.5f, max.y - 6.0f * scale), 2.0f * scale, Theme::Text);
+			}
+			else if (hovered)
+			{
+				drawList->AddRectFilled(min, max, Theme::WithAlpha(Theme::PanelRaised, 150), 12.0f * scale);
+			}
+			const ImVec2 glyph = font->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, icon);
+			drawList->AddText(font, iconSize, ImVec2(min.x + (size - glyph.x) * 0.5f, min.y + (size - glyph.y) * 0.5f - (on ? 2.0f * scale : 0.0f)),
+				on || hovered ? Theme::Text : Theme::TextMuted, icon);
+			ImGui::Dummy(ImVec2(0.0f, 4.0f * scale));
+			return clicked;
+		};
+
+		ImGui::Dummy(ImVec2(0.0f, 4.0f * scale));
+		const Workspace workspace = GetWorkspace();
+		if (button(ICON_BOX, "##RailScene", "Scene: the 3D scene and viewport", workspace == Workspace::Scene))
+			SetWorkspace(Workspace::Scene);
+		if (button(ICON_CODE, "##RailScript", "Script: the Script Editor for ForgeScript and Python", workspace == Workspace::Script))
+			SetWorkspace(Workspace::Script);
+		if (button(ICON_GAUGE, "##RailProfiler", "Profiler: where each frame's time goes (show or hide)", m_ShowProfiler))
+			m_ShowProfiler = !m_ShowProfiler;
+		EditorPanelVisibility& panels = m_Settings.Panels;
+		if (button(ICON_FOLDER, "##RailContent", "Content: the project's assets (show or hide)", panels.Content))
+		{
+			panels.Content = !panels.Content;
+			if (panels.Content)
+				ImGui::SetWindowFocus("Content");
 		}
 
-		ImGui::EndChild();
+		// Settings at the bottom.
+		ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - size - 12.0f * scale));
+		if (button(ICON_SETTINGS, "##RailSettings", "Settings: the scene's and project's settings (show or hide)", panels.Settings))
+		{
+			panels.Settings = !panels.Settings;
+			if (panels.Settings)
+				ImGui::SetWindowFocus("Settings");
+		}
+	}
+
+	void EditorLayer::OpenSearch(const std::string& query)
+	{
+		m_SearchEntries = CollectSearchEntries();
+		m_SearchQuery = query;
+		m_SearchSelected = 0;
+		m_SearchOpen = true;
+		m_SearchJustOpened = true;
+	}
+
+	std::vector<EditorLayer::SearchEntry> EditorLayer::CollectSearchEntries()
+	{
+		using CommandSearch::ResultKind;
+		std::vector<SearchEntry> entries;
+		const auto add = [&](ResultKind kind, std::string name, std::string detail, bool enabled, std::function<void()> run)
+		{
+			entries.push_back({ { kind, std::move(name), std::move(detail), enabled }, std::move(run) });
+		};
+		const auto command = [&](std::string name, std::string shortcut, bool enabled, std::function<void()> run)
+		{
+			add(ResultKind::Command, std::move(name), std::move(shortcut), enabled, std::move(run));
+		};
+		const bool editing = m_SceneState == SceneState::Edit;
+		const bool gameWindowRunning = m_GameWindow.IsRunning();
+		const bool hasSelection = !m_Selection.empty();
+
+		// Commands: the menus' items, named as there.
+		command("Save Scene", "Ctrl+S", editing, [this] { SaveScene(); });
+		command("Save Scene As...", "Ctrl+Shift+S", editing, [this]
+		{
+			m_DialogPath = m_ScenePath.empty() ? "Scenes/NewScene.bscene" : m_ScenePath;
+			m_ShowSaveSceneAsDialog = true;
+		});
+		command("New Scene", "Ctrl+N", editing, [this] { NewScene(); });
+		command("New Script...", "", true, [this] { m_ScriptEditorPanel->ShowCreateDialog(); });
+		command("Play", "Ctrl+P", editing && !gameWindowRunning, [this] { PlayInPreferredMode(); });
+		command("Play Project in Game Window", "F5", editing, [this] { PlayInGameWindow(true); });
+		command("Play Scene in Game Window", "F6", editing, [this] { PlayInGameWindow(false); });
+		command("Play Scene in Editor Viewport", "", editing && !gameWindowRunning, [this] { Play(); });
+		command("Pause", "", !editing, [this] { SetPaused(m_SceneState != SceneState::Pause); });
+		command("Stop", "F8", !editing || gameWindowRunning, [this]
+		{
+			if (m_SceneState != SceneState::Edit)
+				Stop();
+			StopGameWindow();
+		});
+		command("Undo", "Ctrl+Z", editing && m_UndoHistory.CanUndo(), [this] { Undo(); });
+		command("Redo", "Ctrl+Y", editing && m_UndoHistory.CanRedo(), [this] { Redo(); });
+		command("Duplicate", "Ctrl+D", hasSelection, [this] { DuplicateSelection(); });
+		command("Delete", "Del", hasSelection, [this] { DeleteSelection(); });
+		command("Focus Selection", "F", hasSelection, [this] { FocusSelection(); });
+		command("Export Game...", "", true, [this] { ShowExportDialog(); });
+		command("Scene Workspace", "", true, [this] { SetWorkspace(Workspace::Scene); });
+		command("Script Workspace", "", true, [this] { SetWorkspace(Workspace::Script); });
+
+		// Switches show their state in their name, so the one listed is the one that happens.
+		const auto toggle = [&](const char* what, bool& value)
+		{
+			command(std::string(value ? "Hide " : "Show ") + what, "View", true, [&value] { value = !value; });
+		};
+		EditorPanelVisibility& panels = m_Settings.Panels;
+		toggle("Hierarchy", panels.Hierarchy);
+		toggle("Inspector", panels.Inspector);
+		toggle("Content", panels.Content);
+		toggle("Console", panels.Console);
+		toggle("Debugger", panels.Debugger);
+		toggle("Settings", panels.Settings);
+		toggle("Grid", m_Settings.ShowGrid);
+		toggle("Game UI", m_Settings.ShowUI);
+		toggle("UI View", m_Settings.UIView);
+		toggle("Collider Outlines", m_ShowColliders);
+		toggle("Statistics", m_ShowStatistics);
+		toggle("Profiler", m_ShowProfiler);
+		command("Reset Layout", "View", true, [this]
+		{
+			m_Settings.Panels = EditorPanelVisibility();
+			m_LayoutInitialized = false;
+		});
+		command("Open Project...", "", true, [this] { m_ShowOpenProjectDialog = true; });
+		command("Project Manager...", "", true, [this]
+		{
+			if (IsSceneDirty() && m_SceneState == SceneState::Edit)
+				m_ShowCloseProjectDialog = true;
+			else
+				Application::Get().SubmitToMainThread([this] { CloseProject(); });
+		});
+		command("About MageCap Bellows", "Help", true, [this] { m_ShowAboutDialog = true; });
+
+		// Entities of the scene being edited or played: picking one selects it and frames it.
+		if (const Ref<Scene>& scene = GetActiveScene())
+		{
+			for (Entity entity : scene->GetAllEntities())
+			{
+				std::string detail;
+				if (Entity parent = entity.GetParent())
+					detail = "in " + parent.GetName();
+				else if (const SceneGroup* group = scene->FindGroup(scene->GetEntityGroup(entity)))
+					detail = group->Name;
+				const UUID id = entity.GetUUID();
+				add(ResultKind::Entity, entity.GetName(), std::move(detail), true, [this, id]
+				{
+					const Ref<Scene>& active = GetActiveScene();
+					Entity found = active ? active->TryGetEntityByUUID(id) : Entity();
+					if (!found)
+						return;
+					SetWorkspace(Workspace::Scene);
+					Select(found);
+					FocusSelection();
+				});
+			}
+		}
+
+		// Scenes and scripts in the project's assets.
+		const std::filesystem::path assets = m_Project->GetAssetDirectory();
+		std::error_code error;
+		size_t visited = 0;
+		for (auto it = std::filesystem::recursive_directory_iterator(assets, std::filesystem::directory_options::skip_permission_denied, error);
+			it != std::filesystem::recursive_directory_iterator() && !error && visited < 20000; it.increment(error), visited++)
+		{
+			const std::filesystem::path& path = it->path();
+			const std::string fileName = path.filename().string();
+			if (!fileName.empty() && fileName[0] == '.')
+			{
+				// Hidden folders (.bellows caches and the like) hold nothing to open.
+				if (it->is_directory(error))
+					it.disable_recursion_pending();
+				continue;
+			}
+			if (!it->is_regular_file(error))
+				continue;
+			const AssetType type = AssetManager::GetAssetType(path);
+			if (type != AssetType::Scene && type != AssetType::Script)
+				continue;
+			std::string folder = std::filesystem::relative(path.parent_path(), assets, error).generic_string();
+			if (folder == ".")
+				folder.clear();
+			if (type == AssetType::Scene)
+			{
+				const std::string assetPath = std::filesystem::relative(path, assets, error).generic_string();
+				add(ResultKind::Scene, fileName, std::move(folder), editing, [this, assetPath]
+				{
+					Application::Get().SubmitToMainThread([this, assetPath] { OpenScene(assetPath); });
+				});
+			}
+			else
+			{
+				add(ResultKind::Script, fileName, std::move(folder), true, [this, path]
+				{
+					m_ScriptEditorPanel->OpenScript(path);
+					SetWorkspace(Workspace::Script);
+				});
+			}
+		}
+		return entries;
+	}
+
+	void EditorLayer::DrawSearch()
+	{
+		if (!m_SearchOpen)
+			return;
+
+		const float scale = Theme::GetScale();
+		const ImGuiViewport* viewport = ImGui::GetMainViewport();
+		const float width = std::min(600.0f * scale, viewport->WorkSize.x - 40.0f * scale);
+		ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + (viewport->WorkSize.x - width) * 0.5f, viewport->WorkPos.y + 52.0f * scale));
+		ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, FLT_MAX));
+		ImGui::SetNextWindowViewport(viewport->ID);
+		if (m_SearchJustOpened)
+			ImGui::SetNextWindowFocus();
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f * scale);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * scale, 8.0f * scale));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::ToVec4(Theme::Panel));
+		ImGui::PushStyleColor(ImGuiCol_Border, Theme::ToVec4(Theme::BorderStrong));
+		const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings
+			| ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar;
+		ImGui::Begin("##Search", nullptr, flags);
+		ImGui::PopStyleColor(2);
+		ImGui::PopStyleVar(3);
+
+		std::function<void()> run;
+		bool close = false;
+
+		if (m_SearchJustOpened)
+			ImGui::SetKeyboardFocusHere();
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		if (ImGui::InputTextWithHint("##SearchQuery", ICON_SEARCH "  Search commands, entities, scenes and scripts", &m_SearchQuery))
+			m_SearchSelected = 0;
+
+		std::vector<CommandSearch::Item> items;
+		items.reserve(m_SearchEntries.size());
+		for (const SearchEntry& entry : m_SearchEntries)
+			items.push_back(entry.Item);
+		const std::vector<size_t> results = CommandSearch::Rank(items, m_SearchQuery, 12);
+		const int count = static_cast<int>(results.size());
+		if (count > 0)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+				m_SearchSelected = (m_SearchSelected + 1) % count;
+			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+				m_SearchSelected = (m_SearchSelected + count - 1) % count;
+		}
+		m_SearchSelected = count > 0 ? std::clamp(m_SearchSelected, 0, count - 1) : 0;
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+			close = true;
+		if ((ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) && count > 0)
+		{
+			const SearchEntry& entry = m_SearchEntries[results[m_SearchSelected]];
+			if (entry.Item.Enabled)
+			{
+				run = entry.Run;
+				close = true;
+			}
+		}
+
+		ImGui::Dummy(ImVec2(0.0f, 2.0f * scale));
+		if (count == 0)
+			UI::TextMuted("Nothing matches. Try fewer letters.");
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const float rowHeight = 30.0f * scale;
+		for (int i = 0; i < count; i++)
+		{
+			const SearchEntry& entry = m_SearchEntries[results[i]];
+			const CommandSearch::Item& item = entry.Item;
+			ImGui::PushID(i);
+			const bool clicked = ImGui::InvisibleButton("##Result", ImVec2(ImGui::GetContentRegionAvail().x, rowHeight));
+			const bool hovered = ImGui::IsItemHovered();
+			// The mouse picks a row only when it moves, so a still pointer doesn't fight the arrow keys.
+			const ImVec2 mouseDelta = ImGui::GetIO().MouseDelta;
+			if (hovered && (mouseDelta.x != 0.0f || mouseDelta.y != 0.0f))
+				m_SearchSelected = i;
+			const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
+			if (i == m_SearchSelected)
+				drawList->AddRectFilled(min, max, Theme::PanelRaised, 7.0f * scale);
+			const char* icon = item.Kind == CommandSearch::ResultKind::Command ? ICON_ZAP
+				: item.Kind == CommandSearch::ResultKind::Entity ? ICON_BOX
+				: item.Kind == CommandSearch::ResultKind::Scene ? ICON_CLAPPERBOARD : ICON_FILE_CODE;
+			const ImU32 textColor = item.Enabled ? Theme::Text : Theme::TextDisabled;
+			const float textY = min.y + (rowHeight - ImGui::GetFontSize()) * 0.5f;
+			drawList->AddText(ImVec2(min.x + 10.0f * scale, textY), item.Enabled ? Theme::TextMuted : Theme::TextDisabled, icon);
+			drawList->AddText(ImVec2(min.x + 36.0f * scale, textY), textColor, item.Name.c_str());
+			const std::string detail = item.Detail.empty() ? std::string(CommandSearch::KindName(item.Kind)) : item.Detail;
+			const float detailWidth = ImGui::CalcTextSize(detail.c_str()).x;
+			drawList->AddText(ImVec2(max.x - detailWidth - 10.0f * scale, textY), item.Enabled ? Theme::Neutral : Theme::TextDisabled, detail.c_str());
+			if (clicked && item.Enabled)
+			{
+				run = entry.Run;
+				close = true;
+			}
+			ImGui::PopID();
+		}
+		ImGui::Dummy(ImVec2(0.0f, 2.0f * scale));
+		UI::TextMuted("Up and Down choose, Enter runs, Esc closes");
+
+		// Clicking anywhere else closes it, as a menu would.
+		if (!m_SearchJustOpened && !ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
+			close = true;
+		m_SearchJustOpened = false;
+		ImGui::End();
+
+		if (close)
+			CloseSearch();
+		if (run)
+			run();
 	}
 
 	void EditorLayer::DrawStatusBar()

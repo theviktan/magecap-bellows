@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AgentServer.h"
+#include "CommandSearch.h"
 #include "EditorCamera.h"
 #include "EditorSettings.h"
 #include "GameWindowSession.h"
@@ -45,7 +46,7 @@ namespace Bellows {
 		Pause,
 	};
 
-	// The main areas of the editor, switched from the toolbar like Godot's 2D/3D/Script buttons.
+	// The main areas of the editor, switched from the rail at the left like Godot's 2D/3D/Script buttons.
 	enum class Workspace : uint8_t
 	{
 		Scene = 0,	// The 3D viewport
@@ -186,6 +187,20 @@ namespace Bellows {
 		// Draws the logo as a square item of the given size (the flame glyph if the icon is missing).
 		void DrawLogo(float size) const;
 
+		// The title bar's search (Ctrl+K) ------------------------------------
+		// One thing it can find, with what picking it does.
+		struct SearchEntry
+		{
+			CommandSearch::Item Item;
+			std::function<void()> Run;
+		};
+		// Every command, entity, scene and script the search can find right now.
+		std::vector<SearchEntry> CollectSearchEntries();
+		// Opens the search with 'query' typed in it.
+		void OpenSearch(const std::string& query = {});
+		void CloseSearch() { m_SearchOpen = false; m_SearchEntries.clear(); }
+		bool IsSearchOpen() const { return m_SearchOpen; }
+
 		// ForgeScript debugger -----------------------------------------------
 		// Breakpoints and the current stop. A stop pauses the game until the script goes on.
 		ScriptDebugger& GetScriptDebugger() { return m_ScriptDebugger; }
@@ -214,7 +229,12 @@ namespace Bellows {
 		bool ExecutePython(const std::string& source, std::string& outOutput);
 	private:
 		void DrawMenuBar();
-		void DrawToolbar();
+		// The right end of the title bar: the project and scene, Play, Export game.
+		// Returns its left edge, so the search box can stay clear of it.
+		float DrawTitleBarActions(float barTop, float barHeight);
+		void ShowExportDialog();
+		void DrawRail();
+		void DrawSearch();
 		void DrawStatusBar();
 		void DrawViewport();
 		void DrawViewportToolbar();
@@ -323,6 +343,11 @@ namespace Bellows {
 		bool m_ShowSaveSceneAsDialog = false;
 		bool m_ShowStatistics = false;
 		bool m_ShowProfiler = false;
+		bool m_SearchOpen = false;
+		bool m_SearchJustOpened = false;
+		std::string m_SearchQuery;
+		int m_SearchSelected = 0;
+		std::vector<SearchEntry> m_SearchEntries;	// Gathered when the search opens
 		bool m_ShowDemoWindow = false;
 		std::string m_DialogPath;
 		std::string m_DialogMessage;
