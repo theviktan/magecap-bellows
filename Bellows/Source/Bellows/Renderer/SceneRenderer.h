@@ -149,6 +149,7 @@ namespace Bellows {
 		uint32_t PointLights = 0;
 		uint32_t SpotLights = 0;
 		uint32_t Particles = 0;
+		uint32_t Decals = 0;
 	};
 
 	// One camera-facing particle for SubmitParticles.
@@ -229,6 +230,14 @@ namespace Bellows {
 		// Additive ones add light; alpha ones are sorted far to near. Without a texture, each quad is
 		// a soft round dot; a texture's color and alpha are multiplied by the particle's color.
 		void SubmitParticles(const ParticleQuad* quads, size_t count, bool additive, const Ref<Texture2D>& texture = nullptr);
+
+		// Decals: an image (or a plain color) projected onto opaque surfaces, blended into their color
+		// before lighting, so it's lit and shadowed with them. 'boxToWorld' places the unit box (-0.5
+		// to 0.5) it fills; it projects down the box's -Y, with the image's top toward its -Z. Surfaces
+		// turned more than 'maxAngleDegrees' from the box's +Y fade out. Up to ShaderInterop::MaxDecals
+		// are drawn (higher 'sortOrder' first, and on top of lower), with up to MaxDecalTextures images.
+		void SubmitDecal(const glm::mat4& boxToWorld, const glm::vec4& color, const Ref<Texture2D>& texture = nullptr,
+			float maxAngleDegrees = 60.0f, int sortOrder = 0);
 
 		void SetSelectedEntities(const std::vector<uint32_t>& entityIDs);
 
@@ -324,6 +333,23 @@ namespace Bellows {
 			float Distance = 0.0f;
 		};
 
+		struct DecalDraw
+		{
+			glm::mat4 BoxToWorld { 1.0f };
+			glm::vec4 Color { 1.0f };
+			Ref<Texture2D> TextureRef;
+			float CosMaxAngle = 0.5f;
+			int SortOrder = 0;
+		};
+
+		// One layer of the decal atlas and the image it holds.
+		struct DecalLayer
+		{
+			Ref<Texture2D> TextureRef;
+			uint64_t LastUsed = 0;		// m_DecalFrame it was last drawn in
+			bool Filled = false;		// Its image has been copied in
+		};
+
 		// One block of text: a run of vertices sharing a font, drawn far to near.
 		struct TextDraw
 		{
@@ -348,6 +374,9 @@ namespace Bellows {
 		void RenderSkybox(nvrhi::ICommandList* commandList);
 		void RenderTransparent(nvrhi::ICommandList* commandList);
 		void RenderParticles(nvrhi::ICommandList* commandList);
+		// Picks the frame's decals and their atlas layers; true when it made the atlas (new binding sets needed).
+		bool PrepareDecals();
+		void UploadDecals(nvrhi::ICommandList* commandList);
 		void RenderBloom(nvrhi::ICommandList* commandList);
 		void RenderTonemap(nvrhi::ICommandList* commandList);
 		void RenderText(nvrhi::ICommandList* commandList);
@@ -396,6 +425,12 @@ namespace Bellows {
 		std::vector<ParticleVertex> m_ParticleVertices;
 		std::vector<ParticleDraw> m_ParticleDraws;
 		std::vector<uint32_t> m_ParticleOrder;		// Scratch: an alpha emitter's quads far to near
+		std::vector<DecalDraw> m_Decals;
+		ShaderInterop::DecalData m_DecalData {};
+		std::vector<DecalLayer> m_DecalLayers;		// One per atlas layer, once the atlas exists
+		uint64_t m_DecalFrame = 0;
+		bool m_WarnedDecalLimit = false;
+		bool m_WarnedDecalImageLimit = false;
 		std::vector<UIVertex> m_UIVertices;
 		std::vector<UIDraw> m_UIDraws;
 		std::vector<uint32_t> m_SelectedEntities;
@@ -454,10 +489,15 @@ namespace Bellows {
 		nvrhi::GraphicsPipelineHandle m_TextPipeline, m_TextIDPipeline;
 		nvrhi::GraphicsPipelineHandle m_UIPipeline, m_UIIDPipeline;
 		nvrhi::GraphicsPipelineHandle m_ParticleAdditivePipeline, m_ParticleAlphaPipeline;
+		nvrhi::GraphicsPipelineHandle m_DecalCopyPipeline;
 
 		// Constant buffers
 		nvrhi::BufferHandle m_FrameBuffer;
 		nvrhi::BufferHandle m_LightBuffer;
+		nvrhi::BufferHandle m_DecalBuffer;
+		nvrhi::BufferHandle m_DecalCopyConstants;
+		nvrhi::TextureHandle m_DecalAtlas;			// Made when the first decal image is drawn
+		std::vector<nvrhi::FramebufferHandle> m_DecalAtlasFramebuffers;	// [layer * mips + mip]
 		nvrhi::BufferHandle m_SSAOConstants, m_SSAOBlurConstantsH, m_SSAOBlurConstantsV;
 		nvrhi::BufferHandle m_SkyConstants;
 		std::vector<nvrhi::BufferHandle> m_BloomConstants;

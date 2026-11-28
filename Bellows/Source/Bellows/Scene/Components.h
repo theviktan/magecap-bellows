@@ -405,6 +405,29 @@ namespace Bellows {
 		std::string LoadedTexturePath;
 	};
 
+	// Projects an image (or a plain color) onto the opaque surfaces inside its box: down the entity's
+	// -Y, with the image's top toward its -Z. It changes the surfaces' color before lighting, so
+	// it's lit and shadowed like them (a footprint, a crack, a poster, a puddle, graffiti).
+	struct DecalComponent
+	{
+		std::string TexturePath;		// Empty: a plain rectangle of Color
+		glm::vec4 Color { 1.0f };		// Tint; alpha is its opacity
+		glm::vec3 Size { 1.0f };		// Meters: x the image's width, y how deep it reaches, z the image's height
+		float MaxAngle = 60.0f;			// Degrees a surface may turn from the decal's up before it fades out
+		int SortOrder = 0;				// Higher ones are drawn on top of lower ones
+
+		static constexpr float MinSize = 0.001f, MaxSize = 1000.0f;
+		static constexpr float MinMaxAngle = 1.0f, MaxMaxAngle = 89.0f;
+		static constexpr int MaxSortOrder = 1000;	// Either way
+
+		// Holds every value to its range (and a NaN to its default), as a loaded or edited decal needs.
+		void Clamp();
+
+		// Runtime cache (not serialized)
+		Ref<Texture2D> RuntimeTexture;
+		std::string LoadedTexturePath;
+	};
+
 	// -------------------------------------------------------------------------
 	// Game UI
 	// -------------------------------------------------------------------------
@@ -593,7 +616,7 @@ namespace Bellows {
 	using AllComponents = ComponentGroup<TransformComponent, RelationshipComponent, MeshRendererComponent, AnimatorComponent, NavAgentComponent, CameraComponent,
 		DirectionalLightComponent, PointLightComponent, SpotLightComponent, SkyLightComponent,
 		RigidBodyComponent, BoxColliderComponent, SphereColliderComponent, CapsuleColliderComponent, MeshColliderComponent,
-		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent,
+		ScriptComponent, AudioSourceComponent, AudioListenerComponent, TextComponent, ParticleEmitterComponent, DecalComponent,
 		UICanvasComponent, UIRectComponent, UIImageComponent, UILayoutComponent, UIScrollComponent,
 		UIButtonComponent, UIToggleComponent, UISliderComponent, UIDropdownComponent, UITextInputComponent, PrefabComponent>;
 

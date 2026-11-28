@@ -12,6 +12,8 @@ namespace Bellows::ShaderInterop {
 	constexpr uint32_t MaxCascades = 4;
 	constexpr uint32_t MaxPointLights = 64;
 	constexpr uint32_t MaxSpotLights = 32;
+	constexpr uint32_t MaxDecals = 64;
+	constexpr uint32_t MaxDecalTextures = 16;	// Layers of the decal atlas
 
 	struct FrameData
 	{
@@ -56,6 +58,20 @@ namespace Bellows::ShaderInterop {
 	{
 		PointLight PointLights[MaxPointLights];
 		SpotLight SpotLights[MaxSpotLights];
+	};
+
+	struct Decal
+	{
+		glm::mat4 WorldToDecal;		// Into the decal's unit box (-0.5 to 0.5 on each axis)
+		glm::vec4 Color;			// Tint and opacity
+		glm::vec4 Up;				// xyz = the direction it projects from (world), w = cos(its max angle)
+		glm::vec4 Params;			// x = atlas layer (-1 = no image)
+	};
+
+	struct DecalData
+	{
+		glm::uvec4 Count;			// x = decals in use
+		Decal Decals[MaxDecals];
 	};
 
 	struct ObjectData
@@ -113,6 +129,8 @@ namespace Bellows::ShaderInterop {
 	static_assert(sizeof(FrameData) % 16 == 0, "FrameData must be 16-byte aligned for std140");
 	static_assert(sizeof(FrameData) == 6 * 64 + 3 * 16 + 2 * 16 + 4 * 64 + 4 * 16 + 3 * 16 + 3 * 16, "FrameData layout mismatch");
 	static_assert(sizeof(LightData) == MaxPointLights * 32 + MaxSpotLights * 64, "LightData layout mismatch");
+	static_assert(sizeof(Decal) == 112, "Decal layout mismatch");
+	static_assert(sizeof(DecalData) == 16 + MaxDecals * 112, "DecalData layout mismatch");
 	static_assert(sizeof(ObjectData) == 128, "ObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(ShadowObjectData) == 128, "ShadowObjectData must fit the 128-byte push constant minimum");
 	static_assert(sizeof(ShadowSkinnedData) == sizeof(ShadowObjectData), "ShadowSkinnedData shares the shadow pass's push constants");

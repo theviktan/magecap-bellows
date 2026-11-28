@@ -2142,6 +2142,42 @@
 			]
 		},
 		{
+			"name": "Decal",
+			"doc": "Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles",
+			"members": [
+				{
+					"name": "texture",
+					"kind": "property",
+					"type": "str",
+					"doc": "The image (an asset path); empty for a plain rectangle of color"
+				},
+				{
+					"name": "color",
+					"kind": "property",
+					"type": "Vec4 | list[float]",
+					"doc": "Tint (each 0 to 1); its alpha is the decal's opacity"
+				},
+				{
+					"name": "size",
+					"kind": "property",
+					"type": "Vec3",
+					"doc": "Meters: x the image's width, y how deep it reaches, z the image's height"
+				},
+				{
+					"name": "max_angle",
+					"kind": "property",
+					"type": "float",
+					"doc": "Degrees a surface may turn from the decal's up before the decal fades out on it, from 1 to 89"
+				},
+				{
+					"name": "sort_order",
+					"kind": "property",
+					"type": "int",
+					"doc": "Higher ones are drawn on top of lower ones (and win when too many are in view)"
+				}
+			]
+		},
+		{
 			"name": "UICanvas",
 			"doc": "The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game",
 			"members": [

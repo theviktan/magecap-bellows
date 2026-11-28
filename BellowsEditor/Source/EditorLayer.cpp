@@ -1147,6 +1147,15 @@ namespace Bellows {
 			if (!m_ShowColliders)
 				drawColliders(entity);
 
+			// A decal's box, with a line down the way it projects.
+			if (const auto* decal = entity.TryGetComponent<DecalComponent>())
+			{
+				const glm::vec4 decalColor = Rgba(IM_COL32(110, 220, 140, 220));
+				renderer.SubmitWireBox(world, decal->Size * 0.5f, decalColor);
+				const glm::vec3 down = glm::vec3(world * glm::vec4(0.0f, -decal->Size.y * 0.5f, 0.0f, 1.0f));
+				renderer.SubmitLine(position, down, decalColor);
+			}
+
 			if (auto* light = entity.TryGetComponent<PointLightComponent>())
 				renderer.SubmitWireSphere(position, light->Range, lightColor);
 

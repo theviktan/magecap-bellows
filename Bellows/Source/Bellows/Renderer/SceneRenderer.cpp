@@ -21,6 +21,10 @@ namespace Bellows {
 		constexpr nvrhi::Format c_LDRFormat = nvrhi::Format::RGBA8_UNORM;
 		constexpr uint32_t c_MaxBloomMips = 6;
 		constexpr uint32_t c_VolatileVersions = 64;
+		// Each decal image is resampled into one square layer of this size (with its mips).
+		constexpr uint32_t c_DecalAtlasSize = 512;
+		constexpr uint32_t c_DecalAtlasMips = 10;
+		constexpr nvrhi::Format c_DecalAtlasFormat = nvrhi::Format::SRGBA8_UNORM;
 		constexpr uint32_t c_PushConstantSlot = 31;
 
 		struct SSAOConstants
@@ -147,6 +151,8 @@ namespace Bellows {
 
 		m_FrameBuffer = CreateVolatileConstantBuffer(sizeof(ShaderInterop::FrameData), "FrameConstants");
 		m_LightBuffer = CreateVolatileConstantBuffer(sizeof(ShaderInterop::LightData), "LightConstants");
+		m_DecalBuffer = CreateVolatileConstantBuffer(sizeof(ShaderInterop::DecalData), "DecalConstants");
+		m_DecalCopyConstants = CreateVolatileConstantBuffer(sizeof(glm::vec4), "DecalCopyConstants");
 		m_SSAOConstants = CreateVolatileConstantBuffer(sizeof(SSAOConstants), "SSAOConstants");
 		m_SSAOBlurConstantsH = CreateVolatileConstantBuffer(sizeof(BlurConstants), "SSAOBlurH");
 		m_SSAOBlurConstantsV = CreateVolatileConstantBuffer(sizeof(BlurConstants), "SSAOBlurV");
@@ -351,6 +357,7 @@ namespace Bellows {
 		m_BloomDownsamplePipeline = CreateFullscreenPipeline("BloomDownsample.frag", nvrhi::FramebufferInfo().addColorFormat(c_HDRFormat));
 		m_BloomUpsamplePipeline = CreateFullscreenPipeline("BloomUpsample.frag", nvrhi::FramebufferInfo().addColorFormat(c_HDRFormat), additive);
 		m_TonemapPipeline = CreateFullscreenPipeline("Tonemap.frag", nvrhi::FramebufferInfo().addColorFormat(c_LDRFormat));
+		m_DecalCopyPipeline = CreateFullscreenPipeline("DecalCopy.frag", nvrhi::FramebufferInfo().addColorFormat(c_DecalAtlasFormat));
 		m_FXAAPipeline = CreateFullscreenPipeline("FXAA.frag", nvrhi::FramebufferInfo().addColorFormat(c_LDRFormat));
 		m_OutlinePipeline = CreateFullscreenPipeline("Outline.frag", nvrhi::FramebufferInfo().addColorFormat(c_LDRFormat), alphaBlend);
 
@@ -453,7 +460,8 @@ namespace Bellows {
 			&& m_PrepassPipelines.IsComplete() && m_OpaquePipelines.IsComplete() && m_TransparentPipelines.IsComplete()
 			&& m_SSAOPipeline && m_SSAOBlurPipeline && m_BloomDownsamplePipeline && m_BloomUpsamplePipeline
 			&& m_TonemapPipeline && m_FXAAPipeline && m_GridPipeline && m_LinePipeline && m_OutlinePipeline
-			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline && m_ParticleAdditivePipeline && m_ParticleAlphaPipeline,
+			&& m_TextPipeline && m_TextIDPipeline && m_UIPipeline && m_UIIDPipeline && m_ParticleAdditivePipeline && m_ParticleAlphaPipeline
+			&& m_DecalCopyPipeline,
 			"SceneRenderer: failed to create one or more pipelines");
 	}
 
@@ -600,6 +608,9 @@ namespace Bellows {
 		sceneDesc.addItem(nvrhi::BindingSetItem::Sampler(7, Renderer::GetLinearClampSampler()));
 		sceneDesc.addItem(nvrhi::BindingSetItem::Sampler(8, Renderer::GetShadowCompareSampler()));
 		sceneDesc.addItem(nvrhi::BindingSetItem::Sampler(9, Renderer::GetPointClampSampler()));
+		sceneDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(10, m_DecalBuffer));
+		sceneDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(11, m_DecalAtlas ? m_DecalAtlas.Get() : Renderer::GetBlackTextureArray(),
+			nvrhi::Format::UNKNOWN, nvrhi::AllSubresources, nvrhi::TextureDimension::Texture2DArray));
 		sceneDesc.addItem(nvrhi::BindingSetItem::PushConstants(c_PushConstantSlot, sizeof(ShaderInterop::ObjectData)));
 		m_SceneSet = device->createBindingSet(sceneDesc, Renderer::GetSceneBindingLayout());
 
@@ -659,6 +670,7 @@ namespace Bellows {
 		m_TextDraws.clear();
 		m_ParticleVertices.clear();
 		m_ParticleDraws.clear();
+		m_Decals.clear();
 		m_UIVertices.clear();
 		m_UIDraws.clear();
 		m_FrameMeshes.clear();
@@ -1035,12 +1047,14 @@ namespace Bellows {
 		BW_CORE_ASSERT(m_InScene, "EndScene called without BeginScene");
 		m_InScene = false;
 
+		const bool decalAtlasMade = PrepareDecals();
+
 		// React to settings that require new GPU resources.
 		const bool shadowResize = !m_ShadowMap || m_Settings.ShadowMapSize != m_AppliedSettings.ShadowMapSize
 			|| m_Settings.CascadeCount != m_AppliedSettings.CascadeCount;
 		const bool ssaoResize = m_Settings.SSAOHalfResolution != m_AppliedSettings.SSAOHalfResolution;
 		const bool environmentChanged = m_Environment.EnvironmentMap != m_BoundEnvironment;
-		if (m_TargetsDirty || shadowResize || ssaoResize || environmentChanged || !m_SceneSet)
+		if (m_TargetsDirty || shadowResize || ssaoResize || environmentChanged || decalAtlasMade || !m_SceneSet)
 		{
 			Renderer::GetDevice()->waitForIdle();
 			if (m_TargetsDirty || ssaoResize || !m_DepthTexture)
@@ -1102,6 +1116,7 @@ namespace Bellows {
 			}
 			UpdateFrameConstants(commandList);
 			UploadJointMatrices(commandList);
+			UploadDecals(commandList);
 		});
 
 		timed("Shadows", [&] { RenderShadows(commandList, shadowCasters); });
@@ -1504,6 +1519,147 @@ namespace Bellows {
 		draw.Distance = glm::length(center / static_cast<float>(drawn) - m_Camera.Position);
 		m_Statistics.Particles += drawn;
 		m_ParticleDraws.push_back(std::move(draw));
+	}
+
+	void SceneRenderer::SubmitDecal(const glm::mat4& boxToWorld, const glm::vec4& color, const Ref<Texture2D>& texture, float maxAngleDegrees, int sortOrder)
+	{
+		// A box flattened to nothing on any axis has no inside to project through.
+		if (std::abs(glm::determinant(glm::mat3(boxToWorld))) < 1e-12f || color.a <= 0.0f)
+			return;
+		DecalDraw decal;
+		decal.BoxToWorld = boxToWorld;
+		decal.Color = color;
+		decal.TextureRef = texture;
+		decal.CosMaxAngle = std::cos(glm::radians(std::clamp(maxAngleDegrees, 1.0f, 89.0f)));
+		decal.SortOrder = sortOrder;
+		m_Decals.push_back(std::move(decal));
+	}
+
+	bool SceneRenderer::PrepareDecals()
+	{
+		m_DecalFrame++;
+		m_DecalData.Count = glm::uvec4(0);
+		if (m_Decals.empty())
+			return false;
+
+		// The highest sort orders win when there are too many; then they're drawn lowest first, so
+		// higher ones land on top (and, at one sort order, later ones on top of earlier ones).
+		std::stable_sort(m_Decals.begin(), m_Decals.end(), [](const DecalDraw& a, const DecalDraw& b) { return a.SortOrder > b.SortOrder; });
+		if (m_Decals.size() > ShaderInterop::MaxDecals)
+		{
+			if (!m_WarnedDecalLimit)
+				BW_CORE_WARN("SceneRenderer: {} decals in view; only {} are drawn (the highest sort orders)", m_Decals.size(), ShaderInterop::MaxDecals);
+			m_WarnedDecalLimit = true;
+			m_Decals.resize(ShaderInterop::MaxDecals);
+		}
+		std::reverse(m_Decals.begin(), m_Decals.end());
+		std::stable_sort(m_Decals.begin(), m_Decals.end(), [](const DecalDraw& a, const DecalDraw& b) { return a.SortOrder < b.SortOrder; });
+
+		bool madeAtlas = false;
+		uint32_t count = 0;
+		for (const DecalDraw& decal : m_Decals)
+		{
+			float layer = -1.0f;
+			if (decal.TextureRef)
+			{
+				if (!m_DecalAtlas)
+				{
+					nvrhi::TextureDesc desc;
+					desc.setWidth(c_DecalAtlasSize).setHeight(c_DecalAtlasSize).setArraySize(ShaderInterop::MaxDecalTextures)
+						.setMipLevels(c_DecalAtlasMips).setDimension(nvrhi::TextureDimension::Texture2DArray).setFormat(c_DecalAtlasFormat)
+						.setIsRenderTarget(true).setInitialState(nvrhi::ResourceStates::ShaderResource).setKeepInitialState(true)
+						.setDebugName("DecalAtlas");
+					nvrhi::IDevice* device = Renderer::GetDevice();
+					m_DecalAtlas = device->createTexture(desc);
+					m_DecalAtlasFramebuffers.clear();
+					for (uint32_t atlasLayer = 0; atlasLayer < ShaderInterop::MaxDecalTextures; atlasLayer++)
+					{
+						for (uint32_t mip = 0; mip < c_DecalAtlasMips; mip++)
+						{
+							m_DecalAtlasFramebuffers.push_back(device->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(
+								nvrhi::FramebufferAttachment().setTexture(m_DecalAtlas).setArraySlice(atlasLayer).setMipLevel(mip))));
+						}
+					}
+					m_DecalLayers.assign(ShaderInterop::MaxDecalTextures, DecalLayer());
+					madeAtlas = true;
+				}
+
+				// The layer already holding this image, else an empty one, else the one unused longest
+				// (never one another decal uses this frame).
+				int chosen = -1;
+				for (size_t i = 0; i < m_DecalLayers.size() && chosen < 0; i++)
+				{
+					if (m_DecalLayers[i].TextureRef == decal.TextureRef)
+						chosen = static_cast<int>(i);
+				}
+				for (size_t i = 0; i < m_DecalLayers.size() && chosen < 0; i++)
+				{
+					if (!m_DecalLayers[i].TextureRef)
+						chosen = static_cast<int>(i);
+				}
+				if (chosen < 0)
+				{
+					for (size_t i = 0; i < m_DecalLayers.size(); i++)
+					{
+						if (m_DecalLayers[i].LastUsed < m_DecalFrame && (chosen < 0 || m_DecalLayers[i].LastUsed < m_DecalLayers[chosen].LastUsed))
+							chosen = static_cast<int>(i);
+					}
+				}
+				if (chosen < 0)
+				{
+					if (!m_WarnedDecalImageLimit)
+						BW_CORE_WARN("SceneRenderer: more than {} different decal images in view; the rest aren't drawn", ShaderInterop::MaxDecalTextures);
+					m_WarnedDecalImageLimit = true;
+					continue;
+				}
+				DecalLayer& slot = m_DecalLayers[chosen];
+				if (slot.TextureRef != decal.TextureRef)
+				{
+					slot.TextureRef = decal.TextureRef;
+					slot.Filled = false;
+				}
+				slot.LastUsed = m_DecalFrame;
+				layer = static_cast<float>(chosen);
+			}
+
+			ShaderInterop::Decal& data = m_DecalData.Decals[count++];
+			data.WorldToDecal = glm::inverse(decal.BoxToWorld);
+			data.Color = decal.Color;
+			data.Up = glm::vec4(glm::normalize(glm::vec3(decal.BoxToWorld[1])), decal.CosMaxAngle);
+			data.Params = glm::vec4(layer, 0.0f, 0.0f, 0.0f);
+		}
+		m_DecalData.Count = glm::uvec4(count, 0, 0, 0);
+		m_Statistics.Decals = count;
+		return madeAtlas;
+	}
+
+	void SceneRenderer::UploadDecals(nvrhi::ICommandList* commandList)
+	{
+		commandList->writeBuffer(m_DecalBuffer, &m_DecalData, sizeof(m_DecalData));
+
+		// New images go into their layers, every mip from the image's own matching mip. One constant
+		// write per mip, shared by every layer that needs filling.
+		std::vector<uint32_t> pending;
+		for (uint32_t i = 0; i < m_DecalLayers.size(); i++)
+		{
+			if (m_DecalLayers[i].TextureRef && !m_DecalLayers[i].Filled)
+				pending.push_back(i);
+		}
+		if (pending.empty())
+			return;
+		std::vector<nvrhi::BindingSetHandle> sets;
+		for (uint32_t layer : pending)
+			sets.push_back(CreatePostProcessSet(m_DecalCopyConstants, { m_DecalLayers[layer].TextureRef->GetHandle() }));
+		for (uint32_t mip = 0; mip < c_DecalAtlasMips; mip++)
+		{
+			const uint32_t size = std::max(c_DecalAtlasSize >> mip, 1u);
+			const glm::vec4 params(static_cast<float>(size), 0.0f, 0.0f, 0.0f);
+			commandList->writeBuffer(m_DecalCopyConstants, &params, sizeof(params));
+			for (size_t i = 0; i < pending.size(); i++)
+				DrawFullscreen(commandList, m_DecalCopyPipeline, m_DecalAtlasFramebuffers[pending[i] * c_DecalAtlasMips + mip], sets[i], size, size);
+		}
+		for (uint32_t layer : pending)
+			m_DecalLayers[layer].Filled = true;
 	}
 
 	void SceneRenderer::RenderParticles(nvrhi::ICommandList* commandList)

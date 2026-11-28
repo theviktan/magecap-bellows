@@ -365,6 +365,17 @@ namespace Bellows {
 				JsonRead(*it, "Active", component.Active);
 			}
 
+			if (auto it = json.find("Decal"); it != json.end())
+			{
+				auto& component = entity.AddOrReplaceComponent<DecalComponent>();
+				JsonRead(*it, "Texture", component.TexturePath);
+				JsonRead(*it, "Color", component.Color);
+				JsonRead(*it, "Size", component.Size);
+				JsonRead(*it, "MaxAngle", component.MaxAngle);
+				JsonRead(*it, "SortOrder", component.SortOrder);
+				component.Clamp();
+			}
+
 			if (auto it = json.find("ParticleEmitter"); it != json.end())
 			{
 				auto& component = entity.AddOrReplaceComponent<ParticleEmitterComponent>();
@@ -728,6 +739,16 @@ namespace Bellows {
 
 		if (const auto* c = entity.TryGetComponent<AudioListenerComponent>())
 			json["AudioListener"]["Active"] = c->Active;
+
+		if (const auto* c = entity.TryGetComponent<DecalComponent>())
+		{
+			Json& j = json["Decal"];
+			j["Texture"] = c->TexturePath;
+			j["Color"] = c->Color;
+			j["Size"] = c->Size;
+			j["MaxAngle"] = c->MaxAngle;
+			j["SortOrder"] = c->SortOrder;
+		}
 
 		if (const auto* c = entity.TryGetComponent<ParticleEmitterComponent>())
 		{

@@ -19,6 +19,12 @@ layout(set = 0, binding = 6) uniform texture2D u_BRDFLut;
 layout(set = 0, binding = 7) uniform sampler s_LinearClamp;
 layout(set = 0, binding = 8) uniform samplerShadow s_ShadowCompare;
 layout(set = 0, binding = 9) uniform sampler s_PointClamp;
+layout(set = 0, binding = 10, std140) uniform DecalBlock
+{
+	uvec4 u_DecalCount;		// x = decals in use
+	Decal u_Decals[MAX_DECALS];
+};
+layout(set = 0, binding = 11) uniform texture2DArray u_DecalAtlas;
 
 layout(push_constant) uniform ObjectBlock
 {

@@ -172,7 +172,13 @@ function test_components()
 	sparks.emit(3)
 	check(sparks.is_playing, "ParticleEmitter play")
 
-	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent, ParticleEmitter", "components list ({thing.components})")
+	set mark to thing.add_component("Decal")
+	set mark.size to vector(2, 0.5, 1)
+	set mark.sort_order to 2
+	check(close(mark.size, vector(2, 0.5, 1)) and mark.sort_order is 2 and mark.max_angle is 60, "Decal properties")
+	check(fails(function() set mark.max_angle to 120 end), "a Decal's max angle is held to its range")
+
+	check(thing.components.join(", ") is "Transform, MeshRenderer, PointLight, RigidBody, SphereCollider, AudioSource, NavAgent, ParticleEmitter, Decal", "components list ({thing.components})")
 	thing.remove_component("PointLight")
 	check(not thing.has_component("PointLight") and thing.get_component("PointLight") is nothing, "remove_component")
 	thing.destroy()

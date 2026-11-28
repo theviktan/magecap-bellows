@@ -43,6 +43,7 @@ namespace Bellows {
 			if (entity.HasComponent<AnimatorComponent>()) return ICON_PERSON_STANDING;
 			if (entity.HasComponent<MeshRendererComponent>()) return ICON_BOX;
 			if (entity.HasComponent<ParticleEmitterComponent>()) return ICON_FLAME;
+			if (entity.HasComponent<DecalComponent>()) return ICON_STICKER;
 			if (entity.HasComponent<AudioSourceComponent>()) return ICON_VOLUME_2;
 			if (entity.HasComponent<UICanvasComponent>()) return ICON_MONITOR;
 			if (entity.HasComponent<TextComponent>()) return ICON_TYPE;
@@ -106,6 +107,7 @@ namespace Bellows {
 			add(entity.HasComponent<AnimatorComponent>(), ICON_PERSON_STANDING, "Animation");
 			add(entity.HasComponent<NavAgentComponent>(), ICON_FOOTPRINTS, "Walks the navmesh");
 			add(entity.HasComponent<ParticleEmitterComponent>(), ICON_FLAME, "Particles");
+			add(entity.HasComponent<DecalComponent>(), ICON_STICKER, "Decal");
 			return badges;
 		}
 
@@ -1443,6 +1445,12 @@ namespace Bellows {
 		{
 			create("Particles").AddComponent<ParticleEmitterComponent>();
 			m_Editor.CommitChange("Create particles");
+		}
+
+		if (ImGui::MenuItem(ICON_STICKER "  Decal"))
+		{
+			create("Decal").AddComponent<DecalComponent>();
+			m_Editor.CommitChange("Create decal");
 		}
 
 		if (ImGui::MenuItem(ICON_VOLUME_2 "  Audio Source"))

@@ -1163,6 +1163,40 @@ namespace Bellows::Scripting {
 		particles.ReadOnly("particle_count", [](const ParticleEmitterRef& r) { return static_cast<int>(r.Get().RuntimeParticles.size()); },
 			"How many are alive now");
 
+		auto decal = api.template Class<DecalRef>("Decal",
+			"Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top "
+			"toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles");
+		decal.Property("texture", [](const DecalRef& r) { return r.Get().TexturePath; },
+			[](const DecalRef& r, const std::string& v) { r.Get().TexturePath = v; }, "The image (an asset path); empty for a plain rectangle of color");
+		decal.Property("color", [](const DecalRef& r) { return ColorValue { r.Get().Color }; },
+			[](const DecalRef& r, const ColorValue& v)
+			{
+				RequireFiniteNumbers(v, "Decal.color");
+				r.Get().Color = glm::clamp(v.Value, glm::vec4(0.0f), glm::vec4(1.0f));
+			}, "Tint (each 0 to 1); its alpha is the decal's opacity");
+		decal.Property("size", [](const DecalRef& r) { return r.Get().Size; },
+			[](const DecalRef& r, const glm::vec3& v)
+			{
+				RequireFiniteNumbers(v, "Decal.size");
+				if (glm::any(glm::lessThan(v, glm::vec3(DecalComponent::MinSize))) || glm::any(glm::greaterThan(v, glm::vec3(DecalComponent::MaxSize))))
+					throw ScriptValueError("A Decal's size is from 0.001 to 1000 meters on each axis");
+				r.Get().Size = v;
+			}, "Meters: x the image's width, y how deep it reaches, z the image's height");
+		decal.Property("max_angle", [](const DecalRef& r) { return r.Get().MaxAngle; },
+			[](const DecalRef& r, float v)
+			{
+				if (!std::isfinite(v) || v < DecalComponent::MinMaxAngle || v > DecalComponent::MaxMaxAngle)
+					throw ScriptValueError("A Decal's max_angle is from 1 to 89 degrees");
+				r.Get().MaxAngle = v;
+			}, "Degrees a surface may turn from the decal's up before the decal fades out on it, from 1 to 89");
+		decal.Property("sort_order", [](const DecalRef& r) { return r.Get().SortOrder; },
+			[](const DecalRef& r, int v)
+			{
+				if (v < -DecalComponent::MaxSortOrder || v > DecalComponent::MaxSortOrder)
+					throw ScriptValueError("A Decal's sort_order is from -1000 to 1000");
+				r.Get().SortOrder = v;
+			}, "Higher ones are drawn on top of lower ones (and win when too many are in view)");
+
 		auto canvas = api.template Class<UICanvasRef>("UICanvas",
 			"The root of a screen UI: everything under it with a UIRect is laid out on screen, over the game");
 		canvas.Property("reference_size", [](const UICanvasRef& r) { return Detail::ToScriptVector(r.Get().ReferenceSize); },

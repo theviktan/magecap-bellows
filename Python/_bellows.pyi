@@ -280,6 +280,35 @@ class CapsuleCollider:
     def offset(self, value: Vec3 | typing.Sequence[float]) -> None: ...
 
 
+class Decal:
+    """Projects an image (or a plain color) onto the opaque surfaces inside its box, down the entity's -Y with the image's top toward its -Z, lit and shadowed like the surface: footprints, cracks, posters, puddles"""
+    @property
+    def texture(self) -> str:
+        """The image (an asset path); empty for a plain rectangle of color"""
+    @texture.setter
+    def texture(self, value: str) -> None: ...
+    @property
+    def color(self) -> Vec4 | typing.Sequence[float]:
+        """Tint (each 0 to 1); its alpha is the decal's opacity"""
+    @color.setter
+    def color(self, value: Vec4 | typing.Sequence[float]) -> None: ...
+    @property
+    def size(self) -> Vec3:
+        """Meters: x the image's width, y how deep it reaches, z the image's height"""
+    @size.setter
+    def size(self, value: Vec3 | typing.Sequence[float]) -> None: ...
+    @property
+    def max_angle(self) -> float:
+        """Degrees a surface may turn from the decal's up before the decal fades out on it, from 1 to 89"""
+    @max_angle.setter
+    def max_angle(self, value: float) -> None: ...
+    @property
+    def sort_order(self) -> int:
+        """Higher ones are drawn on top of lower ones (and win when too many are in view)"""
+    @sort_order.setter
+    def sort_order(self, value: int) -> None: ...
+
+
 class DirectionalLight:
     """Sun-like light shining along the entity's forward (-Z)"""
     @property
@@ -426,6 +455,8 @@ class Entity:
     @typing.overload
     def get_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter | None: ...
     @typing.overload
+    def get_component(self, component: typing.Literal['Decal']) -> Decal | None: ...
+    @typing.overload
     def get_component(self, component: typing.Literal['UICanvas']) -> UICanvas | None: ...
     @typing.overload
     def get_component(self, component: typing.Literal['UIRect']) -> UIRect | None: ...
@@ -489,6 +520,8 @@ class Entity:
     def add_component(self, component: typing.Literal['Text']) -> Text: ...
     @typing.overload
     def add_component(self, component: typing.Literal['ParticleEmitter']) -> ParticleEmitter: ...
+    @typing.overload
+    def add_component(self, component: typing.Literal['Decal']) -> Decal: ...
     @typing.overload
     def add_component(self, component: typing.Literal['UICanvas']) -> UICanvas: ...
     @typing.overload

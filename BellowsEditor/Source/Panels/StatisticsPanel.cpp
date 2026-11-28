@@ -52,7 +52,7 @@ namespace Bellows {
 			UI::PropertyText("Triangles", std::to_string(stats.Triangles).c_str());
 			UI::PropertyText("Meshes", std::to_string(stats.Meshes).c_str());
 			UI::PropertyText("Point / Spot Lights", fmt::format("{} / {}", stats.PointLights, stats.SpotLights).c_str());
-			UI::PropertyText("Particles", std::to_string(stats.Particles).c_str());
+			UI::PropertyText("Particles / Decals", fmt::format("{} / {}", stats.Particles, stats.Decals).c_str());
 			UI::PropertyText("Entities", std::to_string(scene ? scene->GetEntityCount() : 0).c_str());
 			UI::PropertyText("Script Errors", std::to_string(ScriptEngine::GetErrorCount()).c_str());
 			UI::EndPropertyGrid();

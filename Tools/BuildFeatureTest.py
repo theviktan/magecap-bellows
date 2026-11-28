@@ -22,8 +22,8 @@ ASSETS = pathlib.Path(editor.asset_directory())
 
 # -- Generated source assets -------------------------------------------------------------
 
-def write_png(path: pathlib.Path, width: int, height: int, pixel):
-    """Writes an 8-bit RGB PNG; pixel(x, y) returns an (r, g, b) tuple of ints."""
+def write_png(path: pathlib.Path, width: int, height: int, pixel, alpha=False):
+    """Writes an 8-bit RGB PNG, or RGBA with alpha; pixel(x, y) returns an (r, g, b) or (r, g, b, a) tuple of ints."""
     rows = bytearray()
     for y in range(height):
         rows.append(0)
@@ -34,7 +34,7 @@ def write_png(path: pathlib.Path, width: int, height: int, pixel):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    header = struct.pack(">IIBBBBB", width, height, 8, 6 if alpha else 2, 0, 0, 0)
     path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(bytes(rows), 9)) + chunk(b"IEND", b""))
 
 
@@ -50,6 +50,17 @@ def ground_tiles(x, y):
     if grout:
         base = 70 + fine
     return (max(0, min(255, base)), max(0, min(255, base - 2)), max(0, min(255, base - 6)))
+
+
+def target_mark(x, y):
+    """A painted landing mark: a ring around a cross, soft at its edges, clear elsewhere (for the decal)."""
+    size = 256
+    cx, cy = x - size / 2 + 0.5, y - size / 2 + 0.5
+    radius = math.hypot(cx, cy)
+    ring = 1.0 - min(abs(radius - 100.0) / 14.0, 1.0)
+    cross = 1.0 - min(min(abs(cx), abs(cy)) / 10.0, 1.0) if radius < 70.0 else 0.0
+    coverage = max(ring, cross)
+    return (250, 200, 40, int(round(255 * min(coverage * 1.6, 1.0))))
 
 
 def write_chime(path: pathlib.Path):
@@ -70,6 +81,7 @@ def write_chime(path: pathlib.Path):
 
 
 write_png(ASSETS / "Textures" / "GroundTiles.png", 512, 512, ground_tiles)
+write_png(ASSETS / "Textures" / "TargetMark.png", 256, 256, target_mark, alpha=True)
 write_chime(ASSETS / "Audio" / "Chime.wav")
 editor.reload_asset("Textures/GroundTiles.png")
 
@@ -239,6 +251,11 @@ sparks = campfire.add_component(bellows.ParticleEmitter)
 sparks.rate, sparks.lifetime, sparks.speed, sparks.spread_angle = 30.0, 1.2, 1.5, 20.0
 sparks.shape, sparks.shape_size = "sphere", Vec3(0.2, 0.2, 0.2)
 sparks.start_size, sparks.end_size, sparks.intensity = 0.15, 0.02, 3.0
+
+# Decals: a painted landing mark on the ground in front of the speaker
+landing = create("Landing Mark", position=(-1.5, 0.0, 4.0))
+mark = landing.add_component(bellows.Decal)
+mark.texture, mark.size, mark.color = "Textures/TargetMark.png", Vec3(1.6, 0.4, 1.6), Vec4(1.0, 1.0, 1.0, 0.9)
 
 # Text: a title over the PBR showcase and a camera-facing label over the speaker
 title = create("Title", position=(0.0, 3.2, -3.0))

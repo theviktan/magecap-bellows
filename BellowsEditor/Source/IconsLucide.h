@@ -141,3 +141,4 @@
 #define ICON_ARROW_DOWN                  "\xee\x81\x82"	// U+E042
 #define ICON_PIN                         "\xee\x89\x99"	// U+E259
 #define ICON_PIN_OFF                     "\xee\x8a\xb6"	// U+E2B6
+#define ICON_STICKER                     "\xee\x8c\x82"	// U+E302

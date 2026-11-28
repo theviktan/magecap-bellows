@@ -4,6 +4,7 @@
 // image-based lighting, SSAO and emissive. Writes linear HDR color.
 
 #include "SceneBindings.glsl"
+#include "Decals.glsl"
 #include "PBR.glsl"
 #include "Shadows.glsl"
 
@@ -104,6 +105,11 @@ void main()
 	vec3 geometricNormal = normalize(v_Normal) * (gl_FrontFacing ? 1.0 : -1.0);
 	vec3 V = normalize(u_Frame.CameraPosition.xyz - v_WorldPosition);
 	float NdotV = max(dot(N, V), 1e-4);
+	// Transparent surfaces take no decals (they'd show the decal floating over what's behind).
+	vec3 dpdx = dFdx(v_WorldPosition);
+	vec3 dpdy = dFdy(v_WorldPosition);
+	if (alphaMode != 2u)
+		albedo = ApplyDecals(albedo, v_WorldPosition, geometricNormal, dpdx, dpdy);
 	vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
 	vec3 color = vec3(0.0);

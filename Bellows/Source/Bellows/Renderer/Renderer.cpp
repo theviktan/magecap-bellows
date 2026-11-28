@@ -76,6 +76,9 @@ namespace Bellows {
 					desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(slot));
 				for (uint32_t slot = 7; slot <= 9; slot++)
 					desc.addItem(nvrhi::BindingLayoutItem::Sampler(slot));
+				// Decals: their list and the atlas of their images.
+				desc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(10));
+				desc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(11));
 				desc.addItem(nvrhi::BindingLayoutItem::PushConstants(c_PushConstantSlot, 128));
 				s_Data->SceneLayout = device->createBindingLayout(desc);
 			}

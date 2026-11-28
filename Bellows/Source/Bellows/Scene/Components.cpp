@@ -58,6 +58,17 @@ namespace Bellows {
 			Blend = defaults.Blend;
 	}
 
+	void DecalComponent::Clamp()
+	{
+		const DecalComponent defaults;
+		for (int axis = 0; axis < 3; axis++)
+			Size[axis] = ClampOrDefault(Size[axis], MinSize, MaxSize, defaults.Size[axis]);
+		for (int channel = 0; channel < 4; channel++)
+			Color[channel] = ClampOrDefault(Color[channel], 0.0f, 1.0f, defaults.Color[channel]);
+		MaxAngle = ClampOrDefault(MaxAngle, MinMaxAngle, MaxMaxAngle, defaults.MaxAngle);
+		SortOrder = std::clamp(SortOrder, -MaxSortOrder, MaxSortOrder);
+	}
+
 	const char* ScriptFieldTypeToString(ScriptFieldType type)
 	{
 		switch (type)

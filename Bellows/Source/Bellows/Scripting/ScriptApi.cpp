@@ -242,6 +242,7 @@ namespace Bellows::Scripting {
 			MakeComponentInfo<AudioListenerComponent>("AudioListener"),
 			MakeComponentInfo<TextComponent>("Text"),
 			MakeComponentInfo<ParticleEmitterComponent>("ParticleEmitter"),
+			MakeComponentInfo<DecalComponent>("Decal"),
 			MakeComponentInfo<UICanvasComponent>("UICanvas"),
 			MakeComponentInfo<UIRectComponent>("UIRect"),
 			MakeComponentInfo<UIImageComponent>("UIImage"),
@@ -293,6 +294,7 @@ namespace Bellows::Scripting {
 		if (type == typeid(AudioListenerComponent)) return "AudioListener";
 		if (type == typeid(TextComponent)) return "Text";
 		if (type == typeid(ParticleEmitterComponent)) return "ParticleEmitter";
+		if (type == typeid(DecalComponent)) return "Decal";
 		if (type == typeid(UICanvasComponent)) return "UICanvas";
 		if (type == typeid(UIRectComponent)) return "UIRect";
 		if (type == typeid(UIImageComponent)) return "UIImage";
