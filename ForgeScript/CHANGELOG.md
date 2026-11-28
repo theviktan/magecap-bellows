@@ -5,7 +5,7 @@ Each version of the language and its `forgescript` tool, newest first. The versi
 `serverInfo` and MageCap Bellows' `Install.json` (`ForgeScriptVersion`). The minor number goes up
 with new language or tool features, the patch number with fixes.
 
-## 1.8.0 (not released yet)
+## 1.8.0 (2026-11-28)
 
 - **Whole-number and bit tools** (Roadmap 3.0, item 7; Ron, 5:33 AM Nov 28), as built-in functions,
   with no new symbols: `truncate(x)`, `quotient(a, b)` (agrees with `%`), `to_base(n, base)` and
@@ -81,7 +81,7 @@ with new language or tool features, the patch number with fixes.
   on the right) is one step instead of two. For hosts: `forgescript --benchmark` and
   `GetInstructionsRun()` count fewer instructions for the same script (`calls.forge` 1,800,594 →
   1,350,448), so an `InstructionLimit` now lets a script do a little more work before it stops.
-- **Script time in MageCap Bellows' profiler** (Roadmap 3.0, 1.8.0 item 2): the editor's View →
+- **Script time in MageCap Bellows' profiler** (Roadmap 1.8.0 a): the editor's View →
   Profiler shows each ForgeScript script under Scripts → ForgeScript, and inside it each handler or
   function a task began with (`Scripts/Guard.forge: when update`, `... : patrol` after its `wait`,
   `... : top level`). For hosts, `VM::SetTaskRunHandler` is called just before and after every run of
