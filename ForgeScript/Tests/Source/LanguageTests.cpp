@@ -1523,6 +1523,16 @@ TEST_CASE("ContractsExplainTheirMistakesBeforeTheGameRuns")
 	CHECK_CONTAINS(CompileFails("kind Box\nend\ncontract Box\n\tneeds x\nend\n").Message, "'Box' is a kind in this script already.");
 	CHECK_CONTAINS(CompileFails("function f()\n\tcontract Inner\n\t\tneeds x\n\tend\nend\n").Message,
 		"Write a contract at the top level of the script");
+	// 'follows' with no contract's name after it says what it wants (it used to give the field message).
+	for (const char* line : { "kind Crate follows 5\nend\n", "kind Crate follows \"x\"\nend\n", "kind Crate follows\nend\n",
+			 "kind Box\nend\nkind Crate extends Box follows 5\nend\n" })
+	{
+		const CompileError mistake = CompileFails(line);
+		CHECK_EQ(mistake.Message, std::string("After 'follows', write a contract's name, like: kind Crate follows Damageable"));
+	}
+	// A kind or a function named 'follows' still works.
+	CHECK(Compiles("kind follows\nend\nkind Crate extends follows\nend\n"));
+	CHECK(Compiles("kind Crate\n\tfunction follows()\n\tend\nend\n"));
 	// At run time (a kind inside a function, compiled before the contract) a missing need is
 	// reported at the kind's own line, not the last line of its body.
 	VM vm;

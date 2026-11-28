@@ -1,0 +1,92 @@
+# Whole-number and bit tools (Roadmap 3.0 item 7).
+say truncate(-2.5)
+# expect: -2
+say truncate(2.9)
+# expect: 2
+say quotient(7, 2)
+# expect: 3
+say quotient(-7, 2)
+# expect: -4
+say quotient(7, -2)
+# expect: -4
+for each pair in [[-7, 2], [7, -2], [-9, -4], [13, 5]]
+	set a, b to pair
+	assert(quotient(a, b) * b + a % b is a, "quotient and % agree for {a}, {b}")
+end
+say to_base(255, 16)
+# expect: ff
+say to_base(-5, 2)
+# expect: -101
+say to_base(0, 36)
+# expect: 0
+say number("ff", 16)
+# expect: 255
+say number(" -101 ", 2)
+# expect: -5
+say number("12", 2)
+# expect: nothing
+say number("0xff")
+# expect: 255
+say number(to_base(9007199254740991, 36), 36) is 9007199254740991
+# expect: true
+say number("20000000000000", 16)
+# expect: nothing
+
+# Flags: bits count from 0, so bit 3 is worth 8.
+set flags to 0
+set flags to with_bit(flags, 3)
+set flags to with_bit(flags, 0)
+say flags
+# expect: 9
+say has_bit(flags, 3) and not has_bit(flags, 2)
+# expect: true
+say without_bit(flags, 3)
+# expect: 1
+say flip_bit(flip_bit(flags, 5), 5) is flags
+# expect: true
+say count_bits(flags)
+# expect: 2
+say "{bit_and(12, 10)} {bit_or(12, 10)} {bit_xor(12, 10)}"
+# expect: 8 14 6
+say shift_left(1, 52) is 2 ^ 52
+# expect: true
+say shift_right(256, 4)
+# expect: 16
+
+# Mistakes say what to write.
+try
+	say bit_and(-1, 2)
+catch problem
+	say problem
+end
+# expect: bit_and works on whole numbers from 0 to 9,007,199,254,740,991, but value 1 is -1.
+try
+	say has_bit(5, 53)
+catch problem
+	say problem
+end
+# expect: has_bit counts bits from 0 to 52 (bit 0 is worth 1, bit 3 is worth 8), but this is 53.
+try
+	say shift_left(2, 52)
+catch problem
+	say problem
+end
+# expect: shift_left's answer would be past 9,007,199,254,740,991, the largest whole number a number holds exactly.
+try
+	say quotient(1, 0)
+catch problem
+	say problem
+end
+# expect: quotient can't divide by zero.
+try
+	say to_base(5, 1)
+catch problem
+	say problem
+end
+# expect: to_base writes bases 2 to 36, like: to_base(255, 16). This base is 1.
+try
+	say number(5, 2)
+catch problem
+	say problem
+end
+# expect: number(text, base) reads text, like: number("ff", 16). This is a number.

@@ -7,6 +7,16 @@ with new language or tool features, the patch number with fixes.
 
 ## 1.8.0 (not released yet)
 
+- **Whole-number and bit tools** (Roadmap 3.0, item 7; Ron, 5:33 AM Nov 28), as built-in functions,
+  with no new symbols: `truncate(x)`, `quotient(a, b)` (agrees with `%`), `to_base(n, base)` and
+  `number(text, base)` for bases 2 to 36, and for flags `bit_and`, `bit_or`, `bit_xor`,
+  `shift_left`, `shift_right`, `has_bit`, `with_bit`, `without_bit`, `flip_bit` and `count_bits`, on
+  whole numbers from 0 to 9,007,199,254,740,991. Bits count from 0. Values outside the ranges are
+  errors that say what to write. A script's own function with one of these names keeps its own,
+  with 1.7.0's "takes the name of the built-in" warning.
+- **`follows` with no contract's name** (`kind Crate follows 5`, a bare `follows`) now says "After
+  'follows', write a contract's name, like: kind Crate follows Damageable", instead of the message
+  about what goes inside a kind (MFC's report). Those lines were mistakes before too.
 - **A warning for events nothing listens for** (Roadmap 3.0, item 6; Ron, 11:21 PM Nov 27): `trigger
   door opend` warns "Nothing listens for 'door opend'. No script in this project has 'when door opend'
   or 'wait for door opend'. Did you mean 'door opened'?", with a quick fix. Event names must match
